@@ -567,6 +567,7 @@ end
 
 		local AdventureCsv = Csv.Adventure[data.actId]
 		--更新个人事件列表
+		LuaUtil.DumpTable(data)
 		info.personEventList = {}
 		for k,v in pairs(data.personalEventlist) do
 			local adventureItemCsv = Csv.AdventureMainEvent[v.eventId]
@@ -625,6 +626,7 @@ end
 			one.eventId = v.eventId
 			one.eventIndex = v.eventsIndex
 			one.triggerTime = v.triggerTime
+			one.type = v.type --1 进行中的 2是领奖的
 			one.playerInfo = {
 				icon = v.playerInfo.icon,
 				level = v.playerInfo.level,
@@ -655,35 +657,6 @@ end
 			}
 			one.playerlist = tplayerlist
 			info.shopEventList[one.eventIndex] = one
-		end
-		--后续事件可领奖事件列表
-		info.shopRewardEventList = {}
-		for i=1,#data.gangRewardEventList do
-			local v = data.gangeventlist[i]
-			local tplayerlist = {}
-			local one = {}
-			one.eventId = v.eventId
-			one.eventIndex = v.eventsIndex
-			one.triggerTime = v.triggerTime
-			one.playerInfo = {
-				icon = v.playerInfo.icon,
-				level = v.playerInfo.level,
-				power = v.playerInfo.power,
-				devote = v.playerInfo.devote,
-				staffName = v.playerInfo.staffName
-			}
-			for k, v in pairs(v.playerlist) do
-				local playerInfo = {
-					icon = v.icon,
-					level = v.level,
-					power = v.power,
-					devote = v.devote,
-					staffName = v.staffName
-				}
-				table.insert(tplayerlist, playerInfo)
-			end
-			one.playerlist = tplayerlist
-			info.shopRewardEventList[one.eventIndex] = one
 		end
 		info.shopEventtimes = data.gangEventTimes
 		--已加班列表

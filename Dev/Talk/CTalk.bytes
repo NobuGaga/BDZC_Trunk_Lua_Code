@@ -36,6 +36,7 @@ local ECmdId = {
 	sCorssChatDelete					=	5,--删除指定聊天记录	PTalk::SDeleteChatCross
 	sOfflineMsg							=	6,--发送离线留言
 	sOfflineMsgOver						=	7,--发送离线留言结束
+	sTalkCrossHistoryMsg				=	8,--聊天历史记录   PTalk::PTalkMsg
 }
 
 --清空模块
@@ -57,6 +58,7 @@ function  _M.ModuleInit( isReload )
 		[ECmdId.sCorssChatDelete] =	{proto = "PTalk.SDeleteChatCross",	handle = _P.OnDeleteChatCross},
 		[ECmdId.sOfflineMsg] =		{proto = "PTalk.SOfflineMsg",		handle = _P.OnOfflineMsg},
 		[ECmdId.sOfflineMsgOver] =	{									handle = _P.OnOfflineMsgOver},
+		[ECmdId.sTalkCrossHistoryMsg] =	{proto = "PTalk.STalkListMsg",	handle = _P.OnGetTalkList},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Talk,send,recv,isReload)
 end

@@ -10,6 +10,7 @@ local CActivity = JRequire "Dev.Activity.CActivity"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 
+local GTE_EFFECT_ID = 5
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -54,6 +55,7 @@ function _M:OnCreate(data)
 end
 
 function _P.OnChoose(self, funcId)
+	print("update!!!!")
 	if funcId == 1 then
 		self.mMoudle:Get("cishu").Text = Csv.Text("adventure_follow_count", {num="1/2"})
 		self.mMoudle:Get("Tips").Text = ""
@@ -70,10 +72,11 @@ end
 
 function _P.CreateRewardList(self)
 	self.content:DestroyChildren()
-	local itemTab = {}
+	print("ssssssssssssssssssssssss")
+	self.itemTab = {}
 	for k,v in pairs(self.mData.shopRewardEventList) do
 		local item = _P.AddItemToContent(self,self.content,v, 2)
-		itemTab[k] = item
+		self.itemTab[v.eventsIndex] = item
 	end
 
 	-- self.mItemTab2 = itemTab
@@ -81,12 +84,13 @@ end
 
 function _P.CreateEventList(self)
 	self.content:DestroyChildren()
-	local itemTab = {}
+	print("wwwwwwwwwwwwwwwwww")
+	self.itemTab = {}
 	_P.ClearTimer(self)
 	self.timerTab = {}
 	for k,v in pairs(self.mData.shopEventList) do
 		local item = _P.AddItemToContent(self,self.content,v, 1)
-		itemTab[k] = item
+		self.itemTab[v.eventsIndex] = item
 	end
 
 	-- self.mItemTab = itemTab
@@ -96,12 +100,13 @@ function _P.AddItemToContent(self,content,data, type)
 	local moudle = JGuiManager.GetMoudle(content,"M_Adventure_FollowItem", WindowType.UI, 10)
 
 	local isSelf = data.playerInfo.id == MPlayer.GetId()
-
-	_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME)
-	local t = moudle.SelfRect:AddOnUpdate(function()
-		_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME)--TODO:CD时间
-	end, nil, 1)
-	table.insert(self.timerTab, t)
+	if type == 1 then
+		_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + 30, data)--ADVCOUNTTIME
+		local t = moudle.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + 30, data)
+		end, nil, 1)
+		table.insert(self.timerTab, t)
+	end
 
 	local subEventCsv = Csv.AdventureSubEvent[data.eventId]
 
@@ -112,7 +117,11 @@ function _P.AddItemToContent(self,content,data, type)
 	end, nil, 1)
 	moudle:Get("Btn1"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		_P.OnClickSendPlayer(data)
+		if type == 1 then
+			_P.OnClickSendPlayer(data)
+		else
+			_P.OnGetReward(self,data)
+		end
 	end, nil, 1)
 	moudle:Get("head").SpriteName = data.playerInfo.icon
 	moudle:Get("TitleText").Text = data.playerInfo.name.."("..Csv.Text("adventure_player_level"..data.playerInfo.job)..")"
@@ -170,13 +179,13 @@ function _P.ClearTimer(self)
 	end
 end
 
-function _P.OnUpdateTime(self, timeText, nextTime)
+function _P.OnUpdateTime(self, timeText, nextTime, data)
 	local time = nextTime - HeartBeat.ServSecond()
 	if nextTime ~= nil and time > 0 then
 		timeText.Text = Csv.Text("adventure_left_time",{text = LuaUtil.GetTimeHMS(time)})
 	else
 		--TODO:移除这个事件
-		timeText.Text = "00:00:00"
+		_P.RemoveEvent(self,data.eventsIndex, MActivity.AdventureFollowLastChoose)
 	end
 end
 
@@ -189,6 +198,47 @@ end
 
 function _P.OnClickSendPlayer(data)
 	WindowMgr.Create("UAdventureSendPlayer",data)
+end
+
+function _P.OnGetReward(self,data)
+	local rewardData = {reward = {{id = 32008,count = 10},{id=32009,count = 5}},eventsIndex = data.eventsIndex}
+	_R.OnRewardCallBack(self,rewardData)
+	-- CActivity.ReqAdvGetReward(self.mData.actId,data.eventId)
+end
+
+function _R.OnRewardCallBack(self,data)
+	if data ~= nil then
+		--TODO:飘奖
+		--移除对应事件
+		--刷新可完成商会事件次数
+		SoundMgr.Play(10004)
+		LuaUtil.DumpTable(data)
+		local animRect = self.itemTab[data.eventsIndex]:Get("Btn1")
+		self.itemTab[data.eventsIndex]:Get("new_text").Text = ""
+		local delayCount = 0
+		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
+			for k,v in pairs(data.reward) do
+				CCommon.ShowFlyItem(animRect, v.id, v.count, delayCount)
+				delayCount = delayCount + 0.2
+			end
+			--移除事件
+			self.itemTab[data.eventsIndex]:Get("new_text"):AddOnTime(function()
+				_P.RemoveEvent(self,data.eventsIndex, 2)
+			end, nil, 0.6)
+			
+		end)
+	end
+end
+
+function _P.RemoveEvent(self,eventsIndex,type)
+	--移除参与事件
+	if type == 1 then
+		self.mData.shopEventListp[eventsIndex] = nil
+	else
+		self.mData.shopRewardEventList[eventsIndex] = nil
+	end
+	--刷新显示
+	_P.OnChoose(self, MActivity.AdventureFollowLastChoose)
 end
 
 function _M:BeforeDestroy()

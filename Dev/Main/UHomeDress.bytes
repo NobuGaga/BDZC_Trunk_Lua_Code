@@ -72,43 +72,43 @@ function _P.CreateList(self,sysId)
 	local content = self.mMoudle:Get("Content")
 	local dressTable = _P.GetSortTable(MBag.GetDressForSysId(sysId))
 	for k,v in ipairs(dressTable) do
-    	if sysId ~= Define.SysId.Aircraft or not MAircraft.IsAircraftSkinUnActivative(v.itemid) then
-       local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
-		local csvItem = Csv.Item[v.itemid]
-		if csvItem ~= nil and csvItem.attrId ~= nil then
-			local icon = dressMoudle:Get("Icon")
-			local csvTable
-			local csvDress
-			if sysId == Define.SysId.Aircraft then
-				local csvAircraft = self.CsvTable[sysId][csvItem.attrId]
-				if csvAircraft ~= nil then
+		if sysId ~= Define.SysId.Aircraft or not MAircraft.IsAircraftSkinUnActivative(v.itemid) then
+			local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
+			local csvItem = Csv.Item[v.itemid]
+			if csvItem ~= nil and csvItem.attrId ~= nil then
+				local icon = dressMoudle:Get("Icon")
+				local csvTable
+				local csvDress
+				if sysId == Define.SysId.Aircraft then
+					local csvAircraft = self.CsvTable[sysId][csvItem.attrId]
 					if csvAircraft ~= nil then
-						csvDress = Csv.AircraftAnimation[csvAircraft.asset]
+						if csvAircraft ~= nil then
+							csvDress = Csv.AircraftAnimation[csvAircraft.asset]
+						end
+					else
+						local csvSkin = Csv.AircraftSkin[csvItem.attrId]
+						if csvSkin ~= nil then
+							csvDress = Csv.AircraftAnimation[csvSkin.asset]
+						end
 					end
 				else
-					local csvSkin = Csv.AircraftSkin[csvItem.attrId]
-					if csvSkin ~= nil then
-						csvDress = Csv.AircraftAnimation[csvSkin.asset]
+					csvTable = self.CsvTable[sysId]
+					if csvTable ~= nil then
+						csvDress = csvTable[csvItem.attrId]
 					end
 				end
-			else
-				csvTable = self.CsvTable[sysId]
-				if csvTable ~= nil then
-					csvDress = csvTable[csvItem.attrId]
+				if csvDress ~= nil then
+					icon.SpriteName = csvDress.icon
 				end
+				if self.IconSize ~= nil then
+					icon.SizeDelta = self.IconSize
+				end
+				icon:AddOnButton(function()
+					_P.OnClickIcon(self,v.itemid)
+				end,nil,1)
 			end
-			if csvDress ~= nil then
-				icon.SpriteName = csvDress.icon
-			end
-			if self.IconSize ~= nil then
-				icon.SizeDelta = self.IconSize
-			end
-			icon:AddOnButton(function()
-				_P.OnClickIcon(self,v.itemid)
-			end,nil,1)
+			self.ItemTable[v.itemid] = dressMoudle
 		end
-		self.ItemTable[v.itemid] = dressMoudle
-        end
 	end
 end
 

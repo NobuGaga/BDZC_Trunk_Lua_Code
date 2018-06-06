@@ -117,14 +117,8 @@ function _P.OnCreateItem(self,data,contentTransform)
 
 	local csvEvent = Csv.AdventureMainEvent[data.id]
 
-	local startCount = csvEvent.star
 	local eventName = csvEvent.title
 	local quality = csvEvent.quality
-	print("csvConfig", startCount, eventName, quality)
-
-	for i = 1,startCount do
-		itemMoudle:Get("Star"..i).Activity = true
-	end
 
 	local ImgIcon = itemMoudle:Get("iCON")
 	ImgIcon.SpriteName = csvEvent.icon
@@ -169,7 +163,7 @@ function _P.CreateFadeData(self)
 				attrInfo = {{type = 1, val = 20, params = 10001}}
 			},
 			playerlist = {},
-			triggerTime = HeartBeat.ServSecond(),
+			triggerTime = HeartBeat.ServSecond() + i,
 			playerInfo = {
 				icon = "S_Boy_001",
 				level = 10,
@@ -202,6 +196,7 @@ function _P.CreateFadeData(self)
 	end
 	data.shopRewardEventList = shopRewardEventList
 	data.shopEventList = shopEventList
+	data.actId = 40000
 	print("shopRewardEventList", #data.shopRewardEventList)
 	print("shopEventList", #data.shopEventList)
 	return data

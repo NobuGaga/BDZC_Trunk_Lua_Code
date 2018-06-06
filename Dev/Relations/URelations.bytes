@@ -57,6 +57,9 @@ function _M:OnCreate(...)
 
 	moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
 
+	self.StaffPrefab = nil
+	self.LastStaffId = 0
+
 	local ImgBody = moudle:Get("BSX")
 	ImgBody.Activity = false
 	_P.SetBlackMan(self)
@@ -225,7 +228,20 @@ function _P.RefreshView(self)
 	if data.staffid ~= nil then
 		ImgBody.Activity = true
 		csvPersonnel = Csv.Personnel[data.staffid]
-		ImgBody.SpriteName = csvPersonnel.asset
+
+		if self.LastStaffId ~= data.staffid then
+			if self.StaffPrefab ~= nil then
+				self.StaffPrefab:Destroy()
+				self.StaffPrefab = nil
+			end
+			self.LastStaffId = data.staffid
+			if csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
+				self.StaffPrefab = CCommon.CreateActor(ImgBody, csvPersonnel.prefab, CCommon.ActorFieldMap.staff_lobby_main)
+				ImgBody.SpriteName = ""
+			else
+				ImgBody.SpriteName = csvPersonnel.asset
+			end
+		end
 		ImgJy.Activity = false
 	else
 		ImgBody.Activity = false

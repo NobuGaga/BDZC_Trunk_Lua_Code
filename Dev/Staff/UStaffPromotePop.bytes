@@ -58,11 +58,16 @@ function _M:OnCreate(id)
 	local TextUpMaxLevel = moudle:Get("UpMaxLevel")
 	TextUpMaxLevel.Text = Csv.Text("staff_maxlevel",{num = Csv.ColorUp[data.color+1].lvMax})
 
+	local csvLine = Csv.Personnel[id]
 	local TextName = moudle:Get("Name")
-	TextName.Text = Csv.Personnel[id].name
+	TextName.Text = csvLine.name
 
-	local ImgIcon = moudle:Get("Icon")
-	ImgIcon.SpriteName = Csv.Personnel[id].asset
+	local ImgIcon = moudle:Get("Icon")	
+	if csvLine.prefab ~= nil and csvLine.prefab > 0 then
+		CCommon.CreateActor(ImgIcon, csvLine.prefab, CCommon.ActorFieldMap.staff_up)
+	else
+		ImgIcon.SpriteName = csvLine.asset
+	end		
 end
 
 function _P.CreateList(self,data)

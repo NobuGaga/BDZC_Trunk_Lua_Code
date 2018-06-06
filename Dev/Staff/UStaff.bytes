@@ -41,12 +41,12 @@ function _M:OnCreate(...)
 			MStaff.gou = true
 			self.GOU.Activity = true
 		end
-		_P.CreateStaffList(self)
+		_P.CreateStaffList(self,true)
 		end, nil, 0.9)
 
 	self.mRawTableItems = {}
 	self.mRawTableItems2 = {} -- 没有获得的员工
-	_P.CreateStaffList(self)
+	_P.CreateStaffList(self,false)
 	local TextTitle = moudle:Get("C_Text")
 	TextTitle.Text = Csv.Text("staff_title")
 	local TextStaffNum = moudle:Get("StaffNum")
@@ -106,7 +106,7 @@ function _R.ChangeStaffColor(self,staffid)
 	end
 end
 
-function _P.CreateStaffList(self)
+function _P.CreateStaffList(self,isForSort)
 	for i = 1,5 do
 		self.mMoudle:Get("order"..i).SpriteName = Default_Img
 	end
@@ -115,28 +115,56 @@ function _P.CreateStaffList(self)
 	end
 
 	local contentTransform = self.mMoudle:Get("Content")
-	contentTransform:DestroyChildren()
+	if not isForSort then
+		contentTransform:DestroyChildren()
 
-	local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
-	for k,v in ipairs(staffTableDatas) do
-		self.mRawTableItems[v.id] = _P.OnCreateItem(v,contentTransform)
-	end
-	self.mSortStaffDatas = staffTableDatas
+		local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
+		for k,v in ipairs(staffTableDatas) do
+			self.mRawTableItems[v.id] = _P.OnCreateItem(v,contentTransform)
+		end
+		self.mSortStaffDatas = staffTableDatas
 
-	if Csv.Personnel ~= nil and MStaff.gou == false then
 		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
 		for k,v in ipairs(staffTableDatas) do
 			self.mRawTableItems2[v.id] = _P.OnCreateItem(v,contentTransform)
+			self.mRawTableItems2[v.id].moudle.SelfRect.Activity = not MStaff.gou
 		end
 	else
-		self.mRawTableItems2 = {}
+		local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
+		for k,v in ipairs(staffTableDatas) do
+			local item = self.mRawTableItems[v.id]
+			if item ~= nil then
+				item.moudle.SelfRect.CachedTran:SetSiblingIndex(k - 1)
+			end
+		end
+
+		local num = #staffTableDatas
+		if Csv.Personnel ~= nil and MStaff.gou == false then
+			staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+			for k,v in ipairs(staffTableDatas) do
+				local item = self.mRawTableItems2[v.id]
+				if item ~= nil then
+					item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
+					item.moudle.SelfRect.Activity = true
+				end
+			end
+		else
+			staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+			for k,v in ipairs(staffTableDatas) do
+				local item = self.mRawTableItems2[v.id]
+				if item ~= nil then
+					item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
+					item.moudle.SelfRect.Activity = false
+				end
+			end
+		end
 	end
 end
 
 function _P.ClickSortItem(self,sortType)
 	--MStaff.SortType = sortType
 	MStaff.SetStaffsSortType(sortType)
-	_P.CreateStaffList(self)
+	_P.CreateStaffList(self,true)
 end
 
 function _P.GetSortStaffsNotObtained(self,sortType)

@@ -1,0 +1,47 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Last_Details")
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("IntimacyText").Text = Csv.Text("lastgirl_qimidu")
+	moudle:Get("DataText").Text = Csv.Text("lastgirl_simiziliao")
+
+	local girlData = Csv.KnowGirl[data.girlid]
+
+	local icon = moudle:Get("BSX")
+	local nameText = moudle:Get("name")
+	local DescValue = moudle:Get("Text1")
+
+	icon.SpriteName = girlData.bigIcon
+	nameText.Text = MGirl.GetGirlName(data.girlid)--girlData.name
+	DescValue.Text = girlData.tips
+
+	local sliderText = moudle:Get("NumText")
+	local slider = moudle:Get("slider")
+
+	sliderText.Text = data.intimacy.."/"..girlData.maxReward
+	slider.Value = data.intimacy/girlData.maxReward
+end
+
+return _M

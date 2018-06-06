@@ -1,0 +1,220 @@
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cAirplaneUp        = 1,		--飞机升级		PAirplane.CAirplane
+	cAirplaneSkin      = 2,		--飞机皮肤		PAirplane.CAirplane
+	cAirplaneChoice    = 3,		--游学选人		PAirplane.CAirplaneChoice
+	cAirplaneStart     = 4,		--开始游学
+	cAirplaneAward     = 5,		--完成游学		PAirplane.CAirplaneAward
+	cAirplaneActivate  = 6,		--激活皮肤		PAirplane.CAirplane
+
+	sAirplaneInit      = 1,		--飞机初始化	PAirplane.SAirplaneInit
+	sAirplaneUp        = 2,		--				PAirplane.SAirplane
+	sAirplaneChoice    = 3,		--				PAirplane.SAirplaneSeats
+	sAirplaneSkin      = 4,		--选择皮肤返回   PAirplane.SAirplane
+	sAirplaneStart     = 5,		--				PAirplane.SAirplane
+	sAirplaneAward     = 6,		--				PAirplane.SAirplaneAward
+    sAirplaneAddSkin   = 7,		--增加皮肤列表   PAirplane.SAirplaneSkins
+	sAirplaneActivate  = 8,		--激活皮肤		PAirplane.SAirplaneActivate
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cAirplaneUp] 		= "PAirplane.CAirplane",
+		[ECmdId.cAirplaneSkin] 		= "PAirplane.CAirplane",
+		[ECmdId.cAirplaneChoice] 	= "PAirplane.CAirplaneChoice",
+		[ECmdId.cAirplaneAward] 	= "PAirplane.CAirplaneAward",
+		[ECmdId.cAirplaneActivate] 	= "PAirplane.CAirplane",
+	}
+	local recv = {
+		[ECmdId.sAirplaneInit]		= { proto = "PAirplane.SAirplaneInit",		handle = _P.OnAircraftInit},
+		[ECmdId.sAirplaneUp]		= { proto = "PAirplane.SAirplane",			handle = _P.OnAircraftUp},
+		[ECmdId.sAirplaneChoice]	= { proto = "PAirplane.SAirplaneSeats",		handle = _P.OnAircraftSelectStaff},
+		[ECmdId.sAirplaneSkin]		= { proto = "PAirplane.SAirplane",			handle = _P.OnAircraftSelectSkin},
+		[ECmdId.sAirplaneStart]		= { proto = "PAirplane.SAirplane",			handle = _P.OnAircraftStartLearn},
+		[ECmdId.sAirplaneAward]		= { proto = "PAirplane.SAirplaneAward",		handle = _P.OnAircraftGetReward},
+		[ECmdId.sAirplaneAddSkin]	= { proto = "PAirplane.SAirplaneSkins",		handle = _P.OnAircraftSkinList},
+		[ECmdId.sAirplaneActivate]	= { proto = "PAirplane.SAirplaneActivate",	handle = _P.OnAircraftActivate},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Aircraft, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MAircraft.Clean()
+	if nil ~= _P.Handle then
+		EventCenter.UnRegistCallEvent(_P.Handle)
+		_P.Handle = nil
+	end
+end
+
+----------------------------- Client -> Server -----------------------------
+function _M.AircraftUp(aircraftID)
+	_M.Send(ECmdId.cAirplaneUp, {ID = aircraftID})
+end
+
+function _M.AircraftSelectSkin(skinID)
+	skinID = skinID or 0
+	_M.Send(ECmdId.cAirplaneSkin, {ID = skinID})
+end
+
+function _M.AircraftSelectStaff(seatID, staffID)
+	_M.Send(ECmdId.cAirplaneChoice, {index = seatID, staffid = staffID})
+end
+
+function _M.AircraftStartLearn()
+	_M.Send(ECmdId.cAirplaneStart)
+end
+
+function _M.AircraftComplete(seatID)
+	if nil ~= seatID then
+		_M.Send(ECmdId.cAirplaneAward, {index = seatID})
+	else
+		_M.Send(ECmdId.cAirplaneAward)
+	end
+end
+
+function _M.AircraftActivate(skinID)
+	_M.Send(ECmdId.cAirplaneActivate, {ID = skinID})
+end
+----------------------------- Server -> Client -----------------------------
+function _P.OnAircraftInit(data)
+	MAircraft.InitData(data)
+	_P.RefreshUpdateState()
+	WindowMgr.Call("UAircraft", "RefreshView")
+	WindowMgr.Call("UAircraftSkin", "RefreshView")
+	WindowMgr.Call("UAircraftSkinAll", "RefreshView")
+	WindowMgr.Call("UAircraftUp", "RefreshView")
+	WindowMgr.Call("USchool", "RefreshView")
+end
+
+function _P.OnAircraftUp(data)
+	MAircraft.RefreshAircraftData(data)
+	WindowMgr.Call("UAircraft", "RefreshAircraftInfo")
+	WindowMgr.Call("UAircraftUp", "OnUpgradeSuccess")
+end
+
+function _P.OnAircraftSelectStaff(data)
+	if nil ~= data then
+		if nil ~= data.airplaneSeat then
+			for _, seatData in pairs(data.airplaneSeat) do
+				MAircraft.RefreshAircraftSeatData(seatData)
+			end
+			WindowMgr.Call("USchool", "RefreshSeatViewAndJudge")
+		else
+			error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneChoice .. "返回 airplaneSeat 为空")
+		end
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneChoice .. "返回空")
+	end
+end
+
+function _P.OnAircraftSelectSkin(data)
+	if nil ~= data then
+		MAircraft.RefreshAircraftSkinData(data.airplaneSkinID)
+		WindowMgr.Call("UAircraft", "RefreshAircraftInfo")
+		WindowMgr.Call("UAircraftSkin", "OnSelectAircraftSkin")
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneSkin .. "返回空")
+	end
+end
+
+function _P.OnAircraftStartLearn(data)
+	if nil ~= data then
+		MAircraft.RefreshStartLearnData(data.airplaneTime)
+		_P.RefreshUpdateState()
+		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
+		WindowMgr.Call("USchool", "RefreshSchoolState")
+		WindowMgr.Call("USchool", "OnClose")
+		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneAward .. "返回空")
+	end
+end
+
+function _P.OnAircraftGetReward(data)
+	if nil ~= data then
+		if nil ~= data.airplaneAwards then
+			local temp = { ["airplaneSeat"] = {} }
+			for index, value in pairs(data.airplaneAwards) do
+				if nil ~= value.airplanes then
+					temp.airplaneSeat[index] = value.airplanes
+				end
+			end
+			MAircraft.RefreshAircraftSeatListData(temp)
+			_P.RefreshUpdateState()
+			WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
+			WindowMgr.Call("USchool", "OnGetReward", data.airplaneAwards)
+			WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		else
+			error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneAward .. "字段 airplaneAwards 返回空")
+		end
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneAward .. "返回空")
+	end
+end
+
+function _P.OnAircraftSkinList(data)
+	if nil ~= data then
+		MAircraft.RefreshAircraftUnActivateSkinList(data.skinID)
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneAddSkin .. "返回空")
+	end
+end
+
+function _P.OnAircraftActivate(data)
+	if nil ~= data then
+		MAircraft.DeleteAircraftUnActivateSkin(data.skinID)
+		WindowMgr.Call("UAircraft", "RefreshAircraftSkinInfo")
+		WindowMgr.Call("UAircraftSkin", "OnActivateSuccess", data.skinID)
+	else
+		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneActivate .. "返回空")
+	end
+end
+
+-----------------------------   Data Concrol   -----------------------------
+function _P.RefreshUpdateState()
+	if MAircraft.IsStuding then
+		if nil == _P.Handle then
+			_P.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+				_P.UpdateTime()
+			end)
+		end
+	else
+		if nil ~= _P.Handle then
+			EventCenter.UnRegistCallEvent(_P.Handle)
+			_P.Handle = nil
+		end
+	end
+end
+
+function _P.UpdateTime()
+	local lessTime = MAircraft.SchoolTime - HeartBeat.ServSecond()
+	if MAircraft.FlyEndAnimTime - 1 >= lessTime and not MAircraft.IsPlayEndLearn then
+		MAircraft.IsPlayEndLearn = true
+		WindowMgr.Call("UAircraft", "PlayEndFly")
+	end
+	if 0 >= lessTime then
+		MAircraft.IsPlayEndLearn = false
+		MAircraft.RefreshAircraftSeatListState()
+		_P.RefreshUpdateState()
+		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
+		WindowMgr.Call("USchool", "RefreshSchoolState")
+		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	end
+end
+
+return _M

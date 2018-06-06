@@ -1,0 +1,276 @@
+local MShop = JRequire "Dev.Shop.MShop"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
+local EventCenter = JRequire "Dev.EventCenter"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cSiegeInit = 1,			-- 请求初始化数据
+	cSiegeStage	= 2,		-- 请求阶段信息
+	cProtest = 3,			-- 抗议请求
+	cBossList = 4,			-- 请求boss列表
+	cInitFight = 5,			-- 请求进入备战 --PSiegeWall.CInitFight
+	cBuyBuffInBattle = 6,	-- 备战界面中购买buff （购买直接使用）--PSiegeWall.CBuyBuffInBattle
+	cUsekillBuff = 7,		-- 使用击杀buff	--PSiegeWall.CUsekillBuff
+	cSiegeFight = 8,		-- 战斗	--PSiegeWall.CSiegeFight
+	cUnlockStaff = 9,		-- 解锁员工 --PSiegeWall.CUnlockStaff
+	cOpenUdisk = 10,		-- 开启U盘 --PSiegeWall.COpenUdisk
+	cDonate = 11,			-- 捐赠 --PSiegeWall.CDonate
+	cBuyOrder = 12,			-- 购买斩杀令 --PSiegeWall.CDonate
+	cEnterTreasure = 13,	-- 进入宝库界面 -- PSiegeWall.CEnterTreasure
+	cShopBuy = 14,			-- 商城购买（兑换）PSiegeWall.CShopBuy
+	cGetRankReward = 15,	-- 领取排行版奖励 PSiegeWall.CGetRankReward
+
+	sSiegeInit						=	1,  -- 初始化数据	--PSiegeWall.SSiegeMsg
+	sSiegeStage						=	2,	-- 接受阶段信息  --PSiegeWall.SSiegeStageMsg
+	sProtest						=	3,  -- 抗议返回	--PSiegeWall.SProtest
+	sBossList						=	4,  -- boss列表返回	--PSiegeWall.SBossList
+	sInitFight						=	5,  -- 请求进入备战	--PSiegeWall.SInitFight
+	sBuyBuffInBattle				=	6,  -- 备战界面中购买buff	--PSiegeWall.SBuyBuffInBattle
+	sUsekillBuff					=	7,  -- 使用击杀buff	--PSiegeWall.SUsekillBuff
+	sSiegeFight						=	8, 	-- 战斗返回	--PSiegeWall.SSiegeFight
+	sUnlockStaff					=	9, 	-- 解锁员工	--PSiegeWall.SUnlockStaff
+	sOpenUdisk						=	10, 	-- 开启U盘	--PSiegeWall.SOpenUdisk
+	sDonate 						=	11, -- 捐赠 --PSiegeWall.SDonate
+	sBuyOrder						= 	12, -- 购买斩杀令 -- PSiegeWall.SBuyOrder
+	sEnterTreasure					=	13, -- 进入宝库界面 --PSiegeWall.SEnterTreasure
+	sShopBuy						=	14, -- 商城购买（兑换）PSiegeWall.SShopBuy
+	sGetRankReward					= 	15, -- 领取排行版奖励 PSiegeWall.SGetRankReward
+	sGetRankStatePush				=	16, -- 领取状态变化推送 PSiegeWall.SGetRankStatePush
+	sGetActionPoint					=	17,	-- 更新行动点 PSiegeWall.SActionPoint
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cSiegeInit] = "",
+		[ECmdId.cSiegeStage] =	"",
+		[ECmdId.cProtest] = "",
+		[ECmdId.cBossList] = "",
+		[ECmdId.cInitFight] = "PSiegeWall.CInitFight",
+		[ECmdId.cBuyBuffInBattle] = "PSiegeWall.CBuyBuffInBattle",
+		[ECmdId.cUsekillBuff] = "PSiegeWall.CUsekillBuff",
+		[ECmdId.cSiegeFight] = "PSiegeWall.CSiegeFight",
+		[ECmdId.cUnlockStaff] = "PSiegeWall.CUnlockStaff",
+		[ECmdId.cOpenUdisk] = "PSiegeWall.COpenUdisk",
+		[ECmdId.cDonate] = "PSiegeWall.CDonate",
+		[ECmdId.cBuyOrder] = "PSiegeWall.CDonate",
+		[ECmdId.cEnterTreasure] = "PSiegeWall.CEnterTreasure",
+		[ECmdId.cShopBuy] = "PSiegeWall.CShopBuy",
+		[ECmdId.cGetRankReward] = "PSiegeWall.CEnterTreasure",
+	}
+	local recv = {
+		
+		[ECmdId.sSiegeInit]         = { proto = "PSiegeWall.SSiegeMsg",          	handle = _P.OnInitData},
+		[ECmdId.sSiegeStage]		= { proto = "PSiegeWall.SSiegeStageMsg",	 	handle = _P.OnGetStageMsg},
+		[ECmdId.sProtest]       	= { proto = "PSiegeWall.SProtest",        		handle = _P.OnProtest},
+		[ECmdId.sBossList]        	= { proto = "PSiegeWall.SBossList",    	 		handle = _P.OnBossList},
+		[ECmdId.sInitFight]    		= { proto = "PSiegeWall.SInitFight",   	 		handle = _P.OnInitFight},
+		[ECmdId.sBuyBuffInBattle]   = { proto = "PSiegeWall.SBuyBuffInBattle",      handle = _P.OnBuyBuffInBattle},
+		[ECmdId.sUsekillBuff]      	= { proto = "PSiegeWall.SUsekillBuff",  	 	handle = _P.OnUsekillBuff},
+		[ECmdId.sSiegeFight]       	= { proto = "PSiegeWall.SSiegeFight",       	handle = _P.OnSiegeFight},
+		[ECmdId.sUnlockStaff]  		= { proto = "PSiegeWall.SUnlockStaff",  	 	handle = _P.OnUnlockStaff},
+		[ECmdId.sOpenUdisk]    		= { proto = "PSiegeWall.SOpenUdisk", 	 		handle = _P.OnOpenUdiskBack},
+		[ECmdId.sDonate]        	= { proto = "PSiegeWall.SDonate", 	 			handle = _P.OnDonateBack},
+		[ECmdId.sBuyOrder]       	= { proto = "PSiegeWall.SBuyOrder",  	 		handle = _P.OnBuyOrderBack},
+		[ECmdId.sEnterTreasure]     = { proto = "PSiegeWall.SEnterTreasure",  	 	handle = _P.OnEnterTreasure},
+		[ECmdId.sShopBuy]     	   	= { proto = "PSiegeWall.SShopBuy",  		 	handle = _P.OnShopBuyBack},
+		[ECmdId.sGetRankReward]		= { proto = "PSiegeWall.SGetRankReward",		handle = _P.OnGetRankRewardBack},
+		[ECmdId.sGetRankStatePush]  = { proto = "PSiegeWall.SGetRankStatePush",	 	handle = _P.OnGetRankStatePush},
+		[ECmdId.sGetActionPoint]	= { proto = "PSiegeWall.SActionPoint",			handle = _P.OnUpdateActionPoint},
+	}
+	 _M.Send = SocketMgr.Regist(Define.SysId.SiegeWall, send, recv, isReload)
+end
+
+-- C2S
+function _M.ReqSiegeInit()
+	_M.Send(ECmdId.cSiegeInit)
+end
+
+function _M.ReqSiegeStage()
+	_M.Send(ECmdId.cSiegeStage)
+end
+
+function _M.ReqProtest()
+	_M.Send(ECmdId.cProtest)
+end
+
+function _M.ReqBossList()
+	_M.Send(ECmdId.cBossList)
+end
+
+function _M.ReqInitFight(id)
+	_M.Send(ECmdId.cInitFight,{bossIndexID = id})
+end
+
+function _M.ReqBuyBuffInBattle(id)
+	_M.Send(ECmdId.cBuyBuffInBattle,{bossIndexID = id})
+end
+
+function _M.ReqUsekillBuff(_id)
+	_M.Send(ECmdId.cUsekillBuff,{id = _id})
+end
+
+function _M.ReqSiegeFight(_staffid,_bossId)
+	_M.Send(ECmdId.cSiegeFight,{staffid = _staffid,bossIndexID = _bossId})
+end
+
+function _M.ReqUnlockStaff(_staffid,_bossID)
+	_M.Send(ECmdId.cUnlockStaff,{staffid = _staffid,bossIndexID = _bossID})
+end
+
+
+function _M.OpenUdiskReq(id, playerid)
+	_M.Send(ECmdId.cOpenUdisk, {id = id, playerid = playerid})
+end
+
+
+function _M.DonateReq(id)
+	_M.Send(ECmdId.cDonate, {id = id})
+end
+
+
+function _M.BuyOrderReq(id)
+	_M.Send(ECmdId.cBuyOrder, {id = id})
+end
+
+
+function _M.EnterTreasureReq(actId, stage)
+	_M.Send(ECmdId.cEnterTreasure, {actId = actId, stage = stage})
+end
+
+
+function _M.BuyShopItemReq(stage, index, count)
+	_M.Send(ECmdId.cShopBuy, {stage = stage, index = index, count = count})
+end
+
+
+function _M.GetRankResReq(actId, stage, ranktype)
+	_M.Send(ECmdId.cGetRankReward, {actId = actId, stage = stage, ranktype = ranktype})
+end
+
+
+-- S2C
+function _P.OnInitData(data)
+	MSiege.SetAcitvityPhase(data.activityID,data.phase)
+	MSiege.SetAllStageData(data.stageData)
+end
+
+function _P.OnGetStageMsg(data)
+	print("________OnGetStageMsg_")
+	MSiege.SetSiegeStageMsg(data)
+end
+
+function _P.OnUpdateActionPoint(data)
+	print("_________UpdateAciont____")
+	MSiege.SetActionPoint(data)
+end
+
+function _P.OnProtest(data)
+	print("_________OnProtest____")
+	WindowMgr.Call("USiegeMain", "GetProtest",data)
+end
+
+function _P.OnBossList(data)
+	print("_________OnBossList_______")
+	MSiege.SetBossList(data)
+end
+
+function _P.OnInitFight(data)
+	WindowMgr.Call("USiegeBattle", "InitFight", data)
+end
+
+function _P.OnBuyBuffInBattle(data)
+	MSiege.SetNewBuff(data)
+	WindowMgr.Call("USiegeBattle", "RefreshBuff", data)
+end
+
+function _P.OnUsekillBuff(data)
+	MSiege.SetNewBuff(data)
+	WindowMgr.Call("USiegeBattle", "RefreshBuff", data)
+end
+
+function _P.OnSiegeFight(data)
+	WindowMgr.Call("USiegeBattle", "UpdateFight", data)
+end
+
+function _P.OnUnlockStaff(data)
+	MSiege.UnlockStaff(data)
+	WindowMgr.Call("USiegeSelectStaff","RefreshStaff")
+end
+
+function _P.OnOpenUdiskBack(data)
+	WindowMgr.Call("USiegeTreasurePanel", "OnOpenCallBack", data)
+end
+
+
+function _P.OnDonateBack(data)
+	WindowMgr.Call("USiegeTreasurePanel", "OnDonateCallBack", data)
+end
+
+
+function _P.OnBuyOrderBack(data)
+	WindowMgr.Call("USiegeTreasurePanel", "OnBuyCallBack", data)
+end
+
+
+function _P.OnEnterTreasure(data)
+	WindowMgr.Call("USiegeTreasurePanel", "OnGetTreasureList", data)
+end
+
+
+function _P.OnShopBuyBack(data)
+	local curStageData = MSiege.AllStageData[data.stage]
+	if curStageData then
+		MSiege.AllStageData[data.stage].point = data.point
+		_P.UpdateShopItemData(stage, data)
+	end
+
+	WindowMgr.Call("USiegeExchangePanel", "OnExchangeCallBack", data)
+end
+
+
+function _P.UpdateShopItemData(stage, data)
+	local curStageData = MSiege.AllStageData[data.stage]
+	if curStageData ~= nil and curStageData.itemList ~= nil then
+		for k,v in pairs(curStageData.itemList) do
+			if v.index == data.index then
+				v.buyCount = data.buyCount
+				break
+			end
+		end
+	end
+end
+
+
+function _P.OnGetRankRewardBack(data)
+	WindowMgr.Call("USiegeRankPanel", "OnGetRewardBack", data)
+end
+
+
+function _P.OnGetRankStatePush(data)
+	local curStageData = MSiege.AllStageData[data.stage]
+	if curStageData then
+		MSiege.AllStageData[data.stage].selfGetState = data.selfGetState
+		MSiege.AllStageData[data.stage].gangGetState = data.gangGetState
+	end
+
+	WindowMgr.Call("USiegeRankPanel", "OnGetRankStatePush", data)
+end
+
+
+--清空模块
+function _M.ModuleClean()
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	
+end, true)
+
+--恢复
+function _M.ReqUnlockStaff(_staffID,bossid)
+	print("恢复员工________________",_staffID,bossid)
+end
+
+return _M

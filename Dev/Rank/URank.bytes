@@ -1,0 +1,117 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRank = JRequire "Dev.Rank.MRank"
+local CRank = JRequire "Dev.Rank.CRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EFFECT_OPEN = "T_Rank_Opendoor"
+local EFFECT_CLOSE = "T_Rank_Closedoor"
+local EFFECT_OPEN3 = "T_Rank_Opendoor3"
+local EFFECT_CLOSE3 = "T_Rank_Closedoor3"
+local THISACTORID = 10047
+local FULLACTORID = 10048
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Ranking_URanking")
+	self.mMoudle = moudle
+	self.mIsClossing = false
+	self.mIsOpening = false
+
+	moudle:Get("text1").Text = Csv.Text("rank_bang")
+	moudle:Get("text2").Text = Csv.Text("rank_ben")
+	moudle:Get("text3").Text = Csv.Text("rank_bang")
+	moudle:Get("text4").Text = Csv.Text("rank_kua")
+
+	local ImgDoor = moudle:Get("door")
+	local ThisActorPanel = moudle:Get("ThisActorPanel")
+	self.ImgZhiWen = moudle:Get("zhiwen")
+	ImgDoor:AddOnButton(function(...)
+		SoundMgr.Play(10033)
+		self:Lock()
+		-- 打开排行版特效
+		ImgDoor.RaycastTarget = false
+		self.ImgZhiWen.Activity = false
+		CCommon.CreateEffect(ThisActorPanel, THISACTORID, nil, function( ... )
+			_P.OpenDoor(self)
+		end)
+	end,nil,1)
+	self.mImgDoor = ImgDoor
+
+	local ImgDoor3 = moudle:Get("door3")
+	local FullActorPanel = moudle:Get("FullActorPanel")
+	self.ImgZhiWen3 = moudle:Get("zhiwen3")
+	ImgDoor3:AddOnButton(function(...)
+		SoundMgr.Play(10033)
+		self:Lock()
+		-- 打开排行版特效
+		ImgDoor3.RaycastTarget = false
+		self.ImgZhiWen3.Activity = false
+		CCommon.CreateEffect(FullActorPanel, FULLACTORID, nil, function( ... )
+			_P.OpenDoor3(self)
+		end)
+	end,nil,1)
+	self.mImgDoor3 = ImgDoor3
+
+	moudle:Get("Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	-- moudle:Get("door4").IsGray = true
+	-- moudle:Get("door5").IsGray = true
+	-- moudle:Get("zhiwen3").IsGray = true
+end
+
+function _P.OpenDoor(self)
+	local tween = self.mMoudle:Get("door").CachedTran:GetJTweener(EFFECT_OPEN)
+	-- tween:SetOnComplete(function(...)
+	-- 	WindowMgr.Create("URankTab")
+	-- end)
+	tween:Play()
+
+	self.mMoudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+		WindowMgr.Create("URankTab")
+	end,nil,0.7)
+end
+
+function _R.CloseDoor(self)
+	local tween = self.mMoudle:Get("door").CachedTran:GetJTweener(EFFECT_CLOSE)
+	tween:SetOnComplete(function(...)
+		self.mImgDoor.RaycastTarget = true
+		self.ImgZhiWen.Activity = true
+	end)
+	tween:Play()
+end
+
+function _P.OpenDoor3(self)
+	local tween = self.mMoudle:Get("door3").CachedTran:GetJTweener(EFFECT_OPEN3)
+	tween:Play()
+
+	self.mMoudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+		WindowMgr.Create("URankCross")
+	end,nil,0.7)
+end
+
+function _R.CloseDoor3(self)
+	local tween = self.mMoudle:Get("door3").CachedTran:GetJTweener(EFFECT_CLOSE3)
+	tween:SetOnComplete(function(...)
+		self.mImgDoor3.RaycastTarget = true
+		self.ImgZhiWen3.Activity = true
+	end)
+	tween:Play()
+end
+
+return _M

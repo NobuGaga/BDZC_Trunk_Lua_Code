@@ -1,0 +1,110 @@
+--商会信息界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(msg)
+	local data = msg.info
+	local players = msg.players
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Query_Result")
+	self.Moudle = moudle
+	self.Id = data.id
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("commerce_detail1")
+	moudle:Get("GangName").Text = Csv.Text("commerce_detail2")
+	moudle:Get("GangNameText").Text = data.name
+	moudle:Get("GangLevel").Text = Csv.Text("commerce_detail3", {level = data.level})
+
+	local csvLine = Csv.Commerce[data.level]
+	--商会经验
+	moudle:Get("experience").Text = Csv.Text("commerce_detail4")
+	if csvLine.exp ~= nil and csvLine.exp > 0 then
+		moudle:Get("experienceNum").Text = string.format("%d/%d", data.exp, csvLine.exp)
+	else
+		moudle:Get("experienceNum").Text = string.format("%d/MAX", data.exp)
+	end
+	--商会财富
+	moudle:Get("Money").Text = Csv.Text("commerce_detail5")
+	moudle:Get("MoneyNum").Text = tostring(data.money)
+	--商会势力
+	moudle:Get("Power").Text = Csv.Text("commerce_detail6")
+	moudle:Get("PowerNum").Text = tostring(data.power)
+	--商会QQ群
+	moudle:Get("QQ").Text = Csv.Text("commerce_detail7")
+	moudle:Get("QQNum").Text = tostring(data.qq)
+	--对外宣言
+	moudle:Get("Declaration").Text = Csv.Text("commerce_detail8")
+	if data.declaration == nil or data.declaration == "" then
+		moudle:Get("DeclarationNum").Text = Csv.Text("commerce_create16")
+	else
+		moudle:Get("DeclarationNum").Text = data.declaration
+	end	
+	--商会人数
+	moudle:Get("PeopleNum").Text = Csv.Text("commerce_detail9")
+	moudle:Get("NumText").Text = string.format("%d/%d", data.memberNum, csvLine.count)
+	
+	moudle:Get("PlayerName").Text = Csv.Text("commerce_detai20")
+	moudle:Get("position").Text = Csv.Text("commerce_detai21")
+
+	if MCommerce.IsJoinCommerce() then
+		local bg = moudle:Get("GangPeople")
+		local size = bg.SizeDelta
+		size.y = 636
+		bg.SizeDelta = size
+		moudle:Get("C_Btn_b").Activity = false
+	else
+		moudle:Get("C_text").Text = Csv.Text("commerce_detai22")
+		local joinBtn = moudle:Get("C_Btn_b")
+		joinBtn:AddOnButton(function()
+			SoundMgr.Play(10001)
+			if data.memberNum >= csvLine.count then
+				CCommon.ShowError(Csv.Text("commerce_error2"))
+			else
+				CCommerce.ApplyJoinReq(self.Id)
+			end
+		end)
+	end
+	if players ~= nil then
+		local content = moudle:Get("Content")
+		for _,player in pairs(players) do
+			local childMoudle = self:CreateMoudle(content, "M_GangPeople_Item")
+			childMoudle:Get("PlayerName").Text = player.name
+			childMoudle:Get("position").Text = MCommerce.GetJobStr(player.job)
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,92 @@
+--@RefType [Dev.Questionnaire.MQuestionnaire.bytes#_M]
+local MQuestionnaire = JRequire "Dev.Questionnaire.MQuestionnaire"
+local CMain = JRequire "Dev.Main.CMain"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cGetReward			=	1,--请求领取奖励	PQuestionnaire.CGetReward
+
+	sInit				=	1,--初始化		  PQuestionnaire.SUpdateSate
+	sUpdateSate			=	2,--更新活动状态	PQuestionnaire.SUpdateSate
+	sGetReward			=	3,--获取奖励成功返回	PQuestionnaire.SUpdateSate
+}
+
+function _M.ModuleClean()
+	MQuestionnaire.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cGetReward] = "PQuestionnaire.CGetReward",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sInit] 			= {	proto = "PQuestionnaire.SUpdateSate", 	handle = _P.OnInit},
+		[CMD_ID.sUpdateSate] 	= {	proto = "PQuestionnaire.SUpdateSate", 	handle = _P.OnUpdateSate},
+		[CMD_ID.sGetReward] 	= {	proto = "PQuestionnaire.SUpdateSate", 	handle = _P.OnGetReward},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Questionnaire, func_send, func_recv, isReload)
+end
+
+function _M.GetRewardReq(answerList)
+	_M.Send(CMD_ID.cGetReward, {list = answerList})
+end
+
+-----------------------------
+function _P.DoUpdateMoudle(data)
+	MQuestionnaire.State = data.state
+
+	-- 显示红点
+	local isShowRed = data.state == 1
+	if isShowRed ~= MQuestionnaire.QuestionRedPoint then
+		MQuestionnaire.QuestionRedPoint = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Questionnaire)
+	end
+
+	if data.version ~= nil then
+		MQuestionnaire.Version = data.version
+	else
+		MQuestionnaire.Version = 0
+	end
+	if data.endTime ~= nil then
+		MQuestionnaire.EndTime = data.endTime
+	else
+		MQuestionnaire.EndTime = 0
+	end
+	MQuestionnaire.RewardList = {}
+	if data.list ~= nil then
+		for _,item in pairs(data.list) do
+			table.insert(MQuestionnaire.RewardList, {id = item.key, num = item.value})
+		end
+	end
+end
+
+function _P.OnInit(data)
+	_P.DoUpdateMoudle(data)
+end
+
+function _P.OnUpdateSate(data)
+	_P.DoUpdateMoudle(data)
+
+	WindowMgr.Call("UMain", "RefreshTopBtns")
+	WindowMgr.Call("UQuestionnaire", "OnUpdateSate", data)
+end
+
+function _P.OnGetReward(data)
+	MQuestionnaire.IsGetRewardBack = true
+	_P.DoUpdateMoudle(data)
+	
+	WindowMgr.Call("UMain", "RefreshTopBtns")
+	WindowMgr.Call("UQuestionnaire", "OnGetReward", data)
+end
+
+return _M

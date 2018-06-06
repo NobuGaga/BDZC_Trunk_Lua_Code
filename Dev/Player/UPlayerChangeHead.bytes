@@ -1,0 +1,482 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local JGuiManager = CS.JGui.JGuiManager
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.OnChoose(self, funcId)
+	MPlayer.LastChoose = funcId
+	_P.RefreshList(self,funcId)
+end
+
+function _P.RefreshList(self,funcId)
+	self.HeadTable = {}
+	self.NowSelectId = MPlayer.GetHeadID()
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	self.ImgSelect:SetParent(moudle.SelfRect.CachedTran)
+	content:DestroyChildren()
+	local list = _P.GetSortList(self,funcId)
+	self.mList = list
+	for k,v in ipairs(list) do
+		local csvHead = Csv.Avatar[v.headid]
+		if csvHead ~= nil then
+			local headMoudle = JGuiManager.GetMoudle(content,"M_Cosmetology_Item")
+			local head = headMoudle:Get("Head")
+			head.SpriteName = MPlayer.GetOtherHeadIcon(v.headid,MPlayer.GetSex())
+			headMoudle:Get("BottomBg").Activity = false
+			headMoudle:Get("M_Cosmetology_Item"):AddOnButton(function()
+				_P.ChangeSelectHead(self,v.headid)
+			end)
+			if v.isHave ~= nil then
+				if v.isHave then
+					head.IsGray = false
+				else
+					head.IsGray = true
+				end
+			else
+				head.IsGray = false
+			end
+			self.HeadTable[v.headid] = headMoudle
+		end
+	end
+	_P.ChangeSelectHead(self,self.NowSelectId)
+
+	local textActivity = moudle:Get("ActivityDesc")
+	if funcId == Define.SysId.MakeUp_Activity then
+		if self.ActId ~= nil then
+			local actData = MActivity.GetFromId(self.ActId)
+			if actData ~= nil then
+				if actData.state.endTime <= 0 then
+					textActivity.Text = Csv.Text("player_change15")
+				else
+					textActivity.Text = Csv.Text("player_change14",{time1 = LuaUtil.TransToYearMonthDay(actData.state.startTime),time2 = LuaUtil.TransToYearMonthDay(actData.state.endTime)})
+				end
+			end
+		end
+	else
+		textActivity.Text = ""
+	end
+end
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Cosmetology")
+	self.Moudle = moudle
+	self.ImgSelect = moudle:Get("ING")
+	self.NowSelectId = MPlayer.GetHeadID()
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("IconBg"):AddOnButton(function()
+		_P.ClickItem(self)
+	end,nil,1.2)
+
+	moudle:Get("Bsx").SpriteName = MPlayer.GetBodySp()
+	moudle:Get("head").SpriteName = MPlayer.GetHeadSp()
+	moudle:Get("C_Text").Text = Csv.Text("player_change1")
+	moudle:Get("text1").Text = Csv.Text("player_change4")
+	moudle:Get("OverviewBtnText").Text = Csv.Text("player_change2")
+
+	moudle:Get("text2").Text = Csv.Text("player_changeAttr1")
+	moudle:Get("text3").Text = Csv.Text("player_changeAttr2")
+	moudle:Get("text4").Text = Csv.Text("player_changeAttr3")
+	moudle:Get("text5").Text = Csv.Text("player_changeAttr4")
+	moudle:Get("Geted").Text = Csv.Text("player_change11")
+
+	moudle:Get("ClickAble"):AddOnButton(function()
+		moudle:Get("ClickAble").Activity = false
+	end,nil,1)
+
+	moudle:Get("OverviewBtn"):AddOnButton(function()
+		moudle:Get("ClickAble").Activity = true
+	end,nil,1.2)
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		_P.OnClickBtn(self)
+	end,nil,0.9)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if self._SysId ~= nil and Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.MakeUp, true)
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 3 then
+				if v.id == Define.SysId.MakeUp_Activity then
+					local actid = MActivity.ActIdForType[Define.ActivityType.Head_Change]
+					if actid ~= nil then
+						self.ActId = actid
+						local csvChangeHead = Csv.ActivityChangeHead[actid]
+						if csvChangeHead ~= nil then
+							tabHandle:Add(v.id, moudle:Get("Tab"..index), moudle:Get("TabText"..index), csvChangeHead.name)
+						end
+					end
+				else
+					tabHandle:Add(v.id, moudle:Get("Tab"..index), moudle:Get("TabText"..index), v.name)
+				end
+			end
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+	if count < 3 then
+		for i=count + 1,3 do
+			moudle:Get("Tab"..i).Activity = false
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		_P.SetCost(self)
+	end)
+	_P.SetAllAddAttr(self)
+end
+
+function _P.ClickItem(self)
+	if self.CostItemId ~= nil then
+		CCommon.ShowItemTips(self.CostItemId)
+	end
+end
+
+function _P.OnClickBtn(self)
+	local headTable = MPlayer.HeadTable
+	if MPlayer.LastChoose ~= nil and headTable ~= nil then
+		local csvHead = Csv.Avatar[self.NowSelectId]
+		if csvHead ~= nil then
+			if MPlayer.LastChoose == Define.SysId.MakeUp_Have then
+				if csvHead.costItem ~= nil then
+					if MBag.CheckItemEnough(csvHead.costItem[1],csvHead.costItem[2]) then
+						CPlayer.ChangeHead(self.NowSelectId)
+					end
+				else
+					CPlayer.ChangeHead(self.NowSelectId)
+				end
+			elseif MPlayer.LastChoose == Define.SysId.MakeUp_Normal then
+				if csvHead.changeType ~= nil then
+					if csvHead.changeType == 1 then
+						if csvHead.changeItem ~= nil then
+							if MBag.CheckItemEnough(csvHead.changeItem[1],csvHead.changeItem[2]) then
+								CPlayer.LiveHead(self.NowSelectId)
+							end
+						else
+							CPlayer.LiveHead(self.NowSelectId)
+						end
+					elseif csvHead.changeType == 2 then
+						if _P.CheckIsEnoughHead(self.NowSelectId) then
+							CPlayer.LiveHead(self.NowSelectId)
+						else
+							CCommon.ShowError(csvHead.changeDesc)
+						end
+					end
+				end
+			elseif MPlayer.LastChoose == Define.SysId.MakeUp_Activity then
+				if csvHead.changeType ~= nil then
+					if csvHead.changeType == 1 then
+						if csvHead.changeItem ~= nil then
+							if MBag.CheckItemEnough(csvHead.changeItem[1],csvHead.changeItem[2]) then
+								CPlayer.LiveHead(self.NowSelectId,self.ActId)
+							end
+						else
+							CPlayer.LiveHead(self.NowSelectId,self.ActId)
+						end
+					elseif csvHead.changeType == 2 then
+						if _P.CheckIsEnoughHead(self.NowSelectId) then
+							CPlayer.LiveHead(self.NowSelectId,self.ActId)
+						else
+							CCommon.ShowError(csvHead.changeDesc)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function _P.CheckIsEnoughHead(headid)
+	local csvHead = Csv.Avatar[headid]
+	local headTable = MPlayer.HeadTable
+	if headTable ~= nil and csvHead ~= nil and csvHead.changeItem ~= nil then
+		local num = 0
+		for k,v in pairs(csvHead.changeItem) do
+			if MPlayer.HeadTable[v] ~= nil then
+				num = num + 1
+			end
+		end
+		if num >= #csvHead.changeItem then
+			return true
+		else
+			return false
+		end
+	end
+	return true
+end
+
+function _P.SetCost(self)
+	local moudle = self.Moudle
+	local headid = self.NowSelectId
+	local csvHead = Csv.Avatar[headid]
+	
+	local textGeted = moudle:Get("Geted")
+	local textNeed = moudle:Get("Getneed")
+	local goCost = moudle:Get("Cost")
+	local btn = moudle:Get("C_Btn_a")
+	local textBtn = moudle:Get("C_text")
+
+	if csvHead.changeDesc ~= nil then
+		textNeed.Text = csvHead.changeDesc
+	end
+
+	textGeted.Activity = false
+	textNeed.Activity = false
+	goCost.Activity = false
+	btn.Activity = false
+	if csvHead ~= nil then
+		local funcId = MPlayer.LastChoose
+		local item
+		if funcId == Define.SysId.MakeUp_Have then
+			btn.Activity = true
+			if headid == MPlayer.GetHeadID() then
+				btn.RaycastTarget = false
+				btn.IsGray = true
+				textBtn.Text = Csv.Text("player_change8")
+			else
+				goCost.Activity = true
+				item = csvHead.costItem
+				btn.RaycastTarget = true
+				btn.IsGray = false
+				textBtn.Text = Csv.Text("player_change6")
+			end
+		else
+			local headTable = MPlayer.HeadTable
+			if headTable ~= nil then
+				local headData = headTable[headid]
+				if headData ~= nil then
+					textGeted.Activity = true
+				else
+					if csvHead.changeType ~= nil then
+						btn.Activity = true
+						if csvHead.changeType == 1 then
+							item = csvHead.changeItem
+							goCost.Activity = true
+							textBtn.Text = Csv.Text("player_change12")
+							btn.RaycastTarget = true
+							btn.IsGray = false
+						elseif csvHead.changeType == 2 then
+							textNeed.Activity = true
+							textBtn.Text = Csv.Text("player_change13")
+							if _P.CheckIsEnoughHead(headid) then
+								btn.RaycastTarget = true
+								btn.IsGray = false
+							else
+								btn.RaycastTarget = false
+								btn.IsGray = true
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if item ~= nil then
+			local csvItem = Csv.Item[item[1]]
+			if csvItem ~= nil then
+				self.CostItemId = item[1]
+				moudle:Get("IconBg").SpriteName = csvItem.colorIcon
+				moudle:Get("Icon").SpriteName = csvItem.icon
+				local itemNum = MBag.GetItemNum(item[1])
+				if itemNum >= item[2] then
+					moudle:Get("Text3").Text = Csv.Text("company_exp",{max = item[2],num = itemNum})
+				else
+					moudle:Get("Text3").Text = Csv.Text("player_change10",{max = item[2],num = itemNum})
+				end
+			end
+		else
+			goCost.Activity = false
+		end
+	end
+end
+
+function _R.RefreshList(self)
+	_P.RefreshList(self.MPlayer.LastChoose)
+end
+
+function _P.ChangeSelectHead(self,headid)
+	local moudle = self.Moudle
+	self.NowSelectId = headid
+	local headTable = self.HeadTable
+	if headTable ~= nil then
+		local headMoudle = headTable[headid]
+		if headMoudle == nil then
+			if self.mList ~= nil and self.mList[1] ~= nil then
+				headMoudle = headTable[self.mList[1].headid]
+				self.NowSelectId = self.mList[1].headid
+			end
+		end
+		if headMoudle ~= nil then
+			self.ImgSelect:SetParent(headMoudle.SelfRect.CachedTran)
+			self.ImgSelect.CachedTran:SetSiblingIndex(4)
+			self.ImgSelect.LocalPosition = Vector2(-2,2)
+			_P.SetAddAttr(self)
+			_P.SetCost(self)
+			moudle:Get("head").SpriteName = MPlayer.GetOtherHeadAsset(self.NowSelectId,MPlayer.GetSex())
+		end
+	end
+end
+
+function _P.SetAllAddAttr(self)
+	local moudle = self.Moudle
+	local attr = MPlayer.HeadAllAttr
+	if attr ~= nil then
+		moudle:Get("text22").Text = attr.Wuli
+		moudle:Get("text33").Text = attr.Zhili
+		moudle:Get("text44").Text = attr.Zhengzhi
+		moudle:Get("text55").Text = attr.Meili
+	end
+end
+
+function _P.SetAddAttr(self)
+	local moudle = self.Moudle
+	local headid = self.NowSelectId
+	local csvHead = Csv.Avatar[headid]
+	if csvHead ~= nil and csvHead.addAttr ~= nil and #csvHead.addAttr > 0 then
+		moudle:Get("text222").Text = Csv.Text("player_changeAttr"..csvHead.addAttr[1][1])
+		moudle:Get("text2222").Text = tostring(csvHead.addAttr[1][2])
+		if #csvHead.addAttr > 1 then
+			moudle:Get("text333").Text = Csv.Text("player_changeAttr"..csvHead.addAttr[2][1])
+			moudle:Get("text3333").Text = tostring(csvHead.addAttr[2][2])
+		end
+		moudle:Get("text111").Text = Csv.Text("player_change5")
+	else
+		moudle:Get("text222").Text = ""
+		moudle:Get("text2222").Text = ""
+		moudle:Get("text333").Text = ""
+		moudle:Get("text3333").Text = ""
+		moudle:Get("text111").Text = Csv.Text("player_change5_none")
+	end
+	moudle:Get("IconName").Text = csvHead.name
+end
+
+function _P.GetSortList(self,funcId)
+	local sortTable = {}
+	local headTable = MPlayer.HeadTable
+	if funcId == Define.SysId.MakeUp_Have then
+		if headTable ~= nil then
+			for k,v in pairs(headTable) do
+				local value = {headid = v.headid}
+				table.insert(sortTable,value)
+			end
+		end
+	elseif funcId == Define.SysId.MakeUp_Normal then
+		if headTable ~= nil then
+			for k,v in pairs(Csv.Avatar) do
+				if v.type ~= nil and v.type == 1 then
+					local value = {headid = k,isHave = (headTable[k] ~= nil)}
+					table.insert(sortTable,value)
+				end
+			end
+		end
+	elseif funcId == Define.SysId.MakeUp_Activity then
+		if headTable ~= nil then
+			if self.ActId ~= nil and Csv.ActivityChangeHead[self.ActId] ~= nil and Csv.ActivityChangeHead[self.ActId].headlist ~= nil then
+				local actHeadTable = Csv.ActivityChangeHead[self.ActId].headlist
+				for k,v in pairs(actHeadTable) do
+					local value = {headid = v,isHave = (headTable[v] ~= nil)}
+					table.insert(sortTable,value)
+				end
+			end
+		end
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	if a.isHave and not b.isHave then
+		return true
+	elseif not a.isHave and b.isHave then
+		return false
+	else
+		local acsv = Csv.Avatar[a.headid]
+		local bcsv = Csv.Avatar[b.headid]
+		if acsv.sort ~= nil and bcsv.sort ~= nil then
+			if acsv.sort == bcsv.sort then
+				return a.headid < b.headid
+			else
+				return acsv.sort < bcsv.sort
+			end
+		else
+			return a.headid < b.headid
+		end
+	end
+end
+
+function _R.LiveHead(self,data)
+	_P.SetAllAddAttr(self)
+	local headTable = self.HeadTable
+	local valueTable = MPlayer.HeadTable
+	if headTable ~= nil and valueTable ~= nil then
+		local moudle = headTable[data.headid]
+		local value = valueTable[data.headid]
+		if moudle ~= nil and value ~= nil then
+			moudle:Get("Head").IsGray = false
+		end
+	end
+	_P.ChangeSelectHead(self,self.NowSelectId)
+end
+
+function _R.ChangeHead(self)
+	_P.ChangeSelectHead(self,self.NowSelectId)
+end
+
+function _M:BeforeDestroy()
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end 
+
+return _M

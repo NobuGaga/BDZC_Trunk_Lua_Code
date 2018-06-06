@@ -1,0 +1,103 @@
+--创建商会界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Establish")
+	self.Moudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local opText = Csv.Text("commerce_noJoin3")
+	moudle:Get("C_Text").Text = opText
+	moudle:Get("information").Text = Csv.Text("commerce_create1")
+	moudle:Get("information_0").Text = Csv.Text("commerce_create2")
+	moudle:Get("information_1").Text = Csv.Text("commerce_create3")
+	moudle:Get("information_2").Text = Csv.Text("commerce_create4")
+	moudle:Get("information_3").Text = Csv.Text("commerce_create5")
+	moudle:Get("tipsText").Text = Csv.Text("commerce_create6")
+
+	local inputName = moudle:Get("input")
+	inputName.PlaceholderWidget.Text = Csv.Text("commerce_create7")
+	local inputWeixin = moudle:Get("input_0")
+	inputWeixin.PlaceholderWidget.Text = Csv.Text("commerce_create8")
+	local inputQQ = moudle:Get("input_1")
+	inputQQ.PlaceholderWidget.Text = Csv.Text("commerce_create9")
+	local inputPassword = moudle:Get("input_2")
+	inputPassword.PlaceholderWidget.Text = Csv.Text("commerce_create10")
+	local inputDeclaration = moudle:Get("input_3")
+	inputDeclaration.PlaceholderWidget.Text = Csv.Text("commerce_create11")
+
+	local cost = Csv.Const(Define.Const.CommerceCreateCost)
+	local itemCsv = Csv.Item[cost[1]]
+	moudle:Get("Diamonds").SpriteName = itemCsv.miniIcon
+	moudle:Get("NumText").Text = tostring(cost[2])
+	moudle:Get("C_text").Text = opText
+	-- moudle:Get("Tips").Text = Csv.Text("commerce_create_tips")
+
+	local onBtn = moudle:Get("ON")
+	local offBtn = moudle:Get("OFF")
+
+	onBtn:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		onBtn.Activity = false
+		offBtn.Activity = true
+	end)
+	offBtn:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		offBtn.Activity = false
+		onBtn.Activity = true
+	end)
+
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		local name = LuaUtil.Trim(inputName.Text)
+		local password = LuaUtil.Trim(inputPassword.Text)
+		if name == nil or name == "" then
+			CCommon.ShowError(Csv.Text("commerce_create12"))
+		elseif password == nil or password == "" then
+			CCommon.ShowError(Csv.Text("commerce_create13"))
+		elseif string.len(password) < 6 then
+			CCommon.ShowError(Csv.Text("commerce_create14"))
+		else
+			local weixin = LuaUtil.Trim(inputWeixin.Text or "")
+			local qq = LuaUtil.Trim(inputQQ.Text or "")	
+			local declaration = LuaUtil.Trim(inputDeclaration.Text or "")
+			local isAuto = onBtn.Activity
+			CCommerce.CreateReq(name,password,isAuto,weixin,qq,declaration)
+		end
+	end)
+end
+
+return _M

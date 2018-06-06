@@ -1,0 +1,173 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(sysId, itemIconSize, iconOffset)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Home_Dress")
+	self.mMoudle = moudle
+	self.SysId = sysId
+
+	self.CsvTable = {
+		[Define.SysId.Aircraft] = Csv.Aircraft,
+		[Define.SysId.Car] = Csv.Car
+	}
+
+	self.ImgLight = moudle:Get("Ing")
+	self.ImgIcon = moudle:Get("Icon")
+	self.ImgIconBG = moudle:Get("IconBg")
+	self.IconOffset = iconOffset
+	self.IconSize = itemIconSize
+	if self.IconOffset ~= nil then
+		self.ImgIcon.LocalPosition = iconOffset
+	end
+	_P.OnSetData(self,sysId)
+	_R.RefreshSelected(self)
+	moudle:Get("Title").Text = Csv.Text("Home_tip4")
+	moudle:Get("C_text").Text = Csv.Text("Home_tip6")
+	moudle:Get("Img").Activity = (sysId == Define.SysId.Aircraft)
+
+	local tween = self.ImgLight:DOFade(0,0.6)
+	tween:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+end
+
+function _P.OnSetData(self,sysId)
+	local moudle = self.mMoudle
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+		end, nil, 0.9)
+
+	local BtnChange = moudle:Get("Btn")
+	BtnChange:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickChange(self)
+		self:Destroy()
+		end, nil, 0.9)
+	
+	self.ItemTable = {}
+	_P.CreateList(self,sysId)
+end
+
+function _P.CreateList(self,sysId)
+	local content = self.mMoudle:Get("Content")
+	local dressTable = _P.GetSortTable(MBag.GetDressForSysId(sysId))
+	for k,v in ipairs(dressTable) do
+		local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
+		local csvItem = Csv.Item[v.itemid]
+		if csvItem ~= nil and csvItem.attrId ~= nil then
+			local icon = dressMoudle:Get("Icon")
+			local csvTable
+			local csvDress
+			if sysId == Define.SysId.Aircraft then
+				local csvAircraft = self.CsvTable[sysId][csvItem.attrId]
+				if csvAircraft ~= nil then
+					if csvAircraft ~= nil then
+						csvDress = Csv.AircraftAnimation[csvAircraft.asset]
+					end
+				else
+					local csvSkin = Csv.AircraftSkin[csvItem.attrId]
+					if csvSkin ~= nil then
+						csvDress = Csv.AircraftAnimation[csvSkin.asset]
+					end
+				end
+			else
+				csvTable = self.CsvTable[sysId]
+				if csvTable ~= nil then
+					csvDress = csvTable[csvItem.attrId]
+				end
+			end
+			if csvDress ~= nil then
+				icon.SpriteName = csvDress.icon
+			end
+			if self.IconSize ~= nil then
+				icon.SizeDelta = self.IconSize
+			end
+			icon:AddOnButton(function()
+				_P.OnClickIcon(self,v.itemid)
+			end,nil,1)
+		end
+		self.ItemTable[v.itemid] = dressMoudle
+	end
+end
+
+function _P.GetSortTable(dressTable)
+	local sortTable = {}
+	if dressTable ~= nil then
+		for k,v in pairs(dressTable) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	end
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	local csvItem1 = Csv.Item[a.itemid]
+	local csvItem2 = Csv.Item[b.itemid]
+	if csvItem1 ~= nil and csvItem2 ~= nil then
+		return csvItem1.sort < csvItem2.sort
+	end
+	return false
+end
+
+function _P.OnClickIcon(self,itemid)
+	if itemid ~= self.SelectItemid then
+		_P.ChangeLight(self,itemid)
+	end
+end
+
+function _R.RefreshSelected(self)
+	local selectItemid = MPlayer.GetDress()[self.SysId]
+	_P.ChangeLight(self,selectItemid)
+end
+
+function _P.ChangeLight(self,selectItemid)
+	self.SelectItemid = selectItemid
+	local itemTable = self.ItemTable
+	local itemMoudle = itemTable[selectItemid]
+	if itemMoudle ~= nil then
+		local tran = itemMoudle.SelfRect.CachedTran
+		local light = self.ImgLight
+		light:SetParent(tran)
+		light.CachedTran:SetSiblingIndex(2)
+		light.LocalPosition = Vector2(0,0)
+		light.Activity = true
+		_P.ChangeIcon(self,selectItemid)
+	end
+end
+
+function _P.ChangeIcon(self,itemid)
+	local csvItem = Csv.Item[itemid]
+	if csvItem ~= nil then
+		self.ImgIcon.SpriteName = csvItem.asset
+		self.ImgIconBG.SpriteName = csvItem.colorIcon
+	end
+end
+
+function _P.OnClickChange(self)
+	local oldItemid = MPlayer.GetDress()[self.SysId]
+	if oldItemid ~= self.SelectItemid then
+		CPlayer.ChangeDress(self.SysId,self.SelectItemid)
+	end
+end
+
+return _M

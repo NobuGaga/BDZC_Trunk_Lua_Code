@@ -1,0 +1,233 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local NUM_SACLE = "T_Club_NumSacle"
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(girlData)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_skill")
+	self.mMoudle = moudle
+
+	local content = moudle:Get("content")
+	local closeBtn = moudle:Get("back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	local titleText = moudle:Get("title")
+	local friendText = moudle:Get("youyizhi")
+	self.mFriend = friendText
+
+	titleText.Text = Csv.Text("Girl_skillTitle")
+	friendText.Text = Csv.Text("Girl_skill_friendValue",{value = girlData.friend })
+
+	_P.ShowSkill(self,girlData,content)
+
+end
+
+function _P.ShowSkill(self,girlData,parent)
+	
+	local skillsData = Csv.Girl[girlData.id].skills
+	self.mTableItems = {}
+	for k,v in pairs(skillsData) do
+		local item = _P.SetSkillItem(self,v,parent,girlData.id)
+		self.mTableItems[v] = item
+	end
+end
+
+function _P.SetSkillItem(self,id,parent,girlID)
+	local _moudle = JGuiManager.GetMoudle(parent, "M_Girl_Skill_ele", WindowType.UI, 10)
+
+	_P.SetSkillLevel(self,_moudle,girlID,id)
+
+	return _moudle
+end
+
+function _P.SetSkillLevel(self,_moudle,girlID,id,up)
+	local levelText= _moudle:Get("level")
+	local currentText = _moudle:Get("present_text") --
+	local currentValue = _moudle:Get("present_value")
+	local nextText = _moudle:Get("later_text")
+	local nextValue = _moudle:Get("later_value")
+	local needText = _moudle:Get("consume_text")
+	local nameText = _moudle:Get("name_text")
+	
+	local Csvdata = Csv.GirlSkill[id]
+	local level = MGirl.GetSkillLvByID(girlID,id) --那数据
+	local Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+level]
+
+	--还要向M拿当前美女技能等级
+	local staffDate = Csv.Personnel[Csvdata.employe]
+
+	nameText.Text = Csvdata.name
+	levelText.Text =  Csv.Text("Girl_skill_Lv",{level = level})
+	--levelText.LocalPosition = Vector2(nameText.PreferredWidth + levelText.PreferredWidth/2 +25,0) 
+	
+	local value = _P.GetSkillAttribute(Csvdata.attribute)
+	currentText.Text = Csv.Text("Girl_skill_currentValue",{staff = staffDate.name,value = value})--"当前效果:胆识、魅力属性增加"
+	nextText.Text = Csv.Text("Girl_skill_nextValue",{staff = staffDate.name,value = value})--"升级效果：胆识、魅力属性增加"
+	
+	if level <= 0 then
+		levelText.Activity = false
+		currentText.Activity = false
+		needText.Text =Csv.Text("Girl_skill_unlock",{value = Csvdata.unlock})--解锁条件：<color=#ff2323>40</color>友谊值"
+	else
+		if Costdata ~= nil and Costdata.cost ~= 0  then
+			levelText.Activity = true
+			currentText.Activity = true
+			needText.Text =Csv.Text("Girl_skill_nextUse",{value = Costdata.cost})--升级消耗：<color=#ff2323>40</color>友谊值"
+		else
+			levelText.Activity = true
+			currentText.Activity = true
+			nextText.Activity = false
+			nextValue.Text = Csv.Text("max")
+			needText.Text = Csv.Text("Girl_skill_max")--升级消耗：<color=#ff2323>40</color>友谊值"
+		end
+	end
+
+	if up then
+		SoundMgr.PlayNonStopUI(10017)
+		CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), 10010,nil,function()
+
+			currentValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level) --"15%"
+			nextValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level+1) -- "30%"
+
+			local currentTween = currentValue.CachedTran:GetJTweener(NUM_SACLE)
+			local nextTween = nextValue.CachedTran:GetJTweener(NUM_SACLE)
+			currentTween:Play()
+			nextTween:Play()
+		end)
+	else
+		currentValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level) --"15%"
+		nextValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level+1) -- "30%"
+	end
+
+
+	local upGradeText = _moudle:Get("C_text")
+	local upGradeBtn = _moudle:Get("C_Btn_b")
+
+	if level<= 0 then
+		upGradeBtn.Activity = false
+	else
+		upGradeBtn.Activity = true
+	end
+
+	if Costdata ~= nil and Costdata.cost ~= 0  then
+		upGradeBtn.RaycastTarget = true
+		upGradeBtn.IsGray = false
+		upGradeText.Text = Csv.Text("Girl_skill_levelUp")
+		upGradeBtn:AddOnButton(function ( ... )
+			upGradeBtn.LocalScale = Vector3(1,1,1)
+			SoundMgr.Play(10001)
+			CGirl.ReqSkillUp(girlID,id)
+		end)
+	else
+		upGradeBtn.RaycastTarget = false
+		upGradeBtn.IsGray = true
+		upGradeText.Text = Csv.Text("MAX")
+	end
+end
+
+function _P.UpgradeCost(posID,level)
+	return Csv.GirlSkillCost[posID*1000+level].cost
+end
+
+function _P.CheckSkillMax(level)
+	local cost =  Csv.GirlSkillCost[Csvdata.upGradeId*1000+level+1]
+
+	if cost ~= nil then
+		return cost
+	else
+		return -1
+	end
+end
+
+function _P.GetSkillAttribute(typeTab)
+	local str = ""
+	local count = 0
+	local type = ""
+	for key,var in ipairs(typeTab) do
+
+		type = MGirl.GetGirlSkillAttr(var)
+
+		str = str..type
+		count = count +1
+		if count<#typeTab then
+			str = str.."、"
+		end
+	end
+
+	if #typeTab >= 4 then
+		str = Csv.Text("Girl_skill_allattribute")--"全部属性"
+	end
+
+	return str..Csv.Text("Girl_skill_add")
+end
+
+--parmam
+--[100,2,5,1] 基础值，每等级递增，递增间隔，间隔递增值
+--
+function _P.GetSkillAttrValue(type,param,lv)
+	local str = ""
+	local value = 0
+
+	if #param >= 4 then
+		value =param[1]
+		local addNum = 0
+		local addValue = param[2]
+		for i = 2,lv,1 do
+			if param[3] >0 and param[4] >0 then
+				addNum = addNum+addValue+(math.floor(i/param[3])*param[4])
+			else
+				addNum = addNum+addValue
+			end
+		end
+		value = value+addNum
+	end
+	if type == 1 then
+		str = value
+	elseif type == 2 then
+		value = value/100
+		str = string.format("%.2f", value).."%"
+	end
+
+	return str
+end
+
+function _R.RefreshSkillItem(self,girlID,skillid)
+	local itemTable  = self.mTableItems
+	
+	for k,v in pairs(itemTable) do
+		if k == skillid then
+			_P.SetSkillLevel(self,v,girlID,k,true)
+		end
+	end
+end
+
+function _R.RefreshFriend(self,_friend)
+	self.mFriend.Text = Csv.Text("Girl_skill_friendValue",{value = _friend })
+end
+
+return _M

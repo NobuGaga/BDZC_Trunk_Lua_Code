@@ -1,0 +1,164 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CBag = JRequire "Dev.Bag.CBag"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+
+local CHANGE_AVATAR_ITEMID = Csv.Const(Define.Const.BagChangeAvatarID)
+
+--界面构建
+function _M:OnCreate()
+    local moudle = self:CreateMoudle(self._RootNode, "M_Login_Establish")
+    self.mMoudle = moudle
+
+    -- 固定内容初始化
+    moudle:Get("text").Text = Csv.Text("create_char_title2")
+    moudle:Get("Choosename").Activity = false
+    moudle:Get("ChooseGender").Activity = false
+    local BtnBack = moudle:Get("Back_Btn")
+    BtnBack:AddOnButton(function()
+        self:Destroy()
+    end, nil, 1.2)
+
+    self.HandSelect = moudle:Get("HandSelect")
+    self.bsx_head = moudle:Get("bsx_head")
+    self.bsx_body = moudle:Get("bsx_body")
+    self.vHeadImg = {}
+    self.vHeadFrame = {}
+    for i = 1, 4 do
+        local headimg2 = moudle:Get("head" .. i)
+        if headimg2 then
+            table.insert(self.vHeadFrame, headimg2)
+            headimg2:AddOnButton(
+                function(...)
+                    SoundMgr.Play(10001)
+                    if self.mHeadIndex ~= nil and i ~= self.mHeadIndex then
+                        self.mHeadIndex = i
+                        self:BsxOut(i)
+                    end
+                end,
+                nil,
+                0.9
+            )
+        end
+    end
+    self.gender = MPlayer.GetSex()
+    self.headId = MPlayer.GetAvatar().head
+    self.mHeadIndex = _P.GetIndexById(self.headId)
+    self:UpdateHeaderChange(self.mHeadIndex)
+    self:UpdateGenderChange()
+
+    local BtnCreateChar = moudle:Get("BtnCreateChar")
+	BtnCreateChar:AddOnButton(function()
+		if self.headId == MPlayer.GetAvatar().head then
+			CCommon.ShowError(Csv.Text("err_select_same_head"))
+		else
+            CBag.OnUseItem(CHANGE_AVATAR_ITEMID,1,{self.headId})
+            self:Destroy()
+		end
+    end,nil,0.9)
+    
+    moudle:Get("BtnCreateChar").SpriteName = "dl_027_1"
+end
+
+function _M:UpdateGenderChange()
+    --local maxValue = 1
+    for i = 1, 4 do
+        local icon = _P.GetHeadIcon(self.gender, i)
+        if icon then
+            self.vHeadFrame[i].SpriteName = icon
+            --maxValue = i
+        else
+            self.vHeadFrame[i].Activity = false
+        end
+    end
+    --self:UpdateHeaderChange(math.random(maxValue))
+end
+
+function _M:BsxOut(headid)
+    self:Lock()
+    local BSX = self.mMoudle:Get("bsx")
+    BSX:DOAnchorPosX(750, 0.2)
+	if headid ~= nil then
+        BSX:AddOnTime(
+            function()
+                local pos = BSX.LocalPosition
+                pos.x = -750
+                BSX.LocalPosition = pos
+                self:UpdateGenderChange()
+                self:UpdateHeaderChange(headid)
+                BSX:DOAnchorPosX(0, 0.2)
+                self:Unlock()
+            end,
+            nil,
+            0.2
+        )
+    end
+end
+
+function _P.GetIndexById(headid)
+	for k,v in ipairs(Csv.CreateRole) do
+		if headid == v.head then
+			return k
+		end
+	end
+	return 1
+end
+
+function _M:UpdateHeaderChange(headidx)
+    self.mHeadIndex = headidx
+    local config = Csv.CreateRole[headidx]
+    self.headId = config.head
+
+    self.HandSelect.LocalPosition = self.vHeadFrame[headidx].LocalPosition + Vector2(-61, 59)
+    self.bsx_body.SpriteName = _P.GetBodyId(self.gender, headidx)
+    self.bsx_head.SpriteName = _P.GetHeadAsset(self.gender, headidx)
+end
+
+function _P.GetHeadIcon(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return nil
+    end
+    config = Csv.Avatar[config.head]
+    return config["flatIcon_" .. gender]
+end
+
+function _P.GetHeadAsset(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return "head_001"
+    end
+    config = Csv.Avatar[config.head]
+    return config["asset_" .. gender]
+end
+
+function _P.GetBodyId(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return "head_001"
+    end
+    config = Csv.Avatar[config.body]
+    return config["asset_" .. gender]
+end
+
+return _M

@@ -1,0 +1,200 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local CRank = JRequire "Dev.Rank.CRank"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local URankCrossPower = JRequire "Dev.Rank.URankCrossPower"
+local URankCrossCommerce = JRequire "Dev.Rank.URankCrossCommerce"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local EFFECT_ID = 4
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Ranking_Cross")
+	self.Moudle = moudle
+	self.PageNode = moudle:Get("PageNode")
+	moudle:Get("C_text").Text = Csv.Text("cross_mobai")
+	moudle:Get("text").Text = Csv.Text("cross_mobai_tips")
+	moudle:Get("text2").Text = Csv.Text("cross_rank_self")
+
+	--Table标签控制
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	local tabHandle = TabGroup.new(function (funcId)
+		_P.OnChoose(self, funcId)
+	end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+
+	tabHandle:Add(1, moudle:Get("Btn_c1"), moudle:Get("C_text_1"), Csv.Text("cross_ban_power"))
+	tabHandle:Add(2, moudle:Get("Btn_c2"), moudle:Get("C_text_2"), Csv.Text("cross_ban_commerce"))
+	tabHandle:Choose(1)
+	self.tabHandle = tabHandle
+
+	moudle:Get("Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("Btn_e"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		local ranktype = Define.CrossRankType.Power
+		if funcId == 2 then
+			ranktype = Define.CrossRankType.Commerce
+		end
+		CRank.GetAward(ranktype,false)
+		end,nil,0.9)
+end
+
+function _P.ChangeShipState(self,isworshiped)
+	local moudle = self.Moudle
+	moudle:Get("after").Activity = isworshiped
+	moudle:Get("Btn_e").Activity = not isworshiped
+	moudle:Get("EffectNode").Activity = false
+end
+
+function _P.OnChoose(self, funcId)
+	self.SelectFuncID = funcId
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+
+	if funcId == 1 then
+		self.ChooseMoudle = URankCrossPower.new(self.PageNode)
+		CRank.GetRankList(Define.CrossRankType.Power,false)
+		self.Moudle:Get("Date").Activity = true
+		self.Moudle:Get("GangDate").Activity = false
+	elseif funcId == 2 then
+		self.ChooseMoudle = URankCrossCommerce.new(self.PageNode)
+		CRank.GetCrossCommoncerRankList()
+		self.Moudle:Get("Date").Activity = false
+		self.Moudle:Get("GangDate").Activity = true
+	end
+end
+
+function _R.ResetList(self, data)
+	if self.ChooseMoudle ~= nil then
+		if data ~= nil then
+			if self.SelectFuncID == 1 then
+				self.Moudle:Get("text1_1").Text = data.selfName
+				self.Moudle:Get("text2_1").Text = data.selfrank
+				self.Moudle:Get("text3_1").Text = Csv.Company[MPlayer.GetLevel()].name
+				self.Moudle:Get("text4_1").Text = MPlayer.GetPower()
+
+				local vip = data.vip
+				local imgKuang = self.Moudle:Get("VipBox")
+				local imgNum = self.Moudle:Get("VipNum")
+				if vip ~= nil then
+					local csvVip = Csv.Vip[vip]
+					if vip <= 0 then
+						imgKuang.Activity = false
+						imgNum.Activity = false
+					else
+						imgKuang.Activity = true
+						imgNum.Activity = true
+						imgKuang.SpriteName = csvVip.imgBord
+						imgNum.SpriteName = csvVip.icon
+					end
+				else
+					imgKuang.Activity = false
+					imgNum.Activity = false
+				end
+
+				self.Moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+
+				local vip = MPlayer.GetVip()
+				local csvVip = Csv.Vip[vip]
+				if csvVip ~= nil then
+					local imgBord = self.Moudle:Get("VipBox")
+					if csvVip.imgBord ~= nil then
+						imgBord.Activity = true
+						imgBord.SpriteName = csvVip.imgBord
+					else
+						imgBord.Activity = false
+					end
+
+					local imgNum = self.Moudle:Get("VipNum")
+					if csvVip.icon ~= nil then
+						imgNum.Activity = true
+						imgNum.SpriteName = csvVip.icon
+					else
+						imgNum.Activity = false
+					end
+				end
+			elseif self.SelectFuncID == 2 then
+				self.Moudle:Get("gangtext1").Text = Csv.Text("cross_rank_sh")
+				self.Moudle:Get("gangtext2").Text = Csv.Text("cross_rank_shpm")
+				self.Moudle:Get("gangtext11").Text = data.selfName
+				self.Moudle:Get("gangtext22").Text = data.selfrank
+			end
+			
+			-- self.Moudle:Get("after").Activity = data.isworshiped
+			_P.ChangeShipState(self,data.isworshiped)
+		else
+			_P.ChangeShipState(self,false)
+		end
+		self.ChooseMoudle:ResetList(data)
+	end
+end
+
+function _R.GetAward(self,data)
+	local ranktype = Define.CrossRankType.Power
+	if funcId == 2 then
+		ranktype = Define.CrossRankType.Commerce
+	end
+	if data.rankid == ranktype then
+		if data.exgold ~= nil then
+			SoundMgr.Play(10003)
+		end
+
+		local nodeTrans = self.Moudle:Get("EffectNode")
+		nodeTrans:DestroyChildren()
+		nodeTrans.Activity = true
+		SoundMgr.Play(11007)
+		local effect = CCommon.CreateEffect(nodeTrans.transform,EFFECT_ID,nil,function(...)
+			nodeTrans.Activity = false
+		end,{M_Effect_Get = "ph_010"})
+		effect.SelfRect.SizeDelta = Vector2(102,102)
+		self.Moudle.SelfRect:AddOnTime(function(...)WindowMgr.Create("URankWorship",data)
+		end,nil,0.5)
+		self.Moudle:Get("Btn_e").Activity = false
+	end
+end
+
+function _M:BeforeDestroy()
+	WindowMgr.Call("URank","CloseDoor3")
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.TabHandle ~= nil then
+		self.TabHandle:delete()
+		self.TabHandle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+return _M

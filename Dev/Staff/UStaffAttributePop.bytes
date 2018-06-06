@@ -1,0 +1,102 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_AttributePop", WindowType.UI, 0)
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+
+	local BtnClose = moudle:Get("BackBtn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		WindowMgr.Call("UStaffDetails", "OnClickBackFromDesc")
+	end, nil, 0.9)
+	moudle:Get("BackBtnText").Text = Csv.Text("staff_Back")
+
+	local data = MStaff.GetStaffDataByID(id)
+	moudle:Get("expText").Text = Csv.Text("staff_aptitude_all",{num = MStaff.DoGetAllApitude(data)})
+
+	local Text1 = moudle:Get("Text1")
+	local Text2 = moudle:Get("Text2")
+	local Text3 = moudle:Get("Text3")
+	local Text4 = moudle:Get("Text4")
+	Text1.Text = data.allAttr.Wuli
+	Text2.Text = data.allAttr.Zhili
+	Text3.Text = data.allAttr.Zhengzhi
+	Text4.Text = data.allAttr.Meili
+
+	local Text11 = moudle:Get("Text11")
+	local Text21 = moudle:Get("Text21")
+	local Text31 = moudle:Get("Text31")
+	local Text41 = moudle:Get("Text41")
+	Text11.Text = Csv.Text("staff_add1",{num = data.originAttr.Wuli})
+	Text21.Text = Csv.Text("staff_add1",{num = data.originAttr.Zhili})
+	Text31.Text = Csv.Text("staff_add1",{num = data.originAttr.Zhengzhi})
+	Text41.Text = Csv.Text("staff_add1",{num = data.originAttr.Meili})
+	moudle:Get("Text11d").Text = data.originAttr.Wuli
+	moudle:Get("Text21d").Text = data.originAttr.Zhili
+	moudle:Get("Text31d").Text = data.originAttr.Zhengzhi
+	moudle:Get("Text41d").Text = data.originAttr.Meili
+
+	local Text12 = moudle:Get("Text12")
+	local Text22 = moudle:Get("Text22")
+	local Text32 = moudle:Get("Text32")
+	local Text42 = moudle:Get("Text42")
+	Text12.Text = Csv.Text("staff_add2",{num = data.itemAttr.Wuli})
+	Text22.Text = Csv.Text("staff_add2",{num = data.itemAttr.Zhili})
+	Text32.Text = Csv.Text("staff_add2",{num = data.itemAttr.Zhengzhi})
+	Text42.Text = Csv.Text("staff_add2",{num = data.itemAttr.Meili})
+	moudle:Get("Text12d").Text = data.itemAttr.Wuli
+	moudle:Get("Text22d").Text = data.itemAttr.Zhili
+	moudle:Get("Text32d").Text = data.itemAttr.Zhengzhi
+	moudle:Get("Text42d").Text = data.itemAttr.Meili
+
+	local Text13 = moudle:Get("Text13")
+	local Text23 = moudle:Get("Text23")
+	local Text33 = moudle:Get("Text33")
+	local Text43 = moudle:Get("Text43")
+	Text13.Text = Csv.Text("staff_add3",{num = data.girlAttr.Wuli})
+	Text23.Text = Csv.Text("staff_add3",{num = data.girlAttr.Zhili})
+	Text33.Text = Csv.Text("staff_add3",{num = data.girlAttr.Zhengzhi})
+	Text43.Text = Csv.Text("staff_add3",{num = data.girlAttr.Meili})
+	moudle:Get("Text13d").Text = data.girlAttr.Wuli
+	moudle:Get("Text23d").Text = data.girlAttr.Zhili
+	moudle:Get("Text33d").Text = data.girlAttr.Zhengzhi
+	moudle:Get("Text43d").Text = data.girlAttr.Meili
+
+	local Text14 = moudle:Get("Text14")
+	local Text24 = moudle:Get("Text24")
+	local Text34 = moudle:Get("Text34")
+	local Text44 = moudle:Get("Text44")
+	Text14.Text = Csv.Text("staff_add4",{num = data.aureoleAttr.Wuli})
+	Text24.Text = Csv.Text("staff_add4",{num = data.aureoleAttr.Zhili})
+	Text34.Text = Csv.Text("staff_add4",{num = data.aureoleAttr.Zhengzhi})
+	Text44.Text = Csv.Text("staff_add4",{num = data.aureoleAttr.Meili})
+	moudle:Get("Text14d").Text = data.aureoleAttr.Wuli
+	moudle:Get("Text24d").Text = data.aureoleAttr.Zhili
+	moudle:Get("Text34d").Text = data.aureoleAttr.Zhengzhi
+	moudle:Get("Text44d").Text = data.aureoleAttr.Meili
+end
+
+function _P.GetAllAttribute(data)
+	local allAttr = data.allAttr
+	local num = 0
+	num = allAttr.Wuli + allAttr.Zhili + allAttr.Zhengzhi + allAttr.Meili
+	return num
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

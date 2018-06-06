@@ -1,0 +1,80 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+local T_UDISK_FLY = "T_Udisk_fly"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ShowOpenUDisk(self,data)
+
+end
+
+function _R.CloseView(self)
+	print("CloseView!!!")
+	self:Destroy()
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Upan")
+	self.Moudle = moudle
+
+	local title = moudle:Get("C_Text")
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	local backBtn = moudle:Get("C_Back_Btn")
+	local uDiskIcon = moudle:Get("UpanIcon")
+
+	title.Text = Csv.Func[Define.SysId.Siege_UDisk].name
+	helpBtn:AddOnClick(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",17401)
+	end)
+
+	backBtn:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local bossIcon = moudle:Get("BossBSX")
+	local bossTalk = moudle:Get("text1")
+	bossTalk.Text = Csv.Text("siege_udisk_bossTalk")
+
+	local GetBtn = moudle:Get("Icon1")
+	local OpenBtn = moudle:Get("Icon2")
+	local DonateBtn = moudle:Get("Icon3")
+
+	GetBtn:AddOnButton(function()
+		
+	end,nil,0.9)
+
+	OpenBtn:AddOnButton(function()
+		WindowMgr.Create("UOpenUdisk",data)
+	end,nil,0.9)
+
+	DonateBtn:AddOnButton(function()
+		local tween = uDiskIcon.CachedTran:GetJTweener("T_UDISK_FLY")
+		tween:SetOnComplete(function ( ... )
+			self:Destroy()
+		end)
+		tween:Play()
+	end,nil,0.9)
+
+	
+end
+return _M

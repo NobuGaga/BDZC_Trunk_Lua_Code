@@ -1,0 +1,197 @@
+-- 目标系统主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local FRUIT_ANIM = "T_Charitable_Scale"
+
+local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
+local COLOR_RED = Color(255 / 255, 76 / 255, 76 / 255, 1)
+
+function _M:BeforeDestroy( ... )
+	_P.DestroyBgMusic(self)
+end
+
+--背景音
+function _P.DestroyBgMusic(self)
+	if self.battleMusic and self.battleMusic > 0 then
+		SoundMgr.DestroyMusic(self.battleMusic, true)
+		self.battleMusic = nil
+	end
+end
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+-- --TODO:设置背景
+-- function _P.SetBg(self)
+-- 	local point = self.mData.rankData.pro
+-- 	local Bgtarget = {}
+-- 	local charitableConf = self.charitableConf
+-- 	for k,v in pairs(charitableConf.bg) do
+-- 		table.insert(Bgtarget,{key = k, value = v})
+-- 	end
+-- 	table.sort(Bgtarget, function(a,b)
+-- 		return a.value > b.value
+-- 	end)
+-- 	for index=1,#Bgtarget do
+-- 		if point >= Bgtarget[index].value then
+-- 			self.bgImg.SpriteName = Bgtarget[index].key
+-- 			break
+-- 		end
+-- 	end
+-- end
+
+function _R.UpdateView(self,data)
+	--个人分数
+	self.mData.rankData = data
+	-- _P.SetBg(self)
+	_P.SetJoinState(self)
+end
+
+function _R.UpdateRed(self)
+	local redRect = self.mModule:Get("redpoint")
+	redRect.Activity = MActivity.CharitableRed
+end
+
+--设置进入按钮状态
+function _P.OnInitBtnState(self,data)
+	self.joinBtn = self.mModule:Get("Battle")
+	self.joinBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCharitableActPanel", self.mData)
+	end, nil, 0.95)
+
+	local RankBtn = self.mModule:Get("Rank")
+	RankBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入排行榜
+		if HeartBeat.ServSecond() >= self.mData.state.endTime then
+			CCommon.ShowError(Csv.Text("timelimit_close"))
+		else
+			WindowMgr.Create("UCharitableRankPanel", self.mData)
+		end
+	end, nil, 0.95)
+
+	local FruitBtn = self.mModule:Get("Fruit")
+	FruitBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入水果机
+		WindowMgr.Create("UCharitableFruitPanel", self.mData)
+	end, nil, 0.95)
+end
+
+-- 设置进入状态
+function _P.SetJoinState(self)
+	local leftTime = self.mData.state.lefttime
+	local startTime = self.mData.state.startTime
+	if HeartBeat.ServSecond() < startTime then   -- 未开始
+		self.joinBtn.Activity = false
+		self.unOpenRect.Activity = true
+		self.unOpenText.Text = Csv.Text("xinguan_main_notInTime")
+		self.unOpenText.Color = COLOR_RED
+	elseif HeartBeat.ServSecond() > startTime and HeartBeat.ServSecond() < leftTime then -- 进行中
+		self.joinBtn.Activity = true
+		self.unOpenRect.Activity = false
+	elseif HeartBeat.ServSecond() >= leftTime then-- 已结束
+		self.joinBtn.Activity = false
+		self.unOpenRect.Activity = true
+		self.unOpenText.Text = Csv.Text("xinguan_main_get")
+		self.unOpenText.Color = COLOR_GREEN
+	end
+end
+
+function _P.SetBtnAnim(self)
+	if self.fruitTweener ~= nil then
+		self.fruitTweener:Restore()
+		self.fruitTweener:DOKill()
+		self.fruitTweener = nil
+	end
+
+	self.fruitTweener = self.fruitBtn.CachedTran:GetJTweener(FRUIT_ANIM)
+	if MBag.GetItemNum(self.ItemId) >= self.minCostNum then
+		self.fruitTweener:Play()
+	end
+end
+
+--界面构造
+function _M:OnCreate(...)
+	local module = self:CreateMoudle(self._RootNode, "M_Charitable_Join")
+	self.mModule = module
+
+	local closeBtn = self.mModule:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	self.ActId = 0
+	local data = MActivity.GetListFromType(Define.ActivityType.Charitable)
+	if data ~= nil then
+		for k,v in pairs(data) do
+			self.ActId = k
+			break
+		end
+	else
+		error("Charitable info is nil")
+		return
+	end
+
+	self.mData = data[self.ActId]
+
+	local charitableConf = Csv.Charity[self.ActId]--activityId
+	if not charitableConf then 
+		error("Charitable config is nil")
+		return 
+	end
+	self.charitableConf = charitableConf
+	
+	module:Get("C_Text").Text = charitableConf.title
+	module:Get("title").Text = charitableConf.title
+	module:Get("info").Text = charitableConf.activityDesc
+	module:Get("C_text_1").Text = Csv.Text("timelimit_open_tips")
+	self.unOpenRect = module:Get("NoticeInfo")
+	self.unOpenText = module:Get("NoticeText")
+	self.bgImg = module:Get("bg")
+	
+	local state = self.mData.state
+	module:Get("Date").Text = Csv.Text("charitable_main_data")
+	module:Get("DateText").Text = Csv.Text("charitable_main_dateInfo", {startTime = LuaUtil.TransToYMD(state.startTime),
+																endTime = LuaUtil.TransToYMD(state.startTime + charitableConf.settleTime)})
+	module:Get("Time").Text = Csv.Text("charitable_dataInfo")
+	module:Get("TimeText").Text = Csv.Text("charitable_open_time")
+	module:Get("FruitText").Text = Csv.Text("charitable_2")
+	module:Get("C_text_0").Text = Csv.Text("charitable_rank_reward")
+	
+	_P.OnInitBtnState(self, charitableConf)
+
+	--监听播放爱心抽奖按钮动画
+	self.fruitBtn = module:Get("Fruit")
+	self.minCostNum = self.charitableConf.oneCost[2]
+	self.ItemId = self.charitableConf.oneCost[1]
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == self.ItemId then
+			_P.SetBtnAnim(self)
+		end
+	end)
+	_P.SetBtnAnim(self)
+
+	--因为背景与排行分数有关，所以在这里要请求一把个人排行数据
+	CActivity.ReqCharitableGetRank()
+	_R.UpdateRed(self)
+end
+
+return _M

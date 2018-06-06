@@ -1,0 +1,174 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBattle = JRequire "Dev.Battle.MBattle"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local winActorId = 10002 	 -- 收购成功
+local winTalkActorId = 10019 -- 谈判成功
+local GTE_EFFECT_ID = 5
+local LevelSizeVec = Vector2(103, 103)
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall(table.unpack(self.OnCloseCallParam))
+	end
+end
+
+--界面构建
+function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattle, ...)
+	self.OnCloseCall = onClose
+	self.OnCloseCallParam = {...}
+	self.isSeckillBattle = isSeckillBattle
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Success")
+	local itemRoot = moudle:Get("Items")
+
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 1)
+
+	local csv = Csv.Battle[battleId]
+
+	-- 播放战斗胜利特效
+	SoundMgr.PlayNonStopUI(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), ((csv.type == 2 and winActorId) or winTalkActorId))
+
+	local rewardData = {}
+	if isSeckillBattle then
+		rewardData = MBattle.GetAllReward()
+	else
+		rewardData.money = money
+		rewardData.financial = csv.financial
+		rewardData.item = csv.item
+	end
+
+	if rewardData.money ~= nil and rewardData.money > 0 then
+		CCommon.CreateItem(itemRoot,Define.AssetsType.Coin,nil,{num = rewardData.money})
+	end
+	if rewardData.financial ~= nil and rewardData.financial > 0 then
+		CCommon.CreateItem(itemRoot,Define.AssetsType.Record,nil,{num = rewardData.financial })
+	end
+	if rewardData.item ~= nil then
+		for _,v in pairs(rewardData.item) do
+			CCommon.CreateItem(itemRoot, v[1], nil, {num = v[2]})
+		end
+	end
+
+	local bossRewardText = moudle:Get("RewardText")
+	bossRewardText.Activity = (csv.type == 2)
+	moudle:Get("SimpleBattle").Activity = (csv.type == 1)
+	if csv.type == 2 then -- boss战斗胜利
+		local str = ""
+		if csv.fame ~= nil and csv.fame > 0 then
+			str = Csv.Text("battle_win1", {fame = csv.fame})
+			if csv.fameAdd ~= nil and csv.fameAdd > 0 then
+				str = str .. "," .. Csv.Text("battle_win2", {fameAdd = csv.fameAdd})
+			end
+		elseif csv.fameAdd ~= nil and csv.fameAdd > 0 then
+			str = Csv.Text("battle_win2", {fameAdd = csv.fameAdd})
+		end
+		bossRewardText.Text = str
+	else -- 普通关卡胜利
+		local relationText = moudle:Get("RelationText")
+		local moneyText = moudle:Get("SaveGoldText")
+		local levelImage = moudle:Get("pingjia")
+		
+		relationText.Text = Csv.Text("battle_relation")
+
+		local imageName = _P.GetBattleLevel(self, csv.Courage, ownPower)
+		levelImage.Activity = false
+		local effect = CCommon.CreateEffect(moudle:Get("Effect"), GTE_EFFECT_ID, nil, function( ... )
+			if effect ~= nil then
+				effect:Destroy()
+			end
+			levelImage.Activity = true
+		end, {M_Effect_Get = imageName}, nil, nil, 0.4)
+		effect.SelfRect.SizeDelta = LevelSizeVec -- 设置图片大小
+
+		levelImage.SpriteName = imageName
+
+		if isSeckillBattle then
+			local seckillData = MBattle.SeckillBattleData
+			local totalPart = MBattle.GetPassNum()
+			local totalMoney = MBattle.GetAllNum()
+			moneyText.Text = Csv.Text("battle_seckillShow", {partNum = totalPart, totalNum = LuaUtil.NumberFormat(totalMoney)}) .. _P.GetSaveStr(MBattle.GetAllSeckillMoney())
+		else
+			moneyText.Text = _P.GetSaveMoneyNum(csv.gold, hurtNum)
+		end
+	end
+	
+	LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close"))
+end
+
+
+-- 评级
+function _P.GetBattleLevel(self, enemyPower, ownPower)
+	if not enemyPower then enemyPower = 0 end
+	if not ownPower then ownPower = 0 end
+
+	if self.isSeckillBattle then
+		local isFinished = MBattle.IsSeckillFinished()
+		if isFinished then
+			return "gk_030"
+		end
+	end
+	
+	local levelNameStr = ""
+	if enemyPower * 3 < ownPower then
+		levelNameStr = "gk_025"
+	elseif enemyPower * 1.5 < ownPower and ownPower <= enemyPower * 3 then
+		levelNameStr = "gk_026"
+	elseif enemyPower < ownPower and ownPower <= enemyPower * 1.5 then
+		levelNameStr = "gk_027"
+	elseif enemyPower * 0.5 < ownPower and ownPower <= enemyPower then
+		levelNameStr = "gk_024"
+	elseif ownPower <= enemyPower * 0.5 then
+		levelNameStr = "gk_023"
+	end
+
+	return levelNameStr
+end
+
+
+-- 节省金钱数量
+function _P.GetSaveMoneyNum(enemyHp, ownHp)
+	if ownHp == nil then
+		ownHp = 0
+	end
+	
+	local offsetNum = enemyHp - ownHp
+	return _P.GetSaveStr(offsetNum)
+end
+
+
+function _P.GetSaveStr(offsetNum)
+	local saveStr = ""
+	if offsetNum >= 0 then
+		saveStr = Csv.Text("battle_saveMoney", {num = LuaUtil.NumberFormat(offsetNum)})
+	else
+		saveStr = Csv.Text("battle_takeMoney", {num = LuaUtil.NumberFormat(math.abs(offsetNum))})
+	end
+
+	return saveStr
+end
+
+
+return _M

@@ -1,0 +1,94 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+--界面构建
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_PromotePop")
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local BtnPromote = moudle:Get("BtnPromote")
+	BtnPromote:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not MBag.CheckItemEnoughForArray(Csv.ColorUp[data.color].cost) then
+			return
+		end
+		CStaff.StaffColorUp(id)
+		self:Destroy()
+	end, nil, 0.9)
+
+	_P.CreateList(self,data)
+
+	local TextTitle = moudle:Get("Title")
+	TextTitle.Text = Csv.Text("staff_protit1")
+
+	local TextSecondTitle = moudle:Get("Title2")
+	TextSecondTitle.Text = Csv.Text("staff_protit2")
+
+	local TextPromote = moudle:Get("C_text")
+	TextPromote.Text = Csv.Text("staff_max_up")
+
+	local TextNowStar = moudle:Get("NowStar")
+	if data.color == 0 then
+		TextNowStar.Text = Csv.Text("staff_nowstarN")..data.color
+	else
+		TextNowStar.Text = Csv.Text("staff_nowstar",{num = Csv.Text("staff_star"..data.color)})
+	end
+
+	local TextNowMaxLevel = moudle:Get("NowMaxLevel")
+	TextNowMaxLevel.Text = Csv.Text("staff_maxlevel",{num = Csv.ColorUp[data.color].lvMax})
+
+	local TextUpStar = moudle:Get("UpStar")
+	TextUpStar.Text = Csv.Text("staff_nextstar",{num = Csv.Text("staff_star"..data.color+1)})
+
+	local TextUpMaxLevel = moudle:Get("UpMaxLevel")
+	TextUpMaxLevel.Text = Csv.Text("staff_maxlevel",{num = Csv.ColorUp[data.color+1].lvMax})
+
+	local TextName = moudle:Get("Name")
+	TextName.Text = Csv.Personnel[id].name
+
+	local ImgIcon = moudle:Get("Icon")
+	ImgIcon.SpriteName = Csv.Personnel[id].asset
+end
+
+function _P.CreateList(self,data)
+	local contentTransform = self.mMoudle:Get("Content")
+	local costItems = Csv.ColorUp[data.color].cost
+	for k,v in pairs(costItems) do
+		local itemMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_PromoteItem", WindowType.UI, 0)
+		local ImgIcon = itemMoudle:Get("Icon")
+		ImgIcon.SpriteName = Csv.Item[v[1]].icon
+
+		local ImgColor = itemMoudle:Get("IconColor")
+		ImgColor.SpriteName = Csv.Item[v[1]].colorIcon
+		ImgColor:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UBagDetailPop",v[1])
+		end,nil,0.9)
+
+		local TextNum = itemMoudle:Get("Num")
+		local have = MBag.GetItemNum(v[1])
+		if have >= v[2] then
+			TextNum.Color = Color(93/255,153/255,255/255,1)
+		else
+			TextNum.Color = Color(255/255,93/255,140/255,1)
+		end
+		TextNum.Text = Csv.Text("bag_have",{num = have,max = v[2]})
+	end
+end
+
+return _M

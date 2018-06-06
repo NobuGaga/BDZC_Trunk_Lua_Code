@@ -1,0 +1,216 @@
+-- 车库主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local UCarGaragePanel = JRequire "Dev.Car.UCarGaragePanel"
+local UCarGarageMaterial = JRequire "Dev.Car.UCarGarageMaterial"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MatType = 6
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+function _M:BeforeDestroy()
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+
+	if self.ChooseModule ~= nil then
+		self.ChooseModule:delete()
+		self.ChooseModule = nil
+	end
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(sysId)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Garage_UMain")
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	self.TabImg1 = module:Get("Tab1")
+	self.TabImg2 = module:Get("Tab2")
+	self.pageNode = module:Get("ValueRect")
+	self.OneKeyText = module:Get("BatchText")
+	
+	-- 一键按钮
+	module:Get("C_Text").Text = Csv.Text("car_garage_title")
+	self.OneKeyBtn = module:Get("Batch")
+	self.OneKeyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickOneKeyBtn(self)
+	end, nil, 0.9)
+
+	-- 返回按钮
+	module:Get("BackText").Text = Csv.Text("car_garage_oneKeyBack")
+	self.BackBtn = module:Get("Back")
+	self.BackBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickOneKeyBtn(self)
+	end, nil, 0.9)
+
+	local funcs = _P.GetFuncs(MMain.GetOpenedFuncs(sysId, true))
+	local count = #funcs
+	if count > 0 then
+		self.tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023", Color.white, Color.black)
+
+		for k,v in pairs(funcs) do
+			self.tabHandle:Add(v.id, module:Get("Tab".. k), module:Get("TabText" .. k), v.name)
+		end
+
+		self.tabHandle:Choose(funcs[1].id)
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if self.SelectPageId and self.SelectPageId == Define.SysId.Car_Mat then
+			_P.UpdateMatData(self, itemid)
+		end
+	end)
+end
+
+
+function _P.GetFuncs(funcTable)
+	local sortTable = {}
+	for k,v in pairs(funcTable) do
+		if v.id ~= Define.SysId.Car and v.sort > 3 and v.sort <= 5 then
+			sortTable[#sortTable + 1] = v
+		end
+	end
+
+	table.sort(sortTable,function(a,b)
+		return a.sort < b.sort
+	end)
+
+	return sortTable
+end
+
+
+function _P.OnChoose(self, funcId)
+	if self.SelectPageId == funcId then return end
+	self.SelectPageId = funcId
+
+	if self.ChooseModule ~= nil then
+		self.ChooseModule:Destroy()
+		self.ChooseModule:delete()
+		self.ChooseModule = nil
+	end
+
+	self.BackBtn.Activity = false
+	self.OneKeyBtn.Activity = true
+	if funcId == Define.SysId.Car_Garage then
+		self.ChooseModule = UCarGaragePanel.new(self.pageNode)
+		self.IsBack = false
+		self.OneKeyText.Text = Csv.Text("car_garage_oneKeyBreak")
+	elseif funcId == Define.SysId.Car_Mat then
+		self.ChooseModule = UCarGarageMaterial.new(self.pageNode)
+		self.IsBack = false
+		self.OneKeyText.Text = Csv.Text("car_garage_oneKeySell")
+	end
+end
+
+
+-- 座驾分解成功返回
+function _R.ResolveCarBack(self, carid, getlist)
+	WindowMgr.Create("UCarDecomposeSuccess", carid, getlist, function( ... )
+		if self.SelectPageId == Define.SysId.Car_Garage and self.ChooseModule then
+			self.ChooseModule:UpdateData()
+		end
+	end)
+end
+
+
+-- 座驾重铸成功返回
+function _R.RecastCarBack(self, carid, getlist)
+	WindowMgr.Create("UCarRecastSuccess", carid, getlist, function( ... )
+		if self.SelectPageId == Define.SysId.Car_Garage and self.ChooseModule then
+			self.ChooseModule:UpdateData()
+		end
+	end)
+end
+
+
+-- 座驾材料更新，需要刷新列表
+function _P.UpdateMatData(self, itemid)
+	local itemConf = Csv.Item[itemid]
+	if itemConf and itemConf.type == MatType then
+		if self.ChooseModule then
+			self.ChooseModule:UpdateData()
+		end
+	end
+end
+
+
+-- 一键分解、出售
+function _P.OnClickOneKeyBtn(self)
+	self.IsBack = not self.IsBack
+	self.BackBtn.Activity = self.IsBack
+	self.OneKeyBtn.Activity = not self.IsBack
+
+	if self.ChooseModule then
+		self.ChooseModule:IsShowOneKeyData(self.IsBack)
+	end
+end
+
+
+-- 一键分解成功返回
+function _R.BatchResolveCarBack(self, data)
+	WindowMgr.Create("UCarBatchDecomposeSuccess", data.getlist, function( ... )
+		if self.SelectPageId == Define.SysId.Car_Garage and self.ChooseModule then
+			self.ChooseModule:UpdateData()
+		end
+	end)
+end
+
+
+-- 分解材料返回
+function _R.BreakCarMatBack(self)
+	if MCar.CarMatBreakData and self.SelectPageId == Define.SysId.Car_Mat and self.ChooseModule then
+		self.ChooseModule:UpdateData()
+	end
+end
+
+
+-- 分解合成返回
+function _R.MergeCarMatBack(self)
+	if self.SelectPageId == Define.SysId.Car_Mat and self.ChooseModule then
+		self.ChooseModule:UpdateData()
+	end
+end
+
+return _M

@@ -1,0 +1,630 @@
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local MCommon = JRequire("Dev.Common.MCommon")
+local _NoTipsAgainMap = MCommon.NoTipsAgainMap
+local JGuiManager = CS.JGui.JGuiManager
+
+local _M = {}
+local UMessageName  = "UMessage"
+
+function _M.ShowText(showType, text, ...)
+	if not WindowMgr.IsCreated(UMessageName) then
+		WindowMgr.Create(UMessageName)
+	end
+	WindowMgr.Call(UMessageName,"ShowText", showType, text, ...)
+end
+
+function _M.ShowError(text, ...)
+	_M.ShowText(Define.ShowStrType.Error,text,...)
+end
+
+function _M.ShowRight(text, ... )
+	_M.ShowText(Define.ShowStrType.Right,text,...)
+end
+
+function _M.ShowPower(text, ... )
+	_M.ShowText(Define.ShowStrType.Power,text,...)
+end
+
+--显示物品Tips
+function _M.ShowItemTips( itemId, params )
+	WindowMgr.Create("UBagDetailPop", itemId, params)
+end
+
+--创建物品
+function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
+	local csvLine = Csv.Item[itemId]
+	assert(csvLine ~= nil, "itemId:" .. itemId)
+
+	--item表的colorIcon字段表示外框图片
+	--local colorCsv = Csv.ItemColor[csvLine.color]
+	--assert(colorCsv ~= nil, string.format("itemId:%d, color:%d", itemId, csvLine.color))
+	local moudleNmae = "M_Common_Item"
+	if params ~= nil and params.moudleName ~= nil then
+		moudleNmae = params.moudleName
+	end
+	local one = JGuiManager.GetMoudle(parent, moudleNmae, "", 0)
+	one:Get("color").SpriteName = csvLine.colorIcon
+	one:Get("Icon").SpriteName = csvLine.icon
+
+	if onBtnCall ~= nil then
+		one.SelfRect:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			onBtnCall(itemId, params)
+		end, nil, 0.9)
+	end
+	if one:Get("StaffIcon") ~= nil then
+		one:Get("StaffIcon").Activity = false
+	end
+	one:Get("Icon").Activity = true
+	if params ~= nil then
+		if params.num ~= nil then
+			one:Get("Num").Text = tostring(params.num)
+		end
+		if params.icon ~= nil then
+			if params.staff then
+				if one:Get("StaffIcon") ~= nil then
+					one:Get("StaffIcon").SpriteName = params.icon
+					one:Get("StaffIcon").Activity = true
+				end
+				one:Get("Icon").Activity = false
+			else
+				one:Get("Icon").SpriteName = params.icon
+				if one:Get("StaffIcon") ~= nil then
+					one:Get("StaffIcon").Activity = false
+				end
+			end
+		end
+		-- if params.scale ~= nil then
+		-- 	one.SelfRect.LocalScale = Vector3(0.5, 0.5, 1)
+		-- end
+	end
+	
+	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color)
+	return one, effectMoudle
+end
+
+--创建物品发光外框
+function _M.CreateItemLight(parent, sysId, itemId, itemColor)
+	local effectMoudle
+	if sysId ~= nil and Csv.ItemSysEffect[sysId] then
+		if itemId ~= nil then
+			local csvLine = Csv.Item[itemId]
+			if csvLine ~= nil and csvLine.color then
+				itemColor = csvLine.color
+			end
+		end
+		if itemColor ~= nil then
+			local csvColorEffect = Csv.ItemColorEffect[itemColor]
+			if csvColorEffect ~= nil and csvColorEffect.effectID ~= nil and Csv.Effect[csvColorEffect.effectID] ~= nil then
+				local csvEffect = Csv.Effect[csvColorEffect.effectID]
+				if csvEffect.prefab ~= nil then
+					effectMoudle = JGuiManager.GetMoudle(parent, csvEffect.prefab, "", 0)
+				end
+			end
+		end
+	end
+	return effectMoudle
+end
+
+--onChooseCall: 回调函数, 左边为true, 右边为false
+--可选: params: 参数组合
+	--items: 物品组合列表 (物品id到数量的映射列表)
+	--title: 标题 	--> 默认: 温馨提示 common_warning
+	--content: 提示内容 	--> 默认: 确认惊醒此操作?  common_content
+	--sureText: 左边按钮文字	--> 默认: 确定 common_sure
+	--cancelText: 右边按钮文字 --> 默认: 取消 common_cancel
+	--isNoCancel: 是否没有右边按钮 (true:没有右边按钮, 且左边按钮居中) 	--> 默认: false	
+--可选: noTipsAgainId: 本次登录不再提示所对应的id, 如果玩家勾选, 下次再使用此id进入这个函数将直接回调true (不传没有<本次登录不再提示选项>)
+function _M.CheckTips(onChooseCall, params, noTipsAgainId, winName)
+	if not winName then
+		winName = "UCheckBox"
+	end
+	if _NoTipsAgainMap[noTipsAgainId] ~= nil then
+		onChooseCall(_NoTipsAgainMap[noTipsAgainId], params)
+		return
+	end
+
+	params = params or {}
+	local title = params.title or Csv.Text("common_warning")
+	local content = params.content or Csv.Text("common_content")
+	local sureText = params.sureText or Csv.Text("common_sure")
+	local isNeedShowNoAgainTips = false
+	if noTipsAgainId ~= nil then
+		isNeedShowNoAgainTips = true
+	end
+	local cancelText = nil
+	if params.isNoCancel ~= true then
+		cancelText = params.cancelText or Csv.Text("common_cancel")
+	end
+	WindowMgr.Create(winName, title, content, sureText, function (isSure, isChooseNoAgain)
+		if isChooseNoAgain and isNeedShowNoAgainTips then
+			_NoTipsAgainMap[noTipsAgainId] = isSure
+		end
+		onChooseCall(isSure, params)
+	end, cancelText, params.items, isNeedShowNoAgainTips)
+end
+
+
+local M_Fly_Item = "M_Fly_Item"
+local M_Fly_Item_Right = "M_Fly_Item_Right"
+local M_Fly_Text = "M_Fly_Text"
+local M_Fly_Icon = "M_Fly_Icon"
+local T_Fly_Text = "T_Fly_Text"
+local M_Fly_ArtFont = "M_Fly_ArtFont"
+--飘物品和数量
+--[[
+    @desc: 
+    author:{author}
+    time:2017-11-16 13:18:40
+    --@parent: 挂载点
+	--@itemId: 物品id
+	--@itemNum: 物品数量
+	--@delayTime: 延迟播放时间 (可选, 不填没有延迟)
+    return
+]]
+function _M.ShowFlyItem(parent, itemId, itemNum, delayTime, pos, isRight, callback)
+	local moudle
+	if isRight then
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Item_Right)
+	else
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Item)
+	end
+	if pos ~= nil then
+		moudle.SelfRect.LocalPosition = pos
+	end
+	local itemCsv = Csv.Item[itemId]
+	moudle:Get('Color').SpriteName = itemCsv.colorIcon
+	moudle:Get('Item').SpriteName = itemCsv.icon
+	if itemNum > 0 then
+		moudle:Get('Text').Text = string.format("+%d",itemNum)
+	else
+		moudle:Get('Text').Text = string.format("-%d",itemNum)
+	end
+	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_Text)
+	if delayTime ~= nil and delayTime > 0 then
+		tween:DelayAll(delayTime)
+		moudle.SelfRect:AddOnTime(function()
+			if itemId == Define.AssetsType.Gold then
+				SoundMgr.Play(11001)
+			else
+				SoundMgr.Play(11000)
+			end
+			if callback ~= nil then
+				callback()
+			end
+		end, nil, delayTime)
+	else
+		if itemId == Define.AssetsType.Gold then
+			SoundMgr.Play(11001)
+		else
+			SoundMgr.Play(11000)
+		end
+		if callback ~= nil then
+			callback()
+		end
+	end
+	tween:SetDestoryAtComplete()
+	tween:Play()
+end
+
+function _M.ShowFlyItemAtMessage(itemId, itemNum, delayTime, pos)
+	if not WindowMgr.IsCreated(UMessageName) then
+		WindowMgr.Create(UMessageName)
+	end
+	WindowMgr.Call(UMessageName,"ShowFlyItem", itemId, itemNum, delayTime, pos)
+end
+
+--飘字
+--[[
+    @desc: 
+    author:{author}
+    time:2017-11-16 13:19:13
+    --@parent: 挂载点
+	--@text: 显示文本
+	--@delayTime: 延迟播放时间 (可选, 不填没有延迟)
+	--@spName: 图片名(可选, 不填没有图片)
+	--@spSize: 图片大小(可选, 不填为图片的原始大小)
+    return
+]]
+function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos)
+	local moudld
+	if spName ~= nil then
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Icon)
+		local icon = moudle:Get('Icon')
+		if spSize ~= nil then
+			icon.SizeDelta = spSize
+			icon.SpriteName = spName
+		else
+			icon.SpriteNameAutoScale = spName
+		end
+		moudle:Get('Text').Text = text
+	else
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Text)
+		moudle.SelfRect.Text = text
+	end
+	if pos ~= nil then
+		moudle.SelfRect.LocalPosition = pos
+	end
+	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_Text)
+	if delayTime ~= nil and delayTime > 0 then
+		tween:DelayAll(delayTime)
+	end
+	tween:SetDestoryAtComplete()
+	tween:Play()
+end
+
+--飘美术字
+--[[
+    @desc: 
+    author:{author}
+    time:2017-11-16 13:19:13
+	--@parent: 挂载点
+	--@textTable: 艺术字图片名列表
+	--@delayTime: 延迟播放时间 (可选, 不填没有延迟)
+    return
+]]
+function _M.ShowFlyArtFont(parent, textTable, delayTime)
+	local moudld
+	moudle = JGuiManager.GetMoudle(parent, M_Fly_ArtFont)
+	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_Text)
+	local rect = moudle:Get("rect")
+	for k,v in ipairs(textTable) do
+		local img = JGuiManager.CreateImage(rect,tostring(k))
+		if (not v.sizeW) and (not v.sizeH) then
+			img.SpriteNameAutoScale = v.name
+		else
+			img.SpriteName = v.name
+			img.SizeDelta = Vector2(v.sizeW, v.sizeH)
+		end
+	end
+	if delayTime ~= nil and delayTime > 0 then
+		tween:DelayAll(delayTime)
+	end
+	tween:SetDestoryAtComplete()
+	tween:Play()
+end
+
+--[[
+    @desc: 创建特效
+    author:{author}
+    time:2017-11-08 16:07:55
+    --@parent: 挂载点(effectId为粒子特效时为JGuiActor控件)
+	--@effectId: Effect表的id
+	--@pos: 位置 (可选)
+	--@doneCall: 结束回调 (可选)
+	--@spMap: 替换的图片列表 (可选) {节点名:图片名} --> 覆盖表中的spMap字段中对应节点的值 
+	--@textMap: 文字列表 (可选) {节点名:文字内容} --> 覆盖表中的textMap字段中对应节点的值  
+	--@dura:  持续时间 (可选) 替换表的dura字段
+	--@delay: 播放延迟
+	--@scale: 缩放值
+    return
+]]
+function _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+	local csv = Csv.Effect[effectId]
+	if csv == nil then
+		error(string.format( "cont find id from Effect csv, id:%d", effectId ))
+		return
+	end
+	local moudle = JGuiManager.GetMoudle(parent, csv.prefab)
+	if moudle == nil then
+		error(string.format( "cont find Moudle, effectId:%d, name:%s", effectId, csv.prefab ))
+		return
+	end
+	if pos ~= nil then
+		moudle.SelfRect.LocalPosition = pos
+	elseif csv.pos ~= nil then
+		moudle.SelfRect.LocalPosition = Vector2(csv.pos[1], csv.pos[2])
+	end
+	if scale ~= nil then
+		moudle.SelfRect.LocalScale = Vector3(scale, scale, scale)
+	elseif csv.scale ~= nil then
+		moudle.SelfRect.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
+	end
+	local widget
+	if spMap ~= nil then
+		for k,v in pairs(spMap) do
+			widget = moudle:Get(k)
+			if widget ~= nil then
+				widget.SpriteName = v
+			else
+				error(string.format( "cont find effect node, id:%d, node:%s", effectId, k ))
+			end
+		end
+	end
+	if csv.spMap ~= nil then
+		for k,v in pairs(csv.spMap) do
+			if not spMap or not spMap[k] then
+				widget = moudle:Get(k)
+				if widget ~= nil then
+					widget.SpriteName = v
+				else
+					error(string.format( "cont find effect node, id:%d, node:%s", effectId, k ))
+				end
+			end
+		end
+	end
+	if textMap ~= nil then
+		for k,v in pairs(textMap) do
+			widget = moudle:Get(k)
+			if widget ~= nil then
+				widget.Text = v
+			else
+				error(string.format( "cont find effect node, id:%d, node:%s", effectId, k ))
+			end
+		end
+	end
+	if csv.textMap ~= nil then
+		for k,v in pairs(csv.textMap) do
+			if not textMap or not textMap[k] then
+				widget = moudle:Get(k)
+				if widget ~= nil then
+					widget.Text = v
+				else
+					error(string.format( "cont find effect node, id:%d, node:%s", effectId, k ))
+				end
+			end
+		end
+	end
+	if csv.tweener ~= nil then
+		local tween = moudle.SelfRect.CachedTran:GetJTweener(csv.tweener)
+		if tween == nil then
+			error(string.format( "GetJTweener error, id:%d, name:%s", effectId, csv.tweener ))
+		else
+			if csv.isTweenDelete == 1 then
+				tween:SetDestoryAtComplete(function ( ... )
+					if moudle ~= nil then
+						moudle:Destroy()
+					end
+					if doneCall ~= nil then
+						doneCall(...)
+					end
+				end)
+			end
+			if delay ~= nil and delay > 0 then
+				tween:Delay(delay)
+			end
+			tween:Play()
+		end
+	end
+	if dura == nil then
+		dura = csv.dura
+	end
+	if dura ~= nil and dura > 0 then
+		moudle.SelfRect:AddOnTime(function ( ... )
+			if moudle ~= nil then
+				moudle:Destroy()
+			end
+			if doneCall ~= nil then
+				doneCall(...)
+			end
+		end, nil, dura)
+	end	
+	return moudle
+end
+
+function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
+	local csv = Csv.Effect[effectId]
+	if csv == nil then
+		error(string.format( "cont find id from Effect csv, id:%d", effectId ))
+		return
+	end
+	if dura == nil then
+		dura = csv.dura
+	end
+	if dura ~= nil and dura > 0 then
+		parent:AddOnTime(function ( ... )
+			if parent ~= nil then
+				parent:DestroyChildren()
+			end
+			if doneCall ~= nil then
+				doneCall(...)
+			end
+		end, nil, dura)
+	end
+	if pos ~= nil then
+		parent.LocalPosition = pos
+	elseif csv.pos ~= nil then
+		parent.LocalPosition = Vector2(csv.pos[1], csv.pos[2])
+	end
+	if scale ~= nil then
+		parent.LocalScale = Vector3(scale, scale, scale)
+	elseif csv.scale ~= nil then
+		parent.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
+	end
+	if dura ~= nil and dura > 0 then
+		parent:LoadEffect(csv.prefab,dura)
+	else
+		parent:LoadEffect(csv.prefab,0)
+	end
+end
+
+function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+	if effectId < 10000 then
+		return _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+	else
+		_M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
+		return parent
+	end
+end
+
+--自动创建Actor节点
+function _M.CreateEffectEx(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+	if effectId < 10000 then
+		return _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+	else
+		local prefab = JGuiManager.CreateActor(parent, tostring(effectId))
+		_M.LoadPrefabEffect(prefab, effectId, pos, doneCall, dura, scale)
+		return prefab
+	end
+end
+
+_M.ActorFieldMap = 
+{
+	--角色
+	login = "login",
+	player = "player",
+	girl = "girl",
+	playerLevelUp_left = "playerLevelUp_left",
+	playerLevelUp_right = "playerLevelUp_right",
+	playerLevelUp_show = "playerLevelUp_show",
+	player_look = "player_look",
+	rank = "rank",
+	parliament = "parliament",
+	parliament_worship = "	parliament_worship"	,
+	story_left = "story_left",
+
+	--美女
+	girl_show = "girl_show",
+	girl_home = "girl_home",
+	girl_game = "girl_game",
+	girl_get = "girl_get",
+	girl_date_choose = "girl_date_choose",
+	
+
+	--员工
+	staff_info = "staff_info",
+	staff_get = "staff_get",
+
+	--NPC
+	story_right = "story_right_",
+	-- story_right_1 = "story_right_1",
+	-- story_right_2 = "story_right_2",
+	-- story_right_3 = "story_right_3",
+	-- story_right_4 = "story_right_4",
+
+}
+
+--[[
+	@parent: 挂载点(任何节点)
+	@effectId: 特效表ID
+	@posScaleField: 位置和缩放值参数表索引
+]]
+function _M.CreateActor(parent, prefabId, posScalefield)
+	local prefab = JGuiManager.CreateActor(parent, tostring(prefabId))
+	local pos = nil
+	local scale = nil
+	if posScalefield ~= nil then
+		local uiPosScaleCsv = Csv.EffectUIPosScale[posScalefield]
+		if uiPosScaleCsv ~= nil then
+			pos = Vector2(uiPosScaleCsv.pos[1], uiPosScaleCsv.pos[2])
+			scale = uiPosScaleCsv.scale
+		else
+			local posScaleCsv = Csv.EffectIDPosScale[prefabId]
+			if posScaleCsv ~= nil and posScaleCsv.field ~= nil then
+				for k,v in pairs(posScaleCsv.field) do
+					if v == posScalefield then
+						local posInfo = posScaleCsv.pos[k]
+						if posInfo ~= nil then
+							pos = Vector2(posInfo[1], posInfo[2])
+						end
+						scale = posScaleCsv.scale[k]
+						break
+					end
+				end
+			end
+		end
+	end
+	_M.LoadPrefabEffect(prefab, prefabId, pos, nil, nil, scale)
+	return prefab
+end
+
+function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield)
+	local body = _M.CreateActor(parent, bodyPrefabId, posScalefield)
+	local head = _M.CreateActor(parent, headPrefabId, posScalefield)
+	local headGrap = head:SkeletonGetGraphic()
+	if headGrap ~= nil then
+		body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
+	end
+	return body, head
+end
+
+function _M.PlayEffectGod(parent,sysID)
+	local csvGod = Csv.God[sysID]
+	if csvGod ~= nil then
+		if not WindowMgr.IsCreated(UMessageName) then
+			WindowMgr.Create(UMessageName)
+		end
+		WindowMgr.Call(UMessageName,"ShowShenJi", csvGod)
+	end
+end
+
+function _M.PlayEffect(effectId, pos, doneCall, spMap, textMap, dura)
+	if not WindowMgr.IsCreated(UMessageName) then
+		WindowMgr.Create(UMessageName)
+	end
+	WindowMgr.Call(UMessageName,"PlayEffect", effectId, pos, doneCall, spMap, textMap, dura)
+end
+
+--[[
+    @desc: 锁定输入
+    author:{author}
+    time:2017-11-08 17:12:03
+    --@state: 控制是否响应输入
+    return
+]]
+function _M.LockInput(state)
+	if not WindowMgr.IsCreated(UMessageName) then
+		WindowMgr.Create(UMessageName)
+	end
+	WindowMgr.Call(UMessageName,"LockInput", state)
+end
+
+--[[
+    @desc: 闪烁表现
+    author:{author}
+    time:2017-11-08 17:22:34
+    --@darkTime: 由亮到黑的时间间隔
+	--@lightTime: 由黑到亮的时间间隔
+	--@darkcall: 黑了的时候的回调
+	--@doneCall: 亮的时候的回调
+    return
+]]
+function _M.PlayTwinkle(darkTime, lightTime, isLock, darkcall, doneCall)
+	if not WindowMgr.IsCreated(UMessageName) then
+		WindowMgr.Create(UMessageName)
+	end
+	WindowMgr.Call(UMessageName,"PlayTwinkle", darkTime, lightTime, isLock, darkcall, doneCall)
+end
+
+local ULOADING = "ULoading"
+function _M.ShowLoading(level)
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"ShowLoading", level)
+end
+function _M.HideLoading(level)
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"HideLoading", level)
+end
+function _M.ShowReloginBox(content, sureText, onChooseCall, cancelText, level)
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"ReloginBox", content, sureText, onChooseCall, cancelText, level)
+end
+function _M.HideReloginBox()
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"HideReloginBox")
+end
+
+function _M.RefreshNotice()
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"RefreshNotice")
+end
+
+function _M.ShowFog(color)
+	if not WindowMgr.IsCreated(ULOADING) then
+		WindowMgr.Create(ULOADING)
+	end
+	WindowMgr.Call(ULOADING,"ShowFog", color)
+end
+
+return _M

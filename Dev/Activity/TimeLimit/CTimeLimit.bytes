@@ -1,0 +1,145 @@
+----------------------文件引用--------------------------
+--@RefType [Dev.Activity.BaseCActivity.bytes#_M]
+local BaseCActivity = JRequire "Dev.Activity.BaseCActivity"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+
+------------------------------通用接口------------------------------
+function _M.DoUpdate(actType, data)
+	local csvTimeLimit = Csv.ActivityTimeLimit
+	if nil ~= csvTimeLimit then
+		local temp = csvTimeLimit
+		csvTimeLimit = {}
+		for i, csvValue in pairs(temp) do
+			csvTimeLimit[csvValue.id] = csvValue
+		end
+	end
+	for _, v in pairs(data) do
+		local info = BaseCActivity.GetStateInfo(v, actType)
+		local csvValue = csvTimeLimit[info.actId]
+		if nil ~= csvValue then
+			info.title1 = csvValue.title1
+			info.title2 = csvValue.title2
+			info.pro = v.pro
+			info.proText = csvValue.proText
+			info.rankType = csvValue.rankType
+			info.sort = csvValue.sort
+			info.rewards = {}
+			local GetedRewardIndex = {}
+			if nil ~= v.rewards then
+				for k,v in pairs(v.rewards) do
+					GetedRewardIndex[v] = true
+				end
+			end
+			if nil ~= csvValue.proMax and nil ~= csvValue.reward then
+				for key, value in pairs(csvValue.proMax) do
+					info.rewards[key] = {}
+					info.rewards[key].maxVal = value
+					info.rewards[key].isGeted = nil ~= GetedRewardIndex[key]
+					info.rewards[key].rewards = {}
+					if nil ~= csvValue.reward[key] then
+						for rewardKey, rewardValue in pairs(csvValue.reward[key]) do
+							local one = {
+								key = rewardValue[1],
+								value = rewardValue[2]
+							}
+							info.rewards[key].rewards[rewardKey] = one
+						end
+					else
+						error("error csv data, activity ID", info.actId)
+					end
+				end
+			end
+		end
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+	end
+	--检查小红点
+	_M.CheckRepoint()
+	--刷新界面
+	WindowMgr.Call("UTimeLimit", "OnRefreshView")
+	WindowMgr.Call("UTimeLimitAct", "OnRefreshView")
+end
+
+function _M.CheckRepoint()
+	local listData = MActivity.GetListFromType(Define.ActivityType.TimeLimit)
+	if nil ~= listData then
+		for index, data in pairs(listData) do
+			if MActivity.ActivityState.Doing == data.state.state then
+				if nil ~= data.rewards then
+					local isNeedUpdateRedpoint = false
+					local isRedPoint = false
+					for rewardKey, reward in pairs(data.rewards) do
+						local indexRedPoint = false
+						if data.pro >= reward.maxVal and not reward.isGeted then
+							indexRedPoint = true
+							isRedPoint = true
+						else
+							indexRedPoint = false
+						end
+						if MActivity.ActRedpoint(data.actId, rewardKey, indexRedPoint) then
+							isNeedUpdateRedpoint = true
+						end
+					end
+					if isNeedUpdateRedpoint then
+						CMain.UpdateRedpoint(isRedPoint, Define.SysId.TimeLimit, data.actId)
+					end
+				end					
+			end
+		end
+	end
+end
+
+function _M.OnGetSuccess(getData, actData)
+	--限时奖励兑换返回
+	local one = actData.rewards[getData.index]
+	if one.isGeted ~= getData.isGeted then
+		one.isGeted = getData.isGeted
+		--检查小红点
+		_M.CheckRepoint()
+		--界面表现
+		WindowMgr.Call("UTimeLimitAct", "RefreshItemGetState", getData)
+	end
+end
+
+function _M.OnUpdateState(oldActData, actData)
+	--限时奖励活动状态更新
+	if actData.state.state == MActivity.ActivityState.Close then
+		--关闭入口
+		MActivity.ClearForId(actData.actId)
+		CMain.UpdateRedpoint(false, Define.SysId.TimeLimit, actData.actId)
+		if nil == MActivity.GetListFromType(oldActData.actType) then
+			WindowMgr.Call("UMain", "RefreshTopBtns")
+		end
+	else
+		local lastState = oldActData.state
+		local newState = actData.state
+		oldActData.state = {
+			state = newState.state,
+			startTime = newState.startTime,
+			endTime = newState.endTime,
+		}
+	end
+	
+	--检查小红点
+	_M.CheckRepoint()
+	--界面刷新
+	WindowMgr.Call("UTimeLimit", "OnRefreshView")
+	WindowMgr.Call("UTimeLimitAct", "OnRefreshView")
+end
+
+function _M.OnUpdatePro(actData, proData)
+	--限时奖励活动状态更新
+	actData.pro = proData.pro
+	--检查小红点
+	_M.CheckRepoint()
+	--界面刷新
+	WindowMgr.Call("UTimeLimitAct", "OnRefreshView")
+end
+
+return _M

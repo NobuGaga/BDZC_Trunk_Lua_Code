@@ -1,0 +1,135 @@
+--@RefType [Dev.Mail.MMail.bytes#_M]
+local MMail = JRequire "Dev.Mail.MMail"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local ECmdId = 
+{
+	cMailRead = 1,         -- 阅读邮件 PMail.CRead
+	cMailGainAward = 2,    -- 领取邮件奖励 PMail.CGainAward
+	cMailGainAll =	3,		--一键领取附件
+	cMailDeleteAll = 4,		--一键删除邮件
+
+	sMailInit = 1,         -- 邮件初始化 PMail.SInit
+	sMailUpdateStatus = 2, -- 更新邮件状态 PMail.SUpdateStatus
+	sMailAddNew = 3,       -- 收到新邮件 PMail.PMail
+	sMailGainAll = 	4,     		--一键领取附件列表	PMail.SGainList
+	sMailDeleteAll = 5,			--一键删除游戏列表	PMail.SDeleteList
+}
+
+function _M.ModuleClean()
+	MMail.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cMailRead] = "PMail.CRead",
+		[ECmdId.cMailGainAward] = "PMail.CGainAward",
+		[ECmdId.cMailGainAll]	= "",
+		[ECmdId.cMailDeleteAll] = "",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sMailInit] = { proto = "PMail.SInit", handle = _P.OnInit},
+		[ECmdId.sMailUpdateStatus] = { proto = "PMail.SUpdateStatus", handle = _P.OnMainUpdate},
+		[ECmdId.sMailAddNew] = { proto = "PMail.PMail", handle = _P.OnAddNewMail},
+		[ECmdId.sMailGainAll] = {proto = "PMail.SGainList", handle = _P.OnGainList},
+		[ECmdId.sMailDeleteAll] = {proto = "PMail.SDeleteList", handle = _P.OnDeleteList},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Mail, func_send, func_recv, isReload)
+end
+
+
+-- 请求读取邮件
+function _M.ReadMailReq(mailId)
+	_M.Send(ECmdId.cMailRead, {mailid = mailId})
+end
+
+
+-- 请求领取附件
+function _M.GainAttachReq(mailId)
+	_M.Send(ECmdId.cMailGainAward, {mailid = mailId})
+end
+
+--请求一键领取邮件
+function _M.GainAllMail()
+	_M.Send(ECmdId.cMailGainAll)
+end
+
+--请求一键删除邮件
+function _M.DeleteAllMail()
+	_M.Send(ECmdId.cMailDeleteAll)
+end
+
+
+-- 邮件初始化（S2C）
+function _P.OnInit(data)
+	MMail.OnCreateList(data) -- 创建列表
+	_P.CheckMailRedPoint()
+end
+
+
+-- 邮件更新（S2C）
+function _P.OnMainUpdate(data)
+	MMail.OnUpdateList(data) -- 更新列表
+	WindowMgr.Call("UMailPanel", "OnRefreshItem", data) -- 更新邮件某个item
+	-- WindowMgr.Call("UMailDetailPanel", "OnRefreshItem", data)
+
+	_P.CheckMailRedPoint()
+end
+
+
+-- 新邮件推送（S2C）
+function _P.OnAddNewMail(data)
+	MMail.OnAddNewMail(data)
+	WindowMgr.Call("UMailPanel", "OnAddNewMail", data) -- 更新邮件列表
+	-- WindowMgr.Call("UMailDetailPanel", "OnAddNewMail", data) -- 更新邮件列表
+	_P.CheckMailRedPoint()
+end
+
+
+-- 设置邮件红点
+function _P.CheckMailRedPoint()
+	local isShowRed = false
+
+	for i,v in ipairs(MMail.MailTable) do
+		if v.read == false or (v.awardList ~= nil and v.gainAward == false) then
+			isShowRed = true
+			break
+		end
+	end
+
+	if isShowRed ~= MMail.MailRedPoint then
+		MMail.MailRedPoint = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Mail)
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+	end
+end
+
+function _P.OnGainList(data)
+	MMail.GainAllMails(data)
+	WindowMgr.Call("UMailPanel", "GainAllMails", data.awardList) -- 更新邮件列表
+	-- WindowMgr.Call("UMailDetailPanel", "GainAllMails", data.awardList) -- 更新邮件列表
+	_P.CheckMailRedPoint()
+end
+
+function _P.OnDeleteList(data)
+	MMail.DeleteAllMails(data)
+	WindowMgr.Call("UMailPanel", "DeleteAllMails", data.mails) -- 更新邮件列表
+	-- WindowMgr.Call("UMailDetailPanel", "DeleteAllMails", data.mails) -- 更新邮件列表
+	_P.CheckMailRedPoint()
+end
+
+return _M

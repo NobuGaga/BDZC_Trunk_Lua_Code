@@ -1,0 +1,53 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local JGuiManager = CS.JGui.JGuiManager
+
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(boxid)
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local csv = Csv.RelationsBox[boxid]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Preview")
+	moudle:Get("border").RaycastTarget = true
+	moudle:Get("back_btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("text1").Text = Csv.Text("quest_actPre")
+	moudle:Get("text3").Text = Csv.Text("relations_lianshengN",{num = boxid})
+
+	local items = moudle:Get("Items")
+	if csv.Award ~= nil then
+		local showAward = {}
+		for _,v in pairs(csv.Award) do
+			if not showAward[v[1]] then
+				-- local itemMoudle = JGuiManager.GetMoudle(items, "M_Common_Item")
+				-- local itemCsv = Csv.Item[v[1]]
+				-- itemMoudle:Get("M_Common_Item").SpriteName = itemCsv.colorIcon
+				-- itemMoudle:Get("Icon").SpriteName = itemCsv.icon
+				-- itemMoudle:Get("Num").Text = v[2]
+
+				-- itemMoudle.SelfRect:AddOnButton(function ( ... )
+				-- 	SoundMgr.Play(10001)
+				-- 	WindowMgr.Create("UBagDetailPop",v[1])
+				-- end, nil, 0.9)
+				CCommon.CreateItem(items,v[1],CCommon.ShowItemTips,{num = v[2]},Define.SysId.Relations)
+
+				showAward[v[1]] = true
+			end
+		end
+	end
+end
+
+return _M

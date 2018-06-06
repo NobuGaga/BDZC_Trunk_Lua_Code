@@ -1,0 +1,117 @@
+-- 重铸界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(carData)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Recast")
+	self.mModule = module
+
+	local carConf = Csv.Car[carData.carid]
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("HelpBtn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("Title").Text = Csv.Text("car_garage_chongzhu")
+	module:Get("Tips").Text = Csv.Text("car_recast_tip")
+
+	local goldText = module:Get("ZsNum")
+	local curGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	local needGold = carConf.needGold
+	if curGold >= needGold then
+		goldText.Text = Csv.Text("car_main_greenShow", {num = curGold, need = needGold})
+	else
+		goldText.Text = Csv.Text("car_main_redShow", {num = curGold, need = needGold})
+	end
+
+	local recastBtn = module:Get("C_Btn_b")
+	recastBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needGold) then
+			return
+		end
+		if carData.isequip then -- 装备中的座驾不能重铸
+			CCommon.ShowError(Csv.Text("err_car_recast"))
+		else
+			CCar.CarReCastReq(carData.id)
+		end
+	end, nil, 0.9)
+
+	_P.SetCarData(self, carData)
+end
+
+
+function _P.SetCarData(self, carData)
+	local carConf = Csv.Car[carData.carid]
+	local itemConf = Csv.Item[carData.carid]
+	local strColor = Csv.ItemColor[itemConf.color].str
+	self.mModule:Get("NowCar").SpriteName = itemConf.colorIcon
+	self.mModule:Get("NowCarIcon").SpriteName = carConf.icon
+
+	local qualityNum = (carData.color > 6 and 6) or carData.color
+	self.mModule:Get("NowCarQualifications").SpriteName = QualityIconNameArr[qualityNum]
+	self.mModule:Get("NextCar").SpriteName = itemConf.colorIcon
+	self.mModule:Get("NextCarIcon").SpriteName = carConf.icon
+	self.mModule:Get("NextCarQualifications").SpriteName = QualityIconNameArr[qualityNum]
+
+	self.mModule:Get("NowCarLv1").Text = 'Lv' .. carData.level
+	self.mModule:Get("NowCarLv2").Text = Csv.Text("car_main_jieji") .. carData.star
+	self.mModule:Get("NextCarLv1").Text = 'Lv1'
+	self.mModule:Get("NextCarLv2").Text = Csv.Text("car_main_jieji") .. 0
+	self.mModule:Get("C_text").Text = Csv.Text("car_garage_chongzhu")
+	self.mModule:Get("Get").Text = Csv.Text("car_recast_get")
+
+	_P.SetListData(self, carData)
+end
+
+
+function _P.SetListData(self, carData)
+	local itemContent = self.mModule:Get("Content")
+	if carData.recast then
+		for k,v in pairs(carData.recast) do
+			CCommon.CreateItem(itemContent, v.key, nil, {num = v.value})
+		end
+	end
+end
+
+
+return _M

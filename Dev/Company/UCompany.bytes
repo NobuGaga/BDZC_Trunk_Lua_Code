@@ -1,0 +1,174 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCompany = JRequire "Dev.Company.CCompany"
+local UCompanyManage = JRequire "Dev.Company.UCompanyManage"
+local UCompanyVerdict = JRequire "Dev.Company.UCompanyVerdict"
+local UCompanyPatrol = JRequire "Dev.Company.UCompanyPatrol"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local MMain = JRequire "Dev.Main.MMain"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.Manage then
+		self.ChooseMoudle = UCompanyManage.new(self.PageNode)
+	elseif funcId == Define.SysId.Verdict then
+		self.ChooseMoudle = UCompanyVerdict.new(self.PageNode)
+	elseif funcId == Define.SysId.Patrol then
+		self.ChooseMoudle = UCompanyPatrol.new(self.PageNode)
+	end
+	MCompany.LastChoose = funcId
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Company_UCompany")
+	self.mMoudle = moudle
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("company_T")
+
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Operate, true)
+	local count = #funcs
+	if count > 0 then
+		local lastChoose = chooseFuncId or MStaff.LastChoose
+		local isHave = false
+
+		--Table标签控制
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "ty_016", "ty_017")
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 3 then
+				tabHandle:Add(v.id, moudle:Get("sheet_"..index), moudle:Get("C_text_"..index), v.name)
+				if lastChoose == v.id then
+					isHave = true
+				end
+			end
+			--注册小红点
+			self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.tabHandle = tabHandle
+	end
+	if count < 3 then
+		for i=count + 1,3 do
+			moudle:Get("sheet_"..i).Activity = false
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		self.ChooseMoudle:UpdateAsset(itemid, itemcount, isAdd)
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		if MCompany.LastChoose == Define.SysId.Manage then
+			for k,v in pairs(MCompany.UpdatingTable) do
+				if v then
+					self.ChooseMoudle:UpdateTime(k)
+				end
+			end
+		elseif MCompany.LastChoose == Define.SysId.Verdict then
+			if MCompany.UpdatingVerdict then
+				self.ChooseMoudle:UpdateTime(MCompany.Verdict.id)
+			end
+		end
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if MCompany.LastChoose == Define.SysId.Verdict then
+			self.ChooseMoudle:UpdateSlider()
+		end
+	end)
+end
+
+function _R.OnManage(self,data)
+	if MCompany.LastChoose == Define.SysId.Manage then
+		self.ChooseMoudle:UpdateTime(data.id)
+	end
+end
+
+function _R.OnVerdict(self)
+	if MCompany.LastChoose == Define.SysId.Verdict then
+		self.ChooseMoudle:UpdateUI()
+	end
+end
+
+function _R.OnVerdictRefresh(self,count)
+	if MCompany.LastChoose == Define.SysId.Verdict then
+		self.ChooseMoudle:UpdateCount(count)
+	end
+end
+
+function _R.OnPatrol(self,data)
+	if MCompany.LastChoose == Define.SysId.Patrol then
+		self.ChooseMoudle:OnPatrol(data)
+	end
+end
+
+function _R.OnPatrolPres(self)
+	if MCompany.LastChoose == Define.SysId.Patrol then
+		self.ChooseMoudle:PatrolPres()
+	end
+end
+
+function _R.OnDayout(self)
+	if MCompany.LastChoose == Define.SysId.Patrol then
+		self.ChooseMoudle:OnDayout()
+	end
+end
+
+function _R.OnManageGod(self,data)
+	if MCompany.LastChoose == Define.SysId.Manage then
+		if data.result.isgod then
+			SoundMgr.PlayNonStopUI(10003)
+			self.ChooseMoudle:ShowGod()
+		end
+	end
+end
+
+return _M

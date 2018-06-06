@@ -1,0 +1,229 @@
+local EventCenter = JRequire "Dev.EventCenter"
+
+local JGuiManager = CS.JGui.JGuiManager
+
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = Class()
+
+--构造函数 (****不可以重载*****)
+function _M:ctor(windowType, windowName, isCanPop, sysId)
+	self._Name = windowName
+	self._Type = windowType
+	self._CanPop = isCanPop
+	self._SysId = sysId
+	self._CanvasIndex = 0
+	self._CanvasTweenState = 0 --0无动画 1创建动画 2创建动画结束 3关闭动画
+	self._CallEvents = {}
+	self._Redpoints = {}
+	-- _MusicID: 更换背景音乐ID
+	-- _BeginMemory: 开始时内存
+	-- 	_CanvasNode: 根节点
+	--	_EventNode: 事件节点
+	--  _LockNode: 		遮挡节点
+	--	_RootNode: 界面动画节点, 界面挂载点
+	--  _CanvasIndex: 画布索引
+
+	-- _CreateTweenInfo: 	是否需要创建动画
+	-- _DestroyTweenInfo: 是否需要删除动画
+	-- _CreateOrDestroyTweenCom: 创建时动画组件
+end
+
+function _M:IsActivity()
+	return self._CanvasNode ~= nil and self._CanvasNode.Activity == true
+end
+
+--内部删除函数 (****不可以重载*****)
+--这个函数会有关闭动画, 只能用于关闭按钮, 不可以用于跳转等
+function _M:Destroy(isNoPop, ... )
+	if self._CanvasNode ~= nil then
+		if self._DestroyTweenInfo ~= nil then
+			if self._CreateOrDestroyTweenCom ~= nil then
+				self._CreateOrDestroyTweenCom:DOKill()
+			end
+			self:Lock()
+			local param = {...}
+			if self._DestroyTweenInfo.func ~= nil then
+				self._DestroyTweenInfo.func()
+			end
+			CS.JGui.JGuiManager.DestroyAllChildActor(self._CanvasNode)
+			self._CanvasTweenState = 3
+			self._CreateOrDestroyTweenCom = self._EventNode.CachedTran:GetJTweener(self._DestroyTweenInfo.name)
+			self._CreateOrDestroyTweenCom:SetOnComplete(function ()
+				WindowMgr.Destroy(self._Name, isNoPop, table.unpack(param))
+			end)
+			self._CreateOrDestroyTweenCom:Play()
+		else
+			WindowMgr.Destroy(self._Name, isNoPop, ...)
+		end	
+	end	
+end
+--立即关闭, 不播放关闭动画
+function _M:DestroyImmediately(isNoPop, ... )
+	WindowMgr.Destroy(self._Name, isNoPop, ...)
+end
+
+function _M:DisCreateOrDestroyTween()
+	if self._CreateOrDestroyTweenCom ~= nil then
+		self._CreateOrDestroyTweenCom:DOKill(true)	
+		if self._CanvasTweenState == 2 and self._CreateTweenInfo ~= nil and self._CreateTweenInfo.pass ~= nil then
+			self._CreateTweenInfo.pass(self)
+		end	
+	end
+end
+
+--界面构造
+function _M:OnCreate(...)
+	
+end
+
+--回弹调用
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--删除界面前调用
+function _M:BeforeDestroy( ... )
+	-- body
+end
+
+--播完弹出动画之后回调
+function _M:OnCreateTweenDone( ... )
+
+end
+
+--删除后调用
+function _M:EndDestroy( ... )
+	-- body
+end
+
+--内部函数派发
+function _M:Dispatch(funcName, ...)
+	
+end
+
+--注册一个监听事件 (****不可以重载*****)
+function _M:RegistCallEvent(eventId, onEventCall)
+	local handle = EventCenter.RegistCallEvent(eventId, onEventCall)
+	self._CallEvents[handle] = true
+	return handle
+end
+
+--取消指定的事件监听 (****不可以重载*****)
+function _M:UnRegistCallEvent(eventHandle)
+	self._CallEvents[eventHandle] = nil
+	EventCenter.UnRegistCallEvent(eventHandle)
+end
+
+--取消所有的事件监听 (****不可以重载*****)
+function _M:UnRegistAllEvent()
+	for k,v in pairs(self._CallEvents) do
+		EventCenter.UnRegistCallEvent(k)
+	end
+	self._CallEvents = {}
+end
+
+--注册小红点挂载点 (****不可以重载*****)
+--[[
+    @desc: 注册小红点挂载点 
+    author:{author}
+    time:2017-11-02 11:34:21
+	--@widget: 小红点挂载点
+	--@sysId: Define.SysId
+	--@args: 索引列表 -- 从SysId开始查找到对应产生小红点的索引列表
+    return
+]]
+function _M:RegistRedpoint(redpointWidget, funcId, ...)
+	local indexKeys = {funcId, ...}
+	local tab = self._Redpoints
+	for k,v in pairs(indexKeys) do
+		if tab[v] == nil then
+			tab[v] = {}
+		end
+		tab = tab[v]	
+	end
+	tab._redpointWidget = redpointWidget
+
+	if MMain.RedpointIsActive(funcId,...) then
+		redpointWidget.Activity = true
+	else
+		redpointWidget.Activity = false
+	end
+end
+
+--取消注册小红点监听 (****不可以重载*****)
+function _M:UnRegistRedpoint()
+	self._Redpoints = {}
+end
+
+--外部调用: (****不可以重载*****)
+function _M:OnRedpointUpdate(isActive, ... )
+	if next(self._Redpoints) == nil then
+		return
+	end
+	local indexKeys = {...}
+	local tab
+	for k,v in pairs(indexKeys) do
+		if tab ~= nil then
+			if tab[v] == nil then
+				return
+			end
+			tab = tab[v]
+		else
+			tab = self._Redpoints[v]
+		end
+	end
+	if tab ~= nil and tab._redpointWidget ~= nil then
+		tab._redpointWidget.Activity = isActive
+	end
+end
+
+--模块创建 (****不可以重载*****)
+function _M:CreateMoudle(parent, name)
+	local moudle = JGuiManager.GetMoudle(parent, name, self._Type, self._CanvasIndex)
+	self._CanvasIndex = moudle.SortingOrder + 1
+
+	return moudle
+end
+
+--画布创建 (****不可以重载*****)
+function _M:CreateCanvas(parent, name)
+	local canvas = JGuiManager.CreateCanvas(parent, name)
+	canvas.SortingLayerName = self._Type
+	canvas.SortingOrder = self._CanvasIndex
+	self._CanvasIndex = self._CanvasIndex + 1
+	return canvas
+end
+
+--锁住界面 不可点击 (****不可以重载*****)
+function _M:Lock()
+	self._LockNode.RaycastTarget = true
+end
+
+--取消界面锁定 恢复可点击 (****不可以重载*****)
+function _M:Unlock()
+	self._LockNode.RaycastTarget = false
+end
+
+--压暗 (****不可以重载*****)
+function _M:Black()
+	self._BlackNode.Activity = true
+end
+
+--取消压暗 (****不可以重载*****)
+function _M:UnBlack()
+	self._BlackNode.Activity = false
+end
+
+--自主取消创建时动画 (****不可以重载*****)
+function _M:HideCreateTween()
+	self._CreateTweenInfo = nil
+end
+
+--自主取消删除时动画 (****不可以重载*****)
+function _M:HideDestroyTween()
+	self._DestroyTweenInfo = nil
+end
+
+return _M

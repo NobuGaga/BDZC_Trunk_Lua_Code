@@ -1,0 +1,253 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ShowDailyReward()
+	if self.mViplevel ~= nil then
+		local content = self.mMoudle:Get("flyRect_1")
+
+		local delay = 0
+		local vipDailyGift = Csv.VipDailyGift[self.mViplevel]
+		if vipDailyGift.items ~= nil then
+			for k,v in pairs(vipDailyGift.items) do
+				delay = delay +0.2
+				CCommon.ShowFlyItemAtMessage(v[1], v[2],delay, content.RootCanvasPos)
+			end
+		end
+	end
+end
+
+function _M:ShowDiscountGift()
+	if self.mViplevel ~= nil then
+		local content = self.mMoudle:Get("flyRect_2")
+
+		local delay = 0
+		local actID = MVipWelfare.vipActivityID
+		local vipDiscountData = Csv.VipDiscountGift[actID]
+		if vipDiscountData.gifts[self.mViplevel] ~= nil then
+			for k,v in pairs(vipDiscountData.gifts[self.mViplevel]) do
+				delay = delay +0.2
+				CCommon.ShowFlyItemAtMessage(v[1], v[2],delay, content.RootCanvasPos)
+			end
+		end
+	end
+end
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_Vip_2", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("C_text_0").Text = Csv.Text("recharge_title")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--前往充值
+		WindowMgr.Create("URecharge")
+	end)
+
+	moudle:Get("textBtnGet").Text = Csv.Text("chargeaward_get")
+	moudle:Get("btnGet"):AddOnButton(function()
+		--领取每日奖励
+		_P.GetReward(self)
+	end)
+
+	moudle:Get("textBtnGet_0").Text = Csv.Text("welfare_buy")
+	moudle:Get("btnGet_0"):AddOnButton(function()
+		--购买折扣礼包
+		_P.BuyDiscount(self)
+	end)
+end
+
+function _M:RefreshView(level)
+	local moudle = self.mMoudle
+	self.mViplevel = level
+
+	local vipSp = moudle:Get("VipLevel")
+	local vipSp2 = moudle:Get("Lelev")
+	local ExplainText = moudle:Get("ExplainText")
+	local sliderValue = moudle:Get("ProgressBar")
+	local sliderText = moudle:Get("ExpText") 
+
+	local infoText = moudle:Get("InfoText")
+	
+	local vipLv = MPlayer.GetVip()
+	if vipLv == nil then
+		vipLv = 0
+	end
+	
+	local nextVip = 0
+	local curExp = MRecharge.VipData.exp
+	local maxExp = 0
+	local curDate = Csv.Vip[vipLv]
+	if curDate ~= nil then
+		maxExp = curDate.upExp
+		nextVip = vipLv+1
+	end
+	local nextDate = Csv.Vip[nextVip]
+	if nextDate == nil then
+		--已经最高级vip
+		maxExp = curExp
+		nextVip = vipLv
+		ExplainText.Text = Csv.Text("vip_max")
+	else
+		ExplainText.Text = Csv.Text("welfare_paymore",{vip = nextVip,num = (maxExp - curExp)})
+	end
+	
+	vipSp.SpriteName = "vip_"..vipLv
+	
+	sliderText.Text = curExp.."/"..maxExp
+	sliderValue.FillAmount = curExp/maxExp
+	
+	----------------------------------------------
+	vipSp2.SpriteName =  Csv.VipWelfare[level].vipSp
+	infoText.Text = Csv.Vip[level].desc
+
+	------------每日领取礼包-------------
+	moudle:Get("textTitle").Text = Csv.Text("vip_dayreward",{lv = level})
+	local getImg_1 = moudle:Get("GetPos")
+	local getBtn_1 = moudle:Get("btnGet")
+
+	local content_1 = moudle:Get("content")
+	content_1:DestroyChildren()
+
+	local vipDailyGift = Csv.VipDailyGift[level]
+	local dayItemLights = {}
+	if vipDailyGift.items ~= nil then
+		for k,v in pairs(vipDailyGift.items) do
+			local item, light = CCommon.CreateItem(content_1, v[1], function()
+				CCommon.ShowItemTips(v[1])
+			end, {num = v[2]}, Define.SysId.VIPWelfare)
+
+			if light then
+				table.insert(dayItemLights,light)
+			end
+		end
+	end
+	self.mDayItemLights = dayItemLights
+
+	if not MVipWelfare.CheckDailyRewardGot(level) then
+		getImg_1.Activity = false
+		getBtn_1.Activity = true
+	else
+		_P.DestroyLights(dayItemLights)
+		getImg_1.Activity = true
+		getBtn_1.Activity = false
+	end
+
+	------------每日折扣礼包-------------
+	moudle:Get("textTitle_0").Text = Csv.Text("vip_buyreward",{lv = level})
+	local DiscountNum = moudle:Get("DiscountNum")
+	local beginNum = moudle:Get("Begin")
+	local priceNum = moudle:Get("PriceNum")
+	local limitText = moudle:Get("Limit")
+	
+	local getBtn_2 = moudle:Get("btnGet_0")
+
+	local actID = MVipWelfare.vipActivityID
+	local vipDiscountData = Csv.VipDiscountGift[actID]
+
+	if vipDiscountData == nil then
+		print("VipDiscountGift中找不到活动id__________",actID)
+		return
+	end
+
+	if vipDiscountData.discount[level] ~= nil then
+		DiscountNum.Text = Csv.Text("vip_discount",{num = vipDiscountData.discount[level]})
+	else
+		print("找不到改折扣礼包数据！")
+	end
+	if vipDiscountData.showprice[level] ~= nil then
+		beginNum.Text = Csv.Text("vip_beginCost",{num = vipDiscountData.showprice[level]})
+	else
+		print("找不到改折扣礼包数据！")
+	end
+	if vipDiscountData.price[level] ~= nil then
+		priceNum.Text = vipDiscountData.price[level]
+	else
+		print("找不到改折扣礼包数据！")
+	end
+	limitText.Text = Csv.Text("vip_limitCount",{num = 1})
+
+	local content_2 = moudle:Get("content_0")
+	content_2:DestroyChildren()
+
+	local discountItemLights = {}
+	if vipDiscountData.gifts[level] ~= nil then
+		for k,v in pairs(vipDiscountData.gifts[level]) do
+			local item, light = CCommon.CreateItem(content_2, v[1], function()
+				CCommon.ShowItemTips(v[1])
+			end, {num = v[2]}, Define.SysId.VIPWelfare)
+
+			if light then
+				table.insert(discountItemLights,light)
+			end
+		end
+	else
+		print("找不到改折扣礼包数据！")
+	end
+	self.mDiscountItemLights = discountItemLights
+	
+	getBtn_2.IsGray = false
+	getBtn_2.RaycastTarget = true
+
+	if not MVipWelfare.CheckDisconts(level) then
+		_P.DestroyLights(discountItemLights)
+
+		getBtn_2.IsGray = true
+		getBtn_2.RaycastTarget = false
+		limitText.Text = Csv.Text("vip_limitCount",{num = 0})
+	end
+end
+
+function _P.GetReward(self)
+	CWelfare.ReqGetVipDayReward(self.mViplevel)
+end
+	
+function _P.BuyDiscount(self)
+	local actID = MVipWelfare.vipActivityID
+	local vipDiscountData = Csv.VipDiscountGift[actID]
+	
+	if vipDiscountData == nil then
+		print("VipDiscountGift中找不到活动id__________",actID)
+		return
+	end
+	
+	local cost = vipDiscountData.price[self.mViplevel]
+	local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+	local itemDate = Csv.Item[Define.AssetsType.Gold]
+	if cost ~= nil then
+		if GoldCount >= cost then
+			CActivity.GetVipDiscontRewardReq(MVipWelfare.vipActivityID, self.mViplevel)
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		end
+	else
+		print("找不到改折扣礼包数据！")
+	end
+end
+
+
+function _P.DestroyLights(lights)
+	if lights ~= nil then
+		for k,v in pairs(lights)do
+			v:Destroy()
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

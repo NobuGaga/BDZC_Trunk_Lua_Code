@@ -1,0 +1,136 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--local GIRL_GIFT_ID = {501,502,503,504} --美女礼物id固定
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Gift")
+	local content = moudle:Get("Content")
+	--self.mContent = content
+
+	local closeBtn = moudle:Get("back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local titleText = moudle:Get("title")
+	local initimacyText = moudle:Get("qinmidu")
+	local charmText = moudle:Get("meilizhi")
+
+	titleText.Text = Csv.Text("Girl_giftTitle")
+	initimacyText.Text = Csv.Text("Girl_qinmidu",{num = data.intimacy})
+	charmText.Text = Csv.Text("Girl_meilizhi",{num = data.charm})
+
+	local giftItemTab =  _P.ShowGift(content,data)
+
+	self.mInitimacy = initimacyText
+	self.mCharm = charmText
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+			_P.RefreshItemNum(itemid,itemcount,isAdd,giftItemTab)
+	end)
+end
+
+function _P.RefreshItemNum(itemid,itemcount,isAdd,giftItemTab)
+	for k,v in pairs(giftItemTab) do
+		if k == itemid then
+			_P.SetNum(v,k)
+		end
+	end
+end
+
+function _P.ShowGift(parent,girl)
+	local giftTabel = MGirl.GIRL_GIFT_ID
+	local itemTabel = {}
+
+	for key,var in pairs(giftTabel) do
+		local item =  _P.SetGiftItem(var,parent,girl)
+		itemTabel[var] = item
+	end
+	
+	return itemTabel
+end
+
+function  _P.SetGiftItem(id,parent,girl)
+	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_gift_ele", WindowType.UI, 10)
+    
+	local iconSp = moudle:Get("gift")
+	local itembg = moudle:Get("icon")
+    local name = moudle:Get("name_text")
+    local num = moudle:Get("quantity_textnum")
+	local desc = moudle:Get("describe_text")
+
+	moudle:Get("quantity_text").Text = Csv.Text("bag_numX")
+	
+	local itemNum = MBag.GetItemNum(id)
+	local data = Csv.Item[id]
+	if data ~= nil then
+		iconSp.SpriteName = data.icon
+		itembg.SpriteName = data.colorIcon
+		name.Text = data.name
+		desc.Text = Csv.Text("Girl_gift_desc",{value = data.tips}) 
+		num.Text = itemNum --"数量："..0 --读取后端数据
+	end
+
+    local useBtnText = moudle:Get("C_text")
+    useBtnText.Text = Csv.Text("Girl_gift_use")
+    local useBtn = moudle:Get("C_Btn_b")
+	useBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if itemNum > 0 then
+			CBag.OnUseItem(id,1,{girl.id})
+		else
+			if not MBag.CheckItemEnough(id,1)then
+			end
+			--CCommon.ShowError(Csv.Text("Girl_gift_noEnough"))
+		end
+	end)
+	
+	return moudle
+end
+
+function _P.SetNum(moudle,id)
+	local num = moudle:Get("quantity_textnum")
+	local itemNum = MBag.GetItemNum(id)
+	num.Text = itemNum --"数量："..0 --读取后端数据
+end
+
+function _R.RefreshIntimacy(self,_intimacy,_intimacyChange)
+	self.mInitimacy.Text = Csv.Text("Girl_qinmidu",{num = _intimacy})
+	if _intimacyChange >0 then
+		CCommon.ShowError(Csv.Text("Girl_initimacyName")..Csv.Text("Girl_skill_add").._intimacyChange)
+		SoundMgr.PlayNonStopUI(11000)
+	end
+end
+
+function _R.RefreshCharm(self,_charm,_charmChange)
+	self.mCharm.Text = Csv.Text("Girl_meilizhi",{num = _charm})
+	if _charmChange >0 then
+		CCommon.ShowError(Csv.Text("Girl_charmName")..Csv.Text("Girl_skill_add").._charmChange)
+		SoundMgr.PlayNonStopUI(11000)
+	end
+end
+
+return _M

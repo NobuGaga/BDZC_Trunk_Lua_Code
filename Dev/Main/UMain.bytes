@@ -1,0 +1,744 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MTarget = JRequire "Dev.Target.MTarget"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.CBag.bytes#_M]
+local CBag = JRequire "Dev.Bag.CBag"
+--@RefType [Dev.Talk.MTalk.bytes#_M]
+local MTalk = JRequire "Dev.Talk.MTalk"
+--@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
+--@RefType [Dev.RedPacket.MRedpacket.bytes#_M]
+local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+local MGirl = JRequire"Dev.Girl.MGirl"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+--继承接口
+local _M = Class(WindowBase)
+--私有函数
+local _P = {}
+--由Dispatch派发的外部接口
+local _R = {}
+--常量定义
+local LEVEL_UP_EFFECT_ID = 10006
+local ACTIVITY_ACTORID = 10039
+local TOP_BTN_COUNT = 15
+local BOTTOM_BTN_COUNT = 6
+local LEFT_BTN_COUNT = 3
+local RIGHT_BTN_COUNT = 3
+local TOP_BTN_POS = Vector2(-45, -251)
+local TOP_BTN_NOTICE_POS = Vector2(-45, -214)
+local ICON_EFFECTNAME = "M_Common_MainLeft_Light"
+local TWEEN_LEFTSCALE = "T_Target_Scale"
+local TWEEN_REDPACKET = "T_Redpacket_AngleZ"
+
+local BTN_CITY_IMG = "HXbian_001_16"
+local BTN_VILLA_IMG = "HXbian_001_17"
+local ASSET_LIST = 
+{
+	Define.AssetsType.Soldier,
+	Define.AssetsType.Gold,
+	Define.AssetsType.Coin,
+	Define.AssetsType.Food,	
+}
+local ASSET_INDEX = {}
+for k,v in pairs(ASSET_LIST) do
+	ASSET_INDEX[v] = k
+end
+local BottomBtnSize = Vector2(124, 134)
+--界面删除前回收
+function _M:BeforeDestroy( ... )
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:Destroy()
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end
+end
+
+----------------------外部刷新函数-------------------------
+
+--设置是否显示中间部分按钮
+function _R.SwitchCenterBtns(self, isShowCenterBtns)
+	self.IsShowCenterBtns = isShowCenterBtns
+
+	local moudle = self.Moudle
+	if isShowCenterBtns then		
+		moudle:Get('TopBtns').Activity = true
+		moudle:Get('LeftBtns').Activity = true
+		moudle:Get('RightBtns').Activity = true
+		if MQuest.MainTaskIsEnd() then
+			moudle:Get('TaskBG').Activity = false
+		else
+			moudle:Get('TaskBG').Activity = true
+		end		
+		local btn = moudle:Get("BtnBack")
+		btn.SpriteName = BTN_CITY_IMG
+		btn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowOpen.Open(Define.SysId.Home)
+		end, nil, 1.2)
+
+		_P.RefreshTopBtns(self, moudle)
+		_P.RefreshLeftBtns(self, moudle)
+		_P.RefreshRightBtns(self, moudle)
+		_P.RefreshTask(self)
+	else
+		moudle:Get('TopBtns').Activity = false
+		moudle:Get('LeftBtns').Activity = false
+		moudle:Get('RightBtns').Activity = false
+		moudle:Get('TaskBG').Activity = false
+		local btn = moudle:Get("BtnBack")
+		btn.SpriteName = BTN_VILLA_IMG
+		btn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowOpen.Open(Define.SysId.World)
+		end, nil, 1.2)
+	end
+end
+function _R.RefreshTopBtns(self)
+	if self.IsShowCenterBtns then
+		_P.RefreshTopBtns(self, self.Moudle)
+	end
+end
+
+function _R.RefreshLeftBtns(self)
+	if self.IsShowCenterBtns then
+		_P.RefreshLeftBtns(self, self.Moudle)
+	end
+end
+
+--公告刷新
+function _R.RefreshNotice(self, isShow)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		if isShow then
+			moudle:Get("TopBtns").LocalPosition = TOP_BTN_POS
+		else
+			moudle:Get("TopBtns").LocalPosition = TOP_BTN_NOTICE_POS
+		end
+	end
+end
+--引导获取按钮位置
+function _R.GetBtnPos(self, id, mapTran, retPos)
+	local btn = self.Btns[id]
+	if btn == nil then
+		error(string.format("UMain.GetBtnPos error!!! id:%d", id))
+	else
+		local btnPos = btn.CachedTran.position
+		local screenPos = CS.UnityEngine.RectTransformUtility.WorldToScreenPoint(self._CanvasNode.WorldCamera, btnPos)
+		local isOk, pos = CS.UnityEngine.RectTransformUtility.ScreenPointToLocalPointInRectangle(mapTran, screenPos, self._CanvasNode.WorldCamera)
+		if isOk then
+			retPos.x = pos.x
+			retPos.y = pos.y
+		end
+	end
+end
+--美女等展示
+function _R.ShowStory(self)
+	if WindowMgr.IsCreated("UGuide") then
+		return
+	end
+	if self.Moudle == nil then
+		return
+	end
+	if self.StoryMoudle ~= nil and self.StoryMoudle._Root ~= nil then
+		return
+	end
+	local info = MMain.DequeueWaitStory()
+	if info ~= nil then
+		if info.storyType == 4 then
+			--引导
+			if info.callBack ~= nil then
+				info.callBack()
+			end
+		else
+			if self.StoryMoudle ~= nil then
+				self.StoryMoudle:Destroy()
+				self.StoryMoudle:delete()
+				self.StoryMoudle = nil
+			end
+			self.StoryMoudle = UStoryMoudle.new(self.Moudle:Get("StoryShowRoot"), info.storyId, function ()
+				_R.ShowStory(self)
+			end, info)
+		end		
+	end	
+end
+--主线任务刷新
+function _R.OnTaskUpdate(self)
+	if self.IsShowCenterBtns then
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			_P.RefreshTask(self)
+		end
+	end
+end
+--聊天刷新
+function _R.OnTalkUpdate(self,sender, value)
+	if self.ChatText ~= nil then
+		if value ~= nil then
+			self.ChatText.Text = "<color=#e2c7a9>"..sender.."：</color>"..value
+		end
+	end
+end
+--别墅进入装扮状态时显示（隐藏）
+function _R.ChangeState(self,state)
+	local moudle = self.Moudle
+	moudle.SelfRect.Activity = not state
+end
+
+--新红包提示
+function _R.RefreshRedpacket(self)
+	local moudle = self.Moudle
+	_P.RefreshRightBtns(self, moudle)
+	_P.OnRedpacketMove(self)
+end
+
+function _P.RefreshName(self, moudle)
+	moudle:Get("RoleName").Text = MPlayer.GetName()
+end
+function _P.RefreshLevel(self, moudle)
+	local csv = Csv.Company[MPlayer.GetLevel()]
+	moudle:Get("RloeLv").Text = Csv.Text("player_level", {name = csv.name})
+
+	if self.TaskGuideNode ~= nil and MPlayer.GetLevel() >= 2 then
+		self.TaskGuideNode:Destroy()
+	end
+end
+function _P.RefreshPower(self, moudle)
+	moudle:Get("RolePower").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
+end
+function _P.RefreshAvatar(self, moudle)
+	moudle:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetSHeadIcon()
+end
+function _P.RefreshVip(self, moudle)
+	local vip = MPlayer.GetVip()
+	local csvVip = Csv.Vip[vip]
+	if csvVip ~= nil then
+		local imgBord = moudle:Get("VipBox")
+		if csvVip.imgBord ~= nil then
+			imgBord.Activity = true
+			imgBord.SpriteName = csvVip.imgBord
+		else
+			imgBord.Activity = false
+		end
+
+		local imgNum = moudle:Get("VipNum")
+		if csvVip.icon ~= nil then
+			imgNum.Activity = true
+			imgNum.SpriteName = csvVip.icon
+		else
+			imgNum.Activity = false
+		end
+	end
+end
+-----------------------私有函数------------------------
+
+function _P.OnPressFunc(obj, funcId, data)
+	WindowOpen.Open(funcId)
+	SoundMgr.Play(10001)
+end
+
+function _P.RefreshTopBtns(self, moudle)
+	local btn
+	local buttons = MMain.GetOpenedFuncs(Define.SysId.Top, true, MMain.GetMutexMap())
+	local index = 0
+	for i,v in pairs(buttons) do
+		btn = moudle:Get("topBtn_" .. i)
+		if btn == nil then
+			error(string.format("create main top btn error!!!string.format index:%d,funcId:%d ", i, v.id))
+			break
+		end
+		index = i
+		btn.Activity = true
+		self.Btns[v.id] = btn
+		btn.Activity = true
+		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
+		if v.id == Define.SysId.XinGuan1 or v.id == Define.SysId.XinGuan2 then
+			local activityId
+			if v.id == Define.SysId.XinGuan1 then
+				activityId = MActivity.ActIdForType[Define.ActivityType.XinGuan1]
+			else
+				activityId = MActivity.ActIdForType[Define.ActivityType.XinGuan2]
+			end
+
+			local xinguanConf = Csv.ActivityNewTake[activityId]
+			if xinguanConf then
+				btn.SpriteName = xinguanConf.mainIconBg
+			end
+		else
+			btn.SpriteName = v.icon
+		end
+
+		local actorPanel = moudle:Get("ActorPanel" .. i)
+		_P.SetBtnLight(self, btn.name, actorPanel)
+		--注册小红点
+		self:RegistRedpoint(moudle:Get("topRedpoint_" .. i), v.id)
+	end
+	if index < TOP_BTN_COUNT then
+		for i=index + 1,TOP_BTN_COUNT do
+			moudle:Get("topBtn_" .. i).Activity = false
+		end
+	end	
+end
+function _P.RefreshBottomBtns(self, moudle)
+	local btn
+	local buttons = MMain.GetOpenedFuncs(Define.SysId.Bottom, true)
+	local index = 0
+	for i,v in pairs(buttons) do
+		local back = moudle:Get("bottomBtn_BG_" .. i)
+		btn = moudle:Get("bottomBtn_" .. i)
+		if btn == nil then
+			error(string.format("create main bottom btn error!!!string.format index:%d,funcId:%d ", i, v.id))
+			break
+		end
+		btn.Activity = true
+		index = i
+		self.Btns[v.id] = btn
+		if GameSetting.IsiOSCommit then
+			CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(v.icon, "Main"), 
+												BottomBtnSize.x, BottomBtnSize.y, 
+												function (sp)
+													if sp then
+														btn.Sprite = sp
+													end
+												end)
+		else
+			btn.SpriteName = v.icon
+		end
+		btn:AddOnClick(_P.OnPressFunc, v.id)
+		btn:AddOnPress(function(obj, arg, data)
+			back.Activity = data.isPress
+		end)
+		--注册小红点
+		self:RegistRedpoint(moudle:Get("bottomRedpoint_" .. i), v.id)
+	end
+	if index < BOTTOM_BTN_COUNT then
+		for i=index + 1,BOTTOM_BTN_COUNT do
+			moudle:Get("bottomBtn_" .. i).Activity = false
+		end
+	end
+end
+function _P.RefreshLeftBtns(self, moudle)
+	local btn
+	local buttons = MMain.GetOpenedFuncs(Define.SysId.Left, true)
+	local index = 0
+	for i,v in pairs(buttons) do
+		btn = moudle:Get("leftBtn_" .. i)
+		if btn == nil then
+			error(string.format("create main left btn error!!!string.format index:%d,funcId:%d ", i, v.id))
+			break
+		end
+		index = i
+		btn.Activity = true
+		self.Btns[v.id] = btn
+		btn.SpriteName = v.icon
+		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
+
+		--注册小红点
+		self:RegistRedpoint(moudle:Get("leftRedpoint_" .. i), v.id)
+	end
+	if index < LEFT_BTN_COUNT then
+		for i=index + 1,LEFT_BTN_COUNT do
+			moudle:Get("leftBtn_" .. i).Activity = false
+		end
+	end
+end
+function _P.RefreshRightBtns(self, moudle)
+	local btn
+	local buttons = MMain.GetOpenedFuncs(Define.SysId.Right, true)
+	local index = 0
+	for i,v in pairs(buttons) do
+		btn = moudle:Get("rightBtn_" .. i)
+		actor = moudle:Get("rightActor"..i)
+		if btn == nil then
+			error(string.format("create main right btn error!!!string.format index:%d,funcId:%d ", i, v.id))
+			break
+		end
+		
+		index = i
+		btn.Activity = true
+		self.Btns[v.id] = btn
+		self.RightActorList[v.id] = actor
+		btn.SpriteName = v.icon
+		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
+
+		--红包
+		if v.id == Define.SysId.Redpacket then
+			if not MRedpacket.isRedPackets then
+				btn.Activity = false
+			else
+				_P.OnRedpacketMove(self)
+			end
+		end
+		--手机
+		if v.id == Define.SysId.Phone then
+			CCommon.CreateEffect(actor, 10148)--手机特效
+			actor.Activity = MGirl.isShowPhoneActor
+		end
+
+		--注册小红点
+		self:RegistRedpoint(moudle:Get("rightRedpoint_" .. i), v.id)
+	end
+
+	if index < RIGHT_BTN_COUNT then
+		for i=index + 1,RIGHT_BTN_COUNT do
+			moudle:Get("rightBtn_" .. i).Activity = false
+		end
+	end
+end
+
+local topColumnSpace = 15
+local bottomBtnWidth = 125
+local topBtnWidth = 110
+function _P.AutoCellSize(moudle, ScreenWidth)
+	local standWidth = CS.JGui.JGuiManager.GuiRoot.StandardWidth
+	if ScreenWidth > standWidth then
+		local addedSpace = ScreenWidth - standWidth
+		local topSpace = topColumnSpace + addedSpace / 5
+		local nextPos = -topBtnWidth - topSpace
+		local tmpPos
+		local tmpBtn
+		for i=2,6 do
+			tmpBtn = moudle:Get("topBtn_" .. i)
+			tmpPos = tmpBtn.LocalPosition
+			tmpPos.x = nextPos
+			tmpBtn.LocalPosition = tmpPos
+			nextPos = nextPos - topBtnWidth - topSpace
+		end
+		nextPos = -topBtnWidth - topSpace
+		for i=8,12 do
+			tmpBtn = moudle:Get("topBtn_" .. i)
+			tmpPos = tmpBtn.LocalPosition
+			tmpPos.x = nextPos
+			tmpBtn.LocalPosition = tmpPos
+			nextPos = nextPos - topBtnWidth - topSpace
+		end
+		local bottomSpace = addedSpace / 5
+		nextPos = bottomBtnWidth + bottomSpace
+		for i=2,BOTTOM_BTN_COUNT do
+			tmpBtn = moudle:Get("bottomBtn_BG_" .. i)
+			tmpPos = tmpBtn.LocalPosition
+			tmpPos.x = nextPos
+			tmpBtn.LocalPosition = tmpPos
+			nextPos = nextPos + bottomBtnWidth + bottomSpace
+		end
+	end
+end
+function _P.InitAssets(moudle, LastAssetsNum)
+	for index,assetId in pairs(ASSET_LIST) do
+		local csv = Csv.Item[assetId]
+		local assetNum = MBag.GetItemNum(assetId)
+		LastAssetsNum[assetId] = assetNum
+		moudle:Get('AssetIcon_' .. index).SpriteName = csv.miniIcon
+		moudle:Get('AssetNum_'..index).Text = LuaUtil.NumberFormat(assetNum)
+		if assetId == Define.AssetsType.Gold then
+			local btn = moudle:Get('AssetAdd_'..index)
+			if btn ~= nil then
+				if MMain.FuncIsOpen(Define.SysId.Recharge) then
+					btn:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+						WindowOpen.Open(Define.SysId.Recharge)
+					end, nil, 1.3)
+				else
+					btn.Activity = false
+				end
+			end
+		end
+	end
+end
+--刷新资源
+function _P.RefreshAsset(self, assetId)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		local index = ASSET_INDEX[assetId]
+		if index ~= nil then
+			local widget = moudle:Get('AssetNum_'..index)
+			widget:DOKill()
+			local lastNum = self.LastAssetsNum[assetId]
+			local nowNum = MBag.GetItemNum(assetId)
+			if lastNum ~= nowNum then
+				self.LastAssetsNum[assetId] = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(MBag.GetItemNum(assetId)) end
+					end)
+					t:SetTarget(widget.CachedTran)
+				else
+					widget.Text = LuaUtil.NumberFormat(nowNum)
+				end				
+			end
+		end
+	end
+end
+--刷新任务
+function _P.RefreshTask(self)
+	local moudle = self.Moudle
+
+	if MQuest.MainTaskIsEnd() then
+		moudle:Get('TaskBG').Activity = false
+		return
+	end	
+	local mainTask = MQuest.MainQuest
+	local csv = Csv.MainQuest[mainTask.questid]
+	if csv ~= nil then		
+		local text = moudle:Get('TaskText')	
+		if mainTask.pro >= mainTask.maxval then
+			--已经完成表现
+			moudle:Get("TaskTween").SpriteName = "zjm_0005"
+			text.Color = Color(11/255,245/255,132/255)
+		else
+			moudle:Get("TaskTween").SpriteName = "zjm_0005_1"
+			text.Color = Color(1,35/255,35/255)
+		end
+		text.Text = csv.title
+	end
+end
+
+function _R.GetSortLayer(self, refTab)
+	refTab.type = self._Type
+	refTab.index = self._CanvasIndex
+end
+
+function _R.AddSortLayerCount(self, count)
+	self._CanvasIndex = self._CanvasIndex + count + 1
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构造
+function _M:OnCreate()
+	self:UnBlack()
+	self._EventNode.RaycastTarget = false
+	self.IsShowCenterBtns = false
+	self.Btns = {}
+	self.LastAssetsNum = {}
+	self.LightList = {}
+	self.RightActorList = {}
+	local moudle = self:CreateMoudle(self._RootNode, "M_Main_UMain")
+	self.Moudle = moudle
+	self.ScreenWidth = CS.JGui.JGuiManager.GuiRoot.Width
+	--按钮间距自适应
+	_P.AutoCellSize(moudle, self.ScreenWidth)
+
+	_P.RefreshName(self, moudle)
+	_P.RefreshLevel(self, moudle)
+	_P.RefreshAvatar(self, moudle)
+	_P.RefreshPower(self, moudle)
+	_P.RefreshVip(self, moudle)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerNameUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshName(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshPower(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshVip(self, self.Moudle)
+		end
+	end)
+	
+	moudle:Get("TopBtns").LocalPosition = TOP_BTN_NOTICE_POS
+	_R.RefreshNotice(self)
+	local tween = moudle:Get("TaskTween").CachedTran:GetJTweener("Main_Task")
+	tween:Play()
+	
+	local RoleLevelUp = moudle:Get("RoleLevelUp")
+	--注册小红点
+	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	--可以升级特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	--点击头像
+	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UPlayer")
+	end, nil, 0.9)
+
+	moudle:Get('TaskNode'):AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMainQuest")
+	end, nil, 0.9)
+	moudle:Get('TaskIcon'):AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMainQuest")
+	end, nil, 0.9)
+
+	CCommon.CreateEffect(moudle:Get('TaskFxNode'), 10112)--主线任务特效
+
+	if MPlayer.GetLevel() < 2 then
+		self.TaskGuideNode = CCommon.CreateEffect(moudle:Get('TaskBG'), 25)
+	end
+
+	_P.RefreshBottomBtns(self, moudle)
+	_P.InitAssets(moudle, self.LastAssetsNum)
+
+	--注册资源监听
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if ASSET_INDEX[itemId] ~= nil then
+			local moudle = self.Moudle
+			if moudle ~= nil then
+				_P.RefreshAsset(self, itemId)
+			end
+		end
+	end)
+
+	--注册功能监听
+	self:RegistCallEvent(Define.EventListenId.FuncOpenEvent, function (eventHandle, funcId, isOpen )
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			local funcCsv = Csv.Func[funcId]
+			if funcCsv.fid == Define.SysId.Bottom then
+				_P.RefreshBottomBtns(self, moudle)
+			elseif self.IsShowCenterBtns then
+				if funcCsv.fid == Define.SysId.Top then
+					_P.RefreshTopBtns(self, moudle)
+				elseif funcCsv.fid == Define.SysId.Left then
+					_P.RefreshLeftBtns(self, moudle)
+				elseif funcCsv.fid == Define.SysId.Right then
+					_P.RefreshRightBtns(self, moudle)
+				end
+			end
+		end
+	end)
+
+	--聊天
+	self.ChatText = moudle:Get("ChatText")
+	local info = MTalk.GetLastMsg()
+	if info ~= nil then
+		if info.redPacket == nil then
+			_R.OnTalkUpdate(self,info.sendername, info.value)
+		end
+	end	
+	moudle:Get("ChatEvent"):AddOnButton(_P.OnPressFunc, Define.SysId.Talk, 1.2)
+end
+
+
+-- 活动外框动画
+function _P.SetBtnLight(self, k, actorPanel)
+	if self.LightList[k] ~= nil then return end
+	if actorPanel == nil then return end
+	
+	CCommon.CreateEffect(actorPanel, ACTIVITY_ACTORID)
+	self.LightList[k] = true
+end
+
+
+-- 左边图标外框动画
+function _P.SetLeftBtnLight(self, btn, parentRect)
+	if self.LightList[btn.name] ~= nil then return end
+
+	if btn == nil then return end
+	local effectModule = JGuiManager.GetMoudle(parentRect, ICON_EFFECTNAME, "", 0)
+	parentRect.LocalPosition = btn.LocalPosition
+	self.LightList[btn.name] = true
+end
+
+
+-- 目标系统呼吸动画显示
+function _R.OnUpdateTargetAnim(self)
+	local redRect = self.Moudle:Get("RedRect1")
+	if redRect == nil then return end
+
+	local redName = redRect.name
+	local isShow = MTarget.ShowTargetRed
+	if isShow then
+		if self.LightList[redName] then
+			self.LightList[redName]:Restore()
+		end
+
+		local tweenTran = self.Moudle:Get("LeftRect1")
+		local tween = tweenTran.CachedTran:GetJTweener(TWEEN_LEFTSCALE)
+		self.LightList[redName] = tween
+		tween:Play()
+	else
+		local tween = self.LightList[redName]
+		if tween then
+			tween:DOKill()
+			self.LightList[redName] = nil
+		end
+	end
+end
+
+--手机特效
+function _R.ShowPhoneAnim(self)
+	local moudle = self.Moudle
+	local rect = self.RightActorList[Define.SysId.Phone]
+	local btn = self.Btns[Define.SysId.Phone]
+	if rect ~= nil then
+		rect.Activity = MGirl.isShowPhoneActor
+
+		if MGirl.isShowPhoneActor then
+			btn.Color = Color(1, 1, 1, 0)
+		else
+			btn.Color = Color(1, 1, 1, 1)
+		end
+	end
+end
+
+--红包动画
+function _P.OnRedpacketMove(self)
+	local rect = self.Btns[Define.SysId.Redpacket]
+	if self.LightList[Define.SysId.Redpacket] then
+		self.LightList[Define.SysId.Redpacket]:DOKill()
+		self.LightList[Define.SysId.Redpacket] = nil
+	end
+	if rect ~= nil then
+		rect.LocalRotation = CS.UnityEngine.Quaternion(0,0,0,1)
+		local rectName = rect.name
+		if MRedpacket.isRedPackets then
+			local tween = rect.CachedTran:GetJTweener(TWEEN_REDPACKET)
+			self.LightList[Define.SysId.Redpacket] = tween
+			tween:Play()
+		end
+	end
+end
+
+--刷新选举BOSS按钮状态
+function _R.SetVoteBossState(self)
+	local moudle = self.Moudle
+	_P.RefreshRightBtns(self, moudle)
+end
+
+return _M

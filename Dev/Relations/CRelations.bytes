@@ -1,0 +1,330 @@
+local MRelations = JRequire "Dev.Relations.MRelations"
+local EventCenter = JRequire "Dev.EventCenter"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+_M.IsUpdatingTime = false
+_M.Handle = nil
+
+local ECmdId = {
+	cRelationsMain								=	1,--获取主界面状态 PRelations.CRelationsMain
+	cRelationsDaily								=	2,--日常  PRelations.CRelationsMain
+	cRelationsFight								=	3,--进入战斗选人界面  PRelations.CRelationsFight
+	cRelationsBuyAdd							=	4,--战前购买加成  PRelations.CRelationsBuyAdd
+	cRelationsReport							=	5,--请求战报  PRelations.CRelationsReport
+	cRelationsAdver								=	6,--请求上诉列表  PRelations.CRelationsMain
+	cRelationsDefense							=	7,--请求防守信息列表  PRelations.CRelationsMain
+	cRelationsRank								=	8,--请求排行榜信息列表  PRelations.CRelationsMain
+	cRelationsLog								=	9,--请求追诉列表  PRelations.CRelationsMain
+	cRelationsFind								=	10,--查找玩家  PRelations.CRelationsFind
+	cRelationsNews								=	11,--请求新闻界面信息  PRelations.CRelationsMain
+	cRelationsFightRefresh						=	12,--战斗选人界面刷新  PRelations.CRelationsMain
+	cRelationsFightNormal						=	13,--进入战斗选人界面(上诉)  PRelations.CRelationsFight
+	cRelationsFightSuper						=	14,--进入战斗选人界面(追诉)  PRelations.CRelationsFight
+	cRelationsIn								=	15,--进入律所主界面（开启新闻推送）  PRelations.CRelationsMain
+	cRelationsOut								=	16,--退出律所主界面(关闭新闻推送)  PRelations.CRelationsMain
+	cRelationsClearCD							=	17,--清除下一轮战斗等待CD
+
+	sRelationsMain								=	1,--主界面初始化	PRelations.SRelationsMain
+	sRelationsDaily								=	2,--日常  PRelations.SRelationsDaily
+	sRelationsFight								=	3,--进入战斗选人界面  PRelations.SRelationsFight
+	sRelationsBuyAdd							=	4,--战前购买加成  PRelations.SRelationsBuyAdd
+	sRelationsReport							=	5,--战报  PRelations.SRelationsReport
+	sRelationsAdver								=	6,--请求上诉列表  PRelations.SRelationsAdver
+	sRelationsDefense							=	7,--请求防守信息列表  PRelations.SRelationsDefense
+	sRelationsRank								=	8,--请求排行榜信息列表  PRelations.SRelationsRank
+	sRelationsLog								=	9,--请求追诉列表  PRelations.SRelationsLog
+	sRelationsFind								=	10,--查找玩家  PRelations.SRelationFind
+	sRelationsNews								=	11,--请求新闻界面信息  PRelations.SRelationsNews
+	sRelationsInitStaff							=	12,--初始化员工挑战信息  PRelations.SRelationsInitStaff
+	sRelationsNewsPush							=	13,--新闻推送  PRelations.SRelationsNewsPush
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cRelationsMain] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsDaily] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsFight] = "PRelations.CRelationsFight",
+		[ECmdId.cRelationsBuyAdd] = "PRelations.CRelationsBuyAdd",
+		[ECmdId.cRelationsReport] = "PRelations.CRelationsReport",
+		[ECmdId.cRelationsAdver] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsDefense] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsRank] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsLog] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsFind] = "PRelations.CRelationsFind",
+		[ECmdId.cRelationsNews] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsFightRefresh] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsFightNormal] = "PRelations.CRelationsFight",
+		[ECmdId.cRelationsFightSuper] = "PRelations.CRelationsFight",
+		[ECmdId.cRelationsIn] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationsOut] = "PRelations.CRelationsMain",
+	}
+	local recv = {
+		[ECmdId.sRelationsMain]		=		{proto = "PRelations.SRelationsMain",		handle = _P.SMainInit},
+		[ECmdId.sRelationsDaily]	=		{proto = "PRelations.SRelationsDaily",		handle = _P.SDaily},
+		[ECmdId.sRelationsFight]	=		{proto = "PRelations.SRelationsFight",		handle = _P.SFight},
+		[ECmdId.sRelationsBuyAdd]	=		{proto = "PRelations.SRelationsBuyAdd",		handle = _P.SBuyAdd},
+		[ECmdId.sRelationsReport]	=		{proto = "PRelations.SRelationsReport",		handle = _P.SGetReport},
+		[ECmdId.sRelationsAdver]	=		{proto = "PRelations.SRelationsAdver",		handle = _P.SAdver},
+		[ECmdId.sRelationsDefense]	=		{proto = "PRelations.SRelationsDefense",	handle = _P.SDefense},
+		[ECmdId.sRelationsRank]		=		{proto = "PRelations.SRelationsRank",		handle = _P.SRank},
+		[ECmdId.sRelationsLog]		=		{proto = "PRelations.SRelationsLog",		handle = _P.SLog},
+		[ECmdId.sRelationsFind]		=		{proto = "PRelations.SRelationsFind",		handle = _P.SFind},
+		[ECmdId.sRelationsNews]		=		{proto = "PRelations.SRelationsNews",		handle = _P.SNews},
+		[ECmdId.sRelationsInitStaff]=		{proto = "PRelations.SRelationsInitStaff",	handle = _P.SInitStaff},
+		[ECmdId.sRelationsNewsPush]=		{proto = "PRelations.SRelationsNewsPush",	handle = _P.SNewsPush},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Relations, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MRelations.Clean()
+	_M.IsUpdatingTime = false
+	if _M.Handle ~= nil then
+		EventCenter.UnRegistCallEvent(_M.Handle)
+		_M.Handle = nil
+	end
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	MRelations.StaffTable = {}
+end, true)
+
+--C
+function _M.CMainInit()
+	_M.Send(ECmdId.cRelationsMain)
+end
+
+function _M.CDaily()
+	_M.Send(ECmdId.cRelationsDaily)
+end
+
+function _M.CFight()
+	_M.Send(ECmdId.cRelationsFight)
+end
+
+function _M.CFightNormal(PLAYERID,STAFFID,FIGHTTYPE)
+	if PLAYERID ~= nil and STAFFID ~= nil and FIGHTTYPE ~= nil then
+		_M.Send(ECmdId.cRelationsFightNormal,{playerid = PLAYERID,staffid = STAFFID,fighttype = FIGHTTYPE})
+	end
+end
+
+function _M.CFightSuper(PLAYERID,STAFFID,FIGHTTYPE)
+	if PLAYERID ~= nil and STAFFID ~= nil and FIGHTTYPE ~= nil then
+		_M.Send(ECmdId.cRelationsFightSuper,{playerid = PLAYERID,staffid = STAFFID,fighttype = FIGHTTYPE})
+	end
+end
+
+function _M.CBuyAdd(ID)
+	_M.Send(ECmdId.cRelationsBuyAdd,{id = ID})
+end
+
+function _M.CGetReport(STAFFID)
+	if STAFFID ~= nil then
+		if not MRelations.isWaitingReport then
+			MRelations.isWaitingReport = true
+			_M.Send(ECmdId.cRelationsReport,{staffid = STAFFID})
+		end
+	end
+end
+
+function _M.CAdver()
+	_M.Send(ECmdId.cRelationsAdver)
+end
+
+function _M.CDefense()
+	_M.Send(ECmdId.cRelationsDefense)
+end
+
+function _M.CRank()
+	_M.Send(ECmdId.cRelationsRank)
+end
+
+function _M.CFind(ID)
+	_M.Send(ECmdId.cRelationsFind,{id = ID})
+end
+
+function _M.CLog()
+	_M.Send(ECmdId.cRelationsLog)
+end
+
+function _M.CNews()
+	_M.Send(ECmdId.cRelationsNews)
+end
+
+function _M.CFightRefresh()
+	if WindowMgr.IsCreated("URelationsFight") then
+		WindowMgr.Call("URelationsFight","SetData")
+	else
+		WindowMgr.Create("URelationsFight")
+	end
+
+	-- if MRelations.ShowAdd then
+	-- 	if MRelations.FightData ~= nil then
+	-- 		if MRelations.FightData.surnum > 0 then
+	-- 			WindowMgr.Create("URelationsBuyAdd")
+	-- 		end
+	-- 	end
+	-- end
+end
+
+function _M.CFightRefreshMsg()
+	_M.Send(ECmdId.cRelationsFightRefresh)
+end
+
+function _M.CRelationsIn()
+	_M.Send(ECmdId.cRelationsIn)
+end
+
+function _M.CRelationsOut()
+	_M.Send(ECmdId.cRelationsOut)
+end
+
+function _M.CRelationsClearCD()
+	_M.Send(ECmdId.cRelationsClearCD)
+end
+
+--S
+function _P.SMainInit(data)
+	MRelations.SetInitData(data)
+	_P.CheckTime()
+	WindowMgr.Call("URelations","SetData",data.info)
+	_P.CheckRedPoint()
+end
+
+function _P.SDaily(data)
+	WindowMgr.Create("URelationsDaily",data)
+end
+
+function _P.SFight(data)
+	MRelations.SetFightData(data)
+	if WindowMgr.IsCreated("URelationsFight") or WindowMgr.IsCreated("URelationsReport") then
+		WindowMgr.Call("URelationsFight","SetData")
+	else
+		WindowMgr.Create("URelationsFight")
+		WindowMgr.Call("URelationsFight","SetData")
+	end
+	if data.type > 1 then
+		MRelations.StaffTable[data.mstaffinfo.staffid] = true
+	end
+end
+
+function _P.SBuyAdd(data)
+	MRelations.OnBuyAdd(data)
+	-- WindowMgr.Call("URelationsBuyAdd","OnBuy",data)
+	WindowMgr.Call("URelationsFight","ChangeAdd",data)
+end
+
+function _P.SGetReport(data)
+	MRelations.isWaitingReport = false
+	MRelations.SetReportData(data)
+	if WindowMgr.IsCreated("URelationsReport") then
+		return 
+	end
+	WindowMgr.Create("URelationsReport")
+	if data.allpoint == nil then
+		_M.Send(ECmdId.cRelationsFightRefresh)
+	end
+end
+
+function _P.SAdver(data)
+	MRelations.SetAdverData(data)
+	if WindowMgr.IsCreated("URelationsAdverTab") then
+		WindowMgr.Call("URelationsAdverTab","GetAdverData")
+	end
+end
+
+function _P.SDefense(data)
+	MRelations.SetDefenseData(data)
+	if WindowMgr.IsCreated("URelationsAdverTab") then
+		WindowMgr.Call("URelationsAdverTab","GetDefenseData")
+	end
+end
+
+function _P.SRank(data)
+	MRelations.SetRankData(data)
+	if WindowMgr.IsCreated("URelationsRankTab") then
+		WindowMgr.Call("URelationsRankTab","GetRankData")
+	end
+end
+
+function _P.SLog(data)
+	MRelations.SetLogData(data)
+	if WindowMgr.IsCreated("URelationsAdverTab") then
+		WindowMgr.Call("URelationsAdverTab","GetLogData")
+	end
+end
+
+function _P.SFind(data)
+	if WindowMgr.IsCreated("URelationsAdverTab") then
+		WindowMgr.Call("URelationsAdverTab","GetFindData",data)
+	end
+end
+
+function _P.SNews(data)
+	MRelations.SetNewsData(data)
+	if WindowMgr.IsCreated("URelations") then
+		WindowMgr.Call("URelations","GetNewsPush")
+	end
+end
+
+function _P.SInitStaff(data)
+	MRelations.InitStaff(data)
+end
+
+function _P.SNewsPush(data)
+	if data.info ~= nil then
+		MRelations.PushNews(data.info)
+		if WindowMgr.IsCreated("URelations") then
+			WindowMgr.Call("URelations","GetNewsPush")
+		end
+	end
+end
+
+--local
+function _P.CheckTime()
+	local data = MRelations.InitData
+	if data ~= nil then
+		if data.state == 2 and data.time ~= nil and data.time > 0 then
+			if not _M.IsUpdatingTime then
+				_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+					local lessTime = data.time - HeartBeat.ServSecond()
+					if lessTime < 0 then
+						EventCenter.UnRegistCallEvent(_M.Handle)
+						_M.IsUpdatingTime = false
+						_M.CMainInit()
+					else
+						MRelations.InitData = data
+					end
+				end)
+				_M.IsUpdatingTime = true
+			end
+		else
+			if _M.IsUpdatingTime and _M.Handle ~= nil then
+				EventCenter.UnRegistCallEvent(_M.Handle)
+				_M.Handle = nil
+				_M.IsUpdatingTime = false
+			end
+		end
+	end
+end
+
+function _P.CheckRedPoint()
+	local isRedPoint = false
+	local data = MRelations.InitData
+	if data.state == 0 or data.state == 1 or data.state == 3 then
+		isRedPoint = true
+	end
+	if isRedPoint ~= MRelations.isRedPoint then
+		MRelations.isRedPoint = isRedPoint
+		CMain.UpdateRedpoint(isRedPoint, Define.SysId.Relations)
+	end
+end
+
+
+return _M

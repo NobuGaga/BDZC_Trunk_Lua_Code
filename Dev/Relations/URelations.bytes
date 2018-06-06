@@ -1,0 +1,412 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local COST = Csv.Const(Define.Const.RelationsCost)[1]
+local STAFFLEVEL = Csv.Const(Define.Const.RelationsNormal)[2]
+local CDCOSTITEM = Csv.Const(Define.Const.RelationsCDCost)[1]
+local CDUNIT = Csv.Const(Define.Const.RelationsCDCost)[2]
+local CDTIME = Csv.Const(Define.Const.RelationsCDCost)[3]
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_UMain")
+	self.mMoudle = moudle
+
+	moudle:Get("C_BackBtn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	moudle:Get("HelpBtn"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Relations)
+	end, nil, 1.2)
+
+	local btn1 = moudle:Get("Icon1")
+	btn1:AddOnPress(_P.OnPressFunc, nil)
+	btn1:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URelationsRankTab")
+	end,nil,1)
+	btn1.Activity = not GameSetting.IsiOSCommit
+
+	local btn2 = moudle:Get("Icon2")
+	btn2:AddOnPress(_P.OnPressFunc, nil)
+	btn2:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URelationsAdverTab")
+	end,nil,1)
+
+	moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
+
+	local ImgBody = moudle:Get("BSX")
+	ImgBody.Activity = false
+	_P.SetBlackMan(self)
+
+	moudle:Get("BSX"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		local data = MRelations.InitData
+		if data ~= nil then
+			if data.state == 0 then
+				CRelations.CDaily()
+			elseif data.state == 1 then
+				CRelations.CFightRefreshMsg()
+				CRelations.CFightRefresh()
+			elseif data.state == 3 then
+				if not MBag.CheckItemEnough(COST,1) then
+					return
+				end
+				local costTable = {COST,1}
+				local isEnough,str = MBag.GetCostState(costTable,true)
+				local items = {}
+				items[COST] = MBag.GetItemNum(COST)
+				local params = {}
+				params.items = items
+				params.content = Csv.Text("relations_nofreetips")
+				if isEnough then
+					CCommon.CheckTips(function(isSure,Data)
+						if isSure then
+							CRelations.CDaily()
+						end
+					end,params,nil,"UItemCheckBox")
+				else
+					CCommon.ShowError(str)
+				end
+			end
+		end
+	end,nil,0.9)
+
+	moudle:Get("NameText_1").Text = Csv.Text("relations_T1")
+	moudle:Get("NameText_2").Text = Csv.Text("relations_T2")
+	moudle:Get("TipsText").Text = Csv.Text("relations_tip2")
+	moudle:Get("More").Text = Csv.Text("relations_tip3")
+	moudle:Get("More_0").Text = Csv.Text("relations_tip3")
+	moudle:Get("Tips_0").Text = Csv.Text("relations_tip4")
+	moudle:Get("Tips_1").Text = Csv.Text("relations_tip4")
+	moudle:Get("Tips_1").Activity = false
+
+	-- local tween = moudle:Get("TipsBg"):DOFade(0.6,1)
+	-- tween:SetEase(CS.DG.Tweening.Ease.Linear)
+	-- tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	-- local tween1 = moudle:Get("TipsText"):DOFade(0.6,1)
+	-- tween1:SetEase(CS.DG.Tweening.Ease.Linear)
+	-- tween1:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	local tween2 = moudle:Get("Open"):DOAnchorPosY(5,1)
+	tween2:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween2:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	local tween2 = moudle:Get("Stop"):DOAnchorPosY(5,1)
+	tween2:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween2:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	moudle:Get("TextCost").Activity = false
+	moudle:Get("C_text").Text = Csv.Text("relations_refresh_cd")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		local tipsTable
+		if MRelations.InitData.freenum == 0 and MRelations.InitData.exnum == 0 then
+			tipsTable = {content = Csv.Text("relations_refresh_nostaff_confirm")}
+		elseif MRelations.InitData.cdnum == 0 then
+			tipsTable = {content = Csv.Text("relations_refresh_confirm",
+						 {num = _P.GetCDCostText(MRelations.InitData.time - HeartBeat.ServSecond())})}
+		end
+		if tipsTable then
+			CCommon.CheckTips(function(isSure)
+				if isSure then
+					if MRelations.InitData.time then
+						local time = MRelations.InitData.time - HeartBeat.ServSecond()
+						if time > 0 and MBag.CheckItemEnough(CDCOSTITEM, _P.GetCDCostText(time)) then
+							CRelations.CRelationsClearCD()
+						end
+					end
+				end
+			end, tipsTable)
+		else
+			CRelations.CRelationsClearCD()
+		end
+	end)
+
+	if MRelations.InitData ~= nil then
+		_P.RefreshView(self)
+	end
+	CRelations.CMainInit()
+	CRelations.CNews()
+	CRelations.CRelationsIn()
+
+	moudle:Get("BottomBg"):AddOnButton(function()
+		_P.SetNews(self)
+		moudle:Get("messageRoot").Activity = true
+	end,nil,1)
+
+	moudle:Get("messageRoot"):AddOnButton(function()
+		moudle:Get("messageRoot").Activity = false
+	end,nil,1)
+end
+
+function _P.OnPressFunc(btn, funcId, data)
+	if data.isPress then
+		btn.Alpha = 1
+	else
+		btn.Alpha = 0
+	end	
+end
+
+function _P.SetNews(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local newsTable = MRelations.NewsData.list
+	if newsTable ~= nil then
+		for k,v in ipairs(newsTable) do
+			local newsMoudle = JGuiManager.GetMoudle(content, "M_Lobby_UMain_Item")
+			newsMoudle:Get("Name_0").Text = v.name
+			newsMoudle:Get("C_text").Text = Csv.Text("relations_shangsu")
+			newsMoudle:Get("C_Btn_b"):AddOnButton(function()
+				SoundMgr.Play(10001)
+				MRelations.FightType = 3
+				MRelations.PlayerID = v.playerid
+				WindowMgr.Create("URelationsSelectStaff")
+				moudle:Get("messageRoot").Activity = false
+			end,nil,0.9)
+			local news = Csv.RelationsNews[v.type].tips
+			local staffName = Csv.Personnel[v.staffid].name
+			if v.staffName ~= nil then
+				staffName = v.staffName
+			end
+			local strTable = {staffname = staffName,playername = v.failname,num = v.num,kill = v.times,name = v.name}
+			local strNews = LuaUtil.Format(news,strTable)
+			newsMoudle:Get("Info").Text = strNews
+
+			local timeStr = LuaUtil.TransToYearMonthDayHMS(v.time)
+			newsMoudle:Get("TimeNum_0").Text = timeStr
+			newsMoudle:Get("TimeText").Text = Csv.Text("relations_timeT")
+
+			newsMoudle:Get("Index").Text = k.."."
+			newsMoudle:Get("position").Text = Csv.Text("relations_tip5")
+
+			if v.playerid == MPlayer.GetId() then
+				newsMoudle:Get("C_Btn_b").Activity = false
+			end
+		end
+	end
+end
+
+function _P.RefreshView(self)
+	if self.mEvent ~= nil then
+		self.mEvent:Destroy()
+	end
+	local moudle = self.mMoudle
+	local data = MRelations.InitData
+	local TextTalk = moudle:Get("text")
+	local ImgBody = moudle:Get("BSX")
+	local ImgJy = moudle:Get("JY")
+	local TextCost = moudle:Get("TextCost")
+
+	local csvPersonnel
+	if data.staffid ~= nil then
+		ImgBody.Activity = true
+		csvPersonnel = Csv.Personnel[data.staffid]
+		ImgBody.SpriteName = csvPersonnel.asset
+		ImgJy.Activity = false
+	else
+		ImgBody.Activity = false
+		ImgJy.Activity = true
+	end
+	if data.state == 0 then
+		if csvPersonnel ~= nil then
+			TextTalk.Text = Csv.Text("relations_talk0",{name = MStaff.GetStaffName(csvPersonnel.id)})--csvPersonnel.name})
+			ImgBody.Activity = true
+			ImgJy.Activity = false
+			TextCost.Activity = false
+		end
+	elseif data.state == 1 then
+		self.mEvent = LuaUtil.TextAddThreePoint(TextTalk, Csv.Text("relations_talk1"))
+		ImgBody.Activity = true
+		ImgJy.Activity = false
+	elseif data.state == 2 then
+		_P.SetCDIconAndVipText(self)
+		if data.time ~= nil and data.time > 0 then
+			if not self.mIsUpdatingTime then
+				self.mIsUpdatingTime = true
+				_P.OnUpdateTime(self)
+				self.mTween = moudle.SelfRect:AddOnUpdate(function()
+				_P.OnUpdateTime(self)
+				end,nil,1)
+			end
+			ImgBody.Activity = false
+			ImgJy.Activity = true
+		end
+	elseif data.state == 3 then
+		if data.exnum ~= nil and data.maxnum ~= nil then
+			TextTalk.Text = Csv.Text("relations_talk3",{num = data.exnum,max = data.maxnum})
+		end
+		ImgBody.Activity = true
+		ImgJy.Activity = false
+		TextCost.Activity = false
+	elseif data.state == 4 then
+		TextTalk.Text = Csv.Text("relations_talk4")
+		ImgBody.Activity = false
+		ImgJy.Activity = true
+	elseif data.state == 5 then
+		TextTalk.Text = Csv.Text("relations_talk5",{num = STAFFLEVEL})
+		ImgBody.Activity = false
+		ImgJy.Activity = true
+	end
+	local ImgTextBox = moudle:Get("TextBox")
+	ImgTextBox:AddOnTime(function()
+		local vec = TextTalk.SizeDelta
+		moudle:Get("TextBox").SizeDelta = Vector2(vec.x + 80,vec.y + 46)
+		ImgTextBox.Activity = true
+	end,nil,0.1)
+	_P.SetBlackMan(self)
+end
+
+function _P.SetBlackMan(self)
+	local isShowBlack = self.mMoudle:Get("BSX").Activity
+	for i = 1, 10 do
+		local blackMan = self.mMoudle:Get("BlackMan" .. i)
+		if blackMan then
+			blackMan.Activity = isShowBlack
+		else
+			break
+		end
+	end
+end
+
+function _P.GetCDCostText(time)
+	local cost = 0
+	local rest = 0
+	if time then
+		cost, rest = math.modf(time / CDTIME)
+		if rest == 0 then
+			cost = cost * CDUNIT
+		else
+			cost = (cost + 1) * CDUNIT
+		end
+	end
+	return cost
+end
+
+function _P.SetCDIconAndVipText(self)
+	local data = MRelations.InitData
+	if data == nil or data.time == nil then
+		return
+	end
+	local moudle = self.mMoudle
+	local TextCost = moudle:Get("TextCost")
+	local TextVipCost = moudle:Get("TextVipCost")
+	if self.mOriginTextVipCostPos == nil then
+		self.mOriginTextVipCostPos = TextVipCost.LocalPosition
+	end
+	if data.maxcdnum == 0 then
+		TextVipCost.LocalPosition = self.mOriginTextVipCostPos
+		TextVipCost.Text = Csv.Text("relations_refresh_free_tips")
+	elseif data.cdnum ~= nil and data.cdnum ~= 0 then
+		TextCost.Text = ""
+		TextVipCost.LocalPosition = Vector2(self.mOriginTextVipCostPos.x, 0)
+		TextVipCost.Text = Csv.Text("relations_refresh_free", {num = data.cdnum})
+	else
+		TextVipCost.Text = ""
+	end
+end
+
+function _P.OnUpdateTime(self)
+	local moudle = self.mMoudle
+	local data = MRelations.InitData
+	local TextCost = moudle:Get("TextCost")
+	if data ~= nil and data.time ~= nil then
+		if data.time - HeartBeat.ServSecond() > 0 then
+			moudle:Get("text").Text = Csv.Text("relations_talk2",{time = luaUtil.GetTimeHMS(data.time - HeartBeat.ServSecond())})
+			TextCost.Activity = true
+			if data.cdnum == 0 or data.cdnum == nil then
+				TextCost.Text = Csv.Text("relations_refresh_cost", 
+										{num = _P.GetCDCostText(data.time - HeartBeat.ServSecond())})
+			else
+				TextCost.Text = ""
+			end
+		else
+			if self.mTween ~= nil then
+				self.mTween:Destroy()
+			end
+			self.mIsUpdatingTime = false
+			TextCost.Activity = false
+		end
+	end
+end
+
+function _R.SetData(self)
+	_P.RefreshView(self)
+end
+
+function _R.OnFightEnd(self)
+	local data = MRelations.ReportData
+	if data ~= nil then
+		local BSX = self.mMoudle:Get("BSX")
+		BSX.Activity = false
+		_P.SetBlackMan(self)
+		self.mMoudle.SelfRect:AddOnTime(function()
+			_P.ShowFightEnd()
+			CRelations.CMainInit()
+		end,nil,0.5)
+	end
+end
+
+function _P.ShowFightEnd()
+	local data = MRelations.ReportData
+	if data ~= nil then
+		MRelations.ShowAdd = true
+		if data.state ~= nil then
+			if data.state == 1 then
+				WindowMgr.Create("URelationsAward")
+			else
+				if data.liansheng <= 0 then
+					WindowMgr.Create("URelationsAwardNone")
+				else
+					WindowMgr.Create("URelationsAward")
+				end
+			end
+		end
+	end
+end
+
+function _M:BeforeDestroy()
+	CRelations.CRelationsOut()
+end
+
+function _R.GetNewsPush(self)
+	local news = MRelations.NewsData.list
+	local moudle = self.mMoudle
+	if news ~= nil and news[1] ~= nil then
+		local new = news[1]
+		moudle:Get("name").Text = new.name
+		local staffName = Csv.Personnel[new.staffid].name
+		local strTable = {staffname = staffName,playername = new.failname,num = new.num,kill = new.times,name = new.name}
+		local str = Csv.RelationsNews[new.type].tips
+		local strNews = LuaUtil.Format(str,strTable)
+		moudle:Get("Tips").Text = strNews
+		moudle:Get("Tips_1").Activity = false
+	else
+		moudle:Get("Tips_1").Activity = true
+	end
+end
+
+return _M

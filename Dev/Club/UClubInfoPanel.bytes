@@ -1,0 +1,263 @@
+-- 消息界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MClub = JRequire "Dev.Club.MClub"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
+
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local itemWidth = 600
+local itemHeight = 120
+local space = 10
+local pageNum = 7
+local pageHeight = 922
+
+-- 阵营枚举
+local CampEnum = {
+	Mine = 1,
+	Enemy = 2
+}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Info")
+	self.mModule = module
+
+	self.infoData = MClub.InfoTable
+	if self.infoData == nil then return end
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local titleText = module:Get("C_Text")
+	self.mineText = module:Get("MineText")
+	self.enemyText = module:Get("EnemyText")
+	self.noneText = module:Get("none")	
+
+	titleText.Text = Csv.Text("club_info_title")
+	self.mineText.Text = Csv.Text("club_info_mine")
+	self.enemyText.Text = Csv.Text("club_info_enemy")
+	self.noneText.Text = Csv.Text("club_info_none")
+
+	self.curSelectPage = MClub.InfoEnum.Mine
+	_P.OnSetListData(self)
+	_P.InitPageData(self)
+end
+
+
+function _P.OnSetListData(self)
+	local isMine = self.curSelectPage == MClub.InfoEnum.Mine
+	local infoList
+	if isMine then
+		infoList = _P.GetMineSortList(self.infoData.mineList)
+	else
+		infoList = _P.GetEnemySortList(self.infoData.enemyList)
+	end
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+	
+	self.noneText.Activity = (infoList == nil or #infoList == 0)
+
+	if infoList == nil then return end
+	self.infoList = infoList
+	local scroll = self.mModule:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	self.scrollController = ScrollVertical.new(scroll, itemGrid, "M_Club_Info_Item", 
+							function(index, value, module)_P.ScrollCallBack(self, index, value ,module)end)
+	self.scrollController:CreateScroll(pageNum, pageHeight, itemWidth, itemHeight, space, self.infoList)
+end
+
+
+-- 我的party消息排序
+function _P.GetMineSortList(infoList)
+	if infoList == nil then return end
+
+	local sortTable = infoList
+	table.sort(sortTable, function (a, b)
+		return a.startTime > b.startTime
+	end)
+
+	for i,v in ipairs(sortTable) do
+		v.num = i
+		v.type = CampEnum.Mine
+	end
+
+	return sortTable
+end
+
+
+-- 捣乱者消息排序
+function _P.GetEnemySortList(infoList)
+	if infoList == nil then return end
+
+	local sortTable = infoList
+	table.sort(sortTable, function (a, b)
+		return a.joinTime > b.joinTime
+	end)
+
+	for i,v in ipairs(sortTable) do
+		v.num = i
+		v.type = CampEnum.Enemy
+	end
+	
+	return sortTable
+end
+
+
+-- 设置当个item数据
+function _P.ScrollCallBack(self, index, data, itemModule)
+	if itemModule ~= nil then
+		if data.type == CampEnum.Mine then
+			_P.OnCreateMineItem(data, itemModule)
+		else
+			_P.OnCreateEnemyItem(data, itemModule)
+		end
+		
+		itemModule.SelfRect.LocalPosition = _P.GetPos(self, index)
+	end
+end
+
+
+function _P.GetPos(self, index)
+	local allNum = #self.infoList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0, yPos)
+end
+
+
+function _P.OnCreateMineItem(data, itemModule)
+	itemModule:Get("MineInfo").Activity = true
+	itemModule:Get("EnemyInfo").Activity = false	
+
+	local descText = itemModule:Get("text1")
+	local timeText = itemModule:Get("timeText")
+	local timeDescText = itemModule:Get("time")
+	local typeText = itemModule:Get("PartyInfo")
+	local partyScoreText = itemModule:Get("PartyScore")
+	local partyPointsText = itemModule:Get("PartyPoints")	
+	local scoreText = itemModule:Get("ScoreNum")
+	local numText = itemModule:Get("PointsNum")
+	
+	descText.Text = data.num .. Csv.Text("club_info_desc", {totalNum = data.joinCount, enemyNum = data.jokeCount})
+	timeText.Text = LuaUtil.TransToYearMonthDayHMS(data.startTime)
+	timeDescText.Text = Csv.Text("club_info_timeShow")
+	typeText.Text = Csv.Text("club_info_msg")
+	partyScoreText.Text = Csv.Text("club_info_score")
+	partyPointsText.Text = Csv.Text("club_info_point")
+	scoreText.Text = '+' .. ((data.totalScore < 0 and 0) or data.totalScore)
+	numText.Text = '+' .. ((data.totalPoint < 0 and 0) or data.totalPoint)
+end
+
+
+function _P.OnCreateEnemyItem(data, itemModule)
+	itemModule:Get("MineInfo").Activity = false
+	itemModule:Get("EnemyInfo").Activity = true
+
+	local nameText = itemModule:Get("nameText")
+	local companyText = itemModule:Get("CompanyDesc")
+	local typeText = itemModule:Get("companyType")
+	local forceText = itemModule:Get("forceText")
+	local forceNumText = itemModule:Get("forceNum")
+	local playerText = itemModule:Get("idText")
+	local playerIdText = itemModule:Get("id")
+	local timeText = itemModule:Get("timeText_0")
+
+	nameText.Text = data.num .. Csv.Text("club_info_enemyName", {name = data.name, score = (data.score < 0 and 0) or data.score})
+	companyText.Text = Csv.Text("club_info_company")
+
+	local companyConf = Csv.Company[data.level]
+	typeText.Text = companyConf.name
+	forceText.Text = Csv.Text("club_info_force")
+	forceNumText.Text = data.fightpower
+	playerText.Text = Csv.Text("club_info_playerInfo")
+	playerIdText.Text = data.playerid
+	timeText.Text = LuaUtil.GetTime(math.floor(data.joinTime / 1000))
+end
+
+
+function _P.InitPageData(self)
+	self.mineSelectImg = self.mModule:Get("BtnMine")
+	self.enemySelectImg = self.mModule:Get("BtnEnemy")
+
+	_P.OnSetPageText(self)
+
+	self.mineSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MClub.InfoEnum.Mine)
+	end)
+	self.enemySelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MClub.InfoEnum.Enemy)
+	end)
+end
+
+
+function _P.OnClickPage(self, infoEnum)
+	if self.curSelectPage == infoEnum then return end
+
+	self.curSelectPage = infoEnum
+	
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+
+function _P.OnSetPageText(self)
+	local isMine =(self.curSelectPage == MClub.InfoEnum.Mine)
+	self.mineText.Color = ((isMine and _LightFontColor) or _DefaultFontColor)
+	self.enemyText.Color = ((not isMine and _LightFontColor) or _DefaultFontColor)
+	self.mineText.FontSize = ((isMine and _LightFontSize) or _DefaultFontSize)
+	self.enemyText.FontSize = ((not isMine and _LightFontSize) or _DefaultFontSize)
+
+	self.mineSelectImg.SpriteName = ((isMine and _LightImg) or _DefaultImg)
+	self.enemySelectImg.SpriteName = ((not isMine and _LightImg) or _DefaultImg)
+	self.mineSelectImg.SizeDelta = ((isMine and _LightImgSize) or _DefaultImgSize)
+	self.enemySelectImg.SizeDelta = ((not isMine and _LightImgSize) or _DefaultImgSize)
+end
+
+
+return _M

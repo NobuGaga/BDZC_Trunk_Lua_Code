@@ -1,0 +1,70 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(itemId, params)
+  self._EventNode:AddOnClick(function ( ... )
+    SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil)
+  
+  local csvLine = Csv.Item[itemId]
+  assert(csvLine ~= nil, "itemId:" .. itemId)
+
+  local moudle = self:CreateMoudle(self._RootNode, "M_Bag_DetailPop")
+  
+  LuaUtil.TextAddThreePoint(moudle:Get("new_text"), Csv.Text("common_close2"))
+
+	local BtnClose = moudle:Get("BtnClose")
+  BtnClose:AddOnButton(function ( ... )
+    SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 0.9)
+
+    local TextTitle = moudle:Get("Title")
+    TextTitle.Text = Csv.Text("bag_dettit")
+
+    local TextName = moudle:Get("Name")
+    local strColor = Csv.ItemColor[csvLine.color].str
+    if params ~= nil and params.name ~= nil then
+      TextName.Text = params.name
+    else
+      TextName.Text = csvLine.name
+    end
+
+    local TextDesc = moudle:Get("Desc")
+    if params ~= nil and params.desc ~= nil then
+        TextDesc.Text = Csv.Text("bag_detdesc",{num = params.desc})
+    else
+        TextDesc.Text = Csv.Text("bag_detdesc",{num = csvLine.tips})
+    end
+
+    local ImgIcon = moudle:Get("Icon")
+    ImgIcon.Activity = true
+    if moudle:Get("StaffIcon") ~= nil then
+      moudle:Get("StaffIcon").Activity = false
+    end
+    -- moudle:Get("StaffIcon").Activity = true
+    if params ~= nil and params.icon ~= nil then
+        if params.staff then
+          if moudle:Get("StaffIcon") ~= nil then
+            moudle:Get("StaffIcon").SpriteName = params.icon
+            moudle:Get("StaffIcon").Activity = true
+          end
+          ImgIcon.Activity = false
+        else
+          ImgIcon.SpriteName = params.icon
+          if moudle:Get("StaffIcon") ~= nil then
+            moudle:Get("StaffIcon").Activity = false
+          end
+        end
+    else
+        ImgIcon.SpriteName = csvLine.icon
+		end
+
+    local ImgIconColor  = moudle:Get("IconColor")
+    ImgIconColor.SpriteName = csvLine.colorIcon
+end
+
+return _M

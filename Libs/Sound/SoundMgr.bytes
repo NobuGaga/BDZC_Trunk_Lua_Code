@@ -1,0 +1,641 @@
+local Sound = JRequire "Libs.Sound.Sound"
+local EventCenter = JRequire "Dev.EventCenter"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+local AudioSourcePool = CS.Loader.AudioSourcePool.Inst
+local GameManager =  CS.GameManager.Inst
+local CameraTran = GameManager.CachedTran
+local Vector3 = Vector3
+
+local IS_DEBUG = false
+
+local SoundKind = 
+{
+	music = "music",
+	ui = "ui", 
+	system = "system",
+	voice = "voice",
+	get	= "get",
+	round = "round",
+}
+
+local KindMap = 
+{
+	music = 1,
+	system = 2,
+	ui = 3, 	
+	voice = 4,
+	get	= 5,
+	round = 6,
+}
+
+local _M = {}
+
+local _P = {}
+
+_P.InitVolume = 
+{
+	[SoundKind.music] = 1,
+	[SoundKind.ui] = 1,
+	[SoundKind.system] = 1,
+	[SoundKind.voice] = 1,
+	[SoundKind.get] = 1,
+	[SoundKind.round] = 1,
+}
+
+_P.PercentVolume = 
+{
+	[SoundKind.music] = 1,
+	[SoundKind.ui] = 1,
+	[SoundKind.system] = 1,
+	[SoundKind.voice] = 1,
+	[SoundKind.get] = 1,
+	[SoundKind.round] = 1,
+}
+
+_P.MusicQueue = {}
+--背景音乐
+_P.MusicSound = nil
+--界面音效
+local MAX_UI_SOUND_COUNT = 5
+_P.UISounds = {}
+--收菜音效
+local MAX_GET_SOUND_COUNT = 10
+_P.GetSounds = {}
+--系统音效
+_P.SystemSound = nil
+--玩家语音
+_P.VoiceSound = nil
+--环境音
+local MAX_ROUND_SOUND_COUNT = 5
+_P.RoundSounds = {}
+
+--声音监听对象
+_P.AudioListener = GameManager.AudioListener
+
+--静音
+_P.IsMute = false
+
+--录音中
+_P.VoiceRecording = false
+
+--重新登录的时候处理
+EventCenter.RegistCallEvent(Define.EventListenId.ToReLogin, function (eventHandle)
+	_P.VoiceRecording = false
+	_P.DoRefreshVolume()
+end, true)
+
+--界面关闭的时候处理
+EventCenter.RegistCallEvent(Define.EventListenId.DestroyWindowForType, function (eventHandle, winType)
+	if winType == WindowType.UI then
+		_M.DestroySystem()
+		_M.DestroyVoice()
+		_M.DestroyGet()
+		_M.DestroyRound()
+	end
+end, true)
+
+function _P.SetInitVolume(kind, volume)
+	_P.InitVolume[kind] = volume
+end
+
+function _P.GetVolume(kind)
+	return _P.InitVolume[kind] * _P.PercentVolume[kind]
+end 
+
+_P.IsRealPlaying = 
+{
+	[SoundKind.music] = function ( ... )
+		return _P.MusicSound ~= nil and _P.MusicSound.RealPlaying 
+	end,
+	[SoundKind.ui] = function ( ... )
+		for _,v in pairs(_P.UISounds) do
+			if v then
+				if v.RealPlaying then
+					return true
+				end
+			end
+		end
+		return false
+	end,
+	[SoundKind.system] = function ( ... )
+		return _P.SystemSound ~= nil and _P.SystemSound.RealPlaying
+	end,
+	[SoundKind.voice] = function ( ... )
+		return _P.VoiceSound ~= nil and _P.VoiceSound.RealPlaying
+	end,
+	[SoundKind.get] = function ( ... )
+		for _,v in pairs(_P.GetSounds) do
+			if v then
+				if v.RealPlaying then
+					return true
+				end
+			end
+		end
+		return false
+	end,
+	[SoundKind.round] = function ( ... )
+		for _,v in pairs(_P.RoundSounds) do
+			if v then
+				if v.RealPlaying then
+					return true
+				end
+			end
+		end
+		return false
+	end,
+}
+
+_P.DoUpdateVolume = 
+{
+	[SoundKind.music] = function (  )
+		_P.MusicSound:UpdateVolume(_P.GetVolume(SoundKind.music))
+	end,
+	[SoundKind.ui] = function ( )
+		local volume = _P.GetVolume(SoundKind.ui)
+		for _,v in pairs(_P.UISounds) do
+			if v then
+				v:UpdateVolume(volume)
+			end
+		end
+	end,
+	[SoundKind.system] = function (  )
+		_P.SystemSound:UpdateVolume(_P.GetVolume(SoundKind.system))
+	end,
+	[SoundKind.voice] = function (  )
+		_P.VoiceSound:UpdateVolume(_P.GetVolume(SoundKind.voice))
+	end,
+	[SoundKind.get] = function ( )
+		local volume = _P.GetVolume(SoundKind.get)
+		for _,v in pairs(_P.GetSounds) do
+			if v then
+				v:UpdateVolume(volume)
+			end
+		end
+	end,
+	[SoundKind.round] = function ( )
+		local volume = _P.GetVolume(SoundKind.round)
+		for _,v in pairs(_P.RoundSounds) do
+			if v then
+				v:UpdateVolume(volume)
+			end
+		end
+	end,
+}
+
+
+function _P.DoRefreshVolume()
+	local soundKindCsv = Csv.SoundKind
+	local tmp = {}
+	for k,_ in pairs(SoundKind) do
+		if _P.VoiceRecording then
+			tmp[k] = 0
+		else
+			tmp[k] = 1
+		end		
+	end
+	for kind,line in pairs(soundKindCsv) do
+		if _P.IsRealPlaying[kind]() then
+			for k,_ in pairs(SoundKind) do
+				tmp[k] = tmp[k] * line[k]
+			end
+		end
+	end
+	for k,v in pairs(tmp) do
+		if math.abs(_P.PercentVolume[k] - v) > 0.01 then
+			_P.PercentVolume[k] = v
+			
+			if _P.IsRealPlaying[k]() then
+				_P.DoUpdateVolume[k]()
+			end
+		end
+	end
+end
+
+function _P.OnPlayStart(kind, index)
+	_P.DoRefreshVolume()
+end
+
+function _P.OnPlayEnd(kind, index)
+	_P.DoRefreshVolume()
+end
+
+--设置声音监听对象声音
+function _M.SetListener(listener)
+	if _P.AudioListener ~= nil then
+		_P.AudioListener.enabled = false
+	end
+	if listener == nil then
+		_P.AudioListener = GameManager.AudioListener
+	else
+		_P.AudioListener = listener
+	end	
+	_P.AudioListener.enabled = not _P.IsMute
+end
+
+function _M.RemoveListener(listener)
+	if listener ~= nil then
+		if _P.AudioListener == listener then
+			_M.SetListener(nil)
+		else
+			listener.enabled = false
+		end
+	end	
+end
+
+--静音设置
+function _M.SetMute(isMute)
+	if _P.AudioListener ~= nil then
+		_P.AudioListener.enabled = not isMute
+	end
+end
+
+-------------------------背景音乐----------------------------
+
+function _P.DoPlayMusic(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+	if _P.MusicSound ~= nil then
+		if _P.MusicSound.Id ~= nil and _P.MusicSound.Id > 0 then
+			table.insert(_P.MusicQueue, _P.MusicSound.Id)
+		end
+
+		_P.MusicSound:Stop()
+		local source = _P.MusicSound.Source
+		if source ~= nil then
+			CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+		end
+	end
+	_P.MusicSound = Sound.new(SoundKind.music, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)
+	_P.MusicSound:Play(id, _P.GetVolume(SoundKind.music), nil, audioClip)
+end
+
+--播放场景音乐 -- 只有一个
+function _M.PlayMusic(id, audioClip)
+	_M.Play(id, audioClip)
+end
+
+--设置音量
+function _M.SetMusicVolume(volume)
+	_P.SetInitVolume(SoundKind.music, volume)
+	if _P.MusicSound ~= nil and _P.MusicSound.IsPlaying then
+		_P.DoUpdateVolume[SoundKind.music]()
+	end	
+end
+
+--删除
+function _M.DestroyMusic(musicId, isPlayLastMusic)
+	if _P.MusicSound ~= nil then
+		if musicId == nil or musicId <= 0 or musicId == _P.MusicSound.Id then
+			_P.MusicSound:Stop()
+			local source = _P.MusicSound.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+				-- AudioSourcePool:Push(source)
+			end
+			_P.MusicSound:delete()
+			_P.MusicSound = nil
+
+			if isPlayLastMusic then
+				if _P.MusicQueue ~= nil then
+					local len = #_P.MusicQueue
+					if len > 0 then
+						local lastMusicID = _P.MusicQueue[len]
+						table.remove(_P.MusicQueue, len)
+						_M.PlayMusic(lastMusicID)
+					end			
+				end
+			else
+				_P.MusicQueue = {}
+			end
+		end		
+	end
+end
+
+-------------------------界面音效----------------------------
+
+function _P.DoPlayUI(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+
+	if #_P.UISounds >= MAX_UI_SOUND_COUNT then
+		local lastClip = _P.UISounds[1]
+		table.remove(_P.UISounds, 1)
+		if lastClip ~= nil then
+			lastClip:Stop()
+			local source = lastClip.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+		end
+	end
+	local sourceClip = Sound.new(SoundKind.ui, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)	
+	table.insert(_P.UISounds, sourceClip)
+	sourceClip:Play(id, _P.GetVolume(SoundKind.ui), nil, audioClip)
+end
+
+--界面音效
+function _M.PlayUI(id, audioClip)
+	_M.Play(id, audioClip)
+end
+
+function _M.PlayNonStopUI(id, audioClip)
+	_M.Play(id, audioClip)
+end
+
+function _M.SetUIVolume(volume)
+	_P.SetInitVolume(SoundKind.ui, volume)
+	local isUpdate = false
+
+	for _,v in pairs(_P.UISounds) do
+		if v ~= nil and v.IsPlaying then
+			isUpdate = true 
+			break
+		end
+	end
+	if isUpdate then
+		_P.DoUpdateVolume[SoundKind.ui]()
+	end
+end
+
+function _M.DestroyUI()
+	for k,v in pairs(_P.UISounds) do
+		if v ~= nil then
+			v:Stop()
+			local source = v.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+			v:delete()
+		end
+	end
+	_P.UISounds = {}
+end
+
+-------------------------收菜音效----------------------------
+
+function _P.DoPlayGet(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+
+	if #_P.GetSounds >= MAX_GET_SOUND_COUNT then
+		local lastClip = _P.GetSounds[1]
+		table.remove(_P.GetSounds, 1)
+		if lastClip ~= nil then
+			lastClip:Stop()
+			local source = lastClip.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+		end
+	end
+	local sourceClip = Sound.new(SoundKind.get, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)	
+	table.insert(_P.GetSounds, sourceClip)
+	sourceClip:Play(id, _P.GetVolume(SoundKind.get), nil, audioClip)
+end
+
+function _M.SetGetVolume(volume)
+	_P.SetInitVolume(SoundKind.get, volume)
+	local isUpdate = false
+
+	for _,v in pairs(_P.GetSounds) do
+		if v ~= nil and v.IsPlaying then
+			isUpdate = true 
+			break
+		end
+	end
+	if isUpdate then
+		_P.DoUpdateVolume[SoundKind.get]()
+	end
+end
+
+function _M.DestroyGet()
+	for k,v in pairs(_P.GetSounds) do
+		if v ~= nil then
+			v:Stop()
+			local source = v.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+			v:delete()
+		end
+	end
+	_P.GetSounds = {}
+end
+
+-------------------------环境音效----------------------------
+
+function _P.DoPlayRound(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+
+	if #_P.RoundSounds >= MAX_ROUND_SOUND_COUNT then
+		local lastClip = _P.RoundSounds[1]
+		table.remove(_P.RoundSounds, 1)
+		if lastClip ~= nil then
+			lastClip:Stop()
+			local source = lastClip.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+		end
+	end
+	local sourceClip = Sound.new(SoundKind.round, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)	
+	table.insert(_P.RoundSounds, sourceClip)
+	sourceClip:Play(id, _P.GetVolume(SoundKind.round), nil, audioClip)
+end
+
+function _M.SetRoundVolume(volume)
+	_P.SetInitVolume(SoundKind.round, volume)
+	local isUpdate = false
+
+	for _,v in pairs(_P.RoundSounds) do
+		if v ~= nil and v.IsPlaying then
+			isUpdate = true 
+			break
+		end
+	end
+	if isUpdate then
+		_P.DoUpdateVolume[SoundKind.round]()
+	end
+end
+
+function _M.DestroyRound()
+	for k,v in pairs(_P.RoundSounds) do
+		if v ~= nil then
+			v:Stop()
+			local source = v.Source
+			if source ~= nil then
+				CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			end
+			v:delete()
+		end
+	end
+	_P.RoundSounds = {}
+end
+
+-------------------------系统声音----------------------------
+
+function _P.DoPlaySystem(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+	if _P.SystemSound ~= nil then
+		_P.SystemSound:Stop()
+		local source = _P.SystemSound.Source
+		if source ~= nil then
+			CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+		end
+	end
+	_P.SystemSound = Sound.new(SoundKind.system, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)
+	_P.SystemSound:Play(id, _P.GetVolume(SoundKind.system), nil, audioClip)
+end
+
+--角色走路, 引导等
+function _M.PlaySystem(id, audioClip)
+	_M.Play(id, audioClip)
+end
+
+function _M.SetSystemVolume(volume)
+	_P.SetInitVolume(SoundKind.system, volume)
+	if _P.SystemSound ~= nil and _P.SystemSound.IsPlaying then
+		_P.DoUpdateVolume[SoundKind.system]()
+	end
+end
+
+function _M.DestroySystem()
+	if _P.SystemSound ~= nil then
+		_P.SystemSound:Stop()
+		local source = _P.SystemSound.Source
+		if source ~= nil then
+			CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			-- AudioSourcePool:Push(source)
+		end
+		_P.SystemSound:delete()
+		_P.SystemSound = nil
+	end
+end
+-------------------------玩家语音声音----------------------------
+
+function _P.DoPlayVoice(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+	if _P.VoiceSound ~= nil then
+		_P.VoiceSound:Stop()
+		local source = _P.VoiceSound.Source
+		if source ~= nil then
+			CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+		end
+	end
+	_P.VoiceSound = Sound.new(SoundKind.voice, 0, AudioSourcePool:Pop(CameraTran), _P.OnPlayStart, _P.OnPlayEnd)
+
+	if audioClip ~= nil then
+		_P.VoiceSound:Play(id, _P.GetVolume(SoundKind.voice), nil, audioClip)
+	end
+end
+
+--玩家语音聊天
+function _M.PlayVoice(id, audioClip)
+	_M.Play(id, audioClip)
+end
+
+function _M.StartVoiceRecord()
+	_P.VoiceRecording = true
+
+	_P.DoRefreshVolume()
+end
+function _M.EndVoiceRecord()
+	_P.VoiceRecording = false
+
+	_P.DoRefreshVolume()
+end
+
+function _M.SetVoiceVolume(volume)
+	_P.SetInitVolume(SoundKind.voice, volume)
+	if _P.VoiceSound ~= nil and _P.VoiceSound.IsPlaying then
+		_P.DoUpdateVolume[SoundKind.voice]()
+	end
+end
+
+function _M.DestroyVoice()
+	if _P.VoiceSound ~= nil then
+		_P.VoiceSound:Stop()
+		local source = _P.VoiceSound.Source
+		if source ~= nil then
+			CS.UnityEngine.Object.DestroyImmediate(source.gameObject)
+			-- AudioSourcePool:Push(source)
+		end
+		_P.VoiceSound:delete()
+		_P.VoiceSound = nil
+	end
+end
+
+---------------------------------通用接口--------------------------------
+
+function _M.Play(id, audioClip)
+	if IS_DEBUG then
+		return
+	end
+
+	local soundCsv = Csv.Sound[id]
+	if soundCsv ~= nil then
+		if soundCsv.kind ~= nil and soundCsv.kind > 0 then
+			if soundCsv.kind == KindMap.music then
+				_P.DoPlayMusic(id, audioClip)
+			elseif soundCsv.kind == KindMap.ui then
+				_P.DoPlayUI(id, audioClip)
+			elseif soundCsv.kind == KindMap.system then
+				_P.DoPlaySystem(id, audioClip)
+			elseif soundCsv.kind == KindMap.voice then
+				_P.DoPlayVoice(id, audioClip)
+			elseif soundCsv.kind == KindMap.get then
+				_P.DoPlayGet(id, audioClip)
+			elseif soundCsv.kind == KindMap.round then
+				_P.DoPlayRound(id, audioClip)
+			else
+				error("soundCsv kind error, id == ", id)
+			end
+		end
+	else
+		error("soundCsv error, id == ", id)
+	end
+end
+
+function _M.Destroy(id)
+	local soundCsv = Csv.Sound[id]
+	if soundCsv ~= nil then
+		if soundCsv.kind == KindMap.music then
+			_M.DestroyMusic()
+		elseif soundCsv.kind == KindMap.ui then
+			_M.DestroyUI()
+		elseif soundCsv.kind == KindMap.system then
+			_M.DestroySystem()
+		elseif soundCsv.kind == KindMap.voice then
+			_M.DestroyVoice()
+		elseif soundCsv.kind == KindMap.get then
+			_M.DestroyGet()
+		elseif soundCsv.kind == KindMap.round then
+			_M.DestroyRound()
+		else
+			error("soundCsv kind error, id == ", id)
+		end
+	else
+		error("soundCsv error, id == ", id)
+	end
+end
+
+function _M.DestroyAll()
+	_M.DestroyMusic()
+	_M.DestroyUI()
+	_M.DestroySystem()
+	_M.DestroyVoice()
+	_M.DestroyGet()
+	_M.DestroyRound()
+end
+
+return _M

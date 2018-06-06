@@ -1,0 +1,200 @@
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = {}
+
+-- 竞标地块index
+_M.landIndex = 0
+
+--当前关卡id
+_M.curID = 0
+_M.nextID = 0
+-- 地块信息列表
+_M.landInfo = {}
+-- 竞标消耗的金钱
+_M.money = 0
+-- 竞标类型 1：竞标, 10:一键竞标
+_M.type = 1
+-- 一键竞标奖励 地皮数量<color=#2adb58>+{num}</color>        公司资产<color=#2adb58>+{num2}</color>
+_M.landNum = 0
+_M.assets = 0
+-- 一键竞标需要的金钱
+_M.allInMoneyCache = {}
+-- 竞标结束奖励物品
+_M.rewardList = {}
+-- isSuc 结果是否胜利
+_M.isSuc = false
+-- 当前排行
+_M.rank = 0
+-- 是否已经开启一键竞标
+_M.isOpen = false
+-- 战斗前身上的金钱
+_M.myCurMoney = 0
+-- boss当前血量
+_M.boosBlood = 0
+
+-- 美女员工信息
+_M.girlId = nil
+_M.girlGlamour = nil
+_M.staffId = nil
+_M.staffSkillExp = nil
+_M.staffBookExp = nil
+
+function _M.Clean( ... )
+	_M.landIndex = 0
+end
+
+-- landInfo:地皮信息
+function _M.UpdateLandInfo(landInfo)
+	_M.landInfo = {}
+	if landInfo ~= nil then
+		for index, v in pairs(landInfo) do
+			local lInfo = {}
+			table.insert(_M.landInfo,lInfo)
+			_M.nextID = v.id
+			lInfo.index = v.index
+			lInfo.money = v.money -- 地产金钱
+			lInfo.power = v.power -- 公关实力
+			lInfo.name = v.name
+
+			local attr = v.attr
+			if attr ~= nil then
+				lInfo.attr = {}
+				for _ii,v in pairs(attr) do
+					local subAttr = {}
+					subAttr.id = v.id
+					subAttr.value = v.value
+					subAttr.type = v.type
+					table.insert(lInfo.attr ,subAttr)
+				end
+			end
+
+			local itemInfo = v.randReward
+			if itemInfo ~= nil then
+				lInfo.randReward = {}
+				for _ii,v in pairs(itemInfo) do
+					assert(Csv.Item[v.id] ~= nil , v.id)
+					local itemInfoTable = {}
+					itemInfoTable.id = v.id
+					itemInfoTable.count = math.floor(v.count)
+					table.insert(lInfo.randReward,itemInfoTable)
+				end
+			end
+		end
+	end
+end
+
+function _M.UpdateResult(data)
+	_M.curID = data.id
+	_M.isSuc = data.isSuc
+	_M.type = data.type
+	_M.landNum = data.landNum
+	_M.assets = data.companyScore
+	_M.money = data.money
+	_M.isOpen = data.isOpen
+	_M.boosBlood = data.boosBlood
+	_M.UpdateRewardInfo(data.itemList)
+	if data.nextChapter ~= nil then 
+		_M.UpdateLandInfo(data.nextChapter.landInfo)
+	end
+
+	if _M.type == 1 then
+		WindowMgr.Create("UBuyLandBattle")
+		WindowMgr.Call("UBuyLandBattle","OnResult", data)
+	elseif _M.type == 10 then
+		WindowMgr.Call("UBuyLandMain","OnResult", data)
+	end
+end
+
+function _M.UpdateRewardInfo(data)
+	_M.rewardList = {}
+	if data ~= nil then
+		local id = nil
+		for _,v in pairs(data) do
+			id = v.id
+			assert(Csv.Item[id] ~= nil , id)
+			table.insert(_M.rewardList,{id = id, count = math.floor(v.count)})
+		end
+	end
+end
+
+function _M.GetPower()
+	if _M.landIndex > 0 then
+		return _M.landInfo[_M.landIndex].power
+	end
+	return 0
+end
+
+function _M.GetMoney()
+	if _M.landIndex > 0 then
+		return _M.landInfo[_M.landIndex].money
+	end
+	return 0
+end
+
+function _M.GetCompanyName()
+	if _M.landIndex > 0 then
+		return _M.landInfo[_M.landIndex].name
+	end
+
+	return ""
+end
+
+function _M.UpdateRankInfo(data)
+	_M.rank = data.rank
+	_M.landNum = data.num
+end
+
+function _M.GetNextID()
+	return _M.nextID
+end
+
+function _M.GetLandID()
+	return _M.curID -- * 100 + _M.landIndex
+end
+
+function _M.GetRewardInfo()
+	if _M.rewardList ~= nil then
+		return _M.rewardList
+	end
+
+	return nil
+end
+
+function _M.IsAllIn()
+	return _M.type == 10
+end
+
+function _M.UpdateAllInMoneyCache(data)
+	_M.allInMoneyCache = {}
+	if data ~= nil and data.chapterId ~= nil then
+		for key,v in pairs(data.chapterId) do
+			_M.allInMoneyCache[key] = v
+		end
+	end
+end
+
+
+function _M.GetAllInMoney(value)
+	if _M.allInMoneyCache == nil or _M.allInMoneyCache[value] == nil then 
+		return nil
+	end
+	local allMoney = 0
+	for i = 1, value do
+		allMoney = allMoney + _M.allInMoneyCache[value].value
+	end
+	return allMoney
+end
+
+function _M.GetAllInMoneyCount()
+	return #_M.allInMoneyCache
+end
+
+function _M.CanAllIn()
+	return _M.isOpen
+end
+
+function _M.CacheBattleInfo()
+	_M.myCurMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+end
+
+return _M

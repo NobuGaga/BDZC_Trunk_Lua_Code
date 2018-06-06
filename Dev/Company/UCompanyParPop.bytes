@@ -1,0 +1,44 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Company_Tab3_entrance")
+	local csvPatrol = Csv.Patrol[id]
+	if csvPatrol ~= nil then
+		moudle:Get("text1").Text = Csv.Text("company_parCost",{num = csvPatrol.cost})
+		moudle:Get("nametext").Text = csvPatrol.companyName
+		moudle:Get("zhiweiname").Text = csvPatrol.name
+		if csvPatrol.maxTimes <= 0 then
+			moudle:Get("text21").Text = Csv.Text("company_PA17")
+		else
+			moudle:Get("text21").Text = csvPatrol.maxTimes
+		end
+		moudle:Get("text11").Text = Csv.Text("company_PA18",{num = csvPatrol.cost})
+		moudle:Get("text31").Text = csvPatrol.awardStr
+		moudle:Get("BSX").SpriteName = csvPatrol.personIcon
+
+		local content = moudle:Get("content")
+		for k,v in pairs(csvPatrol.randomgift1) do
+			CCommon.CreateItem(content,v[1],function(itemid,param) CCommon.ShowItemTips(itemid,param) end, 
+							   nil, Define.SysId.Patrol)
+		end
+	end
+
+	moudle:Get("title").Text = Csv.Text("company_parT")
+	moudle:Get("companyname").Text = Csv.Text("company_PA2")
+	moudle:Get("zhiwei").Text = Csv.Text("company_PA3")
+	moudle:Get("text1").Text = Csv.Text("company_PA14")
+	moudle:Get("text2").Text = Csv.Text("company_PA15")
+	moudle:Get("text3").Text = Csv.Text("company_PA16")
+
+	moudle:Get("BtnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+end
+
+return _M

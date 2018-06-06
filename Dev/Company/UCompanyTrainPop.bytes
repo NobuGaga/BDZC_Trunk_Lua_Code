@@ -1,0 +1,281 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local JTweenerManager = CS.JTween.JTweenerManager
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCompany = JRequire "Dev.Company.CCompany"
+local CCommon = JRequire "Dev.Common.CCommon"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local luaUtil = JRequire"Libs.LuaUtil"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local CostItemID = tonumber(Csv.Const(Define.Const.CompanyManageCostID))
+local OneKeyLevel = tonumber(Csv.Const(Define.Const.CompanyManageOneKeyLevel))
+
+local BtnStr1 = "ty_024_5"
+local BtnStr2 = "ty_024_1"
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	self.mID = 3
+
+	self.EffectIndex = {}
+	self.EffectTable = {}
+	self.EffectState = false
+	self.EffectEvent = nil
+
+	self.EffectIndex[Define.AssetsType.Coin] = 9
+	self.EffectIndex[Define.AssetsType.Food] = 10
+	self.EffectIndex[Define.AssetsType.Soldier] = 11
+	local moudle = self:CreateMoudle(self._RootNode, "M_Management")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Text").Text = Csv.Text("company_T3")
+	local TextProduction = moudle:Get("text3")
+	TextProduction.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+
+	local TextGoods = moudle:Get("text4")
+	TextGoods.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Food))
+
+	local TextMoney = moudle:Get("text5")
+	TextMoney.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Soldier))
+
+	self.mAssetNum = {}
+	self.mAssetNum[Define.AssetsType.Coin] =  MBag.GetItemNum(Define.AssetsType.Coin)
+	self.mAssetNum[Define.AssetsType.Food] =  MBag.GetItemNum(Define.AssetsType.Food)
+	self.mAssetNum[Define.AssetsType.Soldier] =  MBag.GetItemNum(Define.AssetsType.Soldier)
+
+	_P.SetManageData(self,moudle,self.mID)
+	
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		_P.UpdateAsset(self, itemid, itemcount, isAdd)
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.UpdateTime(self)
+	end)
+	_P.UpdateTime(self)
+
+	local GoOne = moudle:Get("choose")
+	if MPlayer.GetLevel() >= OneKeyLevel then
+		GoOne.Activity = true
+	else
+		GoOne.Activity = false
+	end
+
+	local BtnOne = moudle:Get("choose")
+	local gouImage = moudle:Get("gou")
+	moudle:Get("choosetext").Text = Csv.Text("company_allTrain")
+	gouImage.Activity = MCompany.OneTrain
+	BtnOne:AddOnButton(function()
+		MCompany.OneTrain = not MCompany.OneTrain
+		gouImage.Activity = MCompany.OneTrain
+	end,nil,1)
+end
+
+function _P.UpdateAsset(self, itemid, itemcount, isAdd)
+	local TextUpdate = self.mMoudle:Get("text"..itemid)
+	if TextUpdate ~= nil then
+		TextUpdate:DOKill()
+		local lastNum = self.mAssetNum[itemid]
+		local nowNum = MBag.GetItemNum(itemid)
+		if not isAdd then
+			_P.UpdateText(self,itemid,lastNum,nowNum,TextUpdate,false)
+			return
+		end
+		local moudleid = 1
+		local playTable = self.EffectTable
+		if playTable ~= nil then
+			local len = #playTable
+			local data = {itemid = itemid,itemcount = itemcount,moudleid = moudleid,lastNum = lastNum,nowNum = nowNum}
+			table.insert(playTable,data)
+			if len <= 0 then
+				_P.CheckPlaying(self,data)
+				self.mMoudle:Get("BG_1"):AddOnTime(function()
+					table.remove(playTable,1)
+				end,nil,0.5)
+			else
+				if not self.EffectState then
+					self.EffectState = true
+					local updateRect = self.mMoudle.SelfRect
+					self.EffectEvent = updateRect:AddOnUpdate(function()
+						_P.CheckPlaying(self,playTable[1])
+						table.remove(playTable,1)
+						if #playTable <= 0 then
+							self.EffectEvent:Destroy()
+							self.EffectState = false
+						end
+					end,nil,0.5)
+				end
+			end
+		end
+	end
+end
+
+function _P.CheckPlaying(self,data)
+	if data ~= nil then
+		local itemid = data.itemid
+		local itemcount = data.itemcount
+		local TextUpdate = self.mMoudle:Get("text"..itemid)
+		local lastNum = data.lastNum
+		local nowNum = data.nowNum
+		local moudle = self.mMoudle
+		if TextUpdate ~= nil then
+			_P.PlayEffect(self,itemid)
+			TextUpdate:AddOnTime(function()
+				_P.UpdateText(self,itemid,lastNum,nowNum,TextUpdate,true)
+				self.mAssetNum[itemid] = nowNum
+			end,nil,0.4)
+			local csvItem = Csv.Item[itemid]
+			CCommon.ShowFlyText(TextUpdate.transform,itemcount,1,csvItem.miniIcon,Vector2(35,35))
+		end
+	end
+end
+
+function _P.PlayEffect(self,getid)
+	SoundMgr.Play(11000)
+	local trans = self.mMoudle.SelfRect.CachedTran
+	for k,v in pairs(self.EffectIndex) do
+		if k == getid then
+			for i=1,30 do
+				local x = math.random(-250,250)
+				local y = math.random(-65,65)
+				local delay = math.random(5,20)/100
+				CCommon.CreateEffect(trans, v, Vector2(x,y), nil, nil, nil, nil, delay)
+			end
+		end
+	end
+end
+
+function _P.UpdateText(self,itemid,lastNum,nowNum,TextUpdate,isAdd)
+	if lastNum ~= nowNum then
+		local dura = 0.4
+		local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+			if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+		end, function()
+			if TextUpdate ~= nil then 
+				if isAdd then
+					TextUpdate.Text = LuaUtil.NumberFormat(self.mAssetNum[itemid]) 
+				else
+					TextUpdate.Text = LuaUtil.NumberFormat(MBag.GetItemNum(itemid)) 
+				end
+			end
+		end)
+		t:SetTarget(TextUpdate.CachedTran)
+	end
+end
+
+function _P.SetManageData(self,moudle,id)
+	local data = MCompany.ManageTable[id]
+	local csvManage = Csv.Manage[data.id]
+	local maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[data.id]
+	moudle:Get("Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local manage = MCompany.ManageTable[data.id]
+		if manage ~= nil then
+			local times = manage.times
+			if times > 0 then
+				if csvManage.costType ~= nil then
+					local cost = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+					local have = MBag.GetItemNum(csvManage.costType)
+					local itemName = Csv.Item[csvManage.costType].name
+					if cost > have then
+						CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemName}))
+						return
+					end
+				end
+				CCompany.CompanyManage(data.id,MCompany.OneTrain)
+			else
+				local itemNum = MBag.GetItemNum(CostItemID)
+				if itemNum <= 0 then
+					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = Csv.Item[CostItemID].name}))
+				elseif itemNum == 1 then
+					CBag.OnUseItem(CostItemID,1,{data.id})
+				else
+					local manageMax = Csv.Company[MPlayer.GetLevel()].harvest[data.id] 
+					local num = math.min(itemNum,manageMax)
+					local itemData = {itemid = CostItemID,itemcount = num}
+					WindowMgr.Create("UBagUsePop",itemData,true,data.id)
+				end
+			end
+		end
+		end, nil, 0.9)
+	moudle:Get("BG_1").SpriteName = csvManage.bgIcon
+	moudle:Get("title_text_1").Text = Csv.Text("company_manageT",{name = csvManage.name})
+	moudle:Get("knowledge_1").Text = Csv.Text("company_manageDsp",{name = Csv.Text("Girl_skill_type"..csvManage.dependType)})
+	moudle:Get("earnings_1").Text = Csv.Text("company_manageYuji")
+	local TextCost = moudle:Get("consume")
+	if csvManage.costType ~= nil then
+		TextCost.gameObject:SetActive(true)
+		TextCost.Text = Csv.Text("company_manageCos",{name = Csv.Item[csvManage.costType].name})
+		moudle:Get("text_11").Text = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+	else
+		TextCost.gameObject:SetActive(false)
+	end
+	moudle:Get("text_9").Text = MPlayer.GetAttr(csvManage.dependType)
+	moudle:Get("text_10").Text = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+	local manage = MCompany.ManageTable[data.id]
+	if manage ~= nil then
+		local times = manage.times
+		if times > 0 then
+			moudle:Get("C_text").Text = Csv.Text("company_train")
+		else
+			moudle:Get("C_text").Text = Csv.Text("company_revert")
+		end
+	end
+	if data.times > 0 then
+		moudle:Get("text_8").Text = Csv.Text("company_exp",{num = data.times,max = maxTimes})
+	else
+		moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time)
+	end
+end
+
+function _P.UpdateTime(self)
+	local id = self.mID
+	local moudle = self.mMoudle
+	local manage = MCompany.ManageTable[id]
+	if manage ~= nil then
+		local times = manage.times
+		local maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[id]
+		if times <= 0 then
+			moudle:Get("text_8").Text = luaUtil.GetTimeHMS(manage.time - HeartBeat.ServSecond())
+			moudle:Get("C_text").Text = Csv.Text("company_revert")
+			moudle:Get("Btn").SpriteName = BtnStr1
+		else
+			moudle:Get("text_8").Text = Csv.Text("company_exp",{num = manage.times,max = maxTimes})
+			moudle:Get("C_text").Text = Csv.Text("company_train")
+			moudle:Get("Btn").SpriteName = BtnStr2
+		end
+	end
+end
+
+function _R.ShowGod(self)
+	SoundMgr.Play(10004)
+	local nodeTrans = self.mMoudle:Get("GodEffectNode")
+	CCommon.PlayEffectGod(nodeTrans,Define.SysId.Manage)
+end
+
+function _R.RefreshTimes(self)
+	_P.UpdateTime(self)
+end
+
+return _M

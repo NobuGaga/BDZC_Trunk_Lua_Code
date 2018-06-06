@@ -1,0 +1,88 @@
+local _M = {}
+
+_M.AchieveTable = {}
+_M.RedPoint = false
+_M.AchieveList = {}
+
+function _M.Clean( ... )
+	_M.AchieveTable = {}
+	_M.RedPoint = false
+end
+
+function _M.CreateList(data)
+	_M.AchieveTable = {}
+	_M.AchieveList = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			_M.AchieveTable[v.questid] = v
+			table.insert(_M.AchieveList, v)
+		end
+
+		table.sort(_M.AchieveList, _M.SortAchieve)
+	end
+end
+
+function _M.OnRefreshAchieve(data)
+	local achieveTable = _M.AchieveTable
+	local achieveInfo = achieveTable[data.achieve.questid]
+	if achieveInfo ~= nil then
+		achieveInfo.pro = data.achieve.pro
+		achieveInfo.val = data.achieve.val
+	else
+		achieveTable[data.achieve.questid] = data.achieve
+		table.insert(_M.AchieveList, data.achieve)
+	end
+
+	table.sort(_M.AchieveList, _M.SortAchieve)
+end
+
+function _M.SortAchieve(a, b)
+	if a.pro == 0 or b.pro == 0 then
+		if a.pro == 0 and b.pro == 0 then
+			return a.questid < b.questid
+		elseif a.pro == 0 and b.pro ~= 0 then
+			return false
+		elseif b.pro == 0 and a.pro ~= 0 then
+			return true
+		end
+	end
+	local aLevelConf = Csv.AchieveLevel[a.pro]
+	local bLevelConf = Csv.AchieveLevel[b.pro]
+	local aneed = (aLevelConf ~= nil and aLevelConf.value) or 0
+	local bneed = (bLevelConf ~= nil and bLevelConf.value) or 0
+	if a.val >= aneed and b.val < bneed then
+		return true
+	elseif a.val >= aneed and b.val >= bneed then
+		return a.questid < b.questid
+	elseif a.val < aneed and b.val < bneed then
+		return a.questid < b.questid
+	else
+		return false
+	end
+end
+
+function _M.GetRedPointState()
+	for k,v in pairs(_M.AchieveTable) do
+		if v.pro > 0 and not _M.GetIsLast(v.questid,v.pro) then
+			local need = Csv.AchieveLevel[v.pro].value
+			if v.val >= need then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetIsLast(questid,pro)
+	local csvAchieve = Csv.Achievement[questid]
+	if csvAchieve ~= nil then
+		local pros = csvAchieve.levelNum
+		local maxPro = pros[#pros]
+		if pro >= maxPro then
+			return true
+		end
+	end
+	return false
+end
+
+return _M

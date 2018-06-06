@@ -1,0 +1,296 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = {}
+
+local MessageAll_Max = Csv.Const(Define.Const.VoteMessageMax)[2]
+local MessageMy_Max = Csv.Const(Define.Const.VoteMessageMax)[3]
+_M.Status = nil
+_M.Time = nil
+_M.MyVoteids = {}
+_M.VoteTable = {}
+
+_M.StatusEnum = {
+	Free = 0,
+	Join = 1,
+	Ticket = 2
+}
+
+_M.TypeEnum = {
+	Town = 1,
+	Member = 2
+}
+
+--BOSS
+_M.BattleData = nil
+_M.isFighting = false
+_M.SelectHero = {}
+_M.isBattle = false
+_M.FightTime = 0 
+_M.Jifen = 0 --积分
+_M.KillerName = "" 
+_M.GiftItems = {}
+_M.BossPower = {}
+
+--------
+--直接拿后端数据
+_M.StaffStateTab = {} 
+_M.StaffLifeNum = {}
+_M.FinanceState = {}
+_M.ResistRankList = {}
+
+_M.isReward = false
+_M.RewardData = {}
+
+_M.NowParType = 1					--记录当前打开的竞选殿堂类型
+_M.SelectVoteID = nil
+
+_M.IsTownRedPoint = false
+_M.IsMemberRedPoint = false
+
+--选举信息
+_M.MessageAll = {}
+_M.MessageMy = {}
+function _M.Clean( ... )
+	_M.Status = nil
+	_M.Time = nil
+	_M.MyVoteids = {}
+	_M.VoteTable = {}
+	_M.BattleData = nil
+
+	_M.isFighting = false
+	_M.SelectHero = {}
+	_M.isBattle = false
+	_M.FightTime = 0 
+	_M.Jifen = 0 --积分
+
+	_M.KillerName = "" 
+	_M.GiftItems = {}
+	_M.BossPower = {}
+
+	--------
+	_M.StaffStateTab = {} 
+	_M.StaffLifeNum = {}
+	_M.FinanceState = {}
+	_M.ResistRankList = {}
+
+	_M.isReward = false
+	_M.RewardData = {}
+
+	--_M.NowParType = 1
+	_M.SelectVoteID = nil
+
+	_M.IsTownRedPoint = false
+	_M.IsMemberRedPoint = false
+
+	_M.MessageAll = {}
+	_M.MessageMy = {}
+end
+
+function _M.OnResetStaff()
+	_M.GiftItems = {}
+	_M.StaffStateTab = {} 
+	_M.StaffLifeNum = {}
+end
+
+function _M.OnInit(data)
+	if data.status ~= nil then
+		_M.Status = data.status
+	end
+	if data.time ~= nil then
+		_M.Time = data.time
+	end
+	if data.voteids ~= nil then
+		_M.MyVoteids = data.voteids
+	else
+		_M.MyVoteids = {}
+	end
+	if data.info ~= nil and #data.info > 0 then
+		local voteTable = {}
+		for k,v in pairs(data.info) do
+			local data
+			local info = v.info
+			if info ~= nil then
+				data = {playerid = info.playerid,playername = info.playername,avatar = info.avatar,sex = info.sex}
+			end
+			voteTable[v.voteid] = data
+		end
+		_M.VoteTable = voteTable
+	else
+		_M.VoteTable = {}
+	end
+end
+
+function _M.OnJoin(data)
+	local voteid 
+	if data.info ~= nil and #data.info > 0 then
+		for k,v in pairs(data.info) do
+			if v.playerid == MPlayer.GetId() then
+				voteid = data.voteid
+			end
+		end
+	end
+
+	local isInIds = false
+	if voteid ~= nil then
+		for k,v in pairs(_M.MyVoteids) do
+			if voteid == v then
+				isInIds = true
+			end
+		end
+	end
+
+	if not isInIds then
+		table.insert(_M.MyVoteids,voteid)
+	end
+end
+
+function _M.GetVoteByType(type)
+	local voteTable = {}
+	for k,v in pairs(_M.VoteTable) do
+		local csvVote = Csv.Vote[k]
+		if csvVote ~= nil and csvVote.type == type then
+			voteTable[k] = v
+		end
+	end
+	return voteTable
+end
+
+function _M.GetVoteSingle(type,voteid)
+	local voteTable = _M.GetVoteByType(type)
+	if voteTable ~= nil then
+		return voteTable[voteid]
+	end
+end
+
+function _M.GetMyVoteByType(type)
+	local myVoteids = _M.MyVoteids
+	local idTable = {}
+	if myVoteids ~= nil and #myVoteids > 0 then
+		for k,v in pairs(myVoteids) do
+			local csvVote = Csv.Vote[v]
+			if csvVote ~= nil and csvVote.type == type then
+				table.insert(idTable,v)
+			end
+		end
+	end
+	return idTable
+end
+
+
+
+-----------------------BOSS
+function _M.UnlockStaff(staffID, staffLifeNum)
+	if _M.StaffStateTab[staffID] then
+		_M.StaffStateTab[staffID] = nil
+	end
+
+	if staffLifeNum ~= nil then
+		_M.StaffLifeNum[staffLifeNum.id] = staffLifeNum.count
+	end
+end
+
+function _M.GetStaffList(staffList, staffLifeNum)
+	_M.StaffStateTab = {}
+	_M.StaffLifeNum = {}
+	if staffList ~= nil then
+		for k,v in pairs(staffList)do
+			_M.StaffStateTab[v] = true
+		end
+	end
+	if staffLifeNum ~= nil then
+		for k,v in pairs(staffLifeNum)do
+			_M.StaffLifeNum[v.id] = v.count
+		end
+	end
+end
+
+--v={state:1派遣，2恢复,3,无效，times}
+function _M.SelectStaff()
+	local staffList = MStaff.StaffTable
+	
+	local biggerMods = {}
+	local smallerMods = {}
+	local _mod = 0
+	for k,v in pairs(staffList) do
+		if _M.StaffStateTab[k] then
+			
+		else
+			_mod = v.power-_M.BossPower.ncur
+			if _mod >= 0 then
+				table.insert(biggerMods,{id = k,mod = _mod})
+			else
+				table.insert(smallerMods,{id = k,mod = _mod})
+			end
+		end
+	end
+		
+	local a_csv
+	local b_csv
+	if #biggerMods > 0 then
+		table.sort(biggerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod < b.mod
+		end)
+	
+		return MStaff.GetStaffDataByID(biggerMods[1].id)
+	end
+	if #smallerMods > 0 then
+		table.sort(smallerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod > b.mod
+		end)
+
+		return MStaff.GetStaffDataByID(smallerMods[1].id)
+	end
+	return nil
+end
+
+
+------------------选举信息--------------
+function _M.OnMessageInit(data)
+	local messageAll = {}
+	if data.listall ~= nil then
+		for k,v in pairs(data.listall) do
+			table.insert(messageAll,v)
+		end
+		table.sort(messageAll,function(a,b) return a.time > b.time end)
+	end
+	_M.MessageAll = messageAll
+
+	local messageMy = {}
+	if data.listmy ~= nil then
+		for k,v in pairs(data.listmy) do
+			table.insert(messageMy,v)
+		end
+		table.sort(messageMy,function(a,b) return a.time > b.time end)
+	end
+	_M.MessageMy = messageMy
+end
+
+function _M.OnMessageUpdateAll(data)
+	local messageAll = _M.MessageAll
+	table.insert(messageAll,1,data.value)
+	if #messageAll > MessageAll_Max then
+		table.remove(messageAll)
+	end
+	_M.MessageAll = messageAll
+end
+
+function _M.OnMessageUpdateMy(data)
+	local messageMy = _M.MessageMy
+	table.insert(messageMy,1,data.value)
+	if #messageMy > MessageMy_Max then
+		table.remove(messageMy)
+	end
+	_M.MessageMy = messageMy
+end
+
+function _M.OnMessageClear()
+	_M.MessageMy = {}
+	_M.MessageAll = {}
+end
+
+return _M

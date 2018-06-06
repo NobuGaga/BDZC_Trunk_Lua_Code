@@ -1,0 +1,57 @@
+local MAchieve = JRequire "Dev.Achieve.MAchieve"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+		cAchieveAward							=	1,--获取奖励 PAchievement.CAchieveAward
+
+		SAchieveInit							=	1,--初始化	PAchievement.SAchieveInit
+		SAchieveRefresh						    =	2,--成就刷新  PAchievement.SAchiveRefresh
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cAchieveAward] = "PAchievement.CAchieveAward",
+	}
+	local recv = {
+		[ECmdId.SAchieveInit]			=		{proto = "PAchievement.SAchieveInit",		handle = _P.OnGetList},
+		[ECmdId.SAchieveRefresh]		=		{proto = "PAchievement.SAchiveRefresh",		handle = _P.OnGetAward},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Achievement, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MAchieve.Clean()
+end
+
+--C
+
+function _M.GetAward(ID)
+	_M.Send(ECmdId.cAchieveAward,{questid = ID})
+end
+
+--S
+function _P.OnGetList(data)
+	MAchieve.CreateList(data)
+	_P.CheckRedPoint()
+end
+
+function _P.OnGetAward(data)
+	MAchieve.OnRefreshAchieve(data)
+	WindowMgr.Call("UAchieveDetail","GetAward",data.achieve)
+	WindowMgr.Call("UAchieve","GetAward",data.achieve)
+	_P.CheckRedPoint()
+end
+
+function _P.CheckRedPoint()
+	local isRedpoint = MAchieve.GetRedPointState()
+	if MAchieve.RedPoint ~= isRedpoint then
+		MAchieve.RedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Achievement)
+	end
+end
+
+return _M

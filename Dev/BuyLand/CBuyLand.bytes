@@ -1,0 +1,209 @@
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cBuyLandBattle = 1, -- 竞标
+	cBuyLandTotalBattle = 2, -- 一键竞标
+	cBuyLandOpen = 3, -- 查询地皮信息
+
+	sBuyLandInit = 1, -- 返回地皮信息
+	sBuyLandResult = 2, -- 战斗结果
+	sBuyLandReset = 3, -- 零点重置
+	sButLandOpen = 4, --打开一键竞标界面返回
+}
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local send = {
+		[CMD_ID.cBuyLandBattle] = "PBuyLand.CBuyLand",
+		[CMD_ID.cBuyLandTotalBattle] = "PBuyLand.CBuyLandTotal",
+		[CMD_ID.cBuyLandOpen] = "",
+	}
+	--接收消息协议注册
+	local recv = {
+		[CMD_ID.sBuyLandInit] = { proto = "PBuyLand.SBuyLandInit", handle = _P.SInit},
+		[CMD_ID.sBuyLandResult] = { proto = "PBuyLand.SBuyLandResult", handle = _P.SResult},
+		[CMD_ID.sBuyLandReset] = { proto = "PBuyLand.SBuyLandInit", handle = _P.SBuyLandReset},
+		[CMD_ID.sButLandOpen] = { proto = "PBuyLand.SBuyLandList", handle = _P.SBuyLandList},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.BuyLand, send, recv, isReload)
+
+end
+
+--清空模块
+function _M.ModuleClean()
+	MBuyLand.Clean()
+end
+
+function _M.CInit()
+	_M.Send(CMD_ID.cBuyLandOpen)
+
+	-- local data = {}
+	-- data.landInfo = {}
+	-- for i=1, 3 do
+	-- 	local landInfo = {}
+	-- 	table.insert(data.landInfo, landInfo)
+	-- 	landInfo.id = 1
+	-- 	landInfo.index = i
+	-- 	landInfo.money = 100 * i
+	-- 	landInfo.power = 200*i
+	-- 	landInfo.randReward = {}
+	-- 	for j = 1, 5 do
+	-- 		local randReward = {}
+	-- 		randReward.id = j
+	-- 		randReward.count = j
+	-- 		table.insert(landInfo.randReward, randReward) 
+	-- 	end
+	-- end
+	-- _P.TestInit(data)
+	-- WindowMgr.Call("UBuyLandMain","RefreshLandInfo")
+
+-- 	local data = {}
+-- 	data.id = 1
+-- 	data.canAllIn = true
+-- 	data.landInfo = {}
+-- 	for i=1, 3 do
+-- 		local landInfo = {}
+-- 		table.insert(data.landInfo, landInfo)
+-- 		landInfo.id = i
+-- 		local dcInfo = {}
+-- 		landInfo.dcInfo = dcInfo
+-- 		dcInfo.money = 100 * i
+-- 		dcInfo.gg = 200*i
+-- 		dcInfo.name = "dcs"..i
+-- 		landInfo.itemInfo = {}
+-- 		for j = 1, 5 do
+-- 			local itemInfo = {}
+-- 			itemInfo.id = j
+-- 			itemInfo.count = j
+-- 			table.insert(landInfo.itemInfo, itemInfo) 
+-- 		end
+-- 	end
+-- 	_P.TestInit(data)
+end
+
+-- landID:地皮id
+function _M.CBuyLand()
+	MBuyLand.CacheBattleInfo()
+	_M.Send(CMD_ID.cBuyLandBattle ,{id = MBuyLand.GetNextID(), index = MBuyLand.landIndex})
+	-- local data = {}
+	-- data.id = 1
+	-- data.type = 1
+	-- data.isSuc = true
+	-- data.money = 1000
+	-- data.itemList = {}
+	-- for j = 1, 5 do
+	-- 	local itemInfo = {}
+	-- 	itemInfo.id = j
+	-- 	itemInfo.count = j
+	-- 	table.insert(data.itemList, itemInfo) 
+	-- end
+	-- data.landNum = 1
+	-- data.companyScore = 10
+	-- data.nextChapter = {}
+	-- data.nextChapter.landInfo = {}
+	-- for i=1, 3 do
+	-- 	local landInfo = {}
+	-- 	table.insert(data.nextChapter.landInfo, landInfo)
+	-- 	landInfo.id = 2
+	-- 	landInfo.index = i
+	-- 	landInfo.money = 100 * i
+	-- 	landInfo.power = 200*i
+	-- 	landInfo.randReward = {}
+	-- 	for j = 1, 5 do
+	-- 		local randReward = {}
+	-- 		randReward.id = j
+	-- 		randReward.count = j
+	-- 		table.insert(landInfo.randReward, randReward) 
+	-- 	end
+	-- end
+	-- _P.SResult(data)
+	
+	-- local data = {}
+	-- data.id = 1
+	-- data.isSuc = false
+	-- data.money = 1000
+	-- data.itemList = {}
+	-- for j = 1, 5 do
+	-- 	local itemInfo = {}
+	-- 	itemInfo.id = j
+	-- 	itemInfo.count = j
+	-- 	table.insert(data.itemList, itemInfo) 
+	-- end
+	-- _P.SResult(data)
+end
+
+-- allInNum:一键竞标多少关卡
+function _M.CAllIn(allInNum)
+	_M.Send(CMD_ID.cBuyLandTotalBattle ,{id = MBuyLand.GetNextID(), num = allInNum})
+
+	-- local data = {}
+	-- data.id = 1
+	-- data.isSuc = true
+	-- data.money = 1000
+	-- data.itemList = {}
+	-- data.num = 2
+	-- for j = 1, 9 do
+	-- 	local itemInfo = {}
+	-- 	itemInfo.id = j
+	-- 	itemInfo.count = j
+	-- 	table.insert(data.itemList, itemInfo) 
+	-- end
+	-- data.landNum = 2
+	-- data.assets = 3
+	-- _P.SResult(data)
+end
+
+function _P.TestInit(data1)
+	local data = {}
+	data.landInfo = {}
+	for i=1, 3 do
+		local landInfo = {}
+		table.insert(data.landInfo, landInfo)
+		landInfo.id = 1
+		landInfo.index = i
+		landInfo.money = 100 * i
+		landInfo.power = 200*i
+		landInfo.randReward = {}
+		for j = 1, 3 do
+			local randReward = {}
+			randReward.id = j
+			randReward.count = j
+			table.insert(landInfo.randReward, randReward) 
+		end
+		landInfo.girlId = 2001
+		landInfo.girlGlamour = 2
+		landInfo.staffId = 10001
+		-- landInfo.staffSkillExp = 3
+		landInfo.staffBookExp = 4
+	end
+	_P.SInit(data)
+end
+
+function _P.SInit(data)
+	MBuyLand.isOpen = data.isOpen
+	MBuyLand.UpdateLandInfo(data.landInfo)
+end
+
+function _P.SBuyLandReset(data)
+	_P.SInit(data)
+	WindowMgr.Call("UBuyLandMain","RefreshLandInfo")
+end
+
+--战斗结果
+function _P.SResult(data)
+	MBuyLand.UpdateResult(data)
+end
+
+function _P.SBuyLandList(data)
+	MBuyLand.UpdateAllInMoneyCache(data)
+end
+
+return _M

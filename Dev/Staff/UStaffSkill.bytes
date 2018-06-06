@@ -1,0 +1,286 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local NUM_TWEEN = "T_Club_NumSacle"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Skill", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mStaffid = id
+	local contentTransform = moudle:Get("Content")
+	local data = MStaff.GetStaffDataByID(id)
+	if data == nil then
+		local skills = Csv.Personnel[id].skills
+		if skills ~= nil then
+			for _i, _sid in pairs(skills) do
+				local skill = Csv.Skill[_sid * 1000 + 1]
+				local itemMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_SkillItem",WindowType.UI, 0)
+				itemMoudle:Get("BtnUp").Activity = false
+
+				itemMoudle:Get("Icon").SpriteName = skill.icon
+				itemMoudle:Get("IconColor").SpriteName = skill.iconColor
+				itemMoudle:Get("Name").Text = skill.name
+				itemMoudle:Get("MaxText").Text = Csv.Text("staff_lvmax")
+				
+				_P.SetSkillDataNil(self,skill,itemMoudle,_sid)
+			end
+		end
+		
+		return
+	end
+
+	local tableItems = {}
+	for k,v in pairs(data.skill) do
+		local skill = Csv.Skill[k * 1000 + v]
+		local item = {}
+		local itemMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_SkillItem",WindowType.UI, 0)
+		local BtnUp = itemMoudle:Get("BtnUp")
+		BtnUp:AddOnButton(function ( ... )
+			if not _P.CheckBtnIsClick(0.3) then return end
+
+			SoundMgr.Play(10001)
+			if _P.IsLevelMax(id,k) then
+				CCommon.ShowError(Csv.Text("staff_skilllvMax"))
+			else
+				if _P.IsEnoughExp(id,k) then
+					CStaff.StaffSkillUp(id,k)
+				else
+					CCommon.ShowError(Csv.Text("staff_noskillexp"))
+				end
+			end
+			end, nil, 0.9)
+
+		local ImgIcon = itemMoudle:Get("Icon")
+		ImgIcon.SpriteName = skill.icon
+
+		local ImgColor = itemMoudle:Get("IconColor")
+		ImgColor.SpriteName = skill.iconColor
+
+		local TextName = itemMoudle:Get("Name")
+		TextName.Text = skill.name
+		
+		local TextMax = itemMoudle:Get("MaxText")
+		TextMax.Text = Csv.Text("staff_lvmax")
+		
+		_P.SetSkillData(self,skill,itemMoudle,data,k)
+
+		local TextUp = itemMoudle:Get("C_text")
+		if _P.IsLevelMax(id,k) then
+			TextUp.Text = Csv.Text("staff_max")
+			BtnUp.RaycastTarget = false
+			BtnUp.Activity = false
+			TextMax.Activity = true
+		else
+			TextUp.Text = Csv.Text("staff_up")
+			BtnUp.RaycastTarget = true
+			BtnUp.Activity = true
+			TextMax.Activity = false
+		end
+
+		item.moudle = itemMoudle
+		tableItems[k] = item
+	end
+	self.mTableItems = tableItems
+end
+
+function _P.IsLevelMax(staffid,skillid)
+	local data = MStaff.GetStaffDataByID(staffid)
+	local skillLv = data.skill[skillid]
+	local maxLv = Csv.ColorUp[data.color].skillMaxLv
+	return skillLv >= maxLv
+end
+
+function _P.IsEnoughExp(staffid,skillid)
+	local data = MStaff.GetStaffDataByID(staffid)
+	local skillLv = data.skill[skillid]
+	local skillexp = data.skillexp
+	local costexp = Csv.Skill[skillid*1000 + skillLv].cost
+	return skillexp >= costexp
+end
+
+function _P.SetSkillDataNil(self,skill,itemMoudle,k,isShowEffect)
+	self.mMoudle:Get("expText").Text = Csv.Text("staff_expT",{num = 0})
+	itemMoudle:Get("Level").Text = Csv.Text("staff_lv",{num = 1})
+
+	local TextNowLeft = itemMoudle:Get("NowLeft")
+	local TextNowCenter = itemMoudle:Get("NowCenter")
+	local TextNowRight = itemMoudle:Get("NowRight")
+	
+	local TextUpLeft = itemMoudle:Get("UpLeft")
+	local TextUpCenter = itemMoudle:Get("UpCenter")
+	local TextUpRight = itemMoudle:Get("UpRight")
+	
+	TextNowLeft.Text = Csv.Text("staff_eff1")
+	TextNowCenter.Text = skill.effect / 100 .. '%'
+	if skill.type == 1 then
+		TextNowRight.Text = Csv.Text("staff_eff2")	
+	else
+		TextNowRight.Text = Csv.Text("staff_eff4")	
+	end
+	TextNowRight.LocalPosition = Vector2(TextNowCenter.PreferredWidth + 5, 0)
+	
+	local nextSkill = Csv.Skill[k * 1000 + 2]
+	TextUpLeft.Text = Csv.Text("staff_eff3")
+	if nextSkill ~= nil then
+		TextUpCenter.Text = nextSkill.effect / 100 .. '%'
+		if nextSkill.type == 1 then
+			TextUpRight.Text = Csv.Text("staff_eff2")
+		else
+			TextUpRight.Text = Csv.Text("staff_eff4")
+		end
+	end
+	itemMoudle:Get("Cost").Text = Csv.Text("staff_1", {num = skill.cost})
+	TextUpRight.LocalPosition = Vector2(TextUpCenter.PreferredWidth + 5, 0)
+
+	TextNowLeft:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowCenter:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowRight:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpLeft:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpCenter:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpRight:AddContentSizeFitter():SetLayoutHorizontal()
+
+	-- 播放读字效果
+	if isShowEffect then
+		self.mMoudle.SelfRect:AddOnTime(function()
+			if TextNowCenter.Text ~= "" then
+				local NowTween = TextNowCenter.CachedTran:GetJTweener(NUM_TWEEN)
+				NowTween:Play()
+			end
+
+			if TextUpCenter.Text ~= "" then
+				local UpTween = TextUpCenter.CachedTran:GetJTweener(NUM_TWEEN)
+				UpTween:Play()
+			end
+		end, nil, 1)
+	end
+
+	itemMoudle:Get("BtnUp").Activity = false
+end
+
+function _P.SetSkillData(self,skill,itemMoudle,data,k,isShowEffect)
+	local TextSkillExp = self.mMoudle:Get("expText")
+	TextSkillExp.Text = Csv.Text("staff_expT",{num = data.skillexp})
+
+	local TextLevel = itemMoudle:Get("Level")
+	TextLevel.Text = Csv.Text("staff_lv",{num = data.skill[k]})
+
+	local TextNowLeft = itemMoudle:Get("NowLeft")
+	local TextNowCenter = itemMoudle:Get("NowCenter")
+	local TextNowRight = itemMoudle:Get("NowRight")
+	
+	local TextUpLeft = itemMoudle:Get("UpLeft")
+	local TextUpCenter = itemMoudle:Get("UpCenter")
+	local TextUpRight = itemMoudle:Get("UpRight")
+	
+	local TextCost = itemMoudle:Get("Cost")
+	TextNowLeft.Text = Csv.Text("staff_eff1")
+	TextNowCenter.Text = skill.effect / 100 .. '%'
+	if skill.type == 1 then
+		TextNowRight.Text = Csv.Text("staff_eff2")	
+	else
+		TextNowRight.Text = Csv.Text("staff_eff4")	
+	end
+	TextNowRight.LocalPosition = Vector2(TextNowCenter.PreferredWidth + 5, 0)
+
+	if data.skill[k] >= Csv.ColorUp[data.color].skillMaxLv then
+		TextUpLeft.Text = Csv.Text("staff_eff5")
+		TextCost.Text = Csv.Text("staff_skicost")
+		TextUpCenter.Text = ""
+		TextUpRight.Text = ""
+	else
+		local nextSkill = Csv.Skill[k * 1000 + data.skill[k] + 1]
+		TextUpCenter.Text = nextSkill.effect / 100 .. '%'
+		TextUpLeft.Text = Csv.Text("staff_eff3")
+		if nextSkill.type == 1 then
+			TextUpRight.Text = Csv.Text("staff_eff2")
+		else
+			TextUpRight.Text = Csv.Text("staff_eff4")
+		end
+		TextCost.Text = Csv.Text("staff_1", {num = skill.cost})
+		TextUpRight.LocalPosition = Vector2(TextUpCenter.PreferredWidth + 5, 0)
+	end
+
+	TextNowLeft:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowCenter:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowRight:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpLeft:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpCenter:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUpRight:AddContentSizeFitter():SetLayoutHorizontal()
+
+	-- 播放读字效果
+	if isShowEffect then
+		self.mMoudle.SelfRect:AddOnTime(function()
+			if TextNowCenter.Text ~= "" then
+				local NowTween = TextNowCenter.CachedTran:GetJTweener(NUM_TWEEN)
+				NowTween:Play()
+			end
+
+			if TextUpCenter.Text ~= "" then
+				local UpTween = TextUpCenter.CachedTran:GetJTweener(NUM_TWEEN)
+				UpTween:Play()
+			end
+		end, nil, 1)
+	end
+
+	local Btn = itemMoudle:Get("BtnUp")
+	if _P.IsLevelMax(self.mStaffid,k) then
+		itemMoudle:Get("C_text").Text = Csv.Text("staff_max")
+		Btn.RaycastTarget = false
+		Btn.Activity = false
+		itemMoudle:Get("MaxText").Activity = true
+	else
+		itemMoudle:Get("C_text").Text = Csv.Text("staff_up")
+		Btn.RaycastTarget = true
+		Btn.Activity = true
+		itemMoudle:Get("MaxText").Activity = false
+	end
+end
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+-- isShowEffect是否显示读字效果
+function _M:ChangeSkillLv(staffid,skillid,skilllv, isShowEffect)
+	local skillItem = self.mTableItems[skillid]
+	if skillItem ~= nil then
+		local data = MStaff.GetStaffDataByID(staffid)
+		local moudle = skillItem.moudle
+		local skill = Csv.Skill[skillid * 1000 + skilllv]
+		_P.SetSkillData(self,skill,moudle,data,skillid,isShowEffect)
+	end
+end
+
+function _M:ResetAllSkill(staffid)
+	local data = MStaff.GetStaffDataByID(staffid)
+	for k,v in pairs(data.skill) do
+		local skill = Csv.Skill[k * 1000 + v]
+		local moudle = self.mTableItems[k].moudle
+		_P.SetSkillData(self,skill,moudle,data,k)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

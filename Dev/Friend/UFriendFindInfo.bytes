@@ -1,0 +1,56 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(playerInfo)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Friend_Serch")
+	moudle:Get("BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("title").Text = Csv.Text("Friend_20")
+
+	moudle:Get("bsx").SpriteName = MPlayer.HeadIconFromSex(playerInfo.headId,playerInfo.sex,true)
+	moudle:Get("Name").Text = playerInfo.name
+	moudle:Get("inline").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - playerInfo.leaveTime)
+	local companyCsv = Csv.Company[playerInfo.level]
+	moudle:Get("zhiwei").Text = companyCsv.name
+	moudle:Get("shili").Text = Csv.Text("Friend_9")
+	moudle:Get("shiliNum").Text = tostring(playerInfo.power)
+
+	moudle:Get("BtnText1").Text = Csv.Text("Friend_2")
+	moudle:Get("Btn"):AddOnButton(function( ... )
+		if MFriend.CheckRelation(playerInfo.id, MFriend.RelationType.Friend) then
+			CCommon.ShowError(Csv.Text("Friend_43"))
+		else
+			CFriend.ReqAdd(playerInfo.id, MFriend.RelationType.Friend)
+		end
+		
+		self:Destroy()
+	end)
+
+	local csvVip = Csv.Vip[playerInfo.vip]
+	if csvVip ~= nil and csvVip.imgBord ~= nil then
+		moudle:Get("VipBox").SpriteName = csvVip.imgBord
+		moudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
+	else
+		moudle:Get("VipBox").Activity = false
+	end
+end
+
+return _M

@@ -1,0 +1,63 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire"Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EFFECT_ID = 10109
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ShowBattleResult(self,data)
+	if data.result == 1 then
+		self.mIsWin = true
+	end
+end
+
+
+--传入美女数据
+function _M:OnCreate(id)
+	self.mIsClose = false
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		if self.mIsClose then
+			self:Destroy()
+		end
+	end)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_PK_2")
+	
+	self.mIsWin = false
+
+	moudle.SelfRect:AddOnTime(function()
+		self.mIsClose = true
+
+		if self.mIsWin then
+			WindowMgr.Create("UWharfBattleWin",id)
+		else
+			WindowMgr.Create("UWharfBattleFail",id)
+		end
+
+	end,nil,2)
+
+	local actorPanel = moudle:Get("ActorPanel")
+	local titleImg = moudle:Get("TitleImg")
+	local bgImg = moudle:Get("bg")
+	local eventData = Csv.WharfEvent[id]
+	
+	bgImg.SpriteName = eventData.npcPowerBg
+	titleImg.SpriteName = eventData.npcPowerTitle
+
+	CCommon.CreateEffect(actorPanel,EFFECT_ID)
+end
+
+return _M

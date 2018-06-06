@@ -1,0 +1,96 @@
+--商会副本打开界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.ChooseItem(self, battleId, openType)
+	local info = MCommerce.MyCommerceInfo
+	local myJob = MCommerce.JobType.HuiYuan
+	if info ~= nil then
+		local myInfo = info.myInfo
+		if myInfo ~= nil then
+			myJob = myInfo.job
+		end
+	end
+
+	if myJob == MCommerce.JobType.HuiZhang or myJob == MCommerce.JobType.FuHuiZhang or 
+		(myJob == MCommerce.JobType.JingYing and openType == 2)
+	then
+		CCommerce.OpenBattleReq(battleId,openType)
+		self:Destroy()
+	elseif openType == 1 then
+		CCommon.ShowError(Csv.Text("commerce_battle19"))
+	else
+		CCommon.ShowError(Csv.Text("commerce_battle20"))
+	end
+end
+
+--界面构建
+function _M:OnCreate(battleId)
+	local csv = Csv.CommerceBattle[battleId]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_FB_Open")
+	self.Moudle = moudle
+	moudle:Get("C_backBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("Title").Text = Csv.Text("commerce_battle6")
+	moudle:Get("FB").Text = Csv.Text("commerce_battle17")
+	moudle:Get("FBName").Text = csv.name
+	--商会财富开启
+	moudle:Get("ordinaryJB1").Text = Csv.Text("commerce_battle8")
+	moudle:Get("Need1").Text = Csv.Text("commerce_battle10")
+	moudle:Get("NeedText1").Text = tostring(csv.cost1)
+	moudle:Get("Cur1").Text = Csv.Text("commerce_battle11")
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		moudle:Get("CurText1").Text = tostring(info.money)
+	end
+	moudle:Get("BtnText1").Text = Csv.Text("commerce_battle18")
+	moudle:Get("EnemyBtn1"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.ChooseItem(self, battleId, 1)
+	end)
+	--钻石开启
+	moudle:Get("ordinaryJB2").Text = Csv.Text("commerce_battle9")
+	moudle:Get("Need2").Text = Csv.Text("commerce_battle12")
+	moudle:Get("NeedText2").Text = tostring(csv.cost2)
+	moudle:Get("Cur2").Text = Csv.Text("commerce_battle13")
+	moudle:Get("CurText2").Text = tostring(MBag.GetItemNum(Define.AssetsType.Gold))
+	moudle:Get("BtnText2").Text = Csv.Text("commerce_battle18")
+	moudle:Get("EnemyBtn2"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.ChooseItem(self, battleId, 2)
+	end)
+end
+
+return _M

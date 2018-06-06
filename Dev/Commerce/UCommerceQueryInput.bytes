@@ -1,0 +1,64 @@
+--查询商会输入界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Query")
+	self.Moudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local input = moudle:Get("input")
+	moudle:Get("C_Text").Text = Csv.Text("commerce_query1")
+	moudle:Get("SmallTitle").Text = Csv.Text("commerce_query2")
+	input.PlaceholderWidget.Text = Csv.Text("commerce_query3")
+	moudle:Get("C_text").Text = Csv.Text("commerce_query4")
+
+	moudle:Get("Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		local id = LuaUtil.Trim(input.Text)
+		if id == nil or id == "" then
+			CCommon.ShowError(Csv.Text("commerce_query5"))
+		else
+			local num = tonumber(id)
+			if num == nil or num <= 0 then
+				CCommon.ShowError(Csv.Text("commerce_query6"))
+			else
+				CCommerce.QueryReq(num)
+			end
+		end
+	end)
+end
+
+return _M

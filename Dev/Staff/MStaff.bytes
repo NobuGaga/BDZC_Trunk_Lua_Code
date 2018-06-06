@@ -1,0 +1,545 @@
+local _M = {}
+local _P = {}
+local MBag = JRequire "Dev.Bag.MBag"
+local STAFFMAXCOLOR = Csv.Const(Define.Const.StaffMax)[4]
+
+_M.StaffTable = {}
+_M.LastChooseStaff = nil
+_M.LastChoose = 1
+_M.StaffRedPoint = false
+_M.BookRedPoint = false
+_M.SkillRedPoint = false
+_M.AureoleRedPoint = false
+_M.StaffNum = 0
+_M.SortType = 0 --0默认，1属性，2品质，3资质，4星级
+_M.StaffNames = {} --记录员工名称，用于判断是否首次改名
+
+_M.gou = true -- 是否只显示已获取员工
+_M.Lvl10 = {} -- 是否勾选连升10级 每个员工单独分开
+
+_M.StaffsSort = 
+{
+	default = 0,
+	level = 1,
+	attr = 2,
+	apitude = 3,
+	star = 4,
+}
+
+_M.Color2Image = 
+{
+	[1] = "yg_bg_008",
+	[2] = "yg_bg_009",
+	[3] = "yg_bg_010",
+	[4] = "yg_bg_011",
+	[5] = "yg_bg_012",
+	[6] = "yg_bg_013",
+	[7] = "yg_bg_013",
+}
+
+_M.Color3Image = 
+{
+	[1] = "ls_024",
+	[2] = "ls_024_1",
+	[3] = "ls_024_2",
+	[4] = "ls_024_3",
+	[5] = "ls_024_4",
+	[6] = "ls_024_5",
+	[7] = "ls_024_5",
+}
+
+function _M.Clean( ... )
+	_M.SortType = 0
+	_M.StaffTable = {}
+	_M.LastChooseStaff = nil
+	_M.LastChoose = 1
+	_M.StaffRedPoint = false
+	_M.BookRedPoint = false
+	_M.SkillRedPoint = false
+	_M.AureoleRedPoint = false
+	_M.StaffNum = 0
+	_M.StaffNames = {}
+	_M.Lvl10 = {}
+end
+
+function _M.OnReLoginClean()
+	_M.gou = true
+end
+
+function _M.NoStaff(id)
+	return _M.StaffTable[id] == nil
+end
+
+function _M.GetStaffDataByID(id)
+	local staffTable = _M.StaffTable
+	return staffTable[id]
+end
+
+function _M.StaffInit(list)
+	if list ~= nil then
+		for k,v in pairs(list) do
+			_M.OnStaffNew(v)
+		end
+	end
+end
+
+function _M.OnStaffLevelUp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.level = data.level
+		staff.levelexp = data.levelexp
+		if data.originAttr ~= nil then
+			staff.originAttr = data.originAttr
+		end
+		if data.allAttr ~= nil then
+			staff.allAttr = data.allAttr
+			if data.power ~= nil then
+				staff.power = data.power
+			end
+		end
+	end
+end
+
+function _M.OnStaffColorUp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.color = data.color
+	end
+end
+
+function _M.OnStaffBookUp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.book[data.bookid] = data.booklv
+		staff.originAttr = data.originAttr
+		staff.allAttr = data.allAttr
+		if data.power ~= nil then
+			staff.power = data.power
+		end
+	end
+end
+
+function _M.OnStaffSkillUp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.skill[data.skillid] = data.skilllv
+		staff.originAttr = data.originAttr
+		staff.allAttr = data.allAttr
+		if data.power ~= nil then
+			staff.power = data.power
+		end
+	end
+end
+
+function _M.OnStaffAureoleUp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.aureole[data.aureoleid].level = data.aureolelv
+		staff.aureole[data.aureoleid].open = data.open
+		staff.aureoleAttr = data.aureoleAttr
+		staff.allAttr = data.allAttr
+		if data.power ~= nil then
+			staff.power = data.power
+		end
+	end
+end
+
+function _M.OnStaffAureoleActive(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.aureole[data.aureoleid].open = true
+	end
+end
+
+function _M.OnStaffNew(data)
+	if data ~= nil then
+		local staffTable = _M.StaffTable
+		local bookTable = {}
+		for k,v in pairs(data.book) do
+			bookTable[v.key] = v.value
+		end
+		local skillTable = {}
+		for k,v in pairs(data.skill) do
+			skillTable[v.key] = v.value
+		end
+		local aureoleTable
+		if data.aureole ~= nil then
+			aureoleTable = {}
+			for k,v in pairs(data.aureole) do
+				local aureole = {level = v.level,open = v.open}
+				aureoleTable[v.id] = aureole
+			end
+		end
+		if staffTable[data.id] == nil then
+			_M.StaffNum = _M.StaffNum + 1
+		end
+		staffTable[data.id] = {id = data.id,level = data.level,levelexp = data.levelexp,color = data.color,skillexp = data.skillexp,
+								bookexp = data.bookexp,book = bookTable,skill = skillTable,aureole = aureoleTable,originAttr = data.originAttr,
+								itemAttr = data.itemAttr,girlAttr = data.girlAttr,aureoleAttr = data.aureoleAttr,allAttr = data.allAttr,power = data.power,
+								name = _P.SetStaffName(data.id,data.name)}
+		
+		
+	end
+end
+
+function _M.SortForPower(a, b)
+	if a.power == b.power then
+		return a.id < b.id
+	end
+	return a.power > b.power
+end
+
+function _M.SortDownForPower(a, b)
+	if a.power == b.power then
+		return a.id < b.id
+	end
+	return b.power > a.power
+end
+
+function _M.SortForDanShi(a, b)
+	if a.allAttr.Wuli == b.allAttr.Wuli then
+		return a.id < b.id
+	end
+	return a.allAttr.Wuli > b.allAttr.Wuli
+end
+
+function _M.OnStaffUpdateBookExp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.bookexp = data.bookexp
+	end
+end
+
+function _M.OnStaffUpdateSkillExp(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.skillexp = data.skillexp
+	end
+end
+
+function _M.OnStaffAddItem(data)
+	local staff = _M.StaffTable[data.staffid]
+	if staff ~= nil then
+		staff.bookexp = staff.bookexp + data.attrValue
+		staff.itemAttr = data.itemAttr
+		staff.allAttr = data.allAttr
+		if data.power ~= nil then
+			staff.power = data.power
+		end
+	end
+end
+
+function _M.GetRedPointStaff()
+	local staffTable = _M.StaffTable
+	for k,v in pairs(staffTable) do
+		local state = _M.GetRedPointState(k)
+		if state then
+			return true
+		end
+	end
+	return false
+end
+
+function _M.GetRedPointState(staffid)
+	if _M.GetRedPointColorUp(staffid) then
+		return true
+	end
+	if _M.GetRedPointBookUp(staffid) then
+		return true
+	end
+	if _M.GetRedPointSkillUp(staffid) then
+		return true
+	end
+	if _M.GetRedPointAureoleUp(staffid) then
+		return true
+	end
+	return false
+end
+
+function _M.GetRedPointColorUp(staffid)
+	local staff = _M.StaffTable[staffid]
+	if staff ~= nil then
+		local maxLevel = Csv.ColorUp[staff.color].lvMax
+		if staff.level >= maxLevel and staff.color < STAFFMAXCOLOR then
+			local items = Csv.ColorUp[staff.color].cost
+			local state,str = MBag.GetCostState(items,false)
+			return state
+		end
+	end
+	return false
+end
+
+function _M.GetRedPointBookUp(staffid)
+	local staff = _M.StaffTable[staffid]
+	if staff ~= nil then
+		local csvStaff = Csv.Personnel[staffid]
+		local bookexp = staff.bookexp
+		for k,v in pairs(csvStaff.book) do
+			local maxLevel = Csv.ColorUp[staff.color].bookMaxLv
+			local level = staff.book[v[1]]
+			if level < maxLevel then 
+				local cost = Csv.BookLv[v[2]*1000 + staff.book[v[1]]].expNum
+				if bookexp >= cost then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetRedPointSkillUp(staffid)
+	local staff = _M.StaffTable[staffid]
+	if staff ~= nil then
+		local skillexp = staff.skillexp
+		for k,v in pairs(staff.skill) do
+			local maxLevel = Csv.ColorUp[staff.color].skillMaxLv
+			if v < maxLevel then
+				local cost = Csv.Skill[k*1000 + v].cost
+				if skillexp >= cost then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetRedPointAureoleUp(staffid)
+	local staff = _M.StaffTable[staffid]
+	if staff ~= nil and staff.aureole ~= nil then
+		for k,v in pairs(staff.aureole) do
+			if v.open then
+				return true
+			end
+			local maxLevel = Csv.ColorUp[staff.color].aureoleMaxLv
+			if v.level < maxLevel then
+				local csvAureole = Csv.Aureole[k*1000 + v.level]
+				if csvAureole.costitem ~= nil then
+					local costTable = {csvAureole.costitem,csvAureole.costcount}
+					local state,str = MBag.GetCostState(costTable,true)
+					if state then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetAllAttrNotObtained(id)
+	local attr1, attr2, attr3, attr4 = _M.GetStaffAttrLvlOne(id)
+	return attr1+attr2+attr3+attr4
+end
+
+--资质属性=资质*(等级*等级+等级+98)/10
+function _M.GetStaffAttrLvlOne(id)
+	local GongGuan = 0 -- 武力	<->	胆识	公关
+	local XingZhen = 0 -- 智力	<->	学识	行政
+	local JiShu = 0 -- 政治	<->	魅力	技术
+	local YingXiao = 0 -- 魅力	<->	魄力	营销
+
+	local books = Csv.Personnel[id].book
+	if books ~= nil then
+		for k, v in pairs(books) do
+			local bookID = v[1]
+			local bookStar = v[2]
+			local booLvID = bookStar * 1000 + 1
+			local bookLvCsv = Csv.BookLv[booLvID]
+			local aptitude = bookLvCsv.aptitude
+			local type = Csv.Book[bookID].type
+			if type == 1 then
+				GongGuan = _M.DoCalAttr(GongGuan, aptitude)
+			elseif type == 2 then
+				XingZhen = _M.DoCalAttr(XingZhen, aptitude)
+			elseif type == 3 then
+				JiShu = _M.DoCalAttr(JiShu, aptitude)
+			elseif type == 4 then
+				YingXiao = _M.DoCalAttr(YingXiao, aptitude)
+			end
+		end
+	end
+
+	return GongGuan, XingZhen, JiShu, YingXiao
+end
+
+function _M.DoCalAttr(attr, aptitude)
+	return attr + (aptitude*(1*1+1+98)/10)
+end
+
+function _M.GetAllApitudeNotObtained(id)
+	local aptitude = 0
+	local books = Csv.Personnel[id].book
+	if books ~= nil then
+		for k, v in pairs(books) do
+			local bookStar = v[2]
+			local booLvID = bookStar * 1000 + 1
+			local bookLvCsv = Csv.BookLv[booLvID]
+			aptitude = aptitude + bookLvCsv.aptitude
+		end
+	end
+
+	return aptitude
+end
+
+function _M.GetAllAttr(staffid)
+	local staff = _M.StaffTable[staffid]
+	if staff ~= nil then
+		return staff.allAttr.Wuli + staff.allAttr.Zhili + staff.allAttr.Zhengzhi + staff.allAttr.Meili
+	end
+	return 0
+end
+
+function _M.GetAttrByType(staffid, type)
+	local staff = _M.StaffTable[staffid]
+	local switch = {
+		[Define.AttrType.Wuli] = function()
+			return staff.allAttr.Wuli
+		end,
+		[Define.AttrType.Zhili] = function()
+			return staff.allAttr.Zhili
+		end,
+		[Define.AttrType.Zhengzhi] = function()
+			return staff.allAttr.Zhengzhi
+		end,
+		[Define.AttrType.Meili] = function()
+			return staff.allAttr.Meili
+		end,
+	}
+	local func = switch[type]
+	if func then
+		return func()
+	end
+end
+
+function _M.GetAllApitude(staffid)
+	local data = _M.GetStaffDataByID(staffid)
+	return _M.DoGetAllApitude(data)
+end
+
+function _M.DoGetAllApitude(data)
+	local allAptitude = 0
+	local books = Csv.Personnel[data.id].book
+	for k,v in pairs(books) do
+		local aptitude = Csv.BookLv[v[2]*1000 + data.book[v[1]]].aptitude
+		allAptitude = allAptitude + aptitude
+	end
+	return allAptitude
+end
+
+function _M.StaffChangeByItem(data)
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local staff = _M.StaffTable[v.staffid]
+			if staff ~= nil then
+				if v.attrtype ~= nil and v.attrvalue ~= nil then
+					if v.attrtype == Define.AttrType.Wuli then
+						staff.itemAttr.Wuli = staff.itemAttr.Wuli + v.attrvalue
+						staff.allAttr.Wuli = staff.allAttr.Wuli + v.attrvalue
+					elseif v.attrtype == Define.AttrType.Zhili then
+						staff.itemAttr.Zhili = staff.itemAttr.Zhili + v.attrvalue
+						staff.allAttr.Zhili = staff.allAttr.Zhili + v.attrvalue
+					elseif v.attrtype == Define.AttrType.Zhengzhi then
+						staff.itemAttr.Zhengzhi = staff.itemAttr.Zhengzhi + v.attrvalue
+						staff.allAttr.Zhengzhi = staff.allAttr.Zhengzhi + v.attrvalue
+					elseif v.attrtype == Define.AttrType.Meili then
+						staff.itemAttr.Meili = staff.itemAttr.Meili + v.attrvalue
+						staff.allAttr.Meili = staff.allAttr.Meili + v.attrvalue
+					end
+				end
+				if v.skillexp ~= nil then
+					staff.skillexp = v.skillexp
+				end
+				if v.bookexp ~= nil then
+					staff.bookexp = v.bookexp
+				end
+			end
+		end
+	end
+end
+
+function _M.LoadStaffsSortType()
+	if CS.UnityEngine.PlayerPrefs.HasKey("StaffsSort") then
+		_M.SortType = CS.UnityEngine.PlayerPrefs.GetInt("StaffsSort")
+	else
+		_M.SetStaffsSortType(_M.StaffsSort.default)
+	end
+end
+
+function _M.SetStaffsSortType(type)
+	_M.SortType = type
+
+	--local PlayerPrefs = CS.UnityEngine.PlayerPrefs
+	--PlayerPrefs.SetInt("StaffsSort", type)
+end
+
+--改名
+function _P.SetStaffName(id,name)
+	if name ~= nil then
+		_M.StaffNames[id] = name
+		return name
+	else
+		local staffData = Csv.Personnel[id]
+		if staffData ~= nil then
+			return staffData.name
+		else
+			return ""
+		end
+	end 
+end
+
+function _M.RefreshStaffName(data)
+	_M.StaffNames[data.staffid] = data.name
+	local staffData = _M.StaffTable[data.staffid]
+	if staffData ~= nil then
+		staffData.name = data.name
+	end
+	_M.StaffTable[data.staffid] = staffData
+
+	WindowMgr.Call("UStaffDetails","RefreshName")
+	WindowMgr.Call("UStaff","RefreshStaffName",data.staffid)
+end
+
+function _M.GetStaffName(id)
+	local staffTable = _M.StaffTable
+	for k,v in pairs(staffTable)do
+		if v.id == id then
+			if v.name ~= nil and v.name ~= "" then
+				return v.name
+			end
+		end
+	end
+	local staffData = Csv.Personnel[id]
+	return staffData.name
+end
+
+function _M.CheckStaffFirstName(id)
+	if _M.StaffNames[id] ~= nil then
+		return false
+	end
+	return true
+end
+
+function _M.IsLvlUp10(staffID)
+	if _M.Lvl10 == nil then
+		return false
+	end
+
+	local value = _M.Lvl10[staffID]
+	if value == nil or value == false then
+		return false
+	end
+
+	return true
+end
+
+function _M.SetLvlUp10(staffID, value)
+	if _M.Lvl10 == nil then
+		_M.Lvl10 = {}
+	end
+
+	_M.Lvl10[staffID] = value
+end
+
+return _M

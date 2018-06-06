@@ -1,0 +1,168 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent)
+	
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_VipReward", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("C_text_0").Text = Csv.Text("recharge_title")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--前往充值
+		WindowMgr.Create("URecharge")
+	end)
+
+	moudle:Get("getBtn"):AddOnButton(function()
+		_P.SendVipReward(self)
+	end)
+
+	moudle:Get("Btn_Text").Text = Csv.Text("vip_looktequan")
+	moudle:Get("VIPBtn"):AddOnButton(function()
+		_P.LookPrivilege(self)
+	end)
+end
+
+function _P.SendVipReward(self)
+	local vipLv = MPlayer.GetVip()
+	local curLevel = self.mViplevel
+
+	if vipLv >= curLevel then
+		CWelfare.ReqGetVipReward(self.mViplevel)
+	else
+		--前往充值
+		WindowMgr.Create("URecharge")
+	end
+end
+
+function _P.LookPrivilege(self)
+	WindowMgr.Create("VipPrivilege",self.mViplevel)
+end
+
+function _M:RefreshView(level)
+	local moudle = self.mMoudle
+	self.mViplevel = level
+
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+
+	local vipSp = moudle:Get("VipLevel")
+	local ExplainText = moudle:Get("ExplainText")
+	local sliderValue = moudle:Get("ProgressBar")
+	local sliderText = moudle:Get("ExpText")
+	local tips = moudle:Get("tips")
+
+	local bgSp = moudle:Get("bg")
+	local getBtnText = moudle:Get("C_text")
+	local getBtn = moudle:Get("getBtn")
+	local getImg = moudle:Get("get")
+
+	local vipLv = MPlayer.GetVip()
+	if vipLv == nil then
+		vipLv = 0
+	end
+
+	local nextVip = 0
+	local curExp = MRecharge.VipData.exp
+	local maxExp = 0
+	local curDate = Csv.Vip[vipLv]
+	if curDate ~= nil then
+		maxExp = curDate.upExp
+		nextVip = vipLv+1
+	end
+
+	local nextDate = Csv.Vip[nextVip]
+	if nextDate == nil then
+		--已经最高级vip
+		maxExp = curExp
+		nextVip = vipLv
+		ExplainText.Text = Csv.Text("vip_max")
+	else
+		ExplainText.Text = Csv.Text("welfare_paymore",{vip = nextVip,num = (maxExp - curExp)})
+	end
+
+	vipSp.SpriteName = "vip_"..vipLv
+	
+	sliderText.Text = curExp.."/"..maxExp
+	sliderValue.FillAmount = curExp/maxExp
+
+	-----------------------------------------------------------------
+	local vipData = Csv.VipWelfare[level]
+
+	getBtn.Activity = true
+	getImg.Activity = false
+
+	ExplainText.Activity = true
+	if vipLv < level then
+		getBtnText.Text = Csv.Text("welfare_gopay")
+	else 
+		if MVipWelfare.CheckVipReward(level) == false then
+			getBtnText.Text = Csv.Text("welfare_vipget")
+		else
+			getImg.Activity = true
+			getBtn.Activity = false
+			_P.DestroyLights(self)
+		end
+	end
+
+	local itemLights = {}
+	if vipData.rewards ~= nil then
+		for k,v in pairs(vipData.rewards) do
+			local item, light = CCommon.CreateItem(content, v[1], function()
+				CCommon.ShowItemTips(v[1])
+			end, {num = v[2]}, Define.SysId.VIPWelfare)
+
+			if light then
+				table.insert(itemLights,light)
+			end
+		end
+	else
+		--没有奖励（V1）
+		getImg.Activity = false
+	end
+	self.mItemLights = itemLights
+
+	bgSp.SpriteName = vipData.bg
+
+
+	------------底部提示----------------------------------
+	local selectExp = 0
+	local beforeDate = Csv.Vip[level-1]
+	if beforeDate ~= nil then
+		selectExp = Csv.Vip[level-1].upExp
+	end
+	local needExp = selectExp - curExp
+	--20180504改为只有下一等级才需要显示
+	if level - vipLv == 1 then
+		tips.Text = Csv.Text("welfare_paymore2",{vip = level,num = needExp})--vipData.tips
+	else
+		tips.Text = ""
+	end
+end
+
+function _P.DestroyLights(self)
+	local lights = self.mItemLights
+
+	if lights ~= nil then
+		for k,v in pairs(lights)do
+			v:Destroy()
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

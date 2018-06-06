@@ -1,0 +1,448 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local DIRNK_EFFECT_ID = 10099
+--酒量增加，消耗道具，消耗数量，自身名称，自身icon
+local RECOVE_ITEMA_1 = Csv.Const(10216)[1]--{id = 31007,cost = 100}
+local RECOVE_ITEMA_2 = Csv.Const(10216)[2]--{id = 31006,cost = 300}
+local DICE_TWEEN_1 = "T_Gril_Game_Dice1"
+local DICE_TWEEN_2 = "T_Gril_Game_Dice2"
+local BIG_DICE_ICON = {"mn_050","mn_051","mn_052"}
+local SMALL_DICE_ICON = {"mn_053","mn_054","mn_055","mn_056"}
+local T_GIRL_GAME_BTN = "T_GIRL_GAME_BTN"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RollDice(self,data)
+	if data.result == 1 then
+		self.mIsSuccess = true
+	else
+		self.mIsSuccess = false
+	end
+
+	_P.DoDiceGame(self)
+end
+
+function _R.RecoverEnergy(self,data)
+	if data.isSuccess then
+		CCommon.ShowError(Csv.Text("lastgirl_exchange"))
+	end
+	_P.UpdateDrink(self,data)
+end
+
+function _R.UpdateData(self)
+	local girlID = self.mData.girlid
+	local data = MGirl.GetKnowGirlData(girlID)
+	self.mData = data
+end
+
+function _P.DoDiceGame(self)
+
+	local data = self.mData
+
+	local diceTween1 = self.mDiceTween1
+	local diceTween2 = self.mDiceTween2
+
+	local cupOpen1 =  self.mCupOpen1
+	local cupOpen2 =  self.mCupOpen2
+	local dice1 =  self.mDice1
+	local dice2 =  self.mDice2
+	local cupClose1 =  self.mCupClose1
+	local cupClose2 =  self.mCupClose2
+
+	diceTween1:SetOnComplete(function()
+		cupOpen1.Activity = true
+		cupOpen2.Activity = true
+		cupClose1.Activity = false
+		cupClose2.Activity = false
+
+		local bigIndex = math.random(1,#BIG_DICE_ICON)
+		local smallIndex = math.random(1,#SMALL_DICE_ICON)
+		if self.mIsSuccess == true then
+			SoundMgr.Play(10035)
+			CCommon.ShowError(Csv.Text("lastgirl_dice_win"))
+			dice1.SpriteName = SMALL_DICE_ICON[smallIndex]
+			dice2.SpriteName = BIG_DICE_ICON[bigIndex]
+
+			CCommon.CreateEffect(self.mGirlActor,DIRNK_EFFECT_ID)
+		else
+			SoundMgr.Play(10036)
+			CCommon.ShowError(Csv.Text("lastgirl_dice_fail"))
+			dice1.SpriteName = BIG_DICE_ICON[bigIndex]
+			dice2.SpriteName = SMALL_DICE_ICON[smallIndex]
+
+			CCommon.CreateEffect(self.mPlayerActor,DIRNK_EFFECT_ID)
+		end
+		-----------------------
+		--延迟3秒后
+		self.mMoudle.SelfRect:AddOnTime(function()
+			cupOpen1.Activity = false
+			cupOpen2.Activity = false
+			cupClose1.Activity = true
+			cupClose2.Activity = true
+
+			_P.ShowDrink(self,data)
+
+			self:Unlock()
+			if data.state == 2 then
+				self.mStartText.Text = Csv.Text("girl_gameagain")
+				--说话
+				if self.mIsSuccess == true then
+					_P.ShowSpeek(self,data,2)--1首次2赢3输
+				else
+					_P.ShowSpeek(self,data,3)--1首次2赢3输
+				end
+			else
+				if data.game.ownEnergy >0 then
+					WindowMgr.Create("UGirlLastGameSuccess",data)
+				else
+					WindowMgr.Create("UGirlLastGameFail",data)
+				end
+			end
+		end,nil,2)
+	end)
+	
+	diceTween1:Play()
+	diceTween2:Play()
+end
+
+function _M:OnCreate(id)
+	local data = MGirl.GetKnowGirlData(id)
+	-- _P.DoSpeek(self)
+	self.mData = data
+	self.mSpeekTab = {}
+	self.mIsTalk = false
+	self.mIsSuccess = true
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Game")
+	self.mMoudle = moudle
+
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UGirlLastDetail",data)
+	end)
+
+	local iconBox1 = moudle:Get("IconBox1")
+	local iconBox2 = moudle:Get("IconBox2")
+	local icon1 = moudle:Get("Icon1")
+	local icon2 = moudle:Get("Icon2")
+	local itemCost_item1 = moudle:Get("ZS1")
+	local itemCost_item2 = moudle:Get("ZS2")
+	local itemCost1 = moudle:Get("ZSNum1")
+	local itemCost2 = moudle:Get("ZSNum2")
+	local itemData1 = Csv.Item[RECOVE_ITEMA_1[4]]
+	local itemData2 = Csv.Item[RECOVE_ITEMA_2[4]]
+	iconBox1.SpriteName = itemData1.colorIcon
+	iconBox2.SpriteName = itemData2.colorIcon
+	local costItemData1 = Csv.Item[RECOVE_ITEMA_1[2]]
+	local costItemData2 = Csv.Item[RECOVE_ITEMA_2[2]]
+	itemCost1.Text = RECOVE_ITEMA_1[3]
+	itemCost2.Text = RECOVE_ITEMA_2[3]
+	icon1.SpriteName = itemData1.icon
+	icon2.SpriteName = itemData2.icon
+	self.mRecoverItem1 = iconBox1
+	self.mRecoverItem2 = iconBox2
+
+	if data.game.recoverEnergy ~= nil then
+		for k,v in pairs(data.game.recoverEnergy)do
+			if v.type == 1 then
+				if RECOVE_ITEMA_1[5] > 0 and v.times > RECOVE_ITEMA_1[5] then
+					iconBox1.Activity = false
+				end 
+			end 
+			if v.type == 2 then
+				if RECOVE_ITEMA_2[5] > 0 and v.times > RECOVE_ITEMA_2[5] then
+					iconBox2.Activity = false
+				end 
+			end 
+		end
+	end
+	--20180423南征决定第一个不要，禅道id 3102 因为作用相同
+	iconBox1.Activity = false
+	
+	iconBox1:AddOnButton(function(...)
+		local GoldCount = MBag.GetItemNum(RECOVE_ITEMA_1[2])
+		if GoldCount >= RECOVE_ITEMA_1[3] then
+			CCommon.CheckTips(function(isSure,rg)_P.BuyRecover1(isSure, arg,self)
+			end,{items = {[RECOVE_ITEMA_1[4]] = 1},content = Csv.Text("girl_drinkrecove",
+						{cost = RECOVE_ITEMA_1[3],costname = costItemData1.name,num =RECOVE_ITEMA_1[1] })})
+		else
+			CCommon.ShowError(Csv.Text("Girl_married_noEnough",{name = costItemData1.name}))
+		end
+	end)
+	iconBox2:AddOnButton(function(...)
+		local GoldCount = MBag.GetItemNum(RECOVE_ITEMA_2[2])
+		if GoldCount >= RECOVE_ITEMA_2[3] then
+			CCommon.CheckTips(function(isSure,rg)_P.BuyRecover2(isSure, arg,self)
+			end,{items = {[RECOVE_ITEMA_2[4]] = 1},content = Csv.Text("girl_drinkrecove",
+						{cost = RECOVE_ITEMA_2[3],costname = costItemData2.name,num =RECOVE_ITEMA_2[1] })})
+		else
+			CCommon.ShowError(Csv.Text("Girl_married_noEnough",{name = costItemData2.name}))
+		end
+	end)
+
+
+	moudle:Get("HelpText").Text = Csv.Text("lastgirl_detail")
+
+	moudle:Get("DrinkerText").Text = Csv.Text("girl_drinker")
+	moudle:Get("playerDrinkerText").Text = Csv.Text("girl_drinker")
+
+	local startBtn = moudle:Get("StartBtn")
+	local startText = moudle:Get("StartText")
+	startText.Text = Csv.Text("girl_gamestart")--girl_gameagain
+	self.mStartText = startText
+	self.mStartBtn = startBtn
+	startBtn:AddOnButton(function(...)
+		--开始游戏
+		SoundMgr.Play(10034)
+		CGirl.ReqRollDice(data.girlid)
+		startBtn.Activity = false
+		self:Lock()
+	end)
+	startBtn.Activity = false
+	
+	local DHK = moudle:Get("DHK")
+	local DHKtext = moudle:Get("DHKtext")
+	self.mDHK = DHK
+	self.mDHKtext = DHKtext
+
+	------------------------
+	local girlIcon = moudle:Get("BSX")
+	local girlHead = moudle:Get("head")
+	local girlDrinks = {}
+	local girlunDrinks = {}
+	for i=1,6 do 
+		local drink = moudle:Get("Drinker"..i)
+		local undrink = moudle:Get("unDrinker"..i)
+		girlDrinks[i] = drink
+		girlunDrinks[i] = undrink
+	end
+
+	local playerHead = moudle:Get("playerhead_0")
+	local playerDrinks = {}
+	local playerunDrinks = {}
+	for i=1,6 do 
+		local drink = moudle:Get("playerDrinker"..i)
+		local undrink = moudle:Get("playerunDrinker"..i)
+		playerDrinks[i] = drink
+		playerunDrinks[i] = undrink
+	end
+
+	self.mGirlDrinks = girlDrinks
+	self.mGirlUnDrinks = girlunDrinks
+	self.mPlayerDrinks = playerDrinks
+	self.mPlayerUnDrinks = playerunDrinks
+
+	--骰子
+	local cupOpen1 = moudle:Get("cupOpen1")
+	local cupOpen2 = moudle:Get("cupOpen2")
+	local dice1 = moudle:Get("Dice1")
+	local dice2 = moudle:Get("Dice2")
+	local cupClose1 = moudle:Get("cupClose1")
+	local cupClose2 = moudle:Get("cupClose2")
+
+	local DiceTween1 = cupClose1.CachedTran:GetJTweener(DICE_TWEEN_1)
+	local DiceTween2 = cupClose2.CachedTran:GetJTweener(DICE_TWEEN_2)
+	local btnTween = startBtn.CachedTran:GetJTweener(T_GIRL_GAME_BTN)
+	btnTween:Play()
+
+	cupOpen1.Activity = false
+	cupOpen2.Activity = false
+
+	self.mCupOpen1 = cupOpen1
+	self.mCupOpen2 = cupOpen2
+	self.mDice1 = dice1
+	self.mDice2 = dice2
+	self.mCupClose1 = cupClose1
+	self.mCupClose2 = cupClose2
+	self.mDiceTween1 = DiceTween1
+	self.mDiceTween2 = DiceTween2
+
+	self.mGirlActor = moudle:Get("girlActorPanel")
+	self.mPlayerActor = moudle:Get("playerActorPanel")
+	------------------
+	local girlsData = Csv.KnowGirl[data.girlid]
+	local girlCsv = Csv.Girl[data.girlid]
+	girlHead.SpriteName = girlsData.icon
+	if girlCsv.prefab ~= nil and girlCsv.prefab > 0 then
+		CCommon.CreateActor(girlIcon, girlCsv.prefab, CCommon.ActorFieldMap.girl_game)
+	else
+		girlIcon.SpriteName = girlsData.bigIcon
+	end	
+	playerHead.SpriteName = MPlayer.GetSHeadIcon()
+	--playerHead:SetNativeSize()
+	moudle:Get("C_Text").Text = MGirl.GetGirlName(data.girlid)--girlsData.name--Csv.Text("lastgirl_talktitle")
+
+	_P.ShowSpeek(self,data,1)
+	_P.ShowDrink(self,data)
+end
+
+function _P.ShowDrink(self,data)
+	local girlDrinks = self.mGirlDrinks 
+	local girlunDrinks = self.mGirlUnDrinks
+	local playerDrinks = self.mPlayerDrinks 
+	local playerunDrinks = self.mPlayerUnDrinks 
+	local girlsData = Csv.KnowGirl[data.girlid]
+
+	--玩家酒量
+	for k,v in pairs(playerDrinks)do
+		if k<=data.game.ownMaxEnergy then
+			playerDrinks[k].Activity = true
+			playerunDrinks[k].Activity = false
+			if k >data.game.ownEnergy then
+				playerunDrinks[k].Activity = true
+			end
+		end
+	end
+	--美女酒量
+	local girlMaxEnergy = girlsData.wine
+	for k,v in pairs(girlDrinks)do
+		if k<=girlMaxEnergy then
+			girlDrinks[k].Activity = true
+			girlunDrinks[k].Activity = false
+			if k >data.game.girlEnergy then
+				girlunDrinks[k].Activity = true
+			end
+		end
+	end
+end
+
+function _P.UpdateDrink(self,data)
+	local playerDrinks = self.mPlayerDrinks 
+	local playerunDrinks = self.mPlayerUnDrinks 
+	local mData = self.mData
+
+
+	if data.type == 1 then
+		mData.game.ownMaxEnergy = mData.game.ownMaxEnergy + RECOVE_ITEMA_1[1]
+		mData.game.ownEnergy = mData.game.ownEnergy + RECOVE_ITEMA_1[1]
+
+		if RECOVE_ITEMA_1[5] > 0 and mData.game.ownMaxEnergy >= 3+ RECOVE_ITEMA_1[5] then
+			self.mRecoverItem1.Activity = false
+		end 
+	else
+		--mData.game.ownMaxEnergy = mData.game.ownMaxEnergy + RECOVE_ITEMA_2[1]
+		mData.game.ownEnergy = mData.game.ownEnergy + RECOVE_ITEMA_2[1]
+		
+		--无限
+		--[[
+		if RECOVE_ITEMA_2[5] > 0 and data.times > RECOVE_ITEMA_2[5] then
+			self.mRecoverItem2.Activity = false
+		end 
+		--]]
+	end
+	--玩家酒量
+	for k,v in pairs(playerDrinks)do
+		if k<=mData.game.ownMaxEnergy then
+			playerDrinks[k].Activity = true
+			playerunDrinks[k].Activity = false
+			if k >mData.game.ownEnergy then
+				playerunDrinks[k].Activity = true
+			end
+		end
+	end
+end
+
+
+function _P.ShowSpeek(self,data,type)--1首次2赢3输
+	local girlData = Csv.KnowGirl[data.girlid]
+
+	local speekIdTab = {}
+	if type == 1 then
+		for k,v in pairs(girlData.gameTalk1)do
+			table.insert(speekIdTab,v)
+		end
+	elseif type == 2 then
+		for k,v in pairs(girlData.gameTalk2)do
+			table.insert(speekIdTab,v)
+		end
+	elseif type == 3 then
+		for k,v in pairs(girlData.gameTalk3)do
+			table.insert(speekIdTab,v)
+		end
+	end
+	local speekId =speekIdTab[math.random(1,#speekIdTab)]
+
+	local talkData = Csv.GirlTalk[speekId]
+	local speekTab = {}
+	for k,v in pairs(talkData.value)do
+		table.insert(speekTab,v)
+	end
+	self.mIsTalk = true
+	self.mSpeekTab = speekTab
+	_P.DoSpeek(self)
+end
+
+function _P.DoSpeek(self)
+	local DHKtext = self.mDHKtext
+	local DHK = self.mDHK
+	local gameBtn = self.mStartBtn
+	DHK.Activity = true
+	gameBtn.Activity = false
+
+	local speekTab = self.mSpeekTab
+
+	local doWait = function()
+		DHK:AddOnTime(function()
+			if speekTab ~=nil and #speekTab > 0 then
+				_P.DoSpeek(self)
+			else
+				self.mIsTalk = false
+				DHK.Activity = false
+				gameBtn.Activity = true
+			end
+		end,nil,1)
+	end
+	DHKtext.Text = speekTab[1]
+	table.remove(speekTab,1)
+	doWait()
+end
+
+function _P.PlayGame(self)
+
+end
+
+function _P.BuyRecover1(isSure, arg,self) 
+	local mData = self.mData
+	if isSure then
+		if mData.game.ownEnergy < mData.game.ownMaxEnergy then
+			CGirl.ReqRecoverEnergy(self.mData.girlid,1)
+		else
+			CCommon.ShowError(Csv.Text("lastgirl_game_full"))
+		end
+	end
+end
+function _P.BuyRecover2(isSure, arg,self) 
+	local mData = self.mData
+	if isSure then
+		if mData.game.ownEnergy < mData.game.ownMaxEnergy then
+			CGirl.ReqRecoverEnergy(self.mData.girlid,2)
+		else
+			CCommon.ShowError(Csv.Text("lastgirl_game_full"))
+		end
+	end
+end
+
+return _M

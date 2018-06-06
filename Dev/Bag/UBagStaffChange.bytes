@@ -1,0 +1,45 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local JGuiManager = CS.JGui.JGuiManager
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+
+--界面构建
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_bag_BatchUse")
+	self.mMoudle = moudle
+	moudle:Get("new_image"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+	local csvItem = Csv.Item[MBag.LastUseItemid]
+	if csvItem ~= nil then
+		moudle:Get("Tips").Text = Csv.Text("bag_useNum",{name = csvItem.name,num = MBag.LastUseItemcount})
+	end
+	local content = moudle:Get("content")
+	if data ~= nil and data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local staffMoudle = JGuiManager.GetMoudle(content,"M_bag_BatchUse_Item")
+			local csvStaff = Csv.Personnel[v.staffid]
+			staffMoudle:Get("BSX").SpriteName = csvStaff.asset
+			if v.addskillexp ~= nil then
+				staffMoudle:Get("Text").Text = Csv.Text("bag_skillexpT")
+				staffMoudle:Get("NumText").Text = Csv.Text("bag_addnum",{num = v.addskillexp})
+			end
+			if v.addbookexp ~= nil then
+				staffMoudle:Get("Text").Text = Csv.Text("bag_bookexpT")
+				staffMoudle:Get("NumText").Text = Csv.Text("bag_addnum",{num = v.addbookexp})
+			end
+		end
+	end
+end
+
+return _M

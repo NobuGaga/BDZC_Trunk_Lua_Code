@@ -1,0 +1,70 @@
+-- 材料出售界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CBag = JRequire "Dev.Bag.CBag"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(matData)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Sell")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Btn_e")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local confirmBtn = module:Get("C_Btn_b")
+	confirmBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if matData.itemcount > 1 then
+			WindowMgr.Create("UCarSellMoreMaterial", matData)
+		else
+			-- 请求出售
+			CBag.OnUseItem(matData.itemid, 1)
+			MCar.SellGetData = {id = self.itemId, count = self.itemCount}
+			self:Destroy()
+		end
+	end, nil, 0.9)
+
+	local itemConf = Csv.Item[matData.itemid]
+	module:Get("Title").Text = Csv.Text("car_sell_title")
+	module:Get("C_text_0").Text = Csv.Text("car_openSeat_ok")
+	module:Get("C_text").Text = Csv.Text("car_openSeat_quxiao")
+	module:Get("Tips1").Text = Csv.Text("car_sell_tip", {name = itemConf.name, num = matData.itemcount})
+	module:Get("Tips2").Text = Csv.Text("car_sell_shouyi")
+
+	local sellConf = Csv.CarSellReturn[matData.itemid]
+	if sellConf and sellConf.getItems then
+		local showData = sellConf.getItems[1]
+		self.itemId = showData[1]
+		self.itemCount = showData[2] * matData.itemcount
+		local priceConf = Csv.Item[self.itemId]
+		module:Get("Icon").SpriteName = priceConf.icon
+		module:Get("Num").Text = self.itemCount
+	end
+end
+
+
+return _M

@@ -1,0 +1,62 @@
+----------------------文件引用--------------------------
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+
+--获取通用活动状态
+function _M.GetStateInfo(data, actType)
+	if nil == data then 
+		return nil 
+	end
+
+	local state = data.state
+	local actData = {
+		actId = data.actId,
+		actType = actType,
+		state = {
+			state = state.state,
+			startTime = state.startTime,
+			endTime = state.endTime,
+			lefttime = state.lefttime,
+		}
+	}
+	return actData
+end
+
+--获取默认通用活动状态
+function _M.GetDefaultStateInfo(actId, actType)
+	local state = {
+		state = MActivity.ActivityState.Waiting,
+	}
+	local data = {
+		actId = actId,
+		actType = actType,
+		state = state,
+	}
+	return data
+end
+
+------------------------------通用接口------------------------------
+function _M.DoUpdate(actType, data)
+	-- body
+end
+
+function _M.CheckRepoint()
+	-- body
+end
+
+function _M.OnGetSuccess(getData, actData)
+	-- body
+end
+
+function _M.OnUpdateState(oldActData, actData)
+	-- body
+end
+
+function _M.OnUpdatePro(actData, proData)
+	-- body
+end
+
+return _M

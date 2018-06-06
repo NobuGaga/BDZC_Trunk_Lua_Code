@@ -1,0 +1,247 @@
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local MTarget = JRequire"Dev.Target.MTarget"
+local MQuestionnaire = JRequire "Dev.Questionnaire.MQuestionnaire"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MVote = JRequire "Dev.Vote.MVote"
+local MShop = JRequire "Dev.Shop.MShop"
+
+local _M = {}
+
+-- funcId = true
+_M.Funcs = {}
+
+--引导 guideId = true
+_M.Guides = {}
+
+--小红点
+_M.Redpoints = {childs = {}, parent = nil, isActive = false}
+
+local doDump
+doDump = function (tmpTable, tab)
+	for k, v in pairs(tab) do
+		local tmp = {}
+		tmpTable[k] = {isActive = v.isActive, childs = tmp}
+		if v.childs ~= nil then
+			doDump(tmp, v.childs)
+		end
+	end
+end
+
+function _M.Dump()
+	local tmpTable = {}
+	doDump(tmpTable, _M.Redpoints.childs)
+	LuaUtil.DumpTable(tmpTable, "---->>>")	
+end
+--等待展示的美女和员工
+_M.WaitStorys = {}
+_M.WaitTriggerStorys = {}
+
+function _M.Clean( ... )
+	_M.Funcs = {}
+	_M.Guides = {}
+	_M.Redpoints = {childs = {}, parent = nil, isActive = false}
+	_M.WaitStorys = {}
+	_M.WaitTriggerStorys = {}
+end
+
+function _M.EnqueueWaitStory(storyType, objId, storyId, callBack)
+	WindowMgr.CleanPopWindow()
+	if storyType == 1 or storyType == 2 then
+		table.insert(_M.WaitStorys, {storyType = storyType, objId = objId, storyId = storyId, callBack = callBack})
+	else
+		table.insert(_M.WaitTriggerStorys, {storyType = storyType, objId = objId, storyId = storyId, callBack = callBack})
+	end
+end
+
+function _M.DequeueWaitStory()
+	if #_M.WaitTriggerStorys > 0 then
+		local ret = _M.WaitTriggerStorys[1]
+		table.remove(_M.WaitTriggerStorys, 1)
+		return ret
+	end
+	if #_M.WaitStorys > 0 then
+		local ret = _M.WaitStorys[1]
+		table.remove(_M.WaitStorys, 1)
+		return ret
+	end
+	return nil
+end
+
+function _M.FuncIsOpen(funcId)
+	if _M.Funcs[funcId] == true then
+		local csv = Csv.Func[funcId]
+		if csv ~= nil and csv.fid ~= nil and csv.fid > 0 then
+			local fatherCsv = Csv.Func[csv.fid]
+			--判断父节点是否开启
+			if fatherCsv ~= nil and not _M.FuncIsOpen(csv.fid) then
+				--如果父节点没有开启, 则直接为不开启
+				return false
+			end
+		end
+
+		if csv ~= nil and csv.actType ~= nil then
+			local isHave = false
+			for _,actType in pairs(csv.actType) do
+				if MActivity.IsHaveActForType(actType) then
+					isHave = true
+				end
+			end
+			return isHave
+		end
+		--月卡，年卡，vip，首充开启检测
+		if funcId == Define.SysId.MonthWelfare then
+			return MWelfare.GetMonthCardShowState()
+		elseif funcId == Define.SysId.YearWelfare then
+			return MWelfare.GetYearCardShowState()
+		elseif funcId == Define.SysId.VIPWelfare then
+			if MVipWelfare.CheckVipTopOpen() then
+				return true
+			else
+				return false
+			end
+		elseif funcId == Define.SysId.FirstRecharge then
+			if MWelfare.firstRechargeState == 2 then
+				return false
+			end
+			return true
+		elseif funcId == Define.SysId.Questionnaire then
+			return MQuestionnaire.IsShowBtn()
+		elseif funcId == Define.SysId.Target then
+			return MTarget.IsShowBtn()
+		elseif funcId == Define.SysId.Sign then
+			return not MWelfare.isSign
+		elseif funcId == Define.SysId.Welfare_QQ then
+			local value = Csv.Const(Define.Const.QQWeiXinContent)
+			--员工
+			if MStaff.GetStaffDataByID(value[1]) ~= nil then
+				return false
+			end
+			return true
+		elseif funcId == Define.SysId.Welfare_WeiXin then
+			local value = Csv.Const(Define.Const.QQWeiXinContent)
+			if MGirl.GetKnowGirlData(value[2]) ~= nil then
+				return false
+			end
+			return true
+		elseif funcId == Define.SysId.VoteBoss then
+			if MVote.BattleData ~= nil and MVote.BattleData.state == 1 then
+				return true
+			else
+				return false
+			end
+		elseif funcId == Define.SysId.Shop_Limit then
+			if MShop.ShopTable ~= nil and MShop.ShopTable[3] ~= nil then
+				local num = 0
+				for k,v in pairs(MShop.ShopTable[3]) do
+					num = num + 1
+				end
+				if num > 0 then
+					return true
+				else
+					return false
+				end
+			else
+				return false
+			end
+		end
+		-------------------------
+		return true
+	end
+	return false
+end
+
+function _M.GetMutexMap()
+	--key和value只存在一个, 但是value的优先级更高
+	return {
+		[Define.SysId.YearWelfare] = Define.SysId.MonthWelfare
+	}
+end 
+
+function _M.GetFuncs(fid, isNeedSort)
+	local funcs = {}
+	local csvLines = Csv.FuncMap[fid]
+	if csvLines ~= nil and #csvLines > 0 then
+		for _,v in pairs(csvLines) do
+			table.insert(funcs, v)
+		end
+	end
+	if isNeedSort and #funcs > 0 then
+		table.sort( funcs, function (a, b)
+			return a.sort < b.sort
+		end )
+	end
+	
+	return funcs
+end
+
+function _M.GetOpenedFuncs(fid, isNeedSort, mutexs)
+	local funcs = {}
+	local csvLines = Csv.FuncMap[fid]
+	if csvLines ~= nil and #csvLines > 0 then
+		for _,v in pairs(csvLines) do
+			if _M.FuncIsOpen(v.id) then
+				if mutexs == nil or mutexs[v.id] == nil or not _M.FuncIsOpen(mutexs[v.id]) then
+					table.insert(funcs, v)
+				end
+			end
+		end
+	end
+	if isNeedSort and #funcs > 0 then
+		table.sort( funcs, function (a, b)
+			return a.sort < b.sort
+		end )
+	end
+	
+	return funcs
+end
+
+function _M.GetFuncFathers(funcId)
+	local ret = {}
+	local funcCsv = Csv.Func[funcId]
+	while funcCsv ~= nil do
+		table.insert(ret, 1, funcCsv.id)
+		if funcCsv.fid ~= nil then
+			funcCsv = Csv.Func[funcCsv.fid]
+		else
+			break
+		end
+	end
+	if #ret == 0 then
+		table.insert(ret, funcId)
+	end
+	return ret
+end
+
+function _M.GuideIsDone( guideId )
+	return _M.Guides[guideId] == true
+end
+
+function _M.RedpointIsActive(funcId, ... )
+	local tab = _M.Redpoints
+	if tab.childs == nil or next(tab.childs) == nil then
+		return false
+	end
+	local list = _M.GetFuncFathers(funcId)
+	if select('#',...) > 0 then
+		for k,v in pairs({...}) do
+			table.insert(list, v)
+		end
+	end
+	
+	for k,v in pairs(list) do
+		if tab.childs[v] == nil then
+			return false
+		end
+		tab = tab.childs[v]
+		if tab.isActive ~= true then
+			return false
+		end
+	end
+	return tab.isActive
+end
+
+return _M

@@ -1,0 +1,107 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--界面构建
+function _M:OnCreate(onClose, data)
+	self.OnCloseCall = onClose
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudleName = "M_Bidding_Success"
+	if MBuyLand.IsAllIn()then
+		moudleName = "M_Bidding_Success2"
+	elseif (MBuyLand.rewardList == nil or #MBuyLand.rewardList == 0) and (data.attr == nil or #data.attr == 0) then
+		moudleName = "M_Bidding_Success_0"
+	end
+	local moudle = self:CreateMoudle(self._RootNode, moudleName)
+	self.Moudle = moudle
+	self.sucMoneyText = moudle:Get("Text1")
+	self.sucTips = moudle:Get("Text2")
+	self.rewardText = moudle:Get("Text3")
+	self.rewardContent = moudle:Get("content")
+
+	_P.Refresh(self, data)
+	SoundMgr.Play(10046)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), 10141)
+
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 1)
+end
+
+function _P.Refresh(self, data)
+	self.sucMoneyText.Text = Csv.Text("buyland_battle_suc",{num = MBuyLand.money})
+	self.sucTips.Text = Csv.Text("buyland_battle_suc2")
+	local landConf = Csv.BuyLandBattle[MBuyLand.GetLandID()]
+	if MBuyLand.IsAllIn() then
+		self.rewardText.Text = Csv.Text("buyland_allin_reward",{num = MBuyLand.landNum,assets = MBuyLand.assets})
+	else
+		self.rewardText.Text = Csv.Text("buyland_main_reward",{num = landConf.baseRewards[2][2],assets = landConf.baseRewards[1][2]})
+	end
+	
+	if self.rewardContent ~= nil then 
+		self.rewardContent:DestroyChildren()
+	end
+
+	if data.attr ~= nil then
+		for index, attr in pairs(data.attr) do
+			if attr.id ~= nil then
+				if attr.type == 1 then
+					local csvGirl = Csv.Girl[attr.id]
+					if csvGirl ~= nil then
+						local idesc = Csv.Text("buyland_main_girldesc",{name = csvGirl.name, num = attr.value})
+						CCommon.CreateItem(self.rewardContent, 1, CCommon.ShowItemTips, {name = csvGirl.name, desc = idesc, icon = csvGirl.icon}, Define.SysId.BuyLand)
+					end
+				else
+					local staffConf = Csv.Personnel[attr.id]
+					if staffConf ~= nil then
+						local lnum = attr.value
+						local textStr = (attr.type == 2 and "buyland_main_staffdesc") or "buyland_main_staffdesc2"
+						local idesc = Csv.Text(textStr,{name = staffConf.name, num = lnum})
+						CCommon.CreateItem(self.rewardContent, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset}, Define.SysId.BuyLand)
+					end
+				end
+			end
+		end
+	end
+	local rewardInfo = MBuyLand.GetRewardInfo()
+	if rewardInfo ~= nil then
+		for index,v in pairs(rewardInfo) do
+			CCommon.CreateItem(self.rewardContent, v.id, CCommon.ShowItemTips, {num = v.count}, Define.SysId.Lottery)
+		end
+	end
+	
+	_P.ShowTips(self)
+end
+
+function _P.ShowTips(self)
+	local tipsText = self.Moudle:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+return _M

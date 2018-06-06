@@ -1,0 +1,26 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy()
+	
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "{0}")
+	self.mMoudle = moudle
+end
+
+return _M

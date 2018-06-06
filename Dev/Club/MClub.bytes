@@ -1,0 +1,70 @@
+local _M = {}
+
+_M.ClubTable = {}             -- 游艇会主界面数据
+_M.InfoTable = {}             -- 历史消息数据
+_M.ExchangeTable = {}         -- 兑换商店数据
+_M.isShowSuccessPanel = false -- 是否打开举办成功界面
+_M.isShowGoPanel = false      -- 是否打开过渡loading界面
+_M.rewardPanelData = nil      -- 结算界面缓存数据
+_M.curPartyName = ""          -- 当前聚会举办者名字
+_M.CurJoinPartyId = 0         -- 当前进入聚会id，用于打开奖励界面用
+
+_M.InfoEnum = {
+	None = 0,
+	Mine = 1,
+	Enemy = 2,
+}
+
+
+function _M.Clean()
+	_M.ClubTable = {}
+	_M.InfoTable = {}
+	_M.ExchangeTable = {}
+
+	_M.isShowSuccessPanel = false
+	_M.isShowGoPanel = false
+	_M.rewardPanelData = nil
+	_M.curPartyName = ""
+	_M.CurJoinPartyId = 0
+end
+
+
+function _M.OnInitClubData(data)
+	_M.ExchangeTable = data.shop
+	_M.ClubTable.joinCount = data.joinCount
+	_M.InfoTable.mineList = data.hostHistList
+	_M.InfoTable.enemyList = data.jokerList
+	_M.ClubTable.score = data.score
+	_M.ClubTable.point = data.point
+end
+
+
+-- 刷新后，更新商店数据
+function _M.OnSetShopData(data)
+	_M.ExchangeTable = data
+end
+
+
+function _M.OnUpdateShopData(data)
+	local shopData =  _M.ExchangeTable
+	for k,v in pairs(shopData.itemList) do
+		if v.index == data.index then
+			v.buyCount = data.buyCount
+			break
+		end
+	end
+
+	shopData.point = data.point
+end
+
+
+function _M.OnSaveShipData(data)
+	_M.ClubTable.openFlag = data.openFlag
+
+	-- 缓存历史信息数据
+	_M.InfoTable.mineList = data.hostHistList
+	_M.InfoTable.enemyList = data.jokerList
+end
+
+
+return _M

@@ -1,0 +1,213 @@
+local luaPrint = print
+local luaError = error
+local Debugger = CS.Utility.Debugger
+
+-- local breakSocketHandle,debugXpCall = require("LuaDebug")("192.168.1.217", 7103)
+_Global = {}
+_G._Global = _Global
+
+local isEditor = CS.UnityEngine.Application.isEditor
+if isEditor then
+	print = function( ... )
+		local tbl = {}
+		for k,v in ipairs({...}) do
+			if v == nil then
+				tbl[k] = "nil"
+			else
+				tbl[k] = tostring(v)
+			end
+		end
+		local str = table.concat(tbl, ", ")
+		str = "<color=#00FF00FF>" .. str .. "</color>    " .. debug.traceback()
+		Debugger.Log(str)
+	end
+else
+	print = function( ... ) end
+end
+error = function( ... )
+	local tbl = {}
+	for k,v in ipairs({...}) do
+		if v == nil then
+			tbl[k] = "nil"
+		else
+			tbl[k] = tostring(v)
+		end
+	end
+	local str = table.concat(tbl, ", ")
+	str = "<color=#FF0000FF>" .. str .. "</color>    " .. debug.traceback()
+	Debugger.LogError(str)
+end
+warning = function( ... )
+	local tbl = {}
+	for k,v in ipairs({...}) do
+		if v == nil then
+			tbl[k] = "nil"
+		else
+			tbl[k] = tostring(v)
+		end
+	end
+	local str = table.concat(tbl, ", ")
+	str = "<color=#FFFF00FF>" .. str .. "</color>    " .. debug.traceback()
+	Debugger.LogWarning(str)
+end
+
+require "Libs.Class"
+rapidjson = require "rapidjson"
+
+CS.HotUp.RegistReloadLuaFunc(function ( luaName )
+	JRequireReload(luaName)
+end)
+CS.HotUp.RegistReloadCsvFunc(function ( csvName )
+	Csv.Reload(csvName)
+end)
+
+-- 初始化随机种子
+math.randomseed(os.time())
+
+--@RefType [luaIde.xluaApi.bytes#CS.UnityEngine.Vector2]
+Vector2 = CS.UnityEngine.Vector2
+--@RefType [luaIde.xluaApi.bytes#CS.UnityEngine.Vector3]
+Vector3 = CS.UnityEngine.Vector3
+--@RefType [luaIde.xluaApi.bytes#CS.UnityEngine.Vector4]
+Vector4 = CS.UnityEngine.Vector4
+--@RefType [luaIde.xluaApi.bytes#CS.UnityEngine.Color]
+Color = CS.UnityEngine.Color
+--@RefType [luaIde.xluaApi.bytes#CS.JGui.JGuiManager]
+JGuiManager = CS.JGui.JGuiManager
+GameObject = CS.UnityEngine.GameObject
+
+--@RefType [Dev.Libs.LuaUtil.bytes#_M]
+LuaUtil = JRequire "Libs.LuaUtil"
+--@RefType [Dev.Define.bytes#_M]
+Define = JRequire "Dev.Define"
+--@RefType [Dev.GameSetting.bytes#_M]
+GameSetting = JRequire "Dev.GameSetting"
+--@RefType [Libs.Csv.CsvReader.bytes#_M]
+Csv = JRequire "Libs.Csv.CsvReader"
+--@RefType [Libs.WindowMgr.WindowMgr.bytes#_M]
+WindowMgr = JRequire "Libs.WindowMgr.WindowMgr"
+--@RefType [Libs.Socket.SocketMgr.bytes#_M]
+SocketMgr = JRequire "Libs.Socket.SocketMgr"
+
+--系统注册
+local CLogin = JRequire "Dev.Login.CLogin"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+local CTalk = JRequire "Dev.Talk.CTalk"
+local CGirl = JRequire "Dev.Girl.CGirl"
+local CBag = JRequire "Dev.Bag.CBag"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+local CCompany = JRequire "Dev.Company.CCompany"
+local CQuest = JRequire "Dev.Quest.CQuest"
+local CBattle = JRequire "Dev.Battle.CBattle"
+local CWharf = JRequire"Dev.Wharf.CWharf"
+local CShop = JRequire "Dev.Shop.CShop"
+local CAchieve = JRequire "Dev.Achieve.CAchieve"
+local CAircraft = JRequire "Dev.Aircraft.CAircraft"
+local CMail = JRequire "Dev.Mail.CMail"
+local CRecharge = JRequire "Dev.Recharge.CRecharge"
+local CSetting = JRequire "Dev.Setting.CSetting"
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local CFinance = JRequire "Dev.Finance.CFinance"
+local CClub = JRequire "Dev.Club.CClub"
+local CParliament = JRequire "Dev.Parliament.CParliament"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local CWelfare = JRequire "Dev.Welfare.CWelfare"
+local CRank = JRequire "Dev.Rank.CRank"
+local CQuestionnaire = JRequire "Dev.Questionnaire.CQuestionnaire"
+local CTarget = JRequire "Dev.Target.CTarget"
+local CCar = JRequire "Dev.Car.CCar"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CVote = JRequire "Dev.Vote.CVote"
+local SoundClipPool = JRequire "Libs.Sound.SoundClipPool"
+local CLectures = JRequire "Dev.Lectures.CLectures"
+local CBuyLand = JRequire "Dev.BuyLand.CBuyLand"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+
+CS.Utility.LogPoint.LogPost(6, 2)
+
+GameSetting.Init()
+
+local prevImage = {
+	"Floor_alpha",	--Floor	
+	"ty_020",	--Box
+	"computer",	--VilaGirl
+	"ty_096",	--Main
+	"ty_juhua",	--Common
+}
+local firstStoryCsv = Csv.Story[101]
+if firstStoryCsv ~= nil then
+	if firstStoryCsv.bg ~= nil then
+		table.insert(prevImage, firstStoryCsv.bg)
+	end
+	if firstStoryCsv.box then
+		table.insert(prevImage, firstStoryCsv.box)
+	end
+end
+if #prevImage > 0 then
+	JGuiManager.PrevLoadImage(prevImage)
+end
+
+local cachedObj = GameObject("prevCachedObj")
+cachedObj:SetActive(false)
+JGuiManager.GetMoudle(cachedObj.transform, "M_Main_UMain")
+JGuiManager.GetMoudle(cachedObj.transform, "M_World_Map")
+JGuiManager.GetMoudle(cachedObj.transform, "M_Guidance_Story")
+local homeMapMoudle = JGuiManager.GetMoudle(cachedObj.transform, "M_Villa")
+local DB_MaidGirl = homeMapMoudle:Get("DB_MaidGirl")
+local DB_SecretaryGirl = homeMapMoudle:Get("DB_SecretaryGirl")
+local DB_Child = homeMapMoudle:Get("DB_Child")
+local DB_Girl = homeMapMoudle:Get("DB_Girl")
+local DB_MatchMaker = homeMapMoudle:Get("DB_MatchMaker")
+local SkyActor = homeMapMoudle:Get("SkyActor")
+local SwimActor = homeMapMoudle:Get("SwimActor")
+CCommon.CreateEffect(homeMapMoudle:Get("SkyActor"),10084)
+CCommon.CreateEffect(homeMapMoudle:Get("SwimActor"),10085)
+_Global._CachedObjects = {
+	parent = cachedObj,
+	effects = {
+		DB_MaidGirl = DB_MaidGirl,
+		DB_SecretaryGirl = DB_SecretaryGirl,
+		DB_Child = DB_Child,
+		DB_Girl = DB_Girl,
+		DB_MatchMaker = DB_MatchMaker,
+		SkyActor = SkyActor,
+		SwimActor = SwimActor,
+	}
+}
+
+local prevLoadSoundIds = {102, 100, 10001, 10002}
+for _,id in pairs(prevLoadSoundIds) do
+	local soundCsv = Csv.Sound[id]
+	if soundCsv ~= nil then
+		SoundClipPool.PrevLoadSound(soundCsv.asset[1])
+		SoundClipPool.SetNoDel(soundCsv.asset[1])
+	end
+end
+
+--提前加载CSV
+local battleLine = Csv.Battle[10101]
+local battleLine = Csv.CarUpQualification[37001000]
+local storyLine = Csv.Story[101]
+
+print("logic start")
+
+CTrigger.Init()
+
+if not GameSetting.IsiOSCommit then
+	CCommon.CreateEffect(homeMapMoudle:Get("DB_MaidGirl"), 20002)
+	CCommon.CreateEffect(homeMapMoudle:Get("DB_SecretaryGirl"), 20003)
+	CCommon.CreateEffect(homeMapMoudle:Get("DB_Child"), 20004)
+	CCommon.CreateEffect(homeMapMoudle:Get("DB_Girl"), 20005)
+	CCommon.CreateEffect(homeMapMoudle:Get("DB_MatchMaker"), 20006)
+end
+
+--SDK注册
+local SDKMgr = JRequire "SDK.SDKMgr"
+SDKMgr.Init()
+
+--开始登陆
+CLogin.Init()

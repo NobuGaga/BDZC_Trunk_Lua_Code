@@ -1,0 +1,175 @@
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Relations.CRelations.bytes#_M]
+local CRelations = JRequire "Dev.Relations.CRelations"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+local CParliament = JRequire "Dev.Parliament.CParliament"
+local CRank = JRequire "Dev.Rank.CRank"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CmdId = 
+{
+	cGuideDone = 1,
+	cStoryDone = 2,
+
+	sInit = 1,
+	sFuncUpdate = 2,
+}
+
+function _M.ModuleClean()
+	MMain.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CmdId.cGuideDone]	= "PMain.CGuideDone",
+		[CmdId.cStoryDone]	= "PMain.CStoryDone",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CmdId.sInit] = {			proto = "PMain.SInit", 		handle = _P.OnInit},
+		[CmdId.sFuncUpdate] = {		proto = "PMain.SFuncUpdate", 	handle = _P.OnFuncUpdate},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.SysOpen, func_send, func_recv, isReload)	
+end
+
+function _M.OnGuideDone(guideCsv)
+	MMain.Guides[guideCsv.id] = true
+
+	if guideCsv.done ~= nil and #guideCsv.done > 0 then
+		_M.Send(CmdId.cGuideDone, {guideid = guideCsv.id})
+	end
+end
+
+function _M.OnStoryDone(storyID)
+	if GameSetting.isFirst and storyID ~= nil then
+		_M.Send(CmdId.cStoryDone, {storyid = storyID})
+	end
+end
+
+--功能开放列表
+function _P.OnInit(msg)
+	local openedFuns = {}
+	local finishGuides = {}
+	if msg.funcList ~= nil then
+		for _,v in pairs(msg.funcList) do
+			openedFuns[v] = true
+		end
+	end
+	if msg.guideList ~= nil then
+		for _,v in pairs(msg.guideList) do
+			finishGuides[v] = true
+		end
+	end
+	MMain.Funcs = openedFuns
+	MMain.Guides = finishGuides
+end
+
+--功能开放刷新
+function _P.OnFuncUpdate(msg)
+	if msg.list ~= nil then
+		for k,v in pairs(msg.list) do
+			MMain.Funcs[v.funcId] = v.isOpen
+
+			EventCenter.CallEventTrigger(Define.EventListenId.FuncOpenEvent, v.funcId, v.isOpen)
+
+			if v.funcId == Define.SysId.Relations and v.isOpen then
+				CRelations.CMainInit()
+			elseif v.funcId == Define.SysId.Aircraft and v.isOpen then
+				WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+			elseif v.funcId == Define.SysId.Rank and v.isOpen then
+				CRank.CheckRankRedPoint()
+			elseif v.funcId == Define.SysId.Parliament and v.isOpen then
+				CParliament.RefreshParRedPoint()
+			end
+		end
+	end
+end
+
+--[[
+    @desc: 小红点开关
+    author:{author}
+    time:2017-11-02 11:34:21
+    --@isActive: 是否为激活状态
+	--@sysId: Define.SysId
+	--@args: 索引列表 -- 从SysId开始查找到对应产生小红点的索引列表
+    return
+]]
+function _M.UpdateRedpoint(isActive, funcId, ... )
+	local pairs = pairs
+	local insert = table.insert
+	local unpack = table.unpack
+	local next = next
+
+	local list = MMain.GetFuncFathers(funcId)
+	if select('#',...) > 0 then
+		for k,v in pairs({...}) do
+			insert(list, v)
+		end
+	end
+
+	local checkActive = function (t)
+		local isActive = false
+		for k,v in pairs(t.childs) do
+			if v.isActive == true then
+				isActive = true
+				break
+			end
+		end
+		return isActive
+	end
+	local tab = MMain.Redpoints
+	for k,v in pairs(list) do
+		if tab.childs[v] == nil then
+			tab.childs[v] = {childs = {}, parent = tab, isActive = false, indexs = {unpack(list, 1, k)}}
+		end
+		tab = tab.childs[v]
+	end
+	local setChildsActivityState
+	setChildsActivityState = function (childs, state)
+		for k,v in pairs(childs) do
+			if v.isActive ~= state then
+				v.isActive = state
+				WindowMgr.OnRedpointUpdate(state, unpack(v.indexs))
+
+				if v.childs ~= nil then
+					setChildsActivityState(v.childs, state)
+				end
+			end
+		end
+	end
+
+	if tab.isActive ~= isActive then
+		tab.isActive = isActive
+		WindowMgr.OnRedpointUpdate(isActive, unpack(tab.indexs))
+
+		if tab.childs ~= nil and isActive == false then
+			setChildsActivityState(tab.childs, false)
+		end
+
+		local parent = tab.parent
+		while parent ~= nil and parent.indexs ~= nil do
+			if parent.isActive ~= checkActive(parent) then
+				parent.isActive = not parent.isActive
+				WindowMgr.OnRedpointUpdate(parent.isActive, unpack(parent.indexs))
+
+				parent = parent.parent
+			else
+				break
+			end
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,89 @@
+-- 参加宴会成功后，结束界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CClub = JRequire "Dev.Club.CClub"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ACTORID = 10020
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Reward")
+	if data == nil or module == nil then return end
+
+	self.mModule = module
+	module:Get("congratulationText").Text = Csv.Text("club_reward_congratulation")
+	module:Get("totalText").Text = Csv.Text("club_reward_total", {num = data.totalNum})
+	module:Get("awardText").Text = Csv.Text("club_reward_desc")
+	module:Get("scoreText").Text = Csv.Text("club_ing_scoreInfo")
+	module:Get("scoreNum").Text = (data.score < 0 and 0) or data.score
+	module:Get("pointText").Text = Csv.Text("club_reward_point")
+	module:Get("pointNum").Text = (data.point < 0 and 0) or data.point
+	module:Get("joinText").Text = Csv.Text("club_reward_show")
+	module:Get("ranking").Text = Csv.Text("club_reward_xuhao")
+	module:Get("name").Text = Csv.Text("club_rank_name")
+	module:Get("Fraction").Text = Csv.Text("club_reward_fenshu")
+	module:Get("C_text").Text = Csv.Text("common_sure")
+
+	_P.SetMsgList(self, data.msgList)
+
+	local confirmBtn = module:Get("C_Btn_b")
+	confirmBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CClub.OnGetRewardReq()
+		self:Destroy()
+	end)
+
+	CCommon.CreateEffect(module:Get("ActorPanel"), ACTORID)
+end
+
+
+function _P.SetMsgList(self, msgList)
+	local itemGrid = self.mModule:Get("content")
+	if itemGrid == nil then return end
+
+	local msgList = _P.GetSortList(msgList)
+	for k,v in ipairs(msgList) do
+		_P.OnCreateMsgItem(v, itemGrid, k)
+	end
+end
+
+
+-- 排序
+function _P.GetSortList(msgList)
+	if msgList == nil then return {} end
+	
+	local sortList = msgList
+	table.sort(sortList, function (a, b)
+		return a.enterTime < b.enterTime
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateMsgItem(data, contentTransform, index)
+	local itemModule = JGuiManager.GetMoudle(contentTransform, "M_Club_RewardNum_Item", WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	itemModule:Get("Num").Text = index
+	itemModule:Get("name").Text = data.name
+	itemModule:Get("value").Text = ((data.score >= 0 and '+') or '') .. data.score	
+end
+
+
+return _M

@@ -1,0 +1,24 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:OnCreate(ruleId)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_URule")
+	local csvLine = Csv.Rule[ruleId]
+	moudle:Get("Title").Text = csvLine.title
+	moudle:Get("Text").Text = csvLine.text
+	moudle:Get("BtnClose"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 0.9)
+end
+
+return _M

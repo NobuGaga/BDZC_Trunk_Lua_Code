@@ -1,0 +1,68 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+--界面构建
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_PromoteSucPop")
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+	local csvStar = Csv.ColorUp[data.color - 1]
+	local csvStarUp = Csv.ColorUp[data.color]
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+	self:Destroy()
+	end, nil, 0.9)
+
+	SoundMgr.Play(10013)
+	local ImgIcon = moudle:Get("Icon")
+	ImgIcon.SpriteName = Csv.Personnel[id].asset2
+
+	local TextTitle = moudle:Get("Title")
+	TextTitle.Text = Csv.Text("staff_prosuc")
+
+	local TextName = moudle:Get("Name")
+	TextName.Text = Csv.Personnel[id].name
+
+	local TextStar = moudle:Get("Star")
+	if data.color <= 1 then
+		TextStar.Text = Csv.Text("staff_nowstarN")
+	else
+		TextStar.Text = Csv.Text("staff_prostar",{num = Csv.Text("staff_star"..data.color - 1)})
+	end
+	local TextStarUp = moudle:Get("StarUp")
+	TextStarUp.Text = Csv.Text("staff_star"..data.color)
+
+	local TextLevel = moudle:Get("Level")
+	TextLevel.Text = Csv.Text("staff_maxlevel",{num = csvStar.lvMax})
+	local TextLevelUp = moudle:Get("LevelUp")
+	TextLevelUp.Text = Csv.Text("staff_ji",{num = csvStarUp.lvMax})
+
+	local TextBook = moudle:Get("Book")
+	TextBook.Text = Csv.Text("staff_probook",{num = csvStar.bookMaxLv})
+	local TextBookUp = moudle:Get("BookUp")
+	TextBookUp.Text = Csv.Text("staff_ji",{num = csvStarUp.bookMaxLv})
+
+	local TextAward = moudle:Get("Award")
+	TextAward.Text = Csv.Text("staff_proaward",{num = _P.GetAwardToString(csvStar.item,csvStar.bookExp)})
+end
+
+function _P.GetAwardToString(items,bookExp)
+	local str = ""
+	if items ~= nil then
+		for k,v in pairs(items) do
+			local strItem = Csv.Item[v[1]].name.."+"..v[2].." "
+			str = str..strItem
+		end
+	end
+	if bookExp ~= nil and bookExp > 0 then
+		str = str..Csv.Item[Define.AssetsType.Bookexp].name.."+"..bookExp
+	end
+	return str
+end
+
+return _M

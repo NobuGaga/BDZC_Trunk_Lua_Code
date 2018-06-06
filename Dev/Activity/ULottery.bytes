@@ -1,0 +1,692 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local Linear = CS.DG.Tweening.Ease.Linear
+local FLY_TYPE = CS.JTween.JTweenerType.LocalAngleZ
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local NUM_REWARD_COUNT = 4
+local ITEM_COUNT = 12
+local GTE_EFFECT_ID = 5
+
+--删除界面前调用
+function _M:BeforeDestroy( ... )
+	CActivity.ReqLotteryClose()
+
+	if self.TenWindowPopHandle ~= 0 then
+		TimeDelay.SetValid(self.TenWindowPopHandle, false)
+	end
+	if self.GoodItemFxHandle ~= 0 then
+		TimeDelay.SetValid(self.GoodItemFxHandle, false)
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateInfo(self, actId)
+	local info = MActivity.GetFromId(actId)
+	if info == nil or info.state.state ~= MActivity.ActivityState.Doing then
+		self.LeftBtn.IsGray = true
+		self.LeftBtn.RaycastTarget = false
+		self.RightBtn.IsGray = true
+		self.RightBtn.RaycastTarget = false
+	end
+
+	if info == nil or info.state.state == MActivity.ActivityState.Close then
+		local isHaveCanGet = false
+		for index = 1,NUM_REWARD_COUNT do
+			local widgetInfo = self.NumGetList[index]
+			if widgetInfo.getedSp ~= nil then
+				widgetInfo.getedSp.Activity = false
+			end
+		end
+		if isHaveCanGet then
+			self.GetBtn.IsGray = false
+			self.GetBtn.RaycastTarget = true
+		else
+			self.GetBtn.IsGray = true
+			self.GetBtn.RaycastTarget = false
+		end
+	end
+
+	if info ~= nil and actId > 0 then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+			if info.state.state == MActivity.ActivityState.Doing then
+				self.LeftBtn.IsGray = false
+				self.LeftBtn.RaycastTarget = true
+				self.RightBtn.IsGray = false
+				self.RightBtn.RaycastTarget = true
+			end
+		else
+			_P.DoUpdateTodayNum(self)
+		end
+	end
+end
+
+function _P.playGoodItemFx(self, itemList, callBack)
+	local isNeedShow = false
+	for k,v in pairs(itemList) do
+		local csv = Csv.LotteryItem[v]
+		if csv ~= nil and csv.type == 1 then
+			isNeedShow = true
+			break
+		end
+	end
+	if isNeedShow then
+		self.GoodItemFx = CCommon.CreateEffectEx(self._RootNode, 10150)
+		self.GoodItemFxHandle = TimeDelay.DelayCall(1.4, false, function( ... )
+			self.GoodItemFxHandle = 0
+			callBack()
+			if self.GoodItemFx ~= nil then
+				self.GoodItemFx:Destroy()
+				self.GoodItemFx = nil
+			end
+		end)
+	else
+		callBack()
+	end
+end
+
+function _R.OnLottery(self, actId, itemList)
+	local info = MActivity.GetFromId(actId)
+	if info ~= nil then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+		else
+			_P.DoUpdateTodayNum(self)
+
+			local lotteryCsv = Csv.Lottery[self.ActId]
+			if lotteryCsv ~= nil then
+				if itemList ~= nil and #itemList > 0 then
+					if self.TenWindowPopHandle ~= 0 then
+						TimeDelay.SetValid(self.TenWindowPopHandle, false)
+						self.TenWindowPopHandle = 0
+					end
+					if self.GoodItemFxHandle ~= 0 then
+						TimeDelay.SetValid(self.GoodItemFxHandle, false)
+						self.GoodItemFxHandle = 0
+					end
+					if self.GoodItemFx ~= nil then
+						self.GoodItemFx:Destroy()
+						self.GoodItemFx = nil
+					end
+					local moudle = self.mModule
+					local last = itemList[#itemList]
+					for index=1,ITEM_COUNT do
+						if last == lotteryCsv.items[index] then
+							if self.FlyTweener ~= nil then
+								self.FlyTweener:DOKill()
+							end
+							self.ChooseNode.Activity = false
+							local toRot = self.ArrowNode.LocalEulerAngles
+							toRot.z = toRot.z % -360
+							self.ArrowNode.LocalEulerAngles = toRot
+							toRot.z = -360 * 12 - (index - 1) * 30
+							self.FlyTweener = self.ArrowNode.CachedTran:GetJTweener("T_Lottery_Fly")
+							local tween = self.FlyTweener:GetTweenForType(FLY_TYPE)
+							tween.ToAngleZ = toRot.z
+							if #itemList > 1 then
+								tween.Duration = 3
+							end
+							self.FlyTweener:SetOnComplete(function ( ... )
+								if self.ArrowNode ~= nil then
+									toRot.z = toRot.z % -360
+									self.ArrowNode.LocalEulerAngles = toRot
+									self.ChooseNode.LocalEulerAngles = toRot
+									self.ChooseNode.Activity = true
+
+									if info.state.state == MActivity.ActivityState.Doing then
+										self.LeftBtn.IsGray = false
+										self.LeftBtn.RaycastTarget = true
+										self.RightBtn.IsGray = false
+										self.RightBtn.RaycastTarget = true
+									end
+
+									if #itemList == 1 then
+										_P.playGoodItemFx(self, itemList, function( ... )
+											if self._RootNode ~= nil then
+												local lotteryItemCsv = Csv.LotteryItem[last]									
+												CCommon.ShowFlyItem(self._RootNode, lotteryItemCsv.item, lotteryItemCsv.num, 0, moudle:Get("IconBox"..index).RootCanvasPos)
+											end
+										end)										
+									end
+								end
+
+								_P.StartPlayLight(self)
+							end)
+							self.FlyTweener:Play()
+							_P.DoFlyLight(self)
+							break
+						end
+					end
+
+					if #itemList > 1 then
+						self.TenWindowPopHandle = TimeDelay.DelayCall(0.6, false, function( ... )
+							self.TenWindowPopHandle = 0
+							if self.ArrowNode ~= nil then
+								_P.playGoodItemFx(self, itemList, function( ... )
+									WindowMgr.Create("ULotteryTenReward", itemList)
+								end)
+							end
+						end)
+					end
+				else
+					if info.state.state == MActivity.ActivityState.Doing then
+						self.LeftBtn.IsGray = false
+						self.LeftBtn.RaycastTarget = true
+						self.RightBtn.IsGray = false
+						self.RightBtn.RaycastTarget = true
+					end
+				end
+			else
+				if info.state.state == MActivity.ActivityState.Doing then
+					self.LeftBtn.IsGray = false
+					self.LeftBtn.RaycastTarget = true
+					self.RightBtn.IsGray = false
+					self.RightBtn.RaycastTarget = true
+				end
+			end
+		end
+	end
+end
+
+function _R.OnLotteryNumGet(self, actId, getNum, getRewards)
+	local info = MActivity.GetFromId(actId)
+	if info ~= nil then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+		elseif getNum > 0 then
+			local lotteryCsv = Csv.Lottery[self.ActId]
+			local isHaveCanGet = false
+			if lotteryCsv ~= nil then
+				for index=1,NUM_REWARD_COUNT do
+					local num = lotteryCsv.num[index]
+					if num == getNum then
+						local widgetInfo = self.NumGetList[index]
+						local effect
+						SoundMgr.PlaySystem(10004)
+						SoundMgr.Play(11000)
+						effect = CCommon.CreateEffect(self.NumItemRoot, GTE_EFFECT_ID, widgetInfo.getedSp.LocalPosition, function( ... )	
+							if effect ~= nil then
+								effect:Destroy()
+							end
+							_P.DoUpdateTodayNum(self)
+						end)
+
+						if getRewards ~= nil then
+							for index,item in pairs(getRewards) do
+								CCommon.ShowFlyItem(self._RootNode, item.key, item.value, index * 0.3, widgetInfo.itemBG.RootCanvasPos + Vector2(0, 60))
+							end
+						end
+
+						break
+					end
+				end
+			end
+		end
+	end 
+end
+
+function _R.OnLotteryMsg(self, actId)
+	local msgs = MActivity.LotteryMessage
+	if msgs == nil or #msgs < 1 then
+		if self.MsgText ~= nil and self.MsgStop then
+			self.MsgText:DOKill()
+			self.MsgIndex = 0
+			self.MsgText.Text = ""
+		end
+	elseif #msgs > self.MsgIndex then
+		if self.MsgText ~= nil and (self.MsgIndex == 0 or self.MsgStop) then
+			_P.DoMessage(self)
+		end
+	end	
+end
+
+function _P.DoMessage(self)
+	local msgs = MActivity.LotteryMessage
+	if msgs == nil or #msgs < 1 then
+		self.MsgIndex = 0
+		if self.MsgText ~= nil then
+			self.MsgText.Text = ""
+			self.MsgText:DOKill()
+		end
+		return
+	end
+	if msgs ~= nil and #msgs > self.MsgIndex and self.MsgText ~= nil then
+		self.MsgText:DOKill()
+		if self.MsgStop then
+			self.MsgStop = false
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 230, 0)
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 460, 3)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				_P.DoMessage(self)
+			end)
+		else
+			self.MsgText.LocalPosition = Vector2.zero
+			self.MsgIndex = self.MsgIndex + 1
+			local msgInfo = msgs[self.MsgIndex]
+			local itemCsv = Csv.Item[msgInfo.itemId]
+			self.MsgText.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})	
+			if self.MsgIndex == #msgs then
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth/2 - 230, 3)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					self.MsgStop = true
+					_P.DoMessage(self)
+				end)
+			else
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 460, 6)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					_P.DoMessage(self)
+				end)
+			end
+		end		
+	elseif self.MsgText ~= nil then
+		self.MsgStop = true
+		self.MsgText:DOKill()
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 230, 0)
+	end
+end
+
+
+function _P.DoUpdateTodayNum(self)
+	if self.GetBtn ~= nil then
+		local isHaveCanGet = false
+		if self.ActId > 0 then
+			local info = MActivity.GetFromId(self.ActId)
+			if info ~= nil then
+				self.TodayNumText.Text = tostring(info.todayNum)
+				local lotteryCsv = Csv.Lottery[self.ActId]
+				if lotteryCsv ~= nil then
+						
+					for index = 1,NUM_REWARD_COUNT do
+						local widgetInfo = self.NumGetList[index]
+						local num = lotteryCsv.num[index]
+						widgetInfo.proText.Text = Csv.Text("lottery_8", {cur = info.todayNum, max = num})
+						if info.todayNum >= num then
+							if info.numGets[num] then 
+								widgetInfo.getedSp.Activity = true
+							else
+								isHaveCanGet = true
+								widgetInfo.getedSp.Activity = false
+							end
+						else
+							isHaveCanGet = true
+							widgetInfo.getedSp.Activity = false
+						end
+					end
+				else
+					error("lotteryCsv error!!",self.ActId )
+				end
+			end
+		end
+
+		if isHaveCanGet then
+			self.GetBtn.IsGray = false
+			self.GetBtn.RaycastTarget = true
+		else
+			self.GetBtn.IsGray = true
+			self.GetBtn.RaycastTarget = false
+		end
+	end
+end
+
+function _P.DoUpdateTime(self)
+	if self.ActId > 0 then
+		local info = MActivity.GetFromId(self.ActId)
+		if info ~= nil then
+			if self.TimeText ~= nil then			
+				self.TimeText.Text = Csv.Text("timelimit_last_time", {startTime = LuaUtil.TransToMD(info.state.startTime),
+					endTime = LuaUtil.TransToMD(info.state.endTime) .. " " .. LuaUtil.TransToHMS(info.state.endTime)})
+			end
+			if self.TimeTips ~= nil then
+				if info.isFree then
+					self.TimeTips.Text = Csv.Text("lottery_11")
+				else
+					local now = HeartBeat.ServSecond()
+					self.TimeTips.Text = CS.Utility.Utils.FormatSeconds(math.max(0, LuaUtil.NextDayTime(now) - now), Csv.Text("lottery_7"))
+				end			
+			end
+		end
+	end
+end
+
+local ITEM_LIGHT_SIZE = Vector2(126, 126)
+function _P.ChangeActID(self)
+	local lotteryCsv = Csv.Lottery[self.ActId]
+	if lotteryCsv ~= nil then
+		local moudle = self.mModule
+		moudle:Get("Banner").SpriteName = lotteryCsv.image
+		moudle:Get("C_Text").Text = lotteryCsv.title
+		_P.DoUpdateTime(self)
+		if lotteryCsv.oneCost[1] ~= Define.AssetsType.Gold then
+			moudle:Get("Price1").SpriteName = Csv.Item[lotteryCsv.oneCost[1]].miniIcon
+		end
+		if lotteryCsv.tenCost[1] ~= Define.AssetsType.Gold then
+			moudle:Get("Price2").SpriteName = Csv.Item[lotteryCsv.tenCost[1]].miniIcon
+		end
+		moudle:Get("PriceNum1").Text = tostring(lotteryCsv.oneCost[2])
+		moudle:Get("PriceNum2").Text = tostring(lotteryCsv.tenCost[2])
+		if self.ItemLight ~= nil then
+			for k,v in pairs(self.ItemLight) do
+				if v ~= nil then
+					v:Destroy()
+				end
+			end
+		end
+		self.ItemLight = {}
+		for index = 1,NUM_REWARD_COUNT do
+			local num = lotteryCsv.num[index]
+			local reward = lotteryCsv.reward[index]
+			local itemId = reward[1]
+			local itemCsv = Csv.Item[itemId]
+			local itemSp = moudle:Get("Num_Item"..index)
+			itemSp.SpriteName = itemCsv.colorIcon
+			moudle:Get("Num_Icon"..index).SpriteName = itemCsv.icon
+			moudle:Get("Num_Text"..index).Text = tostring(reward[2])
+			itemSp:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				CCommon.ShowItemTips(itemId)
+			end)
+			local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
+			if itemLightSp ~= nil then
+				table.insert(self.ItemLight, itemLightSp)
+			end
+		end
+		local itemIndex = lotteryCsv.items
+		for index=1,ITEM_COUNT do
+			local lotterItemCsv = Csv.LotteryItem[itemIndex[index]]
+			local itemId = lotterItemCsv.item
+			local itemCsv = Csv.Item[itemId]
+			local itemSp = moudle:Get("IconBox"..index)
+			itemSp.SpriteName = itemCsv.colorIcon
+			moudle:Get("Icon"..index).SpriteName = itemCsv.icon
+			moudle:Get("Num"..index).Text = "x" .. lotterItemCsv.num
+			itemSp:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				CCommon.ShowItemTips(itemId)
+			end)
+			if lotterItemCsv.broadcast == 1 or lotterItemCsv.broadcast == 2 then
+				local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
+				if itemLightSp ~= nil then
+					itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE
+					table.insert(self.ItemLight, itemLightSp)
+				end
+			end
+		end
+		_R.OnUpdateInfo(self, self.ActId)
+	else
+		error("lotteryCsv error!!",self.ActId )
+	end
+end
+
+function _P.DoToReqLottery(self, num)
+	CActivity.ReqLottery(num)
+	
+	if self.LeftBtn ~= nil then
+		self.LeftBtn.IsGray = true
+		self.LeftBtn.RaycastTarget = false
+		self.RightBtn.IsGray = true
+		self.RightBtn.RaycastTarget = false
+	end
+end
+function _P.ToReqLottery(self, num)
+	if self.ActId > 0 then
+		local lotteryCsv = Csv.Lottery[self.ActId]
+		if lotteryCsv ~= nil then
+			if num == 1 then
+				local info = MActivity.GetFromId(self.ActId)
+				if info ~= nil then
+					if info.isFree then
+						_P.DoToReqLottery(self, num)
+					elseif MBag.CheckItemEnough(lotteryCsv.oneCost[1], lotteryCsv.oneCost[2]) then
+						_P.DoToReqLottery(self, num)
+					end
+				end
+			else
+				if MBag.CheckItemEnough(lotteryCsv.tenCost[1], lotteryCsv.tenCost[2]) then
+					_P.DoToReqLottery(self, num)
+				end
+			end
+		end		
+	end
+end
+
+local LightAngle = 
+{
+	[1] = {startAngle = 15, endAngle = 345},
+	[2] = {startAngle = 345, endAngle = 315},
+	[3] = {startAngle = 315, endAngle = 285},
+	[4] = {startAngle = 285, endAngle = 255},
+	[5] = {startAngle = 255, endAngle = 225},
+	[6] = {startAngle = 225, endAngle = 195},
+	[7] = {startAngle = 195, endAngle = 165},
+	[8] = {startAngle = 165, endAngle = 135},
+	[9] = {startAngle = 135, endAngle = 105},
+	[10] = {startAngle = 105, endAngle = 75},
+	[11] = {startAngle = 75, endAngle = 45},
+	[12] = {startAngle = 45, endAngle = 15},
+}
+
+function _P.DoFlyLight(self)
+	local moudle = self.mModule
+	if moudle ~= nil then
+		if self.LightTweener ~= nil then
+			self.LightTweener:DOKill()
+		end
+		if self.FlyUpdate ~= nil then
+			self.FlyUpdate:Destroy()
+		end
+		for k,v in pairs(self.Lights) do
+			v.widget.Alpha = 0
+			v.alpha = 0
+		end
+		moudle:Get("lightFlash1"):AddCanvasGroup().alpha = 0
+		moudle:Get("lightFlash2"):AddCanvasGroup().alpha = 0
+		moudle:Get("yellowFlash1"):AddCanvasGroup().alpha = 1
+		moudle:Get("yellowFlash2"):AddCanvasGroup().alpha = 1
+		self.FlyUpdate = moudle:Get("LightRoot"):AddOnUpdate(function ( ... )
+			local angle = self.ArrowNode.LocalEulerAngles.z
+			local toAlpha = 0
+			local angleMap
+			for index,lightInfo in pairs(self.Lights) do
+				angleMap = LightAngle[index]
+				if index == 1 then
+					if angle < angleMap.startAngle then
+						toAlpha = 1 - angle / 15
+					elseif angle > angleMap.endAngle then
+						toAlpha = 1 - (360 - angle) / 15
+					else
+						toAlpha = 0
+					end
+				else
+					if angle < angleMap.startAngle and angle > angleMap.endAngle then
+						if angle < angleMap.startAngle - 15 then
+							toAlpha = 1 - (angleMap.startAngle - 15 - angle) / 15
+						else
+							toAlpha = (angleMap.startAngle - angle) / 15
+						end
+					else
+						toAlpha = 0
+					end
+				end
+				if toAlpha > 0.1 then
+					toAlpha = math.min(1, toAlpha + 0.2)
+				end
+				if toAlpha ~= lightInfo.alpha then
+					lightInfo.widget.Alpha = toAlpha
+					lightInfo.alpha = toAlpha
+				end
+			end
+		end, nil, -1)
+	end
+end
+
+function _P.StartPlayLight(self)
+	local moudle = self.mModule
+	if moudle ~= nil then
+		if self.LightTweener ~= nil then
+			self.LightTweener:DOKill()
+		end
+		if self.FlyUpdate ~= nil then
+			self.FlyUpdate:Destroy()
+		end
+		moudle:Get("lightFlash1"):AddCanvasGroup().alpha = 1
+		moudle:Get("lightFlash2"):AddCanvasGroup().alpha = 0
+		moudle:Get("yellowFlash1"):AddCanvasGroup().alpha = 0
+		moudle:Get("yellowFlash2"):AddCanvasGroup().alpha = 1
+		for k,v in pairs(self.Lights) do
+			v.widget.Alpha = 1
+			v.alpha = 1
+		end
+		self.LightTweener = moudle:Get("LightRoot").CachedTran:GetJTweener("T_LotteryLight")
+		self.LightTweener:Play()
+	end
+end
+
+function _M:OnCreate()
+	self.ActId = 0
+	local data = MActivity.GetListFromType(Define.ActivityType.Lottery)
+	if data ~= nil then
+		for k,v in pairs(data) do
+			self.ActId = k
+			break
+		end
+	else
+		error("Lottery info is nil")
+	end
+	self.TenWindowPopHandle = 0
+	self.GoodItemFxHandle = 0
+	local moudle = self:CreateMoudle(self._RootNode, "M_Luck_Draw")
+	self.mModule = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	self.AssetText = moudle:Get("AssetNum_2")
+	self.AssetNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	self.AssetText.Text = tostring(self.AssetNum)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd)
+		if itemId == Define.AssetsType.Gold and self.AssetText ~= nil then
+			local nowNum = MBag.GetItemNum(Define.AssetsType.Gold)
+			if self.AssetNum ~= nowNum then
+				local lastNum = self.AssetNum
+				self.AssetNum = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if self.AssetText ~= nil then self.AssetText.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if self.AssetText ~= nil then self.AssetText.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold)) end
+					end)
+					t:SetTarget(self.AssetText.CachedTran)
+				else
+					self.AssetText.Text = LuaUtil.NumberFormat(nowNum)
+				end	
+			end
+		end
+	end)
+	self.TimeText = moudle:Get("Time")
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.DoUpdateTime(self)
+	end)
+	moudle:Get("Title").Text = Csv.Text("lottery_1")
+	moudle:Get("Record").Text = Csv.Text("lottery_3")
+	local moreBtn = moudle:Get("More")
+	moreBtn.Text = Csv.Text("lottery_4")
+	moreBtn:AddOnButton(function ( ... )
+		WindowMgr.Create("ULotteryMsg")
+	end, nil, 1.2)
+	self.TodayNumText = moudle:Get("TitleNum")
+	self.MsgText = moudle:Get("MsgText")
+	self.MsgIndex = 0
+	self.MsgStop = false
+	moudle:Get("C_text_3").Text = Csv.Text("lottery_5")
+	moudle:Get("C_text_4").Text = Csv.Text("lottery_6")
+	self.LeftBtn = moudle:Get("C_Btn_a_0")
+	self.RightBtn = moudle:Get("C_Btn_b_0")
+	self.LeftBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.ToReqLottery(self, 1)
+	end)
+	self.RightBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.ToReqLottery(self, 10)
+	end)
+	moudle:Get("Num_BtnText1").Text = Csv.Text("quest_get")
+	self.GetBtn = moudle:Get("Num_Btn1")
+	self.GetBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		--6.12修改, 不管传什么, 服务端自己算第几个
+		CActivity.ReqLotteryNumGet(10)
+	end)
+	self.TimeTips = moudle:Get("TimeTips")
+	self.NumGetList = {}
+	self.NumItemRoot = moudle:Get("Num_Info")
+	for i=1,NUM_REWARD_COUNT do
+		table.insert(self.NumGetList, {
+			itemBG = moudle:Get("Num_Item"..i),
+			proText = moudle:Get("frequency"..i),
+			getedSp = moudle:Get("get"..i),
+		})
+	end
+	self.ChooseNode = moudle:Get("ChooseNode")
+	self.ChooseNode.Activity = false
+	self.ArrowNode = moudle:Get("ArrowNode")
+	self.ChooseIndex = 1
+	self.Lights = {}
+	for i=1,ITEM_COUNT do
+		table.insert(self.Lights, {widget = moudle:Get("yellow"..i), alpha = 1})
+	end	
+	_P.StartPlayLight(self)
+
+	if self.ActId > 0 then
+		_P.ChangeActID(self)
+	else
+		error("Lottery actId error", self.ActId)
+	end
+	self.GoodItemFx = nil
+	CActivity.ReqLotteryOpen()
+end
+
+return _M

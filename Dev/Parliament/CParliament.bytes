@@ -1,0 +1,271 @@
+--@RefType [Dev.Parliament.MParliament.bytes#_M]
+local MParliament = JRequire "Dev.Parliament.MParliament"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+-- @RefType [Dev.EventCenter.bytes#_M
+local EventCenter = JRequire "Dev.EventCenter"
+local MMain = JRequire "Dev.Main.MMain"
+
+local rapidjson = require "rapidjson"
+
+----------------------CS类引用--------------------------
+
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cParliamentList = 1,		--议会列表请求
+	cParliamentGet = 2,         --议会崇拜请求
+	cParliamentSetMsg = 3,		--议会留言请求
+	cUseTitle = 4,				--请求使用称号 Parliament:CUseTitle
+	cParliamentGivenList = 6,	--请求已赠送礼物玩家列表
+	cParliamentGift = 7,		--请求赠送礼物 Parliament:CGift
+
+	sParliamentList = 1,		--议会列表返回
+	sParliamentGet = 2,         --议会崇拜返回
+	sParliamentSetMsg = 3,		--议会留言返回
+	sUpdateTitleId = 4,			--称号ID更新 Parliament:SUpdateTitleId
+	sTitleList = 5,				--称号列表下发 Parliament:STitleList
+	sParliamentGiftList = 6,	--已赠送礼物玩家列表下发 Parliament:SGivenList
+	sParliamentGetGifts = 7,	--已赠送礼物玩家下发 Parliament:SGetGift
+	sParliamentUpdate = 8,		--殿堂称号广播 Parliament:SParliamentAdd
+}
+
+function _M.ModuleClean()
+	MParliament.Clean()
+	if nil ~= _P.Handle then
+		EventCenter.UnRegistCallEvent(_P.Handle)
+		_P.Handle = nil
+	end
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cParliamentSetMsg]   = "PParliament.CParliamentMessage",
+		[CMD_ID.cUseTitle] 		     = "PParliament.CUseTitle",
+		[CMD_ID.cParliamentSetMsg]   = "PParliament.CParliamentMessage",
+		[CMD_ID.cParliamentGift]   	 = "PParliament.CGift",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sParliamentList]     = { proto = "PParliament.SParliamentList", handle = _P.OnInit},
+		[CMD_ID.sParliamentGet] 	 = { 										handle = _P.OnGetReward},
+		[CMD_ID.sParliamentSetMsg] 	 = { proto = "PParliament.SParliamenMsg", 	handle = _P.OnSetMessage},
+		[CMD_ID.sUpdateTitleId]  	 = { proto = "PParliament.SUpdateTitleId",  handle = _P.OnChangeTitle},
+		[CMD_ID.sTitleList] 		 = { proto = "PParliament.STitleList", 	    handle = _P.OnUpdateTitleList},
+		[CMD_ID.sParliamentGiftList] = { proto = "PParliament.SGivenList", 	    handle = _P.OnSetGiftList},
+		[CMD_ID.sParliamentGetGifts] = { proto = "PParliament.SGetGift",  		handle = _P.OnSetGift},
+		[CMD_ID.sParliamentUpdate]   = { proto = "PParliament.SParliamentAdd",  handle = _P.OnAddParliamentTitle},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Parliament, func_send, func_recv, isReload)	
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+function _P.OnDayout()
+	MParliament.GiveList = {}
+	MParliament.RestTimes = Csv.Const(Define.Const.ParliamentGiveTimes)
+	_M.Init()
+end
+
+------------------Client -- Server----------------
+--请求初始化界面列表信息
+function _M.Init()
+	_M.Send(CMD_ID.cParliamentList)
+end
+
+function  _M.GetReward()
+	_M.Send(CMD_ID.cParliamentGet)
+end
+
+--改变留言
+function _M.SetMessage(titleID, msg)
+	local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.CheckChatUrl)
+	session:AppendParam("content", msg)
+	session:SetCallBack(function (isOk, param1, param2)
+		if isOk then
+			local retTable = rapidjson.decode(param1)
+			if retTable ~= nil then
+				local state = retTable.status
+				if state == 0 then
+					--正常
+					_M.Send(CMD_ID.cParliamentSetMsg, {titleID = titleID, msg = retTable.content})
+				elseif state == 1 then
+					--违法
+					CCommon.ShowError(Csv.Text("err_parliament_filter_words"))
+				else
+					--敏感
+					_M.Send(CMD_ID.cParliamentSetMsg, {titleID = titleID, msg = retTable.content})
+				end
+			else
+				error("SetMessage --> HttpSession retTable is empty!! url:" .. GameSetting.CheckChatUrl .. ", info:" .. param2)
+			end
+		else
+			error("SetMessage --> HttpSession error!! url:" .. GameSetting.CheckChatUrl .. ", info:" .. param2)
+		end
+	end)
+	HttpHelper.Request(session)
+end
+
+--穿戴称号
+function _M.UseTitleItem(titleID, isUse)
+	local type = 2
+	if isUse then
+		type = 1
+	end
+	_M.Send(CMD_ID.cUseTitle, {titleID = titleID, type = type})
+end
+
+function _M.GetGivenList()
+	_M.Send(CMD_ID.cParliamentGivenList)
+end
+
+function _M.GiveGift(playerid,titleid)
+	_M.Send(CMD_ID.cParliamentGift, {playerID = playerid, titleId = titleid})
+end
+
+function _M.RefreshParRedPoint()
+	if MMain.FuncIsOpen(Define.SysId.Parliament) then
+		if MParliament.isGet then
+			CMain.UpdateRedpoint(false, Define.SysId.Parliament)
+		else
+			CMain.UpdateRedpoint(true, Define.SysId.Parliament)
+		end
+	else
+		CMain.UpdateRedpoint(false, Define.SysId.Parliament)
+	end
+end
+
+------------------Server -- Client----------------
+function _P.OnInit(data)
+	MParliament.Clean()
+	MParliament.SetListData(data)
+	_M.RefreshParRedPoint()
+	WindowMgr.Call("UParliament", "RefreshViewData", data)
+end
+
+function _P.OnGetReward()
+	MParliament.isGet = true
+	_M.RefreshParRedPoint()
+	WindowMgr.Call("UParliament", "RefreshGetReward")
+end
+
+function _P.OnSetMessage(data)
+	MParliament.SetMessage(data.titleID, data.msg)
+	MParliament.SetSelfMessage()
+	WindowMgr.Call("UParliament", "RefreshMessage", MParliament.GetMessage())
+	WindowMgr.Call("UParliamentInput", "OnClose")
+end
+
+function _P.OnChangeTitle(data)
+	--修改MPlayer数据
+	if MParliament.TitleType.Wear == data.type then	--穿上
+		MPlayer.PlayerInfo.titleID = data.title.titleID
+		MParliament.SetSelfTitleID(data.title.titleID)
+	elseif MParliament.TitleType.TakeOff == data.type then--卸下
+		MPlayer.PlayerInfo.titleID = 0
+		MParliament.SetSelfTitleID()
+	elseif MParliament.TitleType.Add == data.type then--添加
+		MParliament.AddTitle(data.title)
+	elseif MParliament.TitleType.Delete == data.type then--过期（删除）
+		MParliament.RemoveTitle(data.title)
+	else
+		--没有这个类型
+	end
+	
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Call("UBag", "UpdateFashionState", data)
+	elseif WindowMgr.IsCreated("UPlayer") then
+		WindowMgr.Call("UPlayer", "UpdateTitle")
+	elseif WindowMgr.IsCreated("UHomeMap") then
+		WindowMgr.Call("UHomeMap", "RefreshPar")
+	end
+	_P.RefreshUpdateState()
+end
+
+function _P.OnUpdateTitleList(data)
+	--修改MPlayer数据
+	MPlayer.PlayerInfo.titleID = data.titleId
+	local titleList = data.titlelist
+	if nil ~= titleList then
+		table.sort(titleList, function (left, right)
+			return left.titleID < right.titleID
+		end)
+	else
+		titleList = {}
+	end
+	MParliament.SetTitleList(titleList)
+	MBag.BagFashionInit()
+	if WindowMgr.IsCreated("UHomeMap") then
+		WindowMgr.Call("UHomeMap", "RefreshPar")
+	end
+	_P.RefreshUpdateState()
+end
+
+function _P.OnSetGiftList(data)
+	MParliament.SetGiftList(data)
+end
+
+function _P.OnSetGift(data)
+	MParliament.SetGift(data)
+	if WindowMgr.IsCreated("UParliamentAwardPop") then
+		WindowMgr.Call("UParliamentAwardPop", "GiveGift", data)
+	end
+	if WindowMgr.IsCreated("UParliamentAward") then
+		WindowMgr.Call("UParliamentAward", "ResetTimes")
+	end
+	CCommon.ShowRight(Csv.Text("parliament_tip17"))
+end
+
+function _P.OnAddParliamentTitle(data)
+	if data and data.parliament then
+		MParliament.SetShowOneData(data.parliament)
+		WindowMgr.Call("UParliament", "RefreshViewData", {list = MParliament.list, isGet = MParliament.isGet})
+	end
+end
+
+-----------------------------   Data Concrol   -----------------------------
+function _P.RefreshUpdateState()
+	local titleList = MParliament.GetTitleList()
+	if nil ~= titleList and 0 ~= #titleList then
+		if nil == _P.Handle then
+			_P.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+				_P.UpdateTime()
+			end)
+		end
+	else
+		if nil ~= _P.Handle then
+			EventCenter.UnRegistCallEvent(_P.Handle)
+			_P.Handle = nil
+		end
+	end
+end
+
+function _P.UpdateTime()
+	if MParliament.RefreshTitleListData() then
+		_P.RefreshUpdateState()
+		_M.Init()
+		WindowMgr.Call("UHomeMap", "RefreshPar")
+	end
+end
+
+return _M

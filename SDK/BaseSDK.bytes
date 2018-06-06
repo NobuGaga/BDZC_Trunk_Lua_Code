@@ -1,0 +1,79 @@
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local rapidjson = require "rapidjson"
+
+local _M = Class()
+
+------------------------------请求接口------------------------------
+function _M.ReqLogin()
+	GameSetting.OpenLoginInput()
+end
+
+function _M.ReqSwitchAccount()
+	GameSetting.OpenLoginInput()
+end
+
+function _M.ReqLogout()
+	GameSetting.OnGameEscapePress()
+end
+
+function _M.ReqCollectData(type, serverID, serverName, roleID, roleName, roleLevel)
+	-- body
+end
+
+function _M.ReqPay(productID, price, gold, productName, num, roleID, roleName, serverID, sbID, param)
+	-- body
+end
+
+function _M.ReqExit()
+	-- body
+end
+
+------------------------------回调接口------------------------------
+
+function _M.OnLogin(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	MLogin.Account = jsonTab.account
+	MLogin.Password = jsonTab.password
+end
+
+function _M.OnSwitchAccount(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	MLogin.Account = jsonTab.account
+	MLogin.Password = jsonTab.password
+end
+
+function _M.OnPay(jsonStr)
+	-- body
+end
+
+------------------------------通用接口------------------------------
+
+--复制文本到粘贴板
+function _M.CopyText(text)
+	CS.Utility.Utils.SystemCopyBuffer = text
+end
+
+--获取粘贴板上的文本
+function _M.PasteText()
+	local data = {}
+	data.func = "OnPaste"
+	data.text = CS.Utility.Utils.SystemCopyBuffer or ""
+	SDKMgr.OnSdkCallBack(rapidjson.encode(data))
+end
+
+--获取粘贴板上的文本回调
+function _M.OnPaste(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	if nil ~= jsonTab then
+		if nil ~= jsonTab.text then
+			return jsonTab.text
+		end
+	end
+	return ""
+end
+
+return _M

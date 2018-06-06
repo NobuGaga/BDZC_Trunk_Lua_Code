@@ -1,0 +1,208 @@
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local CMain = JRequire "Dev.Main.CMain"
+local CCommon = JRequire"Dev.Common.CCommon"
+local EventCenter = JRequire "Dev.EventCenter"
+--local CActivity = JRequire"Dev.Activity.CActivity"
+
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cSign								=	1,--签到
+	cExchange							=	2,--兑换码兑换	PWelfare.CExchange
+	cGetFirstRechargeReward				=	3,--领取首充奖励	.
+	cGetMonthCardReward					=	4,--领取月卡奖励	.
+	cGetYearCardReward					=	5,--领取年卡奖励	.
+	cGetVipReward						=	6,--领取VIP奖励	PWelfare.CGetVipReward
+	cGetVipDailyGift					=	7,--领取vip每日礼包 PWelfare.CGetVipReward
+	cGookLuck							=	8,--请求机遇次数 --PWelfare.C
+
+	sWelfareInitSign						=	1,--签到	PWelfare.SInitSign
+	sWelfareSign							=	2,--签到更新	PWelfare.SSign
+	sWelfareExchange						=	3,--兑换返回	PWelfare.SExchange
+	sFirstRecharge							=	4,--首充信息	PWelfare.SFirstRecharge
+	sMonthCard								=	5,--月卡信息	PWelfare.SMonthCard
+	sYearCard								=	6,--年卡信息	PWelfare.SYearCard
+	sGetFirstRechargeReward					=	7,--领取首充奖励	
+	sGetMonthCardReward						=	8,--领取月卡奖励	.
+	sGetYearCardReward						=	9,--领取年卡奖励	.
+	sGetVipReward							=	10,--领取vip奖励	PWelfare.SGetVipReward
+	sVipRewardInfo							=	11,--vip奖励信息	PWelfare.SVipRewardInfo
+	sVipDayGiftInfo							=	12,--vip每日礼包领取信息下发 PWelfare.SVipDailyGift
+	sLifeLongCard							=	13,--终身卡信息
+	sGoodLuck								=	14,--机遇
+}
+
+--清空模块
+function _M.ModuleClean()
+	MWelfare.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cSign] = "",
+		[ECmdId.cExchange] = "PWelfare.CExchange",
+		[ECmdId.cGetFirstRechargeReward] = "",
+		[ECmdId.cGetMonthCardReward] = "",
+		[ECmdId.cGetYearCardReward] = "",
+		[ECmdId.cGetVipReward] = "PWelfare.CGetVipReward",
+		[ECmdId.cGetVipDailyGift] = "PWelfare.CGetVipReward",
+		[ECmdId.cGookLuck] = ""
+	}
+	local recv = {
+		[ECmdId.sWelfareInitSign]		=	{proto = "PWelfare.SInitSign",		handle = _P.RepInitSign},
+		[ECmdId.sWelfareSign]			=	{proto = "PWelfare.SSign",		handle = _P.RepSign},
+		[ECmdId.sWelfareExchange]		=	{proto = "PWelfare.SExchange",		handle = _P.RepExchange},
+		
+		[ECmdId.sFirstRecharge]				=		{proto = "PWelfare.SFirstRecharge",		handle = _P.RepFirstRecharge},
+		[ECmdId.sMonthCard]					=		{proto = "PWelfare.SMonthCard",		handle = _P.RepMonthCard},
+		[ECmdId.sYearCard]					=		{proto = "PWelfare.SYearCard",		handle = _P.RepYearCard},
+		[ECmdId.sVipRewardInfo]				=		{proto = "PWelfare.SVipRewardInfo",		handle = _P.RepVipRewardInfo},
+		[ECmdId.sGetFirstRechargeReward]	=		{handle = _P.RepGetFirstRechargeReward},
+		[ECmdId.sGetMonthCardReward]		=		{handle = _P.RepGetMonthCardReward},
+		[ECmdId.sGetYearCardReward]			=		{handle = _P.RepGetYearCardReward},
+		[ECmdId.sGetVipReward]				=		{proto = "PWelfare.SGetVipReward",		handle = _P.RepGetVipReward},
+		[ECmdId.sVipDayGiftInfo]			=		{proto = "PWelfare.SVipDailyGift",		handle = _P.RepVipDayGiftInfo},
+		[ECmdId.sLifeLongCard]				=		{proto = "PWelfare.SLifeLongCard",		handle = _P.RepLifeLongCard},
+		[ECmdId.sGoodLuck]				=		{proto = "PWelfare.SGoodLuck",		handle = _P.RepGoodLuck},
+	}
+	
+	_M.Send = SocketMgr.Regist(Define.SysId.Welfare, send, recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	MVipWelfare.OnDayout()
+end, true)
+
+---------------------------------------------------
+--Client -> Server 
+----------------------------------------------------\
+function _M.ReqSign()
+	_M.Send(ECmdId.cSign)
+end
+
+function _M.ReqExchange(_number,_type)
+	_M.Send(ECmdId.cExchange,{number = _number,type = _type})
+end
+
+function _M.ReqFirstRecharge()
+	_M.Send(ECmdId.cGetFirstRechargeReward)
+end
+
+function _M.ReqMonthCardReward()
+	_M.Send(ECmdId.cGetMonthCardReward)
+end
+
+function _M.ReqYearCardReward()
+	_M.Send(ECmdId.cGetYearCardReward)
+end
+
+function _M.ReqGetVipReward(viplevel)
+	_M.Send(ECmdId.cGetVipReward,{vipLv = viplevel})
+end
+
+function _M.ReqGetVipDayReward(viplevel)
+	_M.Send(ECmdId.cGetVipDailyGift,{vipLv = viplevel})
+end
+
+function _M.ReqGetGoodLuckDatas()
+	_M.Send(ECmdId.cGookLuck)
+end
+
+---------------------------------------------------
+-- Server -> Client
+----------------------------------------------------\
+function _P.RepInitSign(data)
+	MWelfare.InitSign(data)
+	_P.RedPoint()
+end
+
+function _P.RepSign(data)
+	MWelfare.RefreshSign(data)
+
+	_P.RedPoint()
+	WindowMgr.Call("UWelfare","RepSign",data)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+end
+
+function _P.RepExchange(data)
+	if data.success then
+		CCommon.ShowError(Csv.Text("set_exchange_success"))--"兑换成功"
+		--20180211策划要求调整为兑换成功关闭福利界面
+		WindowMgr.Call("UWelfare","CloseUWelfare")
+	end
+end
+
+function _P.RepFirstRecharge(data)
+	MWelfare.GetFirstRechargeState(data)
+	
+	local isListItemRed = (data.state == 1)
+	CMain.UpdateRedpoint(isListItemRed,Define.SysId.FirstRecharge)
+	CMain.UpdateRedpoint(isListItemRed,Define.SysId.Welfare_First)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+end
+function _P.RepMonthCard(data)
+	MWelfare.GetMonthCardData(data)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+	WindowMgr.Call("UWelfare","RefreshMonthCard")
+end
+function _P.RepYearCard(data)
+	MWelfare.GetYearCardData(data)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+	WindowMgr.Call("UWelfare","RefreshYearCard")
+end
+
+--前年卡改为终身卡
+function _P.RepLifeLongCard(data)
+	MWelfare.GetYearCardData(data)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+	WindowMgr.Call("UWelfare","RefreshYearCard")
+end
+
+function _P.RepVipRewardInfo(data)
+	MVipWelfare.GetVipInfo(data)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+end
+
+function _P.RepGetFirstRechargeReward(data)
+	MWelfare.GetFirstRechargeState({state = 2})
+	--WindowMgr.Call("UWelfare","RefreshGetFirstRecharge",data)
+	WindowMgr.Call("UFirstRecharge","RefreshGetFirstRecharge",data)
+
+	CMain.UpdateRedpoint(false,Define.SysId.FirstRecharge)
+	CMain.UpdateRedpoint(false,Define.SysId.Welfare_First)
+	WindowMgr.Call("UMain","RefreshTopBtns")
+end
+function _P.RepGetMonthCardReward(data)
+end
+function _P.RepGetYearCardReward(data)
+end
+function _P.RepGetVipReward(data)
+	WindowMgr.Call("UVipWelfare","ShowFirstReward",data.vipLv)
+end
+
+function _P.RepVipDayGiftInfo(data)
+	MVipWelfare.SetVipDayGifts(data)
+end
+
+
+function _P.RedPoint()
+	local isRedpoint = false
+
+	if MWelfare.isSign == false then
+		isRedpoint = true
+	end
+
+	CMain.UpdateRedpoint(isRedpoint,Define.SysId.Welfare_Sign)
+	CMain.UpdateRedpoint(isRedpoint,Define.SysId.Sign)
+end
+
+function _P.RepGoodLuck(data)
+	MWelfare.SetGoodLuckDatas(data)
+end
+
+
+return _M

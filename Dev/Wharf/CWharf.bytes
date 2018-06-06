@@ -1,0 +1,154 @@
+--@RefType [Dev.Girl.MGirl.bytes#_M]
+local MWharf = JRequire"Dev.Wharf.MWharf"
+local EventCenter = JRequire "Dev.EventCenter"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cVist = 1,           --寻访请求 
+	cXiaozai = 2,        --消灾
+	cZhuanyun = 3,       --转运
+	cRecoverEnergy = 4,  --恢复体力
+
+	cGirlEvent = 5,              -- 美女事件状态列表
+    cReadEvent = 6,              -- 读事件
+	cChallenge = 7,              -- 挑战（事件对应npc）
+	cActivationGirl	= 8,			--激活美女
+    
+	sBaseInfo = 1,       --系统基本信息
+	sVist = 2,           --寻访结果
+
+	sGirlList = 3,               -- 美女解锁状态列表
+    sEventList = 4,              -- 新事件列表
+    sGirlEvent = 5,              -- 美女事件状态列表
+    sNewEvent = 6,               -- 新事件
+    sReadEvent = 7,              -- 读事件
+    sChallenge = 8,              -- 挑战（事件对应npc）
+	sUnlockGirl = 9,				--解锁美女
+	sGirlPictorial = 10,			--激活美女列表
+	sNewGirlPictorial = 11,			--新激活美女
+}
+
+--清空模块
+function _M.ModuleClean()
+	MWharf.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cVist] = "PWharf.CVisit",
+		[ECmdId.cXiaozai] = "PWharf.CXiaozai",
+		[ECmdId.cZhuanyun] = "",
+		[ECmdId.cRecoverEnergy] = "",
+		[ECmdId.cGirlEvent] = "PWharf.CGirlEvent",
+		[ECmdId.cReadEvent] = "PWharf.CReadEvent",
+		[ECmdId.cChallenge] = "PWharf.CChallenge",
+		[ECmdId.cActivationGirl] = "PWharf.CActivateGirlPictorial",
+	}
+	local recv = {
+		[ECmdId.sBaseInfo]		=	{proto = "PWharf.SBaseInfo",		handle = _P.RepBaseInfo},
+		[ECmdId.sVist]	=	{proto = "PWharf.SVisit",	handle = _P.RepVisit},
+		
+		[ECmdId.sGirlList] = {proto = "PWharf.SGirlList",handle = _P.RepGirlList},
+		[ECmdId.sEventList] = {proto = "PWharf.SEventList",handle = _P.RepEventList},
+		[ECmdId.sGirlEvent] = {proto = "PWharf.SGirlEvent",handle = _P.RepGirlEvent},
+		[ECmdId.sNewEvent] = {proto = "PWharf.SNewEvent",handle = _P.RepNewEvent},
+		[ECmdId.sReadEvent] = {proto = "PWharf.SReadEvent",handle = _P.RepReadEvent},
+		[ECmdId.sChallenge] = {proto = "PWharf.SChallenge",handle = _P.RepChallenge},
+
+		[ECmdId.sUnlockGirl] = {proto = "PWharf.PGirl",handle = _P.RepUnlockGirl},
+		[ECmdId.sGirlPictorial] = {proto = "PWharf.SGirlPictorial",handle = _P.RepGirlPictorial},
+		[ECmdId.sNewGirlPictorial] = {proto = "PWharf.SNewGirlPictorial",handle = _P.RepNewGirlPictorial},
+	}
+	
+	_M.Send = SocketMgr.Regist(Define.SysId.Wharf, send, recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	MWharf.OnDayout()
+end, true)
+
+---------------------------------------------------
+--Client -> Server 
+----------------------------------------------------\
+
+function _M.ReqVist(_auto,_autoThreshold,_oneKey)
+	_M.Send(ECmdId.cVist,{autoXiaozai = _auto,autoXiaozaiThreshold = _autoThreshold,onekey = _oneKey})
+end
+
+function _M.ReqXiaozai(_type)
+	_M.Send(ECmdId.cXiaozai,{xiaozaiWay = _type})
+end
+
+function _M.ReqZhuanyun()
+	_M.Send(ECmdId.cZhuanyun)
+end
+
+function _M.ReqGirlEvent(_girlid)
+	_M.Send(ECmdId.cGirlEvent,{girlId = _girlid})
+end
+
+function _M.ReqReadEvent(_id)
+	_M.Send(ECmdId.cReadEvent,{eventId = _id})
+end
+
+function _M.ReqChallenge(_id)
+	_M.Send(ECmdId.cChallenge,{eventId = _id})
+end
+
+function _M.ReqActivationGirl(_id)
+	print("__ReqActivationGirl____",_id)
+	_M.Send(ECmdId.cActivationGirl,{girlId = _id})
+end
+
+---------------------------------------------------
+-- Server -> Client
+----------------------------------------------------\
+function _P.RepBaseInfo(data)
+	MWharf.SetBaseInfo(data)
+end
+
+function _P.RepVisit(data)
+	MWharf.VisitResule(data)
+end
+
+function _P.RepGirlList(data)
+	MWharf.SetGirlList(data)
+end
+function _P.RepEventList(data)
+	MWharf.SetEventList(data)
+end
+function _P.RepGirlEvent(data)
+	--点击美女刷新的列表直接发送到关系链界面
+	WindowMgr.Call("UWharfGirlRelation","RefreshGirlEvent",data)
+end
+function _P.RepNewEvent(data)
+	MWharf.NewEvent(data)
+end
+function _P.RepReadEvent(data)
+	MWharf.ReadEvent(data)
+	WindowMgr.Call("UWharfGirlRelation","UpdateEvent",{eventId = data.eventId})
+end
+function _P.RepChallenge(data)
+	--挑战结果发送到关系链
+	WindowMgr.Call("UWharfGirlRelation","UpdateEvent",data)
+	WindowMgr.Call("UWharfBattling","ShowBattleResult",data)
+	--WindowMgr.Call("UWharfBattle","ChallengeResult",data)
+end
+
+function _P.RepUnlockGirl(data)
+	MWharf.NewGirl(data)
+end
+
+function _P.RepGirlPictorial(data)
+	MWharf.SetGirlPictorial(data)
+end
+function _P.RepNewGirlPictorial(data)
+	MWharf.NewGirlPictorial(data)
+end
+
+
+
+return _M

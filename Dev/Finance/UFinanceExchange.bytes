@@ -1,0 +1,150 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local GIFT_ITEMS = Csv.FinanceShop
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshAllExchange(self)
+	local giftItems = self.mGifts
+
+	for k,v in pairs(GIFT_ITEMS) do
+		local gift = giftItems[k]
+		_P.RefreshItem(gift.item,gift.data,k)
+	end
+end
+
+function _R.RefreshExchange(self,data)
+	self.mJifen.Text = MFinance.Jifen
+
+	local giftItems = self.mGifts
+	local gift = giftItems[data.id]
+	if gift ~= nil then
+		_P.RefreshItem(gift.item,gift.data,data.id)
+
+		local itemid = Csv.FinanceShop[data.id].itemId
+		CCommon.ShowFlyItem(self.Moudle.SelfRect,itemid,1)
+	end
+end
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_Exchange")
+	self.Moudle = moudle
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	--标题
+	moudle:Get("C_Text").Text=Csv.Text("finance_exchangename")
+	moudle:Get("KEYONH").Text=Csv.Text("finance_Coin")
+
+	local jifenText = moudle:Get("Num")
+	jifenText.Text=MFinance.Jifen
+	self.mJifen = jifenText
+	
+	local content = moudle:Get("content")
+	local gifts = {}
+	for k,v in pairs(GIFT_ITEMS) do
+		local itemMoudle = _P.CreatItem(content,v,k)
+		gifts[k] = {item = itemMoudle,data = v}
+	end
+	self.mGifts = gifts
+end
+
+function _P.CreatItem(parent,data,index)
+	local moudle = JGuiManager.GetMoudle(parent,"M_FB_Exchange_Item", WindowType.UI, 10)
+
+	_P.RefreshItem(moudle,data,index)
+
+	return moudle
+end
+
+function _P.RefreshItem(moudle,data,index)
+	local iconBox = moudle:Get("IconBox")
+	local iconSp = moudle:Get("icon")
+	local iconNum = moudle:Get("IconNum")
+	local iconName = moudle:Get("iconName")
+	local spendText = moudle:Get("spend")
+	local spendNum = moudle:Get("spendNum")
+	local canExchange = moudle:Get("canExchange")
+	local canExchangeNum = moudle:Get("NumText")
+
+	local itemData = Csv.Item[data.itemId]
+	iconBox.SpriteName = itemData.colorIcon
+	iconSp.SpriteName = itemData.icon
+	--iconNum.Text = MBag.GetItemNum(data.itemId)
+	iconName.Text = itemData.name
+
+	local costNum = _P.GetGiftSpend(data.itemId,index)
+	spendText.Text = Csv.Text("finance_needJifen")--"需要积分："
+	spendNum.Text = costNum
+
+	canExchange.Text = Csv.Text("finance_canExchangeCount")--"可兑换次数："
+
+	local canChangeCount = 0
+	if MFinance.GiftItems[index] ~= nil then
+		canChangeCount = data.limitCount - MFinance.GiftItems[index]
+	else
+		canChangeCount = data.limitCount
+	end
+	canExchangeNum.Text = canChangeCount
+
+	moudle:Get("C_text").Text = Csv.Text("finance_exchange")
+	local C_Btn_b = moudle:Get("C_Btn_b")
+	C_Btn_b:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		--兑换
+		if canChangeCount > 0 then
+			if costNum <= MFinance.Jifen then
+				CFinance.ReqExchangeItem(index,1)
+			else
+				CCommon.ShowError(Csv.Text("finance_noJifen"))--"积分不足！")
+			end
+		else
+			CCommon.ShowError(Csv.Text("finance_noExchangeCount"))--"今日可兑换次数已用完！")
+		end
+	end, nil, 0.9)
+end
+
+function _P.GetGiftSpend(id,index)
+
+	local spend = 0
+	if MFinance.GiftItems[index] ~= nil then
+		local times = 1
+		local getCount = MFinance.GiftItems[index]
+		for i = 1,getCount,1 do 
+			times = times*1.2
+		end
+		spend = Csv.FinanceShop[index].cost*times
+	else
+		spend = Csv.FinanceShop[index].cost
+	end
+
+	return math.ceil(spend)
+end
+
+return _M

@@ -1,0 +1,300 @@
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local CBattle = JRequire "Dev.Battle.CBattle"
+local MMain = JRequire "Dev.Main.MMain"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+
+local _M = {}
+
+function _M.Open(sysId, ...)
+	-- print("Open window: ", sysId)
+	local _SysId = Define.SysId
+
+	--没有在功能表有id的部分
+	if sysId == _SysId.Main then 
+		WindowMgr.Create("UMain")
+	elseif sysId == _SysId.World then
+		WindowMgr.Create("UWorldMap")
+		WindowMgr.Call("UMain","SwitchCenterBtns",true)
+	elseif sysId == _SysId.Home then
+		WindowMgr.Create("UHomeMap")
+		WindowMgr.Call("UMain","SwitchCenterBtns",false)
+
+	elseif sysId == _SysId.Player then
+		WindowMgr.Create("UPlayer")
+	elseif sysId == _SysId.Player_LevelUp then
+		WindowMgr.Create("UPlayer")
+		WindowMgr.Create("UPlayerLevelUp")
+	else
+		--判断功能有没有开启
+		if not MMain.FuncIsOpen(sysId) then
+			local funcCsv = Csv.Func[sysId]
+			if funcCsv ~= nil and funcCsv.conditionDesc ~= nil then
+				CCommon.ShowError(funcCsv.conditionDesc)
+			else
+				CCommon.ShowError(Csv.Text("common_funcClose"))
+			end			
+			return
+		end
+
+		--员工
+		if sysId == _SysId.Staff then 
+			WindowMgr.Create("UStaff", sysId)
+				--员工系统详情
+		elseif  sysId == _SysId.Staff_Staff or
+				--员工系统书籍
+				sysId == _SysId.Staff_Book or	
+				--员工系统技能
+				sysId == _SysId.Staff_Skill or
+				--员工系统光环
+				sysId == _SysId.Staff_Aureole then
+			WindowMgr.Create("UStaffDetails", _SysId.Staff)
+
+		--美女
+		elseif sysId == _SysId.Girl or
+				--美女系统朋友圈
+				sysId == _SysId.Girl_FriendRound or	
+				--已认识美女
+				sysId == _SysId.Girl_Known or	
+				--美女系统未获得
+				sysId == _SysId.Girl_Lock then
+			WindowMgr.Create("UGirl", sysId) 
+		--已结识美女
+		elseif sysId == _SysId.Girl_Unlock then
+			WindowMgr.Create("UGirlUnlock",sysId)
+		--宝宝
+		elseif sysId == _SysId.Girl_Marry then--
+			WindowMgr.Create("UGirlMarried",sysId)
+		--结婚
+		elseif sysId == _SysId.Girl_Baby then
+			WindowMgr.Create("UGirlBaby",sysId)
+		--经营
+		-- elseif sysId == _SysId.Operate then
+		-- 	WindowMgr.Create("UCompany", _SysId.Manage)
+
+		--道具
+		elseif sysId == _SysId.Bag or
+				--背包系统道具
+				sysId == _SysId.Bag_Goods or 
+				--背包系统合成,
+				sysId == _SysId.Bag_Synthetic or 
+				--背包系统时装
+				sysId == _SysId.Bag_Fashion then
+			WindowMgr.Create("UBag", sysId)
+		--成就
+		elseif sysId == _SysId.Achievement then
+			WindowMgr.Create("UAchieve")
+		--任务
+		elseif sysId == _SysId.Quest then
+			WindowMgr.Create("UDailyQuest")
+		--聊天
+		elseif sysId == _SysId.Talk or
+				--聊天系统系统频道
+				sysId == _SysId.Talk_Server or 
+				--聊天系统商会频道
+				sysId == _SysId.Talk_Unions then
+			WindowMgr.Create("UTalk", sysId)
+		elseif sysId == _SysId.Talk_Private then
+			WindowMgr.Create("UPrivateTalk", ...)
+		--充值
+		elseif sysId == _SysId.Recharge then
+			WindowMgr.Create("URecharge", sysId)
+		--商城
+		elseif sysId == _SysId.Shop then
+			WindowMgr.Create("UShop", sysId)
+		--福利
+		elseif sysId == _SysId.Welfare then
+			WindowMgr.Create("UWelfare", sysId)
+		-- 四大奸臣
+		elseif sysId == _SysId.JianChen then
+			WindowMgr.Create("UFourTraitorsActivity", Define.ActivityType.JianChen)
+		-- 巾帼五虎
+		elseif sysId == _SysId.JinGuo then
+			WindowMgr.Create("UFourTraitorsActivity", Define.ActivityType.JinGuo)
+		--限时奖励
+		elseif sysId == _SysId.TimeLimit then
+			WindowMgr.Create("UTimeLimit", sysId)
+		--冲榜活动
+		elseif sysId == _SysId.RankReward then
+			WindowMgr.Create("URankReward", sysId)
+		--新官上任活动1
+		elseif sysId == _SysId.XinGuan1 then
+			WindowMgr.Create("UXinGuanMain", Define.ActivityType.XinGuan1)
+		--新官上任活动2
+		elseif sysId == _SysId.XinGuan2 then
+			WindowMgr.Create("UXinGuanMain", Define.ActivityType.XinGuan2)
+		--慈善活动
+		elseif sysId == _SysId.Charitable then
+			WindowMgr.Create("UCharitableMainPanel")
+		--奇遇活动
+		elseif sysId == _SysId.Adventure then
+			WindowMgr.Create("UAdventureMain", Define.ActivityType.Adventure)
+		--充值奖励
+		elseif sysId == _SysId.RechargeReward then
+			WindowMgr.Create("URechargeAward")
+		elseif sysId == _SysId.Sign or sysId == _SysId.Welfare_Sign then
+			WindowMgr.Create("UWelfare", _SysId.Welfare_Sign) 
+		--设置
+		elseif sysId == _SysId.Setting then
+			WindowMgr.Create("USetting", sysId)
+		--邮件
+		elseif sysId == _SysId.Mail then
+			WindowMgr.Create("UMailPanel")
+		--月卡（主界面顶部入口）
+		elseif sysId == _SysId.MonthWelfare then
+			WindowMgr.Create("UWelfare", _SysId.Welfare_Month) 
+		--年卡（主界面顶部入口）--20180426年卡月卡合成一个
+		elseif sysId == _SysId.YearWelfare then
+			WindowMgr.Create("UWelfare", _SysId.Welfare_Month) 
+		--首冲（主界面顶部入口）
+		elseif sysId == _SysId.FirstRecharge then
+			--WindowMgr.Create("UWelfare", _SysId.Welfare_First) 
+			WindowMgr.Create("UFirstRecharge") 
+		--vip福利（主界面顶部入口）
+		elseif sysId == _SysId.VIPWelfare then
+			local vipSysId = MVipWelfare.GetVipRewardSysID()
+			if vipSysId ~= nil then
+				WindowMgr.Create("UVipWelfare", vipSysId)
+			else
+				WindowMgr.Create("UVipWelfare", sysId)
+			end
+		--围攻华尔街
+		elseif sysId == _SysId.SiegeWall then
+			WindowMgr.Create("USiegeMain")
+		elseif sysId == _SysId.Lottery then
+			WindowMgr.Create("ULottery")
+		elseif sysId == _SysId.Questionnaire then
+			WindowMgr.Create("UQuestionnaire") 
+		elseif sysId == _SysId.Target then
+			WindowMgr.Create("UTargetPanel") 
+		elseif sysId == _SysId.Phone then
+			WindowMgr.Create("UGirl") 
+		elseif sysId == _SysId.Redpacket then
+			local redData = MRedpacket.GetTopRedPacked()
+			if redData ~= nil then
+				if redData.talkChannel ~= nil then
+					if redData.talkChannel == 1 then
+						WindowMgr.Create("UTalk",Define.SysId.Talk_Server) 
+					elseif redData.talkChannel == 2 then
+						WindowMgr.Create("UTalk",Define.SysId.Talk_Unions) 
+					end
+				end
+			end
+		--好友
+		elseif sysId == _SysId.Friend then
+			WindowMgr.Create("UFriend")
+			--好友
+		elseif sysId == _SysId.Friend_Friend or
+			--黑名单
+			sysId == _SysId.Friend_Blacklist or
+			--亲家
+			sysId == _SysId.Friend_Qinjia or
+			--最近联系人
+			sysId == _SysId.Friend_Recent then
+				WindowMgr.Create("UFriend", sysId)
+		--座驾
+		elseif sysId == _SysId.Car then
+			WindowMgr.Create("UCarMainPanel")
+		--七日目标
+		elseif sysId == _SysId.SevenDayTarget then
+			WindowMgr.Create("USevenDayTarget", sysId)
+		--自由城入口(世界) 150 ~ 199
+		--金融机构
+		elseif sysId == _SysId.Finance then
+			WindowMgr.Create("UFinance", sysId)
+		--商场
+		elseif sysId == _SysId.Market then
+		
+		--商会
+		elseif sysId == _SysId.Commerce then
+			CCommerce.EnterCommerce()
+		elseif sysId == _SysId.Commerce_Exchange then
+			if MCommerce.IsJoinCommerce() then
+				CCommerce.EnterCommerce()
+				WindowMgr.Create("UCommerceExchange")
+			else
+				CCommon.ShowError(Csv.Text("err_commerce_not_join_yet"))
+			end
+		--法院
+		elseif sysId == _SysId.Relations then
+			WindowMgr.Create("URelations", sysId)
+		--议会
+		elseif sysId == _SysId.Parliament then
+			WindowMgr.Create("UParliament", sysId)
+		--公司
+		elseif sysId == _SysId.Company then
+			_M.Open(_SysId.Home)
+		--私人秘书
+		elseif sysId == _SysId.Manage then
+			WindowMgr.Create("UCompanyManage", sysId)
+		--视频会议
+		elseif sysId == _SysId.Patrol then
+			WindowMgr.Create("UCompanyPatrol", sysId)
+		--决策
+		elseif sysId == _SysId.Verdict then
+			WindowMgr.Create("UCompanyVerdict", sysId)
+		--加工工厂
+		elseif sysId == _SysId.Factory then
+			WindowMgr.Create("UCompanyManage", sysId)
+		--销售中心
+		elseif sysId == _SysId.Train then
+			WindowMgr.Create("UCompanyManage", sysId)
+		--机场
+		elseif sysId == _SysId.Airport then
+			CBattle.EnterBattle()
+		--直升飞机
+		elseif sysId == _SysId.Aircraft then
+			WindowMgr.Create("UAircraft", sysId)
+		--市场调研
+		elseif sysId == _SysId.Research then
+
+		--排行榜
+		elseif sysId == _SysId.Rank then
+			WindowMgr.Create("URank", sysId)
+		--码头
+		elseif sysId == _SysId.Wharf or
+				--公司
+				sysId == _SysId.Wharf_Company or
+				--别墅
+				sysId == _SysId.Wharf_Villa or
+				--MBA商学院
+				sysId == _SysId.Wharf_MBA or
+				--EMBA商学院
+				sysId == _SysId.Wharf_EMBA or
+				--商会
+				sysId == _SysId.Wharf_Commerce then
+			WindowMgr.Create("UWharf", sysId) 
+		elseif sysId == _SysId.Wharf_Pokedex then
+			WindowMgr.Create("UWharfPokedex") 
+		elseif sysId == _SysId.Wharf_Relation then
+			WindowMgr.Create("Wharf_Relation") 
+		--游艇会
+		elseif sysId == _SysId.Club then
+			WindowMgr.Create("UClubMainPanel", sysId) 
+		--赛事
+		elseif sysId == _SysId.Match then
+			
+		elseif sysId == _SysId.Vote then
+			WindowMgr.Create("UVote", sysId)
+		elseif sysId == _SysId.VoteBoss then
+			WindowMgr.Create("UVoteBattle")
+		elseif sysId == _SysId.Lecture then
+			WindowMgr.Create("ULecturesMainPanel")
+		--竞标地皮
+		elseif sysId == _SysId.BuyLand then
+			WindowMgr.Create("UBuyLandMain")
+		elseif sysId == _SysId.SuperStaff then
+			WindowMgr.Create("USuperStaffPanel")
+		elseif sysId == _SysId.MakeUp then
+			WindowMgr.Create("UPlayerChangeHead")
+		--公司(府宅) 200 ~ 255
+
+		end
+	end
+end
+
+return _M

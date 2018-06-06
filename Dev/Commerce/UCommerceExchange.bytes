@@ -1,0 +1,168 @@
+--商会商城兑换
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+function _R.OnUpdateItem(self, id, num)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local objInfo = self.Items[id]
+		if objInfo ~= nil and objInfo.btn ~= nil then
+			local csv = Csv.CommerceShop[id]
+			local level = info.level 
+			local lastCanEx = objInfo.num
+			local canExCount = csv.count[level]
+			if canExCount ~= nil and canExCount > 0 then
+				canExCount = canExCount - num
+				if canExCount <= 0 then
+					canExCount = 0
+				end
+				objInfo.numText.Text = tostring(canExCount)
+				if canExCount <= 0 then
+					objInfo.btn.IsGray = true
+					objInfo.btn.RaycastTarget = false
+					objInfo.red.Activity = false
+				end
+			else
+				objInfo.red.Activity = false
+				canExCount = 0
+			end
+			objInfo.num = canExCount
+			if lastCanEx > canExCount then
+				CCommon.ShowFlyItem(objInfo.btn,csv.itemId,1)
+			end
+		end
+	end	
+end
+
+function _R.OnUpdateMyInfo(self)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		self.Num.Text = myInfo.contribution.ncur .. "/" .. myInfo.contribution.nmax	
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Integral")
+	self.Moudle = moudle	
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_exchange1")
+	moudle:Get("KEYONH").Text = Csv.Text("commerce_main5")
+	self.Num = moudle:Get("Num")
+
+	_R.RefreshItems(self)
+end
+
+function _R.RefreshItems(self)
+	self.Items = {}
+	local moudle = self.Moudle
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local level = info.level
+		local myInfo = info.myInfo
+		self.Num.Text = myInfo.contribution.ncur .. "/" .. myInfo.contribution.nmax		
+		local content = moudle:Get("content")
+		content:DestroyChildren()
+		local csvLines = {}
+		for k,_ in pairs(Csv.CommerceShop) do
+			local csv = Csv.CommerceShop[k]
+			if csv.locked <= level + 1 then
+				table.insert(csvLines, Csv.CommerceShop[k])
+			end			
+		end
+		table.sort(csvLines, function (a, b)
+			return a.id < b.id
+		end)
+		local exchangeList = myInfo.exchangeList
+		for _,csv in pairs(csvLines) do
+			local tmpId = csv.id
+			local itemId = csv.itemId		
+			local oneMoudle = self:CreateMoudle(content, "M_Gang_Integral_Item")
+			local itemCsv = Csv.Item[itemId]
+			local itemBg = oneMoudle:Get("IconBox")
+			itemBg.SpriteName = itemCsv.colorIcon
+			oneMoudle:Get("Icon").SpriteName = itemCsv.icon
+			oneMoudle:Get("GoodName").Text = itemCsv.name
+			oneMoudle:Get("Score").Text = Csv.Text("commerce_exchange2", {cost = csv.cost})
+			oneMoudle:Get("C_text").Text = Csv.Text("commerce_exchange4")
+			local btn = oneMoudle:Get("C_Btn_b")
+			local numText = oneMoudle:Get("ItemNum")	
+			local red = oneMoudle:Get("Red")
+			local canExCount = 0		
+			if csv.locked > level then
+				oneMoudle:Get("LockText").Text = Csv.Text("commerce_exchange3", {level = csv.locked})
+				red.Activity = false
+				btn.IsGray = true
+				oneMoudle:Get("M_Gang_Integral_Item").IsGray = true
+				oneMoudle:Get("IconBox").IsGray = true
+				oneMoudle:Get("Icon").IsGray = true
+				oneMoudle:Get("GoodName").IsGray = true
+			else				
+				oneMoudle:Get("black").Activity = false
+				itemBg:AddOnButton(function()
+					SoundMgr.Play(10001)
+					CCommon.ShowItemTips(itemId)
+				end)
+				btn:AddOnButton(function()
+					SoundMgr.Play(10001)
+					CCommerce.ExchangeReq(tmpId)
+				end)
+				canExCount = csv.count[level]
+				if canExCount ~= nil and canExCount > 0 then
+					if exchangeList[tmpId] ~= nil then
+						canExCount = canExCount - exchangeList[tmpId]
+						if canExCount <= 0 then
+							canExCount = 0
+						end
+					end
+					numText.Text = tostring(canExCount)
+					if canExCount <= 0 then
+						btn.IsGray = true
+						btn.RaycastTarget = false
+						red.Activity = false
+					end
+				else
+					red.Activity = false
+					canExCount = 0
+				end
+			end
+
+			self.Items[tmpId] = {btn = btn, numText = numText, red = red, num = canExCount, colorSp = itemBg}
+		end
+	end
+end
+
+return _M

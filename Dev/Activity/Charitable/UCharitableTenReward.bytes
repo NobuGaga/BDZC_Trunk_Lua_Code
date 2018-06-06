@@ -1,0 +1,58 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(ids)
+	self:Lock()
+	self._RootNode:AddOnTime(function()
+		self:Unlock()
+	end, nil, 2)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Charitable_Fruit_Continuity")
+	local WidgetCanvas = moudle:Get("WidgetCanvas")
+	WidgetCanvas.Activity = false
+	CCommon.CreateEffect(moudle:Get("FxNode"), 10120)
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+	moudle:Get("C_Btn_a"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("Title").Text = Csv.Text("lottery_12")
+	moudle.SelfRect:AddOnTime(function()
+		WidgetCanvas.Activity = true
+		for index,v in pairs(ids) do
+			TimeDelay.DelayCall((index - 1) * 0.2, false, function( ... )
+				if moudle ~= nil then
+					local itemCsv = Csv.Item[v.itemId]
+					local itemSp = moudle:Get("Item"..index)
+					itemSp.SpriteName = itemCsv.colorIcon
+					moudle:Get("Icon"..index).SpriteName = itemCsv.icon
+					moudle:Get("Num"..index).Text = v.itemNum
+					SoundMgr.Play(11000)
+					itemSp:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+						CCommon.ShowItemTips(v.itemId)
+					end)
+					CCommon.CreateEffect(moudle:Get("FxNode"..index), 10121)
+				end
+			end)
+		end
+	end, nil, 1)	
+end
+
+return _M

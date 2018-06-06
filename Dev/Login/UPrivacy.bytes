@@ -1,0 +1,80 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local ImageSize = {
+	['background'] = { width = 10, height = 190,
+						sliceVector4 = Vector4(1, 1, 62, 122),
+						slice = {
+							left = 1,
+							right = 1,
+							top = 62,
+							bottom = 122,
+						}, 
+					 }, 
+	['button'] = { width = 238, height = 76, }, 
+}
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_iOS_Privacy")
+	moudle:Get("Title").Text = Csv.PrivacyText[1].str
+	moudle:Get("SureText").Text = Csv.PrivacyText[2].str
+	moudle:Get("CancelText").Text = Csv.PrivacyText[3].str
+	
+	local gameName = GameSetting.AppName
+	if gameName == nil or gameName == "" then
+		gameName = Csv.PrivacyText[4].str
+	end
+	moudle:Get("Content").Text = LuaUtil.Format(Csv.PrivacyText[5].str, {gameName = gameName}) 
+	moudle:Get("Sure"):AddOnButton(function( ... )
+		CS.UnityEngine.PlayerPrefs.SetInt("_login_Privacy_", 1)
+		self:Destroy()
+	end)
+	moudle:Get("Cancel"):AddOnButton(function( ... )
+		GameSetting.GameQuit()
+	end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("background", "Privacy"),
+											ImageSize.background.width, ImageSize.background.height,
+											function (sp)
+												if moudle ~= nil then
+													local node = moudle:Get("bg")
+													if node ~= nil then
+														node.Sprite = sp
+													end
+												end
+											end, ImageSize.background.sliceVector4)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("button", "Privacy"),
+											ImageSize.button.width, ImageSize.button.height,
+											function (sp)
+												if moudle ~= nil then
+													local node = moudle:Get("Sure")
+													if node ~= nil then
+														node.Sprite = sp
+													end
+												end
+											end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("button", "Privacy"),
+											ImageSize.button.width, ImageSize.button.height,
+											function (sp)
+												if moudle ~= nil then
+													local node = moudle:Get("Cancel")
+													if node ~= nil then
+														node.Sprite = sp
+													end
+												end
+											end)
+end
+
+return _M
+
+

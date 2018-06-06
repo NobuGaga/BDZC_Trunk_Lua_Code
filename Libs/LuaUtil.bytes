@@ -1,0 +1,425 @@
+local EventCenter = JRequire "Dev.EventCenter"
+--local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local _M = {}
+local _P = {}
+
+local TOW_MUCH_ELEMENTS = "DumpTable Too Much Element, Maybe Looping: "
+local DUMP_TABLE_LIMIT = 200
+
+local function GetType( t )
+    local str = type(t)
+    return string.upper(string.sub(str, 1, 1))..":"
+end
+
+function _M.StringSplit(str, split_char)
+    local sub_str_tab = {}
+    while true do
+        local pos = string.find(str, split_char)
+        if not pos then
+            sub_str_tab[#sub_str_tab + 1] = str
+            break;
+        end
+        local sub_str = string.sub(str, 1, pos - 1)
+        sub_str_tab[#sub_str_tab + 1] = sub_str
+        str = string.sub(str, pos + 1, #str)
+    end
+    return sub_str_tab
+end
+
+function _M.Format(str, param)
+    local ret = str
+    if param ~= nil then
+        for k,v in pairs(param) do
+            ret = string.gsub(ret, '{'..k..'}', tostring(v))
+        end
+    end
+    return ret
+end
+
+function _M.Split( str,reps )
+    local resultStrList = {}
+    string.gsub(str,'[^'..reps..']+',function ( w )
+        table.insert(resultStrList,w)
+    end)
+    return resultStrList
+end
+
+function _M.TextAddThreePoint(obj, text, spaceTime)
+    local tmpTab = 
+    {
+        text,
+        text .. ".",
+        text .. "..",
+        text .. "..."
+    }
+    local index = 1
+    obj.Text = tmpTab[index]
+    local event = obj:AddOnUpdate(function (t, ... )
+        index = index + 1
+        if index > 4 then
+            index = 1
+        end
+        t.Text = tmpTab[index]
+    end, nil, spaceTime or 0.6)
+    return event
+end
+
+function _M.VoicePlayThreePoint(obj,spaceTime)
+    local tmpTab = 
+    {
+        "friend_020",
+        "friend_020_1",
+        "friend_020_2"
+    }
+
+    local index = 1
+    obj.SpriteName = tmpTab[index]
+    local event = obj:AddOnUpdate(function (t, ... )
+        index = index + 1
+        if index > 3 then
+            index = 1
+        end
+        t.SpriteName = tmpTab[index]
+    end, nil, spaceTime or 0.6)
+    return event
+end
+
+local function _dump_table_to_ret(ret, s)
+    ret.count = ret.count + 1
+    if ret.count > DUMP_TABLE_LIMIT then
+        error(TOW_MUCH_ELEMENTS..ret.count)
+    end
+    table.insert(ret, s)
+end
+
+local function _dump_table(t, prefix, indent_input, ret)
+    local indent = indent_input
+    if indent_input == nil then
+        indent = 1
+    end
+
+    local p = nil
+
+    local formatting = string.rep("    ", indent)
+    if prefix ~= nil then
+        formatting = tostring(prefix) .. formatting
+    end
+
+    if t == nil then
+        _dump_table_to_ret(ret, formatting.."nil")
+        return
+    end
+
+    if type(t) ~= "table" then
+        _dump_table_to_ret(ret, formatting..GetType(t)..tostring(t))
+        return
+    end
+
+    local output_count = 0
+    for k,v in pairs(t) do
+        output_count = output_count + 1
+        local str_k = GetType(k)
+        if type(v) == "table" then
+            vstring = tostring(v)
+            if ret.tableOutputted[vstring] == nil then
+                ret.tableOutputted[vstring] = true
+
+                _dump_table_to_ret(ret, formatting..str_k..k.." -> "..vstring)
+                _dump_table(v, prefix, indent + 1, ret)
+            else --为了避免循环输出
+                _dump_table_to_ret(ret, formatting..str_k..k.." -> repeated: "..vstring)
+            end
+        else
+            _dump_table_to_ret(ret, formatting..str_k..k.." -> ".. GetType(v)..tostring(v))
+        end
+    end
+
+    if output_count == 0 then
+        _dump_table_to_ret(ret, formatting.."{}")
+    end
+end
+
+local isEditor = CS.UnityEngine.Application.isEditor
+function _M.DumpTable(t, prefix, indent_input)
+    if isEditor then
+        local ret = {
+            count = 0,
+            tableOutputted = {}, --记录已经输出的表，不再继续输出,否则会循环输出当机
+        }
+        local r, err = pcall(_dump_table, t, prefix, indent_input, ret)
+        if r == false then
+            if string.find(err, TOW_MUCH_ELEMENTS) >= 0 then--如果是过多，还是可以先输出
+                ret.count = nil
+                ret.tableOutputted = nil
+                print(table.concat(ret, '\n')) --最后才一次输出，省的Unity分好多行
+            end
+            error("DumpTable Error: "..tostring(err))
+        else
+            ret.count = nil
+            ret.tableOutputted = nil
+            print(table.concat(ret, '\n')) --最后才一次输出，省的Unity分好多行
+        end
+    end
+end
+
+function _M.GetTime(times)
+	local difTime = os.time() - times
+	local timeStr = ""
+	local num= 0
+	if difTime >= 86400*7 then
+		num = math.floor(difTime/(86400*7))
+		timeStr = Csv.Text("common_day_before",{num = num})--num.."周前"
+	elseif difTime >= 86400 then
+		num = math.floor(difTime/86400)
+		timeStr =Csv.Text("common_week_before",{num = num}) -- num.."天前"
+	else 
+		timeStr = os.date("%H:%M:%S",times)
+	end 
+	return timeStr
+end
+
+--返回 HH:MM:SS
+function _M.GetTimeHMS(second)
+    local hour1,hour2 = math.modf(second/60/60);
+    local hourStr = hour1 < 10 and "0".. hour1 or hour1;
+
+    local min1,min2 = math.modf(second/60);
+    local min = min1%60;
+    local minStr = min < 10 and "0".. min or min;
+
+    local sec = second%60;
+    local secStr = sec < 10 and "0".. sec or sec;
+
+    return hourStr ..":"..minStr..":"..secStr;
+end
+
+--返回 HH:MM
+function _M.GetTimeHM(second)
+    local hour1,hour2 = math.modf(second/60/60);
+    local hourStr = hour1 < 10 and "0".. hour1 or hour1;
+
+    local min1,min2 = math.modf(second/60);
+    local min = min1%60;
+    local minStr = min < 10 and "0".. min or min;
+
+    return hourStr ..":"..minStr
+end
+
+--把时间戳转为年月日
+function _M.TransToYMD(times)
+    local str = ""
+    str = os.date("%Y",times)..Csv.Text("common_year")--"年"
+    str = str..os.date("%m",times)..Csv.Text("common_month")--"月"
+    str = str..os.date("%d",times)..Csv.Text("common_day")--"日"
+    return str;
+end
+
+--把时间戳转为月日
+function _M.TransToMD(times)
+    local str
+    str = os.date("%m",times) .. Csv.Text("common_month")       --"月"
+    str = str .. os.date("%d",times) .. Csv.Text("common_day")  --"日"
+    return str
+end
+function _M.TransToMDH(time)
+    local temp = os.date("*t", time)
+    return Csv.Text("common_MDH", {month = temp.month, day = temp.day, hour = temp.hour})
+end
+
+--把时间戳转为YYYY-MM-DD格式的时间
+function _M.TransToYearMonthDay(times)
+	return os.date("%Y-%m-%d",times);
+end
+
+--把时间戳转为YYYY-MM-DD HH:MM:SS格式的时间
+function _M.TransToYearMonthDayHMS(times)
+	return os.date("%Y-%m-%d %H:%M:%S",times);
+end
+
+--把时间戳转为HH:MM:SS格式的时间
+function _M.TransToHMS(times)
+	return os.date("%H:%M:%S",times);
+end
+
+--xxx分钟前, xxx小时前, xxx天前, xxx月前, xxx年前
+function _M.BeforeXTime(passedTime)
+    local HeartBeat = JRequire "Dev.Player.HeartBeat"
+    local year = 365 * 86400
+    if passedTime <= 30 or passedTime >= HeartBeat.ServSecond() then
+        return Csv.Text("Friend_12")
+    end
+    if passedTime >= year then
+        return Csv.Text("common_year_before", {num = math.floor(passedTime / year)})
+    end
+    local month = 30 * 86400
+    if passedTime >= month then
+        return Csv.Text("common_month_before", {num = math.floor(passedTime / month)})
+    end
+    local week = 7 * 86400
+    if passedTime >= week then
+        return Csv.Text("common_week_before", {num = math.floor(passedTime / week)})
+    end
+    if passedTime >= 86400 then
+        return Csv.Text("common_day_before", {num = math.floor(passedTime / 86400)})
+    end
+    if passedTime >= 3600 then
+        return Csv.Text("common_hh_before", {num = math.floor(passedTime / 3600)})
+    end
+    return Csv.Text("common_mm_before", {num = math.max(0,math.floor(passedTime / 60))})
+end
+
+--大于1天时间 表现为 显示当时星期几
+function _M.GetTimeText(time)
+	local dataDay = math.floor(time/86400)
+	local nowDay = math.floor(os.time()/86400)
+	if nowDay - dataDay > 1 then
+		local weekDay = tonumber(os.date("%w",time))
+		if weekDay == 0 then
+			return Csv.Text("talk_sunday",{time = os.date("%H:%M",time)})--"周日 
+		elseif weekDay == 1 then
+			return Csv.Text("talk_monday",{time = os.date("%H:%M",time)})--"周一 
+		elseif weekDay == 2 then
+			return Csv.Text("talk_tuesday",{time = os.date("%H:%M",time)})--"周二 
+		elseif weekDay == 3 then
+			return Csv.Text("talk_wednesday",{time = os.date("%H:%M",time)})--"周三 
+		elseif weekDay == 4 then
+			return Csv.Text("talk_thursday",{time = os.date("%H:%M",time)})--"周四 
+		elseif weekDay == 5 then
+			return Csv.Text("talk_friday",{time = os.date("%H:%M",time)})--"周五 
+		elseif weekDay == 6 then
+			return Csv.Text("talk_staurday",{time = os.date("%H:%M",time)})--"周六 
+		end
+	elseif nowDay - dataDay > 0 then
+		return Csv.Text("talk_yesterday",{time = os.date("%H:%M",time)})--昨天
+	end
+	return os.date("%H:%M",time)
+end
+
+function _M.TodayStartTime(time)
+    local temp = os.date("*t", time)
+    temp.hour = 0
+    temp.min = 0
+    temp.sec = 0
+    return os.time(temp)
+end
+--到12点的时间
+function _M.NextDayTime(time)
+   return _M.TodayStartTime(time) + 86400
+end
+
+--倒计时
+_M.refreshTimeTable = {}
+function _M.RefreshTime(_tick,_handle)
+    if _tick ~= nil and _handle ~= nil then
+	    if _P.CheckHandle(_tick,_handle) == false then
+	    	table.insert(_M.refreshTimeTable,{tick = _tick,handle = _handle})
+        end
+    end
+	
+	local _refreshTimes = _M.refreshTimeTable
+	if _M.Handle == nil then
+		_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+			local index = 0
+			for k,v in pairs(_refreshTimes) do
+                v.tick = v.tick - 1
+				v.handle(v.tick)
+                
+				if v.tick<=0 then
+					table.remove(_refreshTimes,k)
+				end
+			end
+	
+			if #_refreshTimes <= 0 then
+				EventCenter.UnRegistCallEvent(_M.Handle)
+				_M.Handle = nil
+			end
+			_M.refreshTimeTable = _refreshTimes
+		end)
+    end
+end
+
+function _M.CloseTimeHandle()
+    _M.refreshTimeTable = {}
+    if _M.Handle ~= nil then
+        EventCenter.UnRegistCallEvent(_M.Handle)
+        _M.Handle = nil
+    end
+end
+
+function _P.CheckHandle(_tick,_handle)
+	for k,v in pairs(_M.refreshTimeTable) do
+		if v.handle == _handle then
+			v.tick = _tick
+			return true
+		end
+	end
+	return false
+end
+
+function _M.GetNumByOut(_num)
+    if _num >= 100000000 then
+        return Csv.Text("common_hundred_million",{num = string.format("%0.3f", _num/100000000)})
+    else
+        return num
+    end
+end
+
+function _M.NumberFormat(num)
+    if num <= 999999 then
+        return tostring(num)
+    end
+    local str = tostring(num)
+    local len = string.len(str)
+    if num <= 99999999 then
+        return Csv.Text("common_bigNum1", {num1 = string.sub(str, 1, len - 4)})
+    end    
+    return Csv.Text("common_bigNum", {num1 = string.sub(str, 1, len - 8), num2 = string.sub(str, len - 7, len - 5)})
+    -- return Csv.Text("common_bigNum", {num1 = string.sub(str, 1, len - 8)})
+end
+
+function _M.Shuffle(array)
+    if array ~= nil then
+        local count = #array
+        if count > 0 then
+            local tmp = {}
+            for i=1,count do
+                table.insert(tmp, array[i])
+            end
+            local ret = {}
+            for i=1,count do
+                local index = math.random(1, #tmp)
+                table.insert(ret, tmp[index])
+                table.remove(tmp, index)
+            end
+            return ret
+        end
+    end
+    return {}
+end
+
+--计算字符串字节数
+function _M.StringLenght(text)
+    local count = 0  
+    for uchar in string.gmatch(text, "([%z\1-\127\194-\244][\128-\191]*)") do   
+        if #uchar ~= 1 then  
+            count = count +2  
+        else  
+            count = count +1  
+        end  
+    end 
+    return count
+end
+
+--[[
+    @desc: 删除头尾空字符
+    --@str: string
+    return string
+]]
+function _M.Trim(str)
+    if not str then
+        return str
+    end
+    return (string.gsub(str, "^%s*(.-)%s*$", "%1"))  
+end  
+
+return _M

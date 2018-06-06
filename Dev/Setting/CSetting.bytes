@@ -1,0 +1,81 @@
+--@RefType [Dev.Setting.MSetting.bytes#_M]
+local MSetting = JRequire "Dev.Setting.MSetting"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = {}
+local _P = {}
+local _R = {}
+ --
+
+--预留SDK交互
+--[[local CMD_ID = 
+{
+	--cCDKey	=	1,--预留请求兑换码  未定PQuest.CActiveAw
+
+	--sCdkey	=	1,--获得兑换后物品  未定 PQuest.CActiveAw
+}]] --模块注册 预留SDK
+function _M.ModuleInit(isReload) --
+    --[[发送消息协议注册
+	local func_send = 
+	{
+		--[CMD_ID.cCDKey] = 未定"PQuest.CActiveAward",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		--[CMD_ID.sCdkey] = {	proto = 未定"PQuest.PMainQuest", 	handle = _P.OnMainUpdate},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Setting, func_send, func_recv, isReload)	
+	]]
+end
+
+--清空模块
+function _M.ModuleClean()
+    MSetting.Clean()
+end
+
+-- 初始化
+function _P.OnInit()
+end
+
+function _M.LoadSetting()
+    local hasBackGroundVolume = CS.UnityEngine.PlayerPrefs.HasKey("BackGroundVolume")
+    local hasHumanVoice = CS.UnityEngine.PlayerPrefs.HasKey("HumanVoice")
+    local hasEffectVoice = CS.UnityEngine.PlayerPrefs.HasKey("EffectVoice")
+
+	if (not hasBackGroundVolume) or (not hasHumanVoice) or (not hasEffectVoice) then
+		MSetting.OnSaveSetting()
+	end
+
+	MSetting.BackGroundVolume = CS.UnityEngine.PlayerPrefs.GetFloat("BackGroundVolume")
+    MSetting.HumanVoice = CS.UnityEngine.PlayerPrefs.GetFloat("HumanVoice")
+    MSetting.EffectVoice = CS.UnityEngine.PlayerPrefs.GetFloat("EffectVoice")
+    MSetting.BackGroundSwitch = CS.UnityEngine.PlayerPrefs.GetFloat("BackGroundSwitch")
+    MSetting.HumanVoiceSwitch = CS.UnityEngine.PlayerPrefs.GetFloat("HumanVoiceSwitch")
+    MSetting.EffectVoiceSwitch = CS.UnityEngine.PlayerPrefs.GetFloat("EffectVoiceSwitch")
+
+    _M.SetBackGround((MSetting.BackGroundSwitch == 1 and MSetting.BackGroundVolume) or 0)
+    _M.SetHumanVoice((MSetting.HumanVoiceSwitch == 1 and MSetting.HumanVoice) or 0)
+    _M.SetEffectVoice((MSetting.EffectVoiceSwitch == 1 and MSetting.EffectVoice) or 0)
+end
+
+function _M.SetBackGround(volume)
+	SoundMgr.SetMusicVolume(volume / 100)
+	SoundMgr.SetRoundVolume(volume / 100)
+end
+
+function _M.SetHumanVoice(volume)
+	SoundMgr.SetVoiceVolume(volume / 100)
+end
+
+function _M.SetEffectVoice(volume)
+	SoundMgr.SetUIVolume(volume / 100)
+	SoundMgr.SetGetVolume(volume / 100)
+	SoundMgr.SetSystemVolume(volume / 100)
+end
+
+_M.LoadSetting()
+
+return _M

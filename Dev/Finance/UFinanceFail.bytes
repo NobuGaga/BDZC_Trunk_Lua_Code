@@ -1,0 +1,42 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local failActorId = 10022
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		WindowMgr.Call("UFinanceBattle","RefreshFight")
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PKFail")
+	self.Moudle = moudle
+
+	-- 播放战斗失败特效
+	SoundMgr.Play(10015)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), failActorId)
+
+	local text1 = moudle:Get("text1")
+	local text2 = moudle:Get("text2")
+	local text3 = moudle:Get("text3")
+	text1.Text = Csv.Text("finance_failTitle_fb1",{wave =MFinance.Waves, num = data.hurt})--"对【第"..MFinance.Waves.."波】抵御了"..data.hurt.."点伤害"
+	text2.Text = Csv.Text("finance_fail_fb1")--"抵御失败"
+	text3.Text = Csv.Text("finance_failagain_fb1")--"还请老总再接再厉哦！"
+end
+return _M

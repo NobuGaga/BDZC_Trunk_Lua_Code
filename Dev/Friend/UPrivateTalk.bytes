@@ -1,0 +1,453 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MTalk = JRequire "Dev.Talk.MTalk"
+local CTalk = JRequire "Dev.Talk.CTalk"
+local UPlayerMenuPop = JRequire "Dev.Friend.UPlayerMenuPop"
+
+----------------------CS类引用--------------------------
+local VoiceChat = CS.Speaker.VoiceChat
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+function _M:BeforeDestroy( ... )
+	SoundMgr.DestroyVoice()
+	SoundMgr.EndVoiceRecord()
+
+	if self.MenuPopObj ~= nil then
+		self.MenuPopObj:Destroy()
+		self.MenuPopObj:delete()
+		self.MenuPopObj = nil
+	end
+end
+
+function _R.OnPrivateTalk(self, playerId, newMsg)
+	-- print("OnPrivateTalk::", playerId, newMsg.voiceIndex)
+	if playerId ~= self.PlayerID then
+		return
+	end
+	MFriend.PrivateTalkSetRead(playerId)
+	_P.CreateTalkItem(self, newMsg)
+
+	if #self.MessageObjs > MFriend.PRIVATE_TALK_COUNT then
+		local first = self.MessageObjs[1]
+		if first ~= nil then
+			first:Destroy()
+		end
+		table.remove(self.MessageObjs, 1)
+	end
+
+	local contentHeight = 0
+	for _,oneMoudle in pairs(self.MessageObjs) do
+		contentHeight = contentHeight + oneMoudle.SelfRect.SizeDelta.y + 10
+	end
+	if contentHeight > 0 then
+		contentHeight = contentHeight -10
+
+		if contentHeight > 1130 then
+			self.ViewContent.AnchorMin = Vector2(0.5, 0)
+			self.ViewContent.AnchorMax = Vector2(0.5, 0)
+			self.ViewContent.Pivot = Vector2(0.5, 0)
+			self.ViewContent:AddVerticalLayoutGroup().childAlignment = 7
+			self.ViewContent.LocalPosition = Vector2.zero
+		else
+			self.ViewContent.AnchorMin = Vector2(0.5, 1)
+			self.ViewContent.AnchorMax = Vector2(0.5, 1)
+			self.ViewContent.Pivot = Vector2(0.5, 1)
+			self.ViewContent:AddVerticalLayoutGroup().childAlignment = 1
+			self.ViewContent.LocalPosition = Vector2.zero
+		end
+	end
+end
+
+function _R.OnCheckBlacklist(self)
+	if MFriend.CheckRelation(self.PlayerID, MFriend.RelationType.BlackList) then
+		self:Destroy()
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.CreateTalkItem(self, msgInfo)
+	local oneMoudle
+	local csvVip
+	if msgInfo.from == 1 then
+		oneMoudle = self:CreateMoudle(self.ViewContent, "M_Talk_Item_2")
+		oneMoudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+		local vip = MPlayer.GetVip()
+
+		oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..vip
+
+		local titleId = MPlayer.GetTitleID()
+		if titleId ~= nil and titleId > 0 then
+			-- oneMoudle:Get("title").Text = Csv.Title[titleId].name
+			_P.SetTalkItemTitle(oneMoudle, titleId)
+		end
+		oneMoudle:Get("sender").Text = MPlayer.GetName()
+
+		csvVip = Csv.Vip[vip]
+		if csvVip.imgBord ~= nil then
+			oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+		else
+			oneMoudle:Get("OutBox").Activity = false
+		end
+
+		if csvVip.imgTalk ~= nil then
+			oneMoudle:Get("talk").SpriteName = csvVip.imgTalk
+		end
+	else
+		local playerInfo = MFriend.GetPrivateTalkInfo(self.PlayerID)
+		oneMoudle = self:CreateMoudle(self.ViewContent, "M_Talk_Item")
+		oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(playerInfo.headId,playerInfo.sex,true)
+
+		oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
+
+		if playerInfo.titleId ~= nil and playerInfo.titleId > 0 then
+			-- oneMoudle:Get("title").Text = Csv.Title[playerInfo.titleId].name
+			_P.SetTalkItemTitle(oneMoudle, playerInfo.titleId)
+		end
+		oneMoudle:Get("sender").Text = playerInfo.name
+		if not GameSetting.IsiOSCommit then
+			local headIcon = oneMoudle:Get("HeadBox")
+			headIcon:AddOnButton(function( ... )
+				if self.MenuPopObj ~= nil then
+					self.MenuPopObj:Destroy()
+					self.MenuPopObj:delete()
+					self.MenuPopObj = nil
+				end
+				self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, {
+					MFriend.PlayerMenu.Look,
+					MFriend.PlayerMenu.Copy,
+					MFriend.PlayerMenu.AddFriend,
+					MFriend.PlayerMenu.DelFriend,
+					MFriend.PlayerMenu.AddBlacklist,
+					MFriend.PlayerMenu.DelBlacklist,
+				},headIcon.RootCanvasPos + Vector2(100, -20), playerInfo.name)	
+			end)
+		end
+
+		csvVip = Csv.Vip[playerInfo.vip]
+		if csvVip.imgBord ~= nil then
+			oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+		else
+			oneMoudle:Get("OutBox").Activity = false
+		end
+
+		if csvVip.imgTalk ~= nil then
+			oneMoudle:Get("talk").SpriteName = csvVip.imgTalk
+		end
+	end
+	table.insert(self.MessageObjs, oneMoudle)
+	local isHaveTime = false
+	if msgInfo.time - self.LastInsertTime > 1800 then
+		isHaveTime = true
+		oneMoudle:Get("time").Text = LuaUtil.GetTimeText(msgInfo.time)
+	else
+		isHaveTime = false
+		oneMoudle:Get("timeImg").Activity = false
+	end
+	oneMoudle:Get("Icon").Activity = false
+	self.LastInsertTime = msgInfo.time
+	if msgInfo.voiceIndex ~= nil and msgInfo.voiceIndex > 0 then
+		oneMoudle:Get("talk").Activity = false
+		local voiceNoce = oneMoudle:Get("voice")
+		voiceNoce.Activity = true
+		oneMoudle:Get("Time2").Text = msgInfo.voiceTime .. "\""
+		local size = voiceNoce.SizeDelta
+		size.x = math.max( math.min(msgInfo.voiceTime * 46 , 460), 160 )
+		voiceNoce.SizeDelta = size
+		voiceNoce:AddOnButton(function ( ... )
+			if self.LastVoiceInfo ~= nil and self.LastVoiceInfo.Sprite ~= nil then
+				self.LastVoiceInfo.Event:Destroy()
+				self.LastVoiceInfo.TimeEvent:Destroy()
+				self.LastVoiceInfo.Sprite.SpriteName = "friend_020_2"
+				self.LastVoiceInfo = nil
+			end
+
+			if msgInfo.from == 1 then
+				CFriend.PlayVoiceChat(MPlayer.GetId(), msgInfo.voiceIndex)
+			else
+				CFriend.PlayVoiceChat(self.PlayerID, msgInfo.voiceIndex)
+			end
+
+			local voiceSp = oneMoudle:Get("voice_0")
+			local event = LuaUtil.VoicePlayThreePoint(voiceSp)
+			local ontime = voiceSp:AddOnTime(function()
+				voiceSp.SpriteName = "friend_020_2"
+				event:Destroy()
+				self.LastVoiceInfo = nil
+			end,nil,msgInfo.voiceTime)
+			self.LastVoiceInfo = 
+			{
+				Event = event,
+				Sprite = voiceSp,
+				TimeEvent = ontime
+			}	
+		end)
+		if isHaveTime then
+			oneMoudle.SelfRect.SizeDelta = Vector2(730,240)
+		else
+			oneMoudle.SelfRect.SizeDelta = Vector2(730,150)
+			oneMoudle:Get("Info").LocalPosition = Vector2(0, -80)
+		end	
+	else
+		local talkValue = oneMoudle:Get("value")
+		local talkBg = oneMoudle:Get("talk")
+		talkValue.Text = msgInfo.value or ""
+
+		local width = talkValue.PreferredWidth
+		local BgH = talkValue.PreferredHeight + 40
+		local BgW = width
+		if BgW > 400 then
+			BgW = 400
+		end
+		if width/400 >= 1 then
+			BgW = BgW + 30
+		end
+		talkValue.SizeDelta = Vector2(BgW,BgH - 40)
+		talkBg.SizeDelta = Vector2(BgW + 80,BgH)
+		local valueHeight = 0
+		if BgH >= 90 then
+			valueHeight = BgH - 60
+		end
+		if isHaveTime then
+			oneMoudle.SelfRect.SizeDelta = Vector2(730,240 + valueHeight)
+		else
+			oneMoudle.SelfRect.SizeDelta = Vector2(730,150 + valueHeight)
+			oneMoudle:Get("Info").LocalPosition = Vector2(0, -80)
+		end		
+	end
+
+	return oneMoudle.SelfRect.SizeDelta.y
+end
+
+function _P.SetTalkItemTitle(moudle, titleID)
+	local titleText = moudle:Get("title")
+	local fashionData = Csv.Title[titleID]
+	--兼容没有配置称号图标, 使用文本称号显示
+	if fashionData.chatIcon then
+		local nameText = moudle:Get("sender")
+		local titleImg = moudle:Get("titleImg")
+		local pos = nameText.LocalPosition
+		nameText.LocalPosition = Vector2(pos.x - titleText.LocalPosition.x, pos.y)
+		titleImg.SpriteName = fashionData.chatIcon
+		titleImg:SetNativeSize()
+	elseif fashionData.name then
+		titleText.Text = fashionData.name
+	end
+end
+
+function _P.RefreshTalkType(self)
+	local moudle = self.Moudle
+	if self.TalkType == 1 then
+		self.Img1.Activity = true
+		self.Img2.Activity = false
+		self.TextInput.Activity = true
+		self.VoiceInput.Activity = false
+		self.VoiceRoot.Activity = false
+		self.SendBtn.Activity = true
+	else
+		self.Img1.Activity = false
+		self.Img2.Activity = true
+		self.TextInput.Activity = false
+		self.VoiceInput.Activity = true
+		self.VoiceRoot.Activity = false
+		self.SendBtn.Activity = false
+	end
+end
+
+--界面构建
+function _M:OnCreate(playerId, playerName)
+	self.PlayerID = playerId
+	CFriend.OpendPrivateTalk(self.PlayerID)
+
+	--设置录音的最短和最大长度
+	VoiceChat.Inst:SetRecordLen(2, 15)
+	--设置采样率
+	VoiceChat.Inst:SetRecordFrequency(8000)
+	--设置音量缩放值
+	VoiceChat.Inst:SetRecordGain(6)
+
+	self.LastInsertTime = 0
+	self.TalkType = 1
+	local moudle = self:CreateMoudle(self._RootNode, "M_Friend_Talk")
+	self.Moudle = moudle
+	self.ViewContent = moudle:Get("content")
+	self.MessageObjs = {}
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local helpBtn = moudle:Get("HelpBtn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	if playerName ~= nil then
+		moudle:Get("C_Text").Text = playerName
+	end
+	local messages = MFriend.GetPrivateTalkMsg(self.PlayerID)
+	if messages ~= nil and #messages > 0 then
+		local contentHeight = 0
+		for _,msgInfo in pairs(messages) do
+			local h =_P.CreateTalkItem(self, msgInfo)
+			contentHeight = contentHeight + h + 10
+		end
+		if contentHeight > 0 then
+			contentHeight = contentHeight -10
+
+			if contentHeight > 1130 then
+				self.ViewContent.AnchorMin = Vector2(0.5, 0)
+				self.ViewContent.AnchorMax = Vector2(0.5, 0)
+				self.ViewContent.Pivot = Vector2(0.5, 0)
+				self.ViewContent:AddVerticalLayoutGroup().childAlignment = 7
+				self.ViewContent.LocalPosition = Vector2.zero
+			else
+				self.ViewContent.AnchorMin = Vector2(0.5, 1)
+				self.ViewContent.AnchorMax = Vector2(0.5, 1)
+				self.ViewContent.Pivot = Vector2(0.5, 1)
+				self.ViewContent:AddVerticalLayoutGroup().childAlignment = 1
+				self.ViewContent.LocalPosition = Vector2.zero
+			end
+		end
+	end
+	self.PlayPopCanvas = moudle:Get("PlayPopCanvas")
+	self.Img1 = moudle:Get("Img1")
+	self.Img2 = moudle:Get("Img2")
+	self.TextInput = moudle:Get("TextInput")
+	self.VoiceInput = moudle:Get("VoiceInput")
+	self.VoiceRoot = moudle:Get("Voice")
+	self.Record = moudle:Get("Record")
+	self.Cancel = moudle:Get("Cancel")
+	self.Cancel.Activity = false
+	self.SendBtn = moudle:Get("sendBtn")
+	self.Img1:AddOnButton(function( ... )
+		self.TalkType = 2
+		_P.RefreshTalkType(self)
+	end)
+	self.Img2:AddOnButton(function( ... )
+		self.TalkType = 1
+		_P.RefreshTalkType(self)
+	end)
+	_P.RefreshTalkType(self)
+	moudle:Get("sendText").Text = Csv.Text("talk_sendText")
+	self.TextInput = moudle:Get("TextInput")
+	self.TextInput.PlaceholderWidget.Text = Csv.Text("talk_inputText")
+	self.VoiceInputText = moudle:Get("VoiceInputText")
+	self.VoiceInputText.Text = Csv.Text("Friend_34")
+	moudle:Get("Text1").Text = Csv.Text("Friend_36")
+	moudle:Get("Text2").Text = Csv.Text("Friend_37")
+	self.SendBtn:AddOnButton(function( ... )
+		--文本
+		local text = self.TextInput.Text
+		if text == nil or text == "" or string.len(text) <= 0 then
+			--空
+			CCommon.ShowError(Csv.Text("talk_empty"))
+		elseif string.len(text) > 120 then
+			--超字数
+			CCommon.ShowError(Csv.Text("talk_full"))
+		else
+			CTalk.SendNewTalk(MTalk.Channel.PrivateMsg, text, self.PlayerID)
+			self.TextInput.Text = ""
+		end		
+	end)
+	self.VoiceFill = moudle:Get("Img2_0")
+	self.VoiceFill.FillAmount = 0.1
+	self.DragDeltaY = 0
+	self.ClipData = nil
+	self.ClipLen = 0
+	self.IsRecordingFull = false
+	--音量/长度变更刷新
+	VoiceChat.Inst:SetVolumeShow(function(volume, len)
+		if moudle ~= nil then
+			self.VoiceFill.FillAmount = math.max(0.1,volume)
+
+			if len >= 15 and not self.IsRecordingFull then
+				self.IsRecordingFull = true
+				CCommon.ShowError(Csv.Text("Friend_40"))
+			end
+		end
+	end)
+	--录音结束回调
+	VoiceChat.Inst:SetRecordStopCall(function(len, data)
+		if moudle ~= nil then
+			self.ClipData = data
+			self.ClipLen = len
+		end
+	end)	
+	self.VoiceInput:AddOnPress(function (obj, arg, data)
+		if data.isPress then
+			SoundMgr.StartVoiceRecord()
+			self.DragDeltaY = 0
+			self.VoiceInputText.Text = Csv.Text("Friend_35")
+			self.VoiceRoot.Activity = true
+			self.Record.Activity = true
+			self.Cancel.Activity = false
+			self.ClipData = nil
+			self.ClipLen = 0
+			VoiceChat.Inst:StartRecord()
+			self.IsRecordingFull = false			
+		else
+			self.VoiceInputText.Text = Csv.Text("Friend_34")
+			self.VoiceRoot.Activity = false
+			self.Record.Activity = false
+			self.Cancel.Activity = true
+			VoiceChat.Inst:StopRecord()
+			self.IsRecordingFull = false
+			SoundMgr.EndVoiceRecord()
+			if self.DragDeltaY <= 200 then
+				if self.ClipData ~= nil then
+					--发送消息
+					CFriend.SendVoiceChat(MTalk.Channel.PrivateMsg, self.ClipData, self.ClipLen, self.PlayerID)
+					self.ClipData = nil
+					self.ClipLen = -1
+				elseif self.ClipLen == -1 then
+
+				elseif self.ClipLen <= 2 then
+					CCommon.ShowError(Csv.Text("Friend_38"))
+				else
+					CCommon.ShowError(Csv.Text("Friend_39"))
+				end
+			end
+		end
+		self.VoiceFill.FillAmount = 0.1
+	end)
+	self.VoiceInput:AddOnDrag(function (obj, arg, data)
+		self.DragDeltaY = self.DragDeltaY + data.delta.y
+		if self.DragDeltaY > 200 then
+			self.Record.Activity = false
+			self.Cancel.Activity = true
+		else
+			self.Record.Activity = true
+			self.Cancel.Activity = false
+		end
+	end)
+	
+end
+
+return _M

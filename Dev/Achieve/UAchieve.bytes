@@ -1,0 +1,129 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MAchieve = JRequire "Dev.Achieve.MAchieve"
+local CAchieve = JRequire "Dev.Achieve.CAchieve"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Achievement")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("achieve_title")
+
+	local content = moudle:Get("content")
+	self.mAchieveTable = {}
+	for k,v in pairs(MAchieve.AchieveList) do
+		local achieve = {}
+		local achieveMoudle = JGuiManager.GetMoudle(content,"M_Achievement_Item")
+		_P.CreateItem(self,achieveMoudle,v)
+		achieve.moudle = achieveMoudle
+		self.mAchieveTable[v.questid] = achieve
+	end
+end
+
+function _P.CreateItem(self,moudle,data)
+	local csvAchieve = Csv.Achievement[data.questid]
+	local csvAchieveLv
+	local isLast
+	if data.pro <= 0 then
+		csvAchieveLv = Csv.AchieveLevel[csvAchieve.levelNum[#csvAchieve.levelNum]]
+	else
+		local pro = _P.GetLastPro(data.questid,data.pro)
+		csvAchieveLv = Csv.AchieveLevel[pro]
+		isLast = _P.GetIsLast(data.questid,data.pro)
+	end
+	local maxVal = csvAchieveLv.value
+	local ImgIcon = moudle:Get("Icon")
+	ImgIcon.SpriteName = csvAchieve.icon
+	moudle:Get("RectClick"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UAchieveDetail", data.questid)
+	end,nil,0.9)
+	moudle:Get("Text").Text = csvAchieve.descOut
+	local TextNum = moudle:Get("Num")
+	if csvAchieve.type ~= nil and csvAchieve.type == 1 then
+		local nowLevelName = Csv.Company[data.val].name
+		local maxLevelName = Csv.Company[maxVal].name
+		local text = Csv.Text("company_exp",{num = nowLevelName,max = maxLevelName})
+		if string.len(text) > 15 then
+			text = CS.Utility.Utils.GetStringFont(text,5).."..."
+		end
+		TextNum.Text = text
+	else
+		TextNum.Text = Csv.Text("company_exp",{num = data.val,max = maxVal})
+	end
+	local ImgRed = moudle:Get("RedPoint")
+	if data.pro <= 0 or isLast then
+		ImgRed.Activity = false
+	else
+		if data.val >= maxVal then
+			ImgRed.Activity = true
+		else
+			ImgRed.Activity = false
+		end
+	end
+
+	local sliderValue = 0
+	local sliderMax = 0
+	for k,v in ipairs(csvAchieve.levelNum) do
+		if k < #csvAchieve.levelNum then
+			local cost = Csv.AchieveLevel[v].value
+			if data.val >= cost then
+				sliderValue = sliderValue + 1
+			end
+			sliderMax = sliderMax + 1
+		end
+	end
+	moudle:Get("slider").FillAmount = sliderValue/sliderMax
+end
+
+function _P.GetLastPro(questid,pro)
+	local csvAchieve = Csv.Achievement[questid]
+	if csvAchieve ~= nil then
+		local pros = csvAchieve.levelNum
+		local maxPro = pros[#pros]
+		if pro >= maxPro then
+			return pros[#pros - 1]
+		end
+	end
+	return pro
+end
+
+function _P.GetIsLast(questid,pro)
+	local csvAchieve = Csv.Achievement[questid]
+	if csvAchieve ~= nil then
+		local pros = csvAchieve.levelNum
+		local maxPro = pros[#pros]
+		if pro >= maxPro then
+			return true
+		end
+	end
+	return false
+end
+
+function _R.GetAward(self,data)
+	local achieve = self.mAchieveTable[data.questid]
+	if achieve ~= nil then
+		local moudle = achieve.moudle
+		_P.CreateItem(self,moudle,data)
+	end
+end
+
+return _M

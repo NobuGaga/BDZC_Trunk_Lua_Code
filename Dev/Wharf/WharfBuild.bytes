@@ -1,0 +1,91 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MGirl = JRequire"Dev.Girl.MGirl"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_building")
+	local closeBtn = moudle:Get("backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local data = Csv.WharfBuild[id]
+
+	local content = moudle:Get("Content")
+	local nameText = moudle:Get("name")
+
+	nameText.Text = data.name
+
+	for k,v in pairs(data.peoples) do
+		local peopleData = Csv.WharfPeople[v]
+		if peopleData ~= nil then
+			if peopleData.type == 2 then
+				if MGirl.GetGirlData(peopleData.girlId) ~= nil then
+					_P.CreatItem(content,v)
+				end
+			else
+				_P.CreatItem(content,v)
+			end
+				
+		end
+	end
+end
+
+function _P.CreatItem(parent,id)
+	local _data = Csv.WharfPeople[id]
+	local _moudle = JGuiManager.GetMoudle(parent, "M_Inquiries_build_item", WindowType.UI, 10)
+
+	local bgSp = _moudle:Get("bg")
+	local bsx = _moudle:Get("bsx")
+	local name = _moudle:Get("C_text_0")
+	local jobText = _moudle:Get("jobText")
+	local desc = _moudle:Get("desc")
+	local lockText = _moudle:Get("lockText")
+	local lockSp = _moudle:Get("lock")
+	local meetText = _moudle:Get("meet")
+
+	bgSp.SpriteName = _data.bg
+	bsx.SpriteName = _data.icon
+	name.Text = _data.name
+	jobText.Text = _data.job
+	desc.Text = _data.desc
+
+	bsx:SetNativeSize()
+
+	if _data.type == 2 then
+		lockText.Text = _data.lock
+		lockSp.Activity = true
+
+		if _data.meetUnlock ~= nil then
+			if _data.meetUnlock >0 then
+				local meetNum = MWharf.GetMeetByID(_data.girlId)
+				meetText.Text = Csv.Text("Wharf_build_meet",{num = meetNum,max = _data.meetUnlock})
+			end
+		end
+	else
+		lockSp.Activity = false
+	end
+end
+
+return _M

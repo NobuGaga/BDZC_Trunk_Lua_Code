@@ -1,0 +1,167 @@
+-- 奇遇选择员工界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_ChooseStaff")
+	self.mModule = module
+
+	self.mData = data
+	LuaUtil.DumpTable(data)
+	self.mRawTableItems = {}
+	self.mCondition = data.eventInfo.attrInfo
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	self.content = module:Get("content")
+
+	_P.SetOwnStaffList(self,self.mCondition)
+end
+
+function _P.GetSortStaffs(self,rawTable, suitData)
+	local sortTable = {}
+	local suitTable = {} --符合条件的
+	local unsuitTable = {} --不符合条件的
+	local totalTable = {}--一共的
+	--TODO：
+	-- for k,v in pairs(rawTable) do
+	-- 	--符合条件的
+	-- 	if _P.CheckIsSuit(self,suitData,v) then
+	-- 		table.insert(suitTable,v)
+	-- 	else
+	-- 		table.insert(unsuitTable,v)
+	-- 	end
+	-- end
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+
+	table.sort(sortTable,function(a,b)
+		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
+	end)
+	print("sortTable",#sortTable)
+	return sortTable
+end
+
+--检测这名员工是否符合需求
+function _P.CheckIsSuit(self,suitData, data)
+	local checkSum = 1 	--符合度
+	local checkSeed = 1000 --防止单属性偏差过大
+	local csvPerson = Csv.Personnel[data.id]
+	for i=1,#suitData do
+		--四种基本属性：公关，行政，技术，营销 走一套
+		if suitData[i].type <= 4 then
+			local dataVal = MStaff.GetAttrByType(data.id, suitData[i].type)
+			checkSum = checkSum + (dataVal - suitData[i].val) * checkSeed
+			--指定员工
+			if suitData[i].params ~= -1 then
+				if data.id ~= suitData[i].params then
+					checkSum = 0
+				end
+			end
+		end
+	end
+	return checkSum
+end
+
+function _P.SetOwnStaffList(self,suitData)
+	local contentTransform = self.content
+	contentTransform:DestroyChildren()
+
+	local staffTableDatas = _P.GetSortStaffs(self, MStaff.StaffTable, suitData)
+	for k,v in pairs(staffTableDatas) do
+		self.mRawTableItems[v.id] = _P.OnCreateOwnItem(self,v,contentTransform,suitData)
+	end
+end
+
+function _P.OnCreateOwnItem(self,data,content,suitdata)
+	local staff = {}
+	local itemMoudle = JGuiManager.GetMoudle(content, "M_Adventure_Choose_Item", WindowType.UI, 10)
+
+	local csvPerson = Csv.Personnel[data.id]
+	local ImgIcon = itemMoudle:Get("head")
+	ImgIcon.SpriteName = csvPerson.asset3
+
+	local TextLevel = itemMoudle:Get("number1")
+	TextLevel.Text = data.level
+	local sendBtnText = itemMoudle:Get("C_Text")
+	local sendBtn = itemMoudle:Get("C_Btn_b")
+	sendBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickSendItem(self,data)
+		end, nil, 1)
+	local TextName = itemMoudle:Get("name")
+	TextName.Text = MStaff.GetStaffName(data.id)
+	
+	--TODO:资质图标
+	_P.SetStaffItem(self,suitdata,data,itemMoudle)
+	local unSuit = itemMoudle:Get("Tips")
+	unSuit.Text = Csv.Text("adventure_unsuit")
+	--	只用判断符不符合条件并且可不可用
+	if _P.CheckIsSuit(self,suitdata,data) > 0 and not _P.IsUse(self,data.id) then
+		unSuit.Activity = false
+		sendBtn.Activity = true
+	else
+		unSuit.Activity = true
+		sendBtn.Activity = false
+	end
+
+	sendBtnText.Text = Csv.Text("adventure_staff_send")
+	local allattrText = itemMoudle:Get("number2")
+	allattrText.Text = MStaff.GetAllAttr(data.id)
+	itemMoudle:Get("combat").Text = Csv.Text("adventure_staff_allattr")
+end
+
+function _P.SetStaffItem(self,suitData,data,module)
+	local suitType = suitData[1].type
+	--如果没有配四种属性默认取第一种把
+	if suitType > 4 then 
+		suitType = MActivity.AdvReqTypeEnum.Gongguan
+	end
+	if suitType == MActivity.AdvReqTypeEnum.Gongguan then
+			module:Get("icon1").SpriteName = "ty_133"
+	elseif suitType == MActivity.AdvReqTypeEnum.Xingzheng then
+		module:Get("icon1").SpriteName = "ty_134"
+	elseif suitType == MActivity.AdvReqTypeEnum.Tech then
+		module:Get("icon1").SpriteName = "ty_135"
+	elseif suitType == MActivity.AdvReqTypeEnum.Sell then
+		module:Get("icon1").SpriteName = "ty_136"
+	end
+
+	module:Get("number2_0").Text = MStaff.GetAttrByType(data.id, suitType)
+end
+
+-- 是否已经使用过
+function _P.IsUse(self,id)
+	return false
+end
+
+-- 派遣员工
+function _P.OnClickSendItem(self,data)
+	--请求派遣
+	-- CActivity.ReqAdvGangEventEnd(self.mData.actId, self.mData.eventIndex,data.id)
+	print("派遣了id为"..data.id.."的员工")
+	self:Destroy()
+	-- _P.FindNext(self)
+end
+
+return _M

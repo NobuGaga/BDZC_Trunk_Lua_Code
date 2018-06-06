@@ -1,0 +1,172 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local JGuiManager = CS.JGui.JGuiManager
+local MBag = JRequire "Dev.Bag.MBag"
+local MVote = JRequire "Dev.Vote.MVote"
+local CVote = JRequire "Dev.Vote.CVote"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local LuaUtil = JRequire"Libs.LuaUtil"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local Seat_Num = 9
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Study_Main")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	moudle:Get("C_Text").Text = Csv.Text("vote_55")
+	moudle:Get("Profit").Text = Csv.Text("vote_56")
+	moudle:Get("Text3").Text = Csv.Text("vote_61")
+	
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if self._SysId ~= nil and Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	CVote.ReqVoteStudyInit()
+end
+
+function _R.RefreshView(self,data)
+	local moudle = self.mMoudle
+	self.IsInvited = data.isinvited
+	local list = _P.GetSeatList(data.info)
+	self.List = list
+	for i = 1,Seat_Num do
+		local value = list[i]
+		local bsx = moudle:Get("bsx"..i)
+		local nameBG = moudle:Get("NameBg"..i)
+		local nameText = moudle:Get("Name"..i)
+		local clickAble = moudle:Get("ClickAble"..i)
+		local computer = moudle:Get("computer"..i)
+		local add = moudle:Get("Add"..i)
+		clickAble:AddOnButton(function()
+			_P.OnClickSeat(self,i)
+		end,nil,1)
+		if value ~= nil then
+			local csvStaff = Csv.Personnel[value.staffid]
+			if csvStaff ~= nil then
+				bsx.Activity = true
+				bsx.SpriteName = csvStaff.asset
+				nameBG.Activity = true
+				local staffName = csvStaff.name
+				if value.staffName ~= nil then
+					staffName = value.staffName
+				end
+				nameText.Text = Csv.Text("vote_62",{name = value.playername,staff = staffName})
+				clickAble.RaycastTarget = false
+				computer.Activity = true
+				add.Activity = false
+			end
+		else
+			bsx.Activity = false
+			nameBG.Activity = false
+			clickAble.RaycastTarget = true
+			computer.Activity = false
+			add.Activity = true
+		end
+	end
+
+	local csvVotePer = Csv.VotePermition[data.voteid]
+	if csvVotePer ~= nil and csvVotePer.CommerceStudyGain ~= nil then
+		moudle:Get("Text1").Text = Csv.Text("vote_57",{num = _P.GetExpNum(csvVotePer,Define.AssetsType.Bookexp)})
+		moudle:Get("Text2").Text = Csv.Text("vote_58",{num = _P.GetExpNum(csvVotePer,Define.AssetsType.Skillexp)})
+		moudle:Get("Text2_0").Text = Csv.Text("vote_60",{name = csvVotePer.CommerceLearn})
+	end
+	moudle:Get("Text1_0").Text = Csv.Text("vote_59",{name = data.playername})
+
+	moudle.SelfRect:AddOnUpdate(function()
+		_P.UpdateTime(self,data.endtime)
+	end,nil,1)
+	_P.UpdateTime(self,data.endtime)
+end
+
+function _P.UpdateTime(self,endtime)
+	local moudle = self.mMoudle
+	local second = endtime - HeartBeat.ServSecond()
+		if second > 0 then
+			moudle:Get("Text33").Text = LuaUtil.GetTimeHMS(second)
+		else
+			moudle:Get("Text33").Text = Csv.Text("vote_63")
+		end
+end
+
+function _P.GetExpNum(csvVotePer,id)
+	local award = csvVotePer.CommerceStudyGain
+	if award ~= nil then
+		for k,v in pairs(award) do
+			if v[1] == id then
+				local num1,num2 = math.modf((v[2] * 60)/10000 + 0.5)
+				return num1
+			end
+		end
+	end
+	return 0
+end
+
+function _P.OnClickSeat(self,index)
+	if self.List ~= nil then
+		if _P.CheckIsJoin(self.List) then
+			CCommon.ShowError(Csv.Text("vote_64"))
+		else
+			if self.IsInvited then
+				WindowMgr.Create("UVoteStudySelect",index)
+			else
+				CCommon.ShowError(Csv.Text("err_not_invited"))
+			end
+		end
+	end
+end
+
+function _P.CheckIsJoin(list)
+	for k,v in pairs(list) do
+		if v.playid == MPlayer.GetId() then
+			return true
+		end
+	end
+	return false
+end
+
+function _P.GetSeatList(list)
+	local rawTable = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			rawTable[v.index] = v
+		end
+	end
+	return rawTable
+end
+
+return _M

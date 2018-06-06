@@ -1,0 +1,129 @@
+-- 出售材料再次确认界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CBag = JRequire "Dev.Bag.CBag"
+local MBag = JRequire "Dev.Bag.MBag"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+function _M:BeforeDestroy()
+	if self.SliderButton ~= nil then
+		self.SliderButton:delete()
+		self.SliderButton = nil
+	end
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(matData,isBagOpen)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Sell2")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Btn_e")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local itemConf = Csv.Item[matData.itemid]
+	local showData
+	if isBagOpen then
+		local csvItem = Csv.Item[matData.itemid]
+		if csvItem ~= nil and csvItem.useParam ~= nil then
+			showData = {csvItem.useParam[1],csvItem.useParam[2]}
+		end
+	else
+		local sellConf = Csv.CarSellReturn[matData.itemid]
+		showData = sellConf.getItems[1]
+	end
+	module:Get("Title").Text = Csv.Text("car_garage_sell")
+	module:Get("C_text_0").Text = Csv.Text("car_openSeat_ok")
+	module:Get("C_text").Text = Csv.Text("car_openSeat_quxiao")
+	module:Get("Num").Text = Csv.Text("car_sell_num")
+	module:Get("Profit").Text = Csv.Text("car_sell_Profit")
+	
+	self.NumText = module:Get("NumText")
+	self.ProfitText = module:Get("ProfitText")
+	_P.SetMatData(self, matData, itemConf, showData)
+
+	self.SliderButton = SliderButton.new(1, matData.itemcount, 1, function(value)
+		_P.OnSliderValueChanged(self, value, matData.itemcount, showData[2])
+	end)
+	self.SliderButton:CreateSliderBtn(module:Get("Slider"),module:Get("BtnAdd"),module:Get("BtnMinus"))
+	
+	self.sliderValue = 1
+	_P.OnSliderValueChanged(self, 1, matData.itemcount, showData[2])
+
+	local confirmBtn = module:Get("C_Btn_d")
+	confirmBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 请求出售
+		CBag.OnUseItem(matData.itemid, self.sliderValue)
+		if not isBagOpen then
+			MCar.SellGetData = {id = showData[1], count = tonumber(self.ProfitText.Text)}
+		else
+			MBag.SellGetData = {id = showData[1], count = tonumber(self.ProfitText.Text)}
+		end
+		self:Destroy()
+	end, nil, 0.9)
+
+	local sellIcon1 = module:Get("PriceIcon")
+	local sellIcon2 = module:Get("ProfitIcon")
+	local csvSellItem
+	if isBagOpen then
+		local csvItem = Csv.Item[matData.itemid]
+		if csvItem ~= nil and csvItem.useParam ~= nil then
+			csvSellItem = Csv.Item[csvItem.useParam[1]]
+		end
+	else
+		csvSellItem = Csv.Item[Define.AssetsType.Gangcai]
+	end
+	sellIcon1.SpriteName = csvSellItem.miniIcon
+	sellIcon2.SpriteName = csvSellItem.miniIcon
+end
+
+
+function _P.OnSliderValueChanged(self, value, maxValue, onePrice)
+	self.sliderValue = value
+	self.NumText.Text = Csv.Text("bag_have", {num = value, max = maxValue})
+	self.ProfitText.Text = onePrice * value
+end
+
+
+function _P.SetMatData(self, data, itemConf, priceData)
+	local strColor = Csv.ItemColor[itemConf.color].str
+	self.mModule:Get("Quality").SpriteName = itemConf.colorIcon
+	self.mModule:Get("Icon").SpriteName = itemConf.icon
+	self.mModule:Get("Name").Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+	if priceData then
+		local priceItemConf = Csv.Item[priceData[1]]
+		self.mModule:Get("Tips2").Text = Csv.Text("car_sell_price")
+		self.mModule:Get("PriceIcon").SpriteName = priceItemConf.icon
+		self.mModule:Get("ProfitIcon").SpriteName = priceItemConf.icon
+		self.mModule:Get("PriceNum").Text = priceData[2]
+	end
+	self.mModule:Get("Desc").Text = itemConf.tips
+end
+
+
+return _M

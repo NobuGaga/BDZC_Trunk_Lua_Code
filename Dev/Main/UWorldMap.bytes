@@ -1,0 +1,477 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MFinance = JRequire "Dev.Finance.MFinance"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+local MCompany = JRequire "Dev.Company.MCompany"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local MCar = JRequire "Dev.Car.MCar"
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local _R = {}
+
+local MAP_WIDTH = 2250
+local MAP_HEIGHT = 1334
+local FINANCE_ACTORID = 10016
+local FINANCE_BUILDID = 6
+local BUILD_ACTORID = 10026
+local FACTORY_FX_ID = 10042
+local SEND_FX_ID = 10043 
+local PEN_QUAN_FX_ID = 10052
+local CLICK_FX = 10054
+local InitVec = Vector2(185, 0)
+local HillOffset = 433.4
+
+local CompanyIconTable = {}
+CompanyIconTable[Define.SysId.Manage] = "world_009"
+CompanyIconTable[Define.SysId.Verdict] = "world_001"
+CompanyIconTable[Define.SysId.Girl] = "world_002"
+CompanyIconTable[Define.SysId.Patrol] = "world_004"
+CompanyIconTable[Define.SysId.Car] = "world_012"
+CompanyIconTable[Define.SysId.Aircraft] = "world_011"
+CompanyIconTable[Define.SysId.Girl_Baby] = "world_kid"
+
+local CityBtnPos = {{-510,-221},{-73,-161},{57,-391},{-497,122},{668,200},{880,-374},{525,-174},{-935,-5},{341,257},{194,57},{-732,151},{-99,181},{848,-68},{875,-412}}
+local CityBtnSizePos = {{201,358}, {323,256},{321,218},{234,295},{301,163},{259,321},{170,243},{293,189},{162,184},{182,359},{175,138},{322,207},{170,243},{353,274}}
+
+
+function _P.OnPressFunc(btn, funcId, data)
+	if data.isPress then
+		local t = btn:DOFade(1, 0.6)
+		t:SetEase(CS.DG.Tweening.Ease.Linear)
+		t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+	else
+		if btn ~= nil then
+			btn:DOKill()
+		end
+		btn.Alpha = 0		
+	end	
+end
+
+function _P.RefreshFunc(self, moudle)
+	local btn
+	local buttons = MMain.GetFuncs(Define.SysId.World, false)
+	local hasShow = {}
+	for _,v in pairs(buttons) do
+		btn = moudle:Get("Btn_" .. v.sort)
+		if btn == nil then
+			error(string.format("create world btn error!!! index:%d,funcId:%d ", v.sort, v.id))
+			break
+		end
+		hasShow[v.sort] = true
+		self.Btns[v.id] = btn
+
+		local lastT = self.BtnTweens[v.sort]
+		if lastT ~= nil then
+			lastT:Restore()
+		end
+		if MMain.FuncIsOpen(v.id) then
+			local textWidget = moudle:Get("Title_Name_" .. v.sort)
+			textWidget.Text = v.name
+			textWidget.Activity = true
+			moudle:Get("Title_Name_Lock_" .. v.sort).Activity = false
+
+			local t = moudle:Get("Title_Bg_" .. v.sort).CachedTran:GetJTweener("T_WorldIonName")
+			self.BtnTweens[v.sort] = t
+			t:Play()
+		else
+			moudle:Get("Title_Name_" .. v.sort).Activity = false
+			local textWidget = moudle:Get("Title_Name_Lock_" .. v.sort)
+			textWidget.Text = v.name
+			textWidget.Activity = true
+		end
+
+		if GameSetting.IsiOSCommit then
+			-- local cityPos = CityBtnSizePos[v.sort]
+			-- local cityLocalPos = CityBtnPos[v.sort]
+			-- CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(v.icon, "Architecture"),
+			-- 									cityPos[1], cityPos[2], 
+			-- 									function (sp)
+			-- 										if sp then
+			-- 											btn.Sprite = sp
+			-- 											btn.SizeDelta = Vector2(cityPos[1], cityPos[2])
+			-- 										end
+			-- 									end)
+			-- btn.LocalPosition = Vector2(cityLocalPos[1], cityLocalPos[2])
+		else
+			btn.SpriteName = v.icon
+			btn:AddOnPress(_P.OnPressFunc, nil)
+		end
+		btn:AddOnClick(function ( )
+			SoundMgr.Play(10001)
+
+			if MMain.FuncIsOpen(v.id) then
+				WindowOpen.Open(v.id)
+			else
+				CCommon.ShowError(Csv.Func[v.id].conditionDesc)
+			end
+		end,nil)
+	end
+	for i=1,16 do
+		if not hasShow[i] then
+			moudle:Get("Btn_" .. i).Activity = false
+		end
+	end
+end
+
+function _P.NeedMoveToPos(self, btn)
+	local mapX = self.Map.SizeDelta.x -- * self.Map.LocalScale.x
+	local widthHalf = mapX / 2 - CS.JGui.JGuiManager.GuiRoot.Width / 2 - 2
+
+	local ret = Vector2.zero
+	local btnPos = btn.LocalPosition
+	-- btnPos.x = btnPos.x * self.Scale
+	ret.x = -btnPos.x
+	if ret.x > 0 then
+		if ret.x > widthHalf then
+			ret.x = widthHalf
+		end
+	else
+		if ret.x < - widthHalf then
+			ret.x = - widthHalf
+		end
+	end
+	return ret
+end
+
+--看向某个功能按钮
+function _R.LookAtFunc(self, funcId)
+
+	local btn = self.Btns[funcId]
+	if btn ~= nil and self.Map ~= nil then
+		self.Map.LocalPosition = _P.NeedMoveToPos(self, btn)
+		_P.OnScrollValueChange(self)
+	else
+		error("GetBtnPos error:"..funcId)
+	end
+end
+
+function _R.GetBtnPos(self, funcId, mapTran, retPos)
+	local btn = self.Btns[funcId]
+	if btn ~= nil and self.Map ~= nil then
+		self.Map.LocalPosition = _P.NeedMoveToPos(self, btn)
+		_P.OnScrollValueChange(self)
+		local btnPos = btn.CachedTran.position
+		local screenPos = CS.UnityEngine.RectTransformUtility.WorldToScreenPoint(self._CanvasNode.WorldCamera, btnPos)
+		local isOk, pos = CS.UnityEngine.RectTransformUtility.ScreenPointToLocalPointInRectangle(mapTran, screenPos, self._CanvasNode.WorldCamera)
+		if isOk then
+			retPos.x = pos.x
+			retPos.y = pos.y
+		end
+	else
+		error("GetBtnPos error:"..funcId)
+	end
+end
+
+
+-- 金融机构特效
+function _R.SetBuildEffectActive(self, isShow)
+	if isShow then
+		_P.CreateBuildEffect(self, FINANCE_BUILDID, FINANCE_ACTORID)
+	else
+		_P.DestroyBuildEffect(self, FINANCE_BUILDID)
+	end
+end
+
+function _R.ShowCompanyFactoryFx(self)
+	local moudle = self.Moudle
+	if moudle ~= nil and self.Btns ~= nil then
+		local btn = self.Btns[Define.SysId.Factory]
+		if btn ~= nil and btn.Activity then
+			-- local fxPoint = moudle:Get("Goods1_Fx")
+			-- if fxPoint ~= nil then
+			-- 	CCommon.CreateEffect(fxPoint, FACTORY_FX_ID)
+			-- end
+			local fxPoint = moudle:Get("Send1_Fx")
+			if fxPoint ~= nil then
+				CCommon.CreateEffect(fxPoint, SEND_FX_ID)
+			end
+		end
+	end
+end
+
+
+function _M:BeforeDestroy( ... )
+	SoundMgr.DestroyRound()
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate()
+	self:UnBlack()
+	GameSetting.isFirst = false
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_World_Map")
+	self.Moudle = moudle
+	local map = moudle:Get('content')
+	map.LocalPosition = InitVec
+	self.Map = map
+	-- map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+	-- local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
+	-- self.Scale = scale
+	-- map.LocalScale = Vector3(scale, scale, 1)
+	self.Btns = {}
+	self.BtnTweens = {}
+	self.Actors = {}
+	_P.RefreshFunc(self, moudle)
+
+	self:RegistCallEvent(Define.EventListenId.FuncOpenEvent, function (eventHandle, funcId, isOpen )
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			local funcCsv = Csv.Func[funcId]
+			if funcCsv.fid == Define.SysId.World then
+				_P.RefreshFunc(self, moudle)
+			elseif funcCsv.fid == Define.SysId.Wharf then
+				_P.CheckWharfOpen(self)
+			end
+		end
+	end)
+
+	_P.CheckBuildEffect(self)
+
+	local scrollView = moudle:Get("scrollView")
+	self.ClickNode = moudle:Get("ClickNode")
+	scrollView:AddOnPress(function(obj, arg, data)
+		if data.isPress then
+			self.ClickNode:DestroyChildren()
+			self.ClickNode.LocalPosition = map:ScreenPosToLocal(data.pos)
+			CCommon.CreateEffect(self.ClickNode, CLICK_FX)
+		end
+	end)
+
+	CCommon.CreateEffect(moudle:Get("SkyActorPanel"), BUILD_ACTORID)
+	CCommon.CreateEffect(moudle:Get("FountainNode"), PEN_QUAN_FX_ID)
+
+	-- 别墅红点
+	local company = moudle:Get("Iconbox3")
+	-- 码头红点
+	local wharf = moudle:Get("Iconbox7")
+	-- 殿堂红点
+	local parliament = moudle:Get("Iconbox5")
+	-- 律所红点
+	local relation = moudle:Get("Iconbox2")
+	-- 排行版红点
+	local rankRed = moudle:Get("Iconbox4")
+
+	self:RegistRedpoint(parliament, Define.SysId.Parliament)
+	self:RegistRedpoint(wharf, Define.SysId.Wharf)
+	self:RegistRedpoint(relation, Define.SysId.Relations)
+	self:RegistRedpoint(rankRed, Define.SysId.Rank)
+
+	local tCompany = company.CachedTran:GetJTweener("T_Effect_Guodong")
+	tCompany:Play()
+	local tParliament = parliament.CachedTran:GetJTweener("T_Effect_Guodong")
+	tParliament:Play()
+	local tWharf = wharf.CachedTran:GetJTweener("T_Effect_Guodong")
+	tWharf:Play()
+	local tRelation = relation.CachedTran:GetJTweener("T_Effect_Guodong")
+	tRelation:Play()
+	local tRank = rankRed.CachedTran:GetJTweener("T_Effect_Guodong")
+	tRank:Play()
+
+	_R.SetCompanyIcon(self)
+	_P.CheckWharfOpen(self)
+
+	scrollView.OnValueChanged:RemoveAllListeners()
+	scrollView.OnValueChanged:AddListener(
+		function(...) 
+			_P.OnScrollValueChange(self)
+		end
+	)
+	_P.OnScrollValueChange(self)
+
+	local effectCanvas = moudle:Get("SkyActorCanvas")
+	effectCanvas.Activity = not GameSetting.IsiOSCommit
+	if GameSetting.IsiOSCommit then
+		_P.SetMapBg(self)
+	end
+	-- 播放飞鸟环境音，初次进来10s后播放，后面每30s播放一次
+	-- self.ClickNode:AddOnTime(function()
+	-- 	SoundMgr.Play(5000)
+	-- end, nil, 10)
+
+	-- self.Map:AddOnTime(function()
+	-- 	SoundMgr.Play(5001)
+	-- end, nil, 3)
+
+	-- company:AddOnTime(function()
+	-- 	SoundMgr.Play(5002)
+	-- end, nil, 5)
+end
+
+
+function _P.SetMapBg(self)
+	local med1 = self.Moudle:Get("Medium1")
+	local med2 = self.Moudle:Get("Medium2")
+	local sky1 = self.Moudle:Get("Sky1")
+	local sky2 = self.Moudle:Get("Sky2")
+	local build1 = self.Moudle:Get("Build1")
+	local build2 = self.Moudle:Get("Build2")
+	local hill1 = self.Moudle:Get("Hill1")
+
+	local xPos1 = med1.LocalPosition.x
+	local xPos2 = med2.LocalPosition.x
+	med1.LocalPosition = Vector2(xPos1, 340)
+	med2.LocalPosition = Vector2(xPos2, 340)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_100021_1', "Map"),
+												1024, 128, 
+												function (sp)
+													if sp then
+														med1.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_100021_2', "Map"),
+												1024, 128, 
+												function (sp)
+													if sp then
+														med2.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_100024_1', "Map"),
+												1024, 512, 
+												function (sp)
+													if sp then
+														sky1.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_100024_2', "Map"),
+												1024, 512, 
+												function (sp)
+													if sp then
+														sky2.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_10001_1', "Map"),
+												1024, 1024,
+												function (sp)
+													if sp then
+														build1.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_10001_2', "Map"),
+												1024, 1024, 
+												function (sp)
+													if sp then
+														build2.Sprite = sp
+													end
+												end)
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath('scene_100022_1', "Map"),
+												512, 64, 
+												function (sp)
+													if sp then
+														hill1.Sprite = sp
+													end
+												end)
+end
+
+-- 拖动列表设置值
+function _P.OnScrollValueChange(self)
+	local module = self.Moudle
+	local contentPos = self.Map.LocalPosition
+	local skyRect = module:Get("SkyRect")
+	local medRect = module:Get("MediumRect")
+	
+	local x = contentPos.x
+	local y = (GameSetting.IsiOSCommit and 20) or 0
+	skyRect.LocalPosition = Vector2(x * 0.26, 0)
+	medRect.LocalPosition = Vector2(x * 0.36 + HillOffset, y)
+end
+
+
+function _P.CheckBuildEffect(self)
+	if MFinance.GetFinanceState() then
+		_P.CreateBuildEffect(self, FINANCE_BUILDID, FINANCE_ACTORID)
+	end
+end
+
+function _P.CheckWharfOpen(self)
+	local wharfFunc = self.Moudle:Get("wharffunc")
+
+	if MMain.FuncIsOpen(Define.SysId.Wharf) then
+		wharfFunc.Activity = true
+	else
+		wharfFunc.Activity = false
+	end
+end
+
+-- 添加建筑特效
+function _P.CreateBuildEffect(self, buildId, effectId)
+	if self.Actors[buildId] ~= nil then return end
+
+	local buildActorPanel = self.Moudle:Get("ActorPanel" .. buildId)
+	CCommon.CreateEffect(buildActorPanel, effectId)
+	self.Actors[buildId] = true
+end
+
+
+-- 删除建筑特效
+function _P.DestroyBuildEffect(self, buildId)
+	if self.Actors[buildId] == nil then return end
+
+	local buildActorPanel = self.Moudle:Get("ActorPanel" .. buildId)
+	buildActorPanel:DestroyChildren()
+	self.Actors[buildId] = nil
+end
+
+-- 判断公司建筑显示图标
+function _R.SetCompanyIcon(self)
+	local moudle = self.Moudle
+	local ImgIcon = moudle:Get("ComputerIcon")
+	local GoIcon = moudle:Get("Iconbox3")
+
+	local pointManage = MCompany.AllRedPoint
+	local pointVerdict = MCompany.VerdictRedPoint
+	local pointGirl = MGirl.redPoint
+	local pointCar = MCar.CarRedPoint
+	local pointPatrol = MCompany.PatrolRedPoint
+	local pointAircraft = not MAircraft.IsStuding
+	local pointBaby = MGirl.babyRedPoint
+
+	if pointManage and MMain.FuncIsOpen(Define.SysId.Manage) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Manage]
+		GoIcon.Activity = true
+	elseif pointVerdict and MMain.FuncIsOpen(Define.SysId.Verdict) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Verdict]
+		GoIcon.Activity = true
+	elseif pointGirl and MMain.FuncIsOpen(Define.SysId.Girl) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Girl]
+		GoIcon.Activity = true
+	 elseif pointCar and MMain.FuncIsOpen(Define.SysId.Car) then
+	 	ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Car]
+	 	GoIcon.Activity = true
+	elseif pointPatrol and MMain.FuncIsOpen(Define.SysId.Patrol) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Patrol]
+		GoIcon.Activity = true
+	elseif pointAircraft and MMain.FuncIsOpen(Define.SysId.Aircraft) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Aircraft]
+		GoIcon.Activity = true
+	elseif pointBaby and MMain.FuncIsOpen(Define.SysId.Girl_Baby) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Girl_Baby]
+		GoIcon.Activity = true
+	else
+		GoIcon.Activity = false
+	end
+end
+
+
+return _M

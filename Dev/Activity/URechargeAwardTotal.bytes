@@ -1,0 +1,226 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MMain = JRequire "Dev.Main.MMain"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = Class()
+local _P = {}
+
+local SCROLL_SPACE = 30
+local EFFECTID = 16
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_DailyRecharge_Day", WindowType.UI, 0)
+	self.mMoudle = moudle
+	moudle:Get("titletext").Text = Csv.Text("chargeaward_T4")
+	moudle:Get("timetext3").Text = Csv.Text("chargeaward_T7")
+	_P.CreateList(self)
+	
+end
+
+function _P.CreateList(self)
+	self.mItemTable = {}
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local info
+	if MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil then
+		local data = MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total)
+		local actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_Total]
+		if actId ~= nil then
+			info = data[actId]
+		end
+	end
+	if info ~= nil then
+		moudle:Get("timetext").Text = Csv.Text("chargeaward_T6",{day1 = LuaUtil.TransToMD(info.state.startTime),day2 = LuaUtil.TransToMD(info.state.endTime)})
+		local CanGetedState = false
+		local RoleY = 0
+		content:DestroyChildren()
+		local sortList = _P.GetSortTable(info.list, info.num)
+		for k,v in ipairs(sortList) do
+			local item = {}
+			local rechargeMoudle = JGuiManager.GetMoudle(content,"M_DailyRecharge_Item2", WindowType.UI, 0)
+
+			if v ~= nil then
+				local Geted = rechargeMoudle:Get("Geted")
+				local BtnText = rechargeMoudle:Get("C_text")
+				local Btn = rechargeMoudle:Get("C_Btn_a")
+				rechargeMoudle:Get("title").Text = v.desc
+				rechargeMoudle:Get("timetext").Text = Csv.Text("chargeaward_T1")
+				rechargeMoudle:Get("slidertext").Text = Csv.Text("chargeaward_T2")
+				rechargeMoudle:Get("timetextNum").Text = Csv.Text("chargeaward_slider",{num = info.num,max = v.grade})
+				Btn:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					_P.OnClickBtn(self,v.id)
+					end, nil, 0.9)
+
+				local awards = v.award
+				local itemSize = rechargeMoudle.SelfRect.SizeDelta
+				local itemSizeY = itemSize.y
+				if awards ~= nil then
+					local csvItem = Csv.Item[awards[1][1]]
+					rechargeMoudle:Get("zuans").SpriteName = csvItem.miniIcon
+					rechargeMoudle:Get("C_slidertextNum").Text = awards[1][2]
+				end
+
+				if v.isGeted then
+					Btn.Activity = false
+					Geted.Activity = true
+					if not CanGetedState then
+						RoleY = RoleY + itemSizeY  + SCROLL_SPACE
+					end
+				else
+					Btn.Activity = true
+					Geted.Activity = false
+					if info.num >= v.grade then
+						-- Btn.SpriteName = "ty_024"
+						BtnText.Text = Csv.Text("chargeaward_get")
+						CanGetedState = true
+					else
+						-- Btn.SpriteName = "ty_024_5"
+						BtnText.Text = Csv.Text("chargeaward_go")
+					end
+					CanGetedState = true
+				end
+			end
+			item.moudle = rechargeMoudle
+			item.value = v
+			self.mItemTable[v.id] = item
+		end
+		content.LocalPosition = Vector2(0,RoleY)
+		if info.state.endTime ~= nil and info.state.endTime > 0 then
+			local endTime = info.state.endTime
+			if self.Tween ~= nil then
+				self.Tween:Destroy()
+			end
+			self.Tween = moudle.SelfRect:AddOnUpdate(function()
+				_P.UpdateTime(self)
+			end,nil,1)
+		end
+		_P.UpdateTime(self)
+	end
+end
+
+function _P.GetSortTable(rawTable, num)
+	local sortTable = {}
+	for k,v in pairs(rawTable) do
+		if num >= v.displayNum then
+			table.insert(sortTable,v)
+		end
+	end
+	table.sort(sortTable,function(a,b)
+		if a.isGeted and b.isGeted then
+			return a.id < b.id
+		elseif not a.isGeted and b.isGeted then
+			return true
+		elseif a.isGeted and not b.isGeted then
+			return false
+		else
+			return a.id < b.id
+		end
+	end)
+	return sortTable
+end
+
+function _P.UpdateTime(self)
+	local info
+	if MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil then
+		local data = MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total)
+		local actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_Total]
+		if actId ~= nil then
+			info = data[actId]
+		end
+	end
+	if info ~= nil then
+		local endTime = info.state.endTime
+		local second = endTime - HeartBeat.ServSecond()
+		if second < 0 then
+			second = 0
+		end
+		self.mMoudle:Get("timenum").Text = LuaUtil.GetTimeHMS(second)
+	end
+end
+
+function _P.OnClickBtn(self,id)
+	local info
+	if MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil then
+		local data = MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total)
+		local actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_Total]
+		if actId ~= nil then
+			info = data[actId]
+		end
+	end
+	if info ~= nil then
+		local csvRecharge = self.mItemTable[id].value
+		if info.num >= csvRecharge.grade then
+			CActivity.GetRewardReq(info.actId,id)
+		else
+			if MMain.FuncIsOpen(Define.SysId.Recharge) then
+				WindowOpen.Open(Define.SysId.Recharge)
+			else
+				local csvFunc = Csv.Func[Define.SysId.Recharge]
+				CCommon.ShowError(csvFunc.conditionDesc)
+			end
+		end
+	end
+end
+
+function _M:RefreshItemGetState(data)
+	local itemTable = self.mItemTable
+	local item = itemTable[data.index]
+	local info
+	if MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil then
+		local data = MActivity.GetListFromType(Define.ActivityType.RechargeReward_Total)
+		local actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_Total]
+		if actId ~= nil then
+			info = data[actId]
+		end
+	end
+	local csvRecharge = item.value
+	if item ~= nil and csvRecharge ~= nil then
+		local moudle = item.moudle
+		local Geted = moudle:Get("Geted")
+		local BtnText = moudle:Get("C_text")
+		local Btn = moudle:Get("C_Btn_a")
+		if data.isGeted then
+			local effectNode = moudle:Get("EffectNode")
+			local effectMoudle = CCommon.CreateEffect(effectNode,EFFECTID,nil,nil,{M_Effect_Achieve_Get = "fl_030"})
+			effectMoudle.SelfRect.SizeDelta = Vector2(103,103)
+			SoundMgr.PlaySystem(10004)
+			Btn.Activity = false
+			if csvRecharge.award ~= nil then
+				CCommon.ShowFlyItem(self._RootNode,csvRecharge.award[1][1],csvRecharge.award[1][2],0.3,effectNode.RootCanvasPos)
+			end
+		else
+			Btn.Activity = true
+			Geted.Activity = false
+			if info.num >= csvRecharge.grade then
+				-- Btn.SpriteName = "ty_024"
+				BtnText.Text = Csv.Text("chargeaward_get")
+			else
+				-- Btn.SpriteName = "ty_024_5"
+				BtnText.Text = Csv.Text("chargeaward_go")
+			end
+		end
+	end
+end
+
+function _M:RefreshView()
+	_P.CreateList(self)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

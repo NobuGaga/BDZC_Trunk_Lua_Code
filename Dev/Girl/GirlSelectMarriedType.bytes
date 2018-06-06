@@ -1,0 +1,102 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local MARRIED_ITEMID = 2 --结婚道具
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseWin(self)
+	self:Destroy()
+end
+
+function _M:OnCreate(marriedId)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Unmarried_Tips2")
+	local backBtn = moudle:Get("C_backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	--id = MGirl.MarriedSelectID
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
+
+	local title = moudle:Get("title")
+	local tips = moudle:Get("chooseText")
+	title.Text = Csv.Text("Girl_married_selectType")--"选择结婚方式"
+	tips.Text = Csv.Text("Girl_married_selectItem")--"请选择结婚道具"
+
+	local goldData = Csv.Item[Define.AssetsType.Gold]
+	local goldBox = moudle:Get("goodsBox1")
+	local goldIcon = moudle:Get("goods1")
+	local goldcostText = moudle:Get("consumeText1")
+	local goldhaveText = moudle:Get("HaveText1")
+	local selectGoldText = moudle:Get("C_text")
+	local useGoldBtn = moudle:Get("C_Btn_b")
+
+	local costGold = MGirl.GetMarriedGoldCost(data.degree)--GetMarriedGoldCost
+	local haveGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	local goldItemData = Csv.Item[Define.AssetsType.Gold]
+
+	selectGoldText.Text = Csv.Text("Girl_married_select")--"选择"
+	goldBox.SpriteName = goldData.colorIcon
+	goldIcon.SpriteName = goldData.icon
+	goldcostText.Text = Csv.Text("Girl_married_costGold",{cost = costGold})--"消耗<color=#FF2323>"..costGold.."</color>钻石"
+	goldhaveText.Text = Csv.Text("Girl_married_haveGold",{have = haveGold})--"现拥有<color=#FF2323>"..haveGold.."</color>钻石"
+
+	useGoldBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if costGold <= haveGold then
+			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,marriedId,Define.AssetsType.Gold)
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))
+		end
+	end)
+
+	local itemData = Csv.Item[marriedCostItem[1]]
+	local itemBox = moudle:Get("goodsBox2")
+	local itemIcon = moudle:Get("goods2")
+	local itemcostText = moudle:Get("consumeText2")
+	local itemhaveText = moudle:Get("HaveText2")
+	local selectItemText = moudle:Get("C_text_0")
+	local useItemBtn = moudle:Get("C_Btn_d")
+
+	local haveItem = MBag.GetItemNum(marriedCostItem[1])
+	
+	selectItemText.Text = Csv.Text("Girl_married_select")--"选择"
+	itemBox.SpriteName = itemData.colorIcon
+	itemIcon.SpriteName = itemData.icon
+	itemcostText.Text = Csv.Text("Girl_married_costItem",{name = itemData.name,num = marriedCostItem[2]})--"消耗"..itemData.name.."X"..marriedCostItem[2]
+	itemhaveText.Text = Csv.Text("Girl_married_haveItem",{have = haveItem,name = itemData.name})--"现拥有<color=#FF2323>"..haveItem.."</color>"..itemData.name
+
+	useItemBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if marriedCostItem[2] <= haveItem then
+			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,marriedId,marriedCostItem[1])
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))
+		end
+	end)
+end
+
+return _M

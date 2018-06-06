@@ -1,0 +1,60 @@
+-- 奇遇结算奖励界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--界面构造
+function _M:OnCreate(data,OnClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Result")
+	self.mModule = module
+
+	self.mData = data
+	LuaUtil.DumpTable(data)
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	self.chuli = module:Get("chuli")
+	self.chuli.Text = Csv.Text("adventure_result_time",{num = data.compatibility * 100})
+	module:Get("Title").Text = Csv.Text("adventure_result_title")
+	module:Get("Tips").Text = Csv.Text("adventure_result_tips")
+	module:Get("pingjia").Text = Csv.Text("adventure_result_judge")
+	module:Get("jlTitle").Text = Csv.Text("adventure_reward_tips")
+	_P.OnCreateList(self, self.mData.reward)
+	self.OnCloseCall = OnClose
+end
+
+function _P.OnCreateList(self, listData)
+	if listData == nil or next(listData) == nil then return end
+
+	local itemRoot = self.mModule:Get("content")
+	for _,v in pairs(listData) do
+		CCommon.CreateItem(itemRoot, v.id, nil, {num = v.count})
+	end
+end
+
+return _M

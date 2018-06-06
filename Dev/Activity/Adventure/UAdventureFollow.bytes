@@ -1,0 +1,201 @@
+-- 奇遇后续事件界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ADVCOUNTTIME = Csv.Const(Define.Const.AdventureEvent)[1]
+local ADVSHOPLIMIT = Csv.Const(Define.Const.AdventureEvent)[4]
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Adventure_Follow")
+	self.mMoudle = moudle
+
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.mData = data
+	self.content = moudle:Get("Content")
+	--Table标签控制
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	local tabHandle = TabGroup.new(function (funcId)
+		_P.OnChoose(self, funcId)
+	end, "yth_023", "yth_023_2",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+
+	tabHandle:Add(1, moudle:Get("toggle_1"), moudle:Get("C_text_1"), Csv.Text("adventure_follow_1"))
+	tabHandle:Add(2, moudle:Get("toggle_2"), moudle:Get("C_text_2"), Csv.Text("adventure_follow_2"))
+	tabHandle:Choose(1)
+	self.tabHandle = tabHandle
+
+	
+	moudle:Get("C_Text_0").Text = Csv.Text("adventure_follow_title")
+	-- _R.OnGetData(data)
+end
+
+function _P.OnChoose(self, funcId)
+	if funcId == 1 then
+		self.mMoudle:Get("cishu").Text = Csv.Text("adventure_follow_count", {num="1/2"})
+		self.mMoudle:Get("Tips").Text = ""
+		self.mMoudle:Get("UpVip").Text = Csv.Text("adventure_follow_vip")
+		_P.CreateEventList(self)
+	elseif funcId == 2 then
+		self.mMoudle:Get("cishu").Text = ""
+		self.mMoudle:Get("Tips").Text = Csv.Text("adventure_follow_count2", {num=ADVSHOPLIMIT})
+		self.mMoudle:Get("UpVip").Text = ""
+		_P.CreateRewardList(self)
+	end
+	MActivity.AdventureFollowLastChoose = funcId
+end
+
+function _P.CreateRewardList(self)
+	self.content:DestroyChildren()
+	local itemTab = {}
+	for k,v in pairs(self.mData.shopRewardEventList) do
+		local item = _P.AddItemToContent(self,self.content,v, 2)
+		itemTab[k] = item
+	end
+
+	-- self.mItemTab2 = itemTab
+end
+
+function _P.CreateEventList(self)
+	self.content:DestroyChildren()
+	local itemTab = {}
+	_P.ClearTimer(self)
+	self.timerTab = {}
+	for k,v in pairs(self.mData.shopEventList) do
+		local item = _P.AddItemToContent(self,self.content,v, 1)
+		itemTab[k] = item
+	end
+
+	-- self.mItemTab = itemTab
+end
+
+function _P.AddItemToContent(self,content,data, type)
+	local moudle = JGuiManager.GetMoudle(content,"M_Adventure_FollowItem", WindowType.UI, 10)
+
+	local isSelf = data.playerInfo.id == MPlayer.GetId()
+
+	_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME)
+	local t = moudle.SelfRect:AddOnUpdate(function()
+		_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME)--TODO:CD时间
+	end, nil, 1)
+	table.insert(self.timerTab, t)
+
+	local subEventCsv = Csv.AdventureSubEvent[data.eventId]
+
+	self.joinBtn = moudle:Get("C_Btn_a")
+	self.joinBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickIcon(data.playerlist,data.eventId)
+	end, nil, 1)
+	moudle:Get("Btn1"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickSendPlayer(data)
+	end, nil, 1)
+	moudle:Get("head").SpriteName = data.playerInfo.icon
+	moudle:Get("TitleText").Text = data.playerInfo.name.."("..Csv.Text("adventure_player_level"..data.playerInfo.job)..")"
+	moudle:Get("C_text").Text = Csv.Text("adventure_follow_p")
+	moudle:Get("new_text").Text = ((type == 1 and Csv.Text("adventure_follow_go")) or Csv.Text("adventure_follow_lj"))
+	moudle:Get("Name").Text = subEventCsv.title
+	moudle:Get("Info").Text = subEventCsv.desc
+	-- moudle:Get("name").Text = data.playerInfo.staffName
+	moudle:Get("number1").Text = data.playerInfo.level
+	moudle:Get("ManNum").Text = Csv.Text("adventure_follow_num")
+	local playerlist = data.playerlist
+	local num = ((playerlist == nil and 0) or #playerlist)
+	moudle:Get("ManNum1").Text = num.."/"..subEventCsv.joinCount
+	moudle:Get("Reward").Text = Csv.Text("adventure_follow_reward")
+	moudle:Get("Condition").Text = Csv.Text("adventure_follow_con")
+
+	local content = moudle:Get("content")
+	if subEventCsv.joinReward ~= nil then
+		local len = #subEventCsv.joinReward
+		for i=1, len do
+			local iid = subEventCsv.joinReward[i][1]
+			local num = subEventCsv.joinReward[i][2]
+			CCommon.CreateItem(content,iid,nil,{num = num},nil)
+		end
+	end
+	if isSelf then
+		moudle:Get("Tips").Text = Csv.Text("adventure_follow_self")
+		self.joinBtn.Activity = false
+	end
+
+	self.condition1 = moudle:Get("Condition1")
+	self.condition2 = moudle:Get("Condition2")
+	local condition = data.eventInfo.attrInfo[1]
+	--任意员工
+	if condition.params == -1 then
+		self.condition1.Text = Csv.Text("adventure_follow_con1",{staff = Csv.Text("adventure_any_staff")})
+	else
+		self.condition1.Text = Csv.Text("adventure_follow_con1",{staff = MStaff.GetStaffName(condition.params)})
+	end
+
+	--类型
+	self.condition2.Text = Csv.Text("adventure_follow_con2",{attr = Csv.Text("adventure_staff_attr"..condition.type),num = condition.val})
+
+	return moudle
+end
+
+function _P.ClearTimer(self)
+	if self.timerTab ~= nil then
+		for k, v in pairs(self.timerTab) do
+			if v ~= nil then
+				v:Destroy()
+			end
+		end
+		self.timerTab = nil
+	end
+end
+
+function _P.OnUpdateTime(self, timeText, nextTime)
+	local time = nextTime - HeartBeat.ServSecond()
+	if nextTime ~= nil and time > 0 then
+		timeText.Text = Csv.Text("adventure_left_time",{text = LuaUtil.GetTimeHMS(time)})
+	else
+		--TODO:移除这个事件
+		timeText.Text = "00:00:00"
+	end
+end
+
+function _P.OnClickIcon(data,eventId)
+	print("------------",eventId)
+	if data ~= nil then
+		WindowMgr.Create("UAdventurePlayerList", data,eventId)
+	end
+end
+
+function _P.OnClickSendPlayer(data)
+	WindowMgr.Create("UAdventureSendPlayer",data)
+end
+
+function _M:BeforeDestroy()
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end
+
+return _M

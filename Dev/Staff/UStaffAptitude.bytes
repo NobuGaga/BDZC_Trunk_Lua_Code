@@ -1,0 +1,120 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Aptitude", WindowType.UI, 0)
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+	local TextAllAptitude = moudle:Get("AllAptitudeText")
+	if data ~= nil then
+		TextAllAptitude.Text = Csv.Text("staff_aptitude_all",{num = MStaff.DoGetAllApitude(data)})
+	else
+		TextAllAptitude.Text = Csv.Text("staff_aptitude_all",{num = MStaff.GetAllApitudeNotObtained(id)})
+	end
+	local contentTransform = moudle:Get("Content")
+	local tableItems = {}
+	local books = Csv.Personnel[id].book
+	for k,v in ipairs(books) do
+		local bookItem = {}
+		local bookMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_AptitudeItem",WindowType.UI, 0)
+		local bookLevel = (data == nil and 1) or data.book[v[1]]
+		local ImgBG = bookMoudle:Get("BG")
+		if data ~= nil then
+			ImgBG:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("UStaffBookUpPop",id,v[1],v[2])
+				end, nil, 1)
+		end
+		local ImgIcon = bookMoudle:Get("Icon")
+		ImgIcon.SpriteName = Csv.Book[v[1]].icon
+
+		local ImgColor = bookMoudle:Get("IconColor")
+		ImgColor.SpriteName = Csv.Book[v[1]].colorIcon
+
+		local TextName = bookMoudle:Get("Name")
+		TextName.Text = Csv.Book[v[1]].name
+
+		local TextLevel = bookMoudle:Get("Level")
+		TextLevel.Text = Csv.Text("staff_lv",{num = bookLevel})
+
+		local TextDetail = bookMoudle:Get("DetailT")
+		TextDetail.Text = Csv.Text("staff_aptitude"..Csv.Book[v[1]].type)
+
+		local TextDetailData = bookMoudle:Get("DetailD")
+		TextDetailData.Text = Csv.BookLv[v[2]*1000 + bookLevel].aptitude
+
+		for i=1,7 do
+			local star = bookMoudle:Get("star"..i)
+			if star ~= nil then
+				star.gameObject:SetActive(false)
+			end
+		end
+		for i=1,v[2] do
+			local star = bookMoudle:Get("star"..i)
+			star.gameObject:SetActive(true)
+		end
+		bookItem.moudle = bookMoudle
+		bookItem.color = v[2]
+		bookItem.id = v[1]
+		tableItems[v[1]] = bookItem
+		local starRect = bookMoudle:Get("Star")
+		if v[2] > 5 then
+			local spaceVec = starRect:AddGridLayoutGroup().spacing
+			local starMinus = v[2] - 5
+			local spaceNew = Vector2(spaceVec.x - starMinus*3,spaceVec.y)
+			starRect:AddGridLayoutGroup().spacing = spaceNew
+		end
+	end
+	self.mTableItems = tableItems
+	_P.ResetAllBookPoint(self,id)
+end
+
+function _M:ChangeBookLv(staffid,bookid,booklv)
+	local bookItem = self.mTableItems[bookid]
+	if bookItem ~= nil then
+		local moudle = bookItem.moudle
+		moudle:Get("Level").Text = Csv.Text("staff_lv",{num = booklv})
+		moudle:Get("DetailD").Text = Csv.BookLv[bookItem.color*1000 + booklv].aptitude
+		_P.ResetAllBookPoint(self,staffid)
+		local data = MStaff.GetStaffDataByID(staffid)
+		self.mMoudle:Get("AllAptitudeText").Text = Csv.Text("staff_aptitude_all",{num = MStaff.DoGetAllApitude(data)})
+	end
+end
+
+function _P.ResetAllBookPoint(self,id)
+	local data = MStaff.GetStaffDataByID(id)
+	local tableItems = self.mTableItems
+	for k,v in pairs(tableItems) do
+		local ImgPoint = v.moudle:Get("RedPoint")
+		if data == nil then
+			ImgPoint.Activity = false
+		else
+			local cost = Csv.BookLv[v.color * 1000 + data.book[v.id]].expNum
+			local staffcolor = MStaff.GetStaffDataByID(id).color
+			if data.bookexp >= cost and data.book[v.id] < Csv.ColorUp[staffcolor].bookMaxLv then
+				ImgPoint.Activity = true
+			else
+				ImgPoint.Activity = false
+			end
+		end
+	end
+end
+
+function _M:ResetAllBookPoint(id)
+	_P.ResetAllBookPoint(self,id)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

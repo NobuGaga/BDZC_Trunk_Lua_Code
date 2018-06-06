@@ -1,0 +1,290 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local JTweenerManager = CS.JTween.JTweenerManager
+local JGuiManager = CS.JGui.JGuiManager
+local MMain = JRequire "Dev.Main.MMain"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+local MAP_WIDTH = 3000
+local MAP_HEIGHT = 2668
+
+local SCENE_WIDTH = 750
+local SCENE_HEIGHT = 1334
+
+local MAX_PART = 200
+
+local CLOUD_EFFECT = 22
+local FLAG_EFFECT = 23
+
+local ASSET_LIST = 
+{
+	Define.AssetsType.Soldier,
+	Define.AssetsType.Gold,
+	Define.AssetsType.Coin,
+	Define.AssetsType.Food,	
+}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(isAnimate)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_World_Map")
+	self.mMoudle = moudle
+	moudle:Get("BtnBack"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+	moudle:Get("Black"):AddOnButton(function ( ... )
+		moudle:Get("Black").Activity = false
+	end, nil, 1)
+	moudle:Get("BuildClick"):AddOnButton(function()
+		WindowMgr.Create("UBattle")
+	end,nil,1)
+	moudle:Get("Back"):AddOnButton(function()
+		local scroll = moudle:Get("scrollView")
+		scroll.Inertia = false
+		moudle:Get("Build"):AddOnTime(function()
+			scroll.Inertia = true
+			scroll.DecelerationRate = 0.135
+		end,nil,0.001)
+		_P.GotoBuild(self)
+	end,nil,0.9)
+	self.FlagTable = {}
+	self.CloudTable = {}
+	_P.RefreshView(self)
+	if isAnimate then
+		local curId = MBattle.CurId
+		local csvBattle = Csv.Battle[curId]
+		if csvBattle ~= nil then
+			local csvPart = Csv.Part[csvBattle.part]
+			local csvPartLast = Csv.Part[csvBattle.part - 1]
+			local parent = moudle:Get("Map")
+			if csvPartLast ~= nil then
+				local flagLast = self.FlagTable[csvBattle.part - 1]
+				if flagLast ~= nil then
+					flagLast.SelfRect.Activity = false
+				end
+				local effectLast = CCommon.CreateEffect(parent,FLAG_EFFECT,Vector2(csvPartLast.posFlag[1],csvPartLast.posFlag[2]),function()
+					if flagLast ~= nil then
+						flagLast.SelfRect.Activity = true
+					end
+				end,nil,nil,1)
+				effectLast.SelfRect.SizeDelta = Vector2(31,34)
+			end
+			if csvPart ~= nil then
+				local pos = Vector2(csvPart.pos[1],csvPart.pos[2])
+				if csvPartLast ~= nil then
+					local cloudMoudle = JGuiManager.GetMoudle(parent, "M_Checkpoint_World_Cloud", "", 0)
+					cloudMoudle.SelfRect.LocalPosition = Vector2(csvPart.pos[1],csvPart.pos[2])
+					moudle.SelfRect:AddOnTime(function()
+						if cloudMoudle ~= nil then
+							cloudMoudle:Destroy()
+						end
+						CCommon.CreateEffect(parent,CLOUD_EFFECT,pos)
+					end,nil,1.2)
+				else
+					CCommon.CreateEffect(parent,CLOUD_EFFECT,pos)
+				end
+			end
+		end
+	end
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	moudle:Get("RoleName").Text = MPlayer.GetName()
+	moudle:Get("RoleIcon").SpriteName = MPlayer.GetHeadIcon()
+	moudle:Get("RolePower").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
+	moudle:Get("RloeLv").Text = Csv.Text("player_level", {name = Csv.Company[MPlayer.GetLevel()].name})
+	moudle:Get("BackText").Text = Csv.Text("battle_tip1")
+	moudle:Get("new_text").Text = Csv.Text("battle_tip2")
+	_P.InitAssets(self)
+	_P.CheckIsOver(self)
+	_P.RefreshBuild(self)
+	_P.GotoBuild(self)
+	_P.CreateFlag(self)
+	_P.CreateCloud(self)
+end
+
+function _P.InitAssets(self)
+	local moudle = self.mMoudle
+	for index,assetId in pairs(ASSET_LIST) do
+		local csv = Csv.Item[assetId]
+		local assetNum = MBag.GetItemNum(assetId)
+		moudle:Get('AssetIcon_' .. index).SpriteName = csv.miniIcon
+		moudle:Get('AssetNum_'..index).Text = LuaUtil.NumberFormat(assetNum)
+		if assetId == Define.AssetsType.Gold then
+			local btn = moudle:Get('AssetAdd_'..index)
+			if btn ~= nil then
+				if MMain.FuncIsOpen(Define.SysId.Recharge) then
+					btn:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+						WindowOpen.Open(Define.SysId.Recharge)
+					end, nil, 1.3)
+				else
+					btn.Activity = false
+				end
+			end
+		end
+	end
+end
+
+function _P.CheckIsOver(self)
+	local moudle = self.mMoudle
+	local curId = MBattle.CurId
+	local csvBattle = Csv.Battle[curId]
+	local notOver = moudle:Get("Img")
+	local over = moudle:Get("AllBg")
+	if csvBattle == nil or csvBattle.next == nil or csvBattle.next <= 0 then
+		notOver.Activity = false
+		over.Activity = true
+	else
+		notOver.Activity = true
+		over.Activity = false
+	end
+end
+
+function _P.GotoBuild(self)
+	local moudle = self.mMoudle
+	local curId = MBattle.CurId
+	local csvBattle = Csv.Battle[curId]
+	if csvBattle ~= nil and csvBattle.part ~= nil then
+		local csvPart = Csv.Part[csvBattle.part]
+		if csvPart == nil then
+			csvPart = Csv.Part[csvBattle.part - 1]
+		end
+		if csvPart ~= nil and csvPart.pos ~= nil then
+			local x = csvPart.pos[1]
+			if x > (MAP_WIDTH - SCENE_WIDTH)/2 then
+				x = (MAP_WIDTH - SCENE_WIDTH)/2
+			elseif x < -(MAP_WIDTH - SCENE_WIDTH)/2 then
+				x = -(MAP_WIDTH - SCENE_WIDTH)/2
+			end
+			x = -x
+			local y = csvPart.pos[2]
+			if y > (MAP_HEIGHT - SCENE_HEIGHT)/2 then
+				y = (MAP_HEIGHT - SCENE_HEIGHT)/2
+			elseif y < -(MAP_HEIGHT - SCENE_HEIGHT)/2 then
+				y = -(MAP_HEIGHT - SCENE_HEIGHT)/2
+			end
+			y = -y
+
+			moudle:Get("Map").LocalPosition = Vector2(x,y)
+		end
+	end
+end
+
+function _P.RefreshBuild(self)
+	local moudle = self.mMoudle
+	local curId = MBattle.CurId
+	local csvBattle = Csv.Battle[curId]
+	local build = moudle:Get("Build")
+	local light = moudle:Get("Light")
+	if csvBattle ~= nil and csvBattle.part ~= nil then
+		local csvPart = Csv.Part[csvBattle.part]
+		if csvPart ~= nil and csvPart.buildImg ~= nil then
+			build.SpriteName = csvPart.buildImg
+			light.SpriteName = csvPart.lightImg
+			if csvPart.pos ~= nil then
+				build.LocalPosition = Vector2(csvPart.pos[1],csvPart.pos[2])
+			end
+		else
+			build.Activity = false
+		end
+	else
+		build.Activity = false
+	end
+
+	-- local tweenFade = light:DOFade(0.4,0.6)
+	-- tweenFade:SetEase(CS.DG.Tweening.Ease.Linear)
+	-- tweenFade:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+	-- self.TweenFade = tweenFade
+end
+
+function _P.OnClickOverBuild(self,partId)
+	local moudle = self.mMoudle
+	moudle:Get("title2").Text = Csv.Text("battle_tip3")
+	moudle:Get("chiyougupiao").Text = Csv.Text("battle_tipT2")
+	moudle:Get("chiyougufen").Text = Csv.Text("battle_tipT3")
+	moudle:Get("bianmaNum_0").Text = "100"
+	moudle:Get("bianmaNum_1").Text = "%"
+	local csvPart = Csv.Part[partId]
+	if csvPart ~= nil then
+		moudle:Get("companyname").Text = csvPart.name
+		moudle:Get("bianmaNum").Text = csvPart.code
+	end
+	moudle:Get("Black").Activity = true
+end
+
+function _P.CreateFlag(self)
+	local moudle = self.mMoudle
+	local curId = MBattle.CurId
+	local csvBattle = Csv.Battle[curId]
+	if csvBattle ~= nil and csvBattle.part ~= nil then
+		if csvBattle.part > 1 then
+			local parent = moudle:Get("Map")
+			for i = 1,csvBattle.part - 1 do
+				local csvPart = Csv.Part[i]
+				if csvPart ~= nil then
+					local flagMoudle = JGuiManager.GetMoudle(parent, "M_Checkpoint_World_Flag", "", 0)
+					flagMoudle.SelfRect.LocalPosition = Vector2(csvPart.posFlag[1],csvPart.posFlag[2])
+					self.FlagTable[i] = flagMoudle
+					flagMoudle:Get("M_Checkpoint_World_Flag"):AddOnButton(function()
+						_P.OnClickOverBuild(self,i)
+					end,nil,1)
+				end
+			end
+		end
+	end
+end
+
+function _P.CreateCloud(self)
+	local moudle = self.mMoudle
+	local curId = MBattle.CurId
+	local csvBattle = Csv.Battle[curId]
+	if csvBattle ~= nil and csvBattle.part ~= nil then
+		if csvBattle.part <= MAX_PART then
+			local parent = moudle:Get("Map")
+			for i = csvBattle.part + 1,MAX_PART do
+				local csvPart = Csv.Part[i]
+				if csvPart ~= nil then
+					local cloudMoudle = JGuiManager.GetMoudle(parent, "M_Checkpoint_World_Cloud", "", 0)
+					cloudMoudle.SelfRect.LocalPosition = Vector2(csvPart.pos[1],csvPart.pos[2])
+					self.CloudTable[i] = cloudMoudle
+				end
+			end
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,100 @@
+-- 离线期间，聚会信息界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_News")
+	if data == nil or module == nil then return end
+
+	self.mModule = module
+
+	local enemyNum = _P.GetEnemyNumByList(data)
+	local totalScore = _P.GetTotalScoreByList(data)
+	module:Get("title").Text = Csv.Text("club_news_title")
+	module:Get("summary").Text = Csv.Text("club_news_desc", {num = #data, enemyNum = enemyNum, operate = ((totalScore > 0 and '+') or ''), score = totalScore})
+	module:Get("name").Text = Csv.Text("club_news_name")
+	module:Get("Num").Text = Csv.Text("club_rank_score")
+
+	_P.SetMsgList(self, data)
+
+	local closeBtn = module:Get("backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+end
+
+
+-- 得到当前捣乱者人数
+function _P.GetEnemyNumByList(list)
+	local count = 0
+	for k,v in ipairs(list) do
+		if v.joinType == 4 then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
+
+-- 得到当前总分数
+function _P.GetTotalScoreByList(list)
+	local totalCount = 0
+	for k,v in ipairs(list) do
+		totalCount = totalCount + v.score
+	end
+
+	return totalCount
+end
+
+
+function _P.SetMsgList(self, list)
+	local itemGrid = self.mModule:Get("content")
+	if itemGrid == nil then return end
+
+	local msgList = _P.GetSortList(list)
+	for k,v in ipairs(msgList) do
+		_P.OnCreateMsgItem(v, itemGrid)
+	end
+end
+
+-- 排序
+function _P.GetSortList(msgList)
+	if msgList == nil then return {} end
+	
+	local sortList = msgList
+	table.sort(sortList, function (a, b)
+		return a.enterTime < b.enterTime
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateMsgItem(data, contentTransform)
+	local itemModule = JGuiManager.GetMoudle(contentTransform, "M_Club_News_Info", WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	itemModule:Get("name").Text = data.name
+	local isSmall = data.score < 0
+	itemModule:Get("num").Text = ((isSmall and '') or '+') .. data.score
+end
+
+
+return _M

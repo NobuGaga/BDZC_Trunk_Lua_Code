@@ -1,0 +1,193 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local PEOPLE_ID = Csv.Const(11005)[2]--
+local REWARD_ITEMS = Csv.Const(11005)[3]--
+
+local EFFECT = 10122
+local SoundCar = Csv.Const(Define.Const.FirstRechargeSound)[1][1]
+local SecondCar = Csv.Const(Define.Const.FirstRechargeSound)[1][2]
+local SoundStaff = Csv.Const(Define.Const.FirstRechargeSound)[2][1]
+local SecondStaff = Csv.Const(Define.Const.FirstRechargeSound)[2][2]
+
+function _M:BeforeDestroy()
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_First_Buy_New")
+	self.mMoudle = moudle
+	-- moudle.SelfRect.LocalScale = Vector3(1,0,1)
+	-- moudle.SelfRect:DOScale(1,0.5)
+
+	local getBtn = moudle:Get("Btn")
+	local getImg = moudle:Get("get")
+	local content = moudle:Get("Content")
+
+	local itemLights = {}
+	local itemTable = {}
+	if REWARD_ITEMS ~= nil then
+		for k,v in pairs(REWARD_ITEMS) do
+			local item =  CCommon.CreateItem(content, v[1], function()
+				CCommon.ShowItemTips(v[1])
+			end, {num = v[2]}, Define.SysId.FirstRecharge)
+			item.SelfRect.LocalScale = Vector3(0,0,1)
+			-- local light = CCommon.CreateItemLight(item.SelfRect)
+			-- table.insert(itemLights,light)
+			table.insert(itemTable,item)
+		end
+	end
+	-- self.mItemLights = itemLights
+	self.mItemTable = itemTable
+
+	content:AddOnTime(function()
+		_P.DoItemScale(self)
+	end,nil,1)
+
+	getImg.Activity = false
+	getBtn.RaycastTarget = true
+	getBtn.IsGray = false
+
+	local btnText = moudle:Get("Btn_Text")
+	if MWelfare.firstRechargeState == 0 then
+		btnText.Text = Csv.Text("welfare_gopay")
+		getImg.Activity = false
+	elseif MWelfare.firstRechargeState == 1 then
+		btnText.Text = Csv.Text("welfare_vipget")
+		getImg.Activity = false
+	elseif MWelfare.firstRechargeState == 2 then
+		btnText.Text = Csv.Text("welfare_vipget")
+		getImg.Activity = true
+		getBtn.RaycastTarget = false
+		getBtn.Activity = false
+		--_P.DestroyLights(self)
+	end
+
+	getBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if MWelfare.firstRechargeState == 0 then
+			--前往充值
+			WindowMgr.Create("URecharge")
+		elseif MWelfare.firstRechargeState == 1 then
+			CWelfare.ReqFirstRecharge()
+		end
+	end)
+
+	moudle:Get("backBtn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	self.mGetBtn = getBtn
+	self.mGetImg = getImg
+	self.mBtnText = btnText
+
+	local actor = moudle:Get("EffectActor")
+	CCommon.CreateEffect(actor,EFFECT)
+
+	if SoundCar ~= nil and SecondCar ~= nil then
+		moudle.SelfRect:AddOnTime(function()
+			SoundMgr.Play(SoundCar)
+		end,nil,SecondCar)
+	end
+
+	if SoundStaff ~= nil and SecondStaff ~= nil then
+		moudle:Get("Bg"):AddOnTime(function()
+			SoundMgr.Play(SoundStaff)
+		end,nil,SecondStaff)
+	end
+end
+
+function _P.DoItemScale(self)
+	local itemTable = self.mItemTable
+	for k,v in pairs(itemTable) do
+		local rect = v.SelfRect
+		if rect ~= nil then
+			rect:AddOnTime(function()
+				rect:DOScale(1,0.15)
+			end,nil,(k - 1) * 0.15)
+		end
+	end
+end
+
+function _R.RefreshGetFirstRecharge(self,data)
+	if MWelfare.firstRechargeState == 2 then
+		self.mGetBtn.Activity = false
+		self.mGetBtn.RaycastTarget = false
+		self.mGetImg.Activity = true
+
+		self.mBtnText.Text = Csv.Text("welfare_vipget")
+		local delay = 0
+		if REWARD_ITEMS ~= nil then
+			for k,v in pairs(REWARD_ITEMS) do
+				delay = delay +0.2
+				CCommon.ShowFlyItemAtMessage(v[1], v[2],delay,self.mGetBtn.RootCanvasPos)
+			end
+		end
+		--_P.DestroyLights(self)
+	end
+end
+
+function _R.ShowMoudle(self)
+	if self.mMoudle == nil then
+		return
+	end
+	if self.StoryMoudle ~= nil and self.StoryMoudle._Root ~= nil then
+		return
+	end
+	local info = MWelfare.DequeueWaitShow()
+	if info ~= nil then
+		if info.storyType == 7 then
+			self.StoryMoudle = UStoryMoudle.new(self.mMoudle:Get("StoryShowRoot"), info.storyId, function ()
+				_R.ShowMoudle(self)
+			end, info,info.data)
+		else
+			self.StoryMoudle = UStoryMoudle.new(self.mMoudle:Get("StoryShowRoot"), info.storyId, function ()
+				_R.ShowMoudle(self)
+			end, info)
+		end		
+	end	
+end
+
+function _R.GetSortLayer(self, refTab)
+	refTab.type = self._Type
+	refTab.index = self._CanvasIndex
+end
+
+function _R.AddSortLayerCount(self, count)
+	self._CanvasIndex = self._CanvasIndex + count + 1
+end
+
+function _P.DestroyLights(self)
+	local lights = self.mItemLights
+
+	if lights ~= nil then
+		for k,v in pairs(lights)do
+			v:Destroy()
+		end
+	end
+end
+
+return _M

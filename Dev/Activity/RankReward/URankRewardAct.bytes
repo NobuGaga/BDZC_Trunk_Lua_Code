@@ -1,0 +1,338 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+-- @RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_List_Details"
+local BtnClose = "btnBack"
+local ItemName = "M_List_Details_Item"
+
+--最小排名缩减
+local Min_Rank_Pow = 3
+--客户端排名最多位数
+local Max_Rank_Pow = 32
+
+local GTE_EFFECT_ID = 5
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(actId, rankType)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	self.actId = actId
+	self.listData = MActivity.GetFromId(actId)
+	if nil == self.listData then
+		self:Destroy()
+	else
+		_P.InitTopInfo(self)
+		_P.InitRewardView(self)
+		_P.InitBottomInfo(self)
+	end
+
+	if MActivity.CommerceRank[rankType] then
+		CActivity.GetInfoReq(actId)
+	end
+end
+
+--初始化顶部信息
+function _P.InitTopInfo(self)
+	local state = self.listData.state	
+	self.moudle:Get("textTitle").SpriteName = self.listData.title2
+	self.moudle:Get("textLeft").Text = self.listData.text[1]
+	self.moudle:Get("textRight").Text = self.listData.text[2]	
+
+	local textNum = self.moudle:Get("textnum")
+	textNum.Text = self.listData.textNum
+
+	local time = state.lefttime - HeartBeat.ServSecond()
+	self.time = state.lefttime
+	if time < 0 then
+		time = 0
+	end
+
+	self.moudle:Get("textActiveTime").Text = Csv.Text("rankreward_last_time", {startTime = LuaUtil.TransToMD(state.startTime),
+																			   endTime = LuaUtil.TransToMD(state.startTime + self.listData.settleTime)})
+
+	self.textRestTime = self.moudle:Get("textRestTime")
+	_P.RefreshTime(self)
+	if time > 0 then
+		self.timer = self.textRestTime:AddOnUpdate(function() 
+			if _P.RefreshTime(self) then
+				if nil ~= self.timer then
+					self.timer:Destroy()
+				end
+				_P.RefreshGetButton(self)
+			end
+		end, nil, 1)
+	end
+end
+
+--倒计时刷新时间
+function _P.RefreshTime(self)
+	local time = self.time - HeartBeat.ServSecond() 
+	local isFinish = time <= 0
+	if isFinish then
+		self.textRestTime.Text = Csv.Text("rankreward_finish")
+	else
+		self.textRestTime.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("rankreward_count_time_another"))
+	end
+	return isFinish
+end
+
+--初始化档位奖励界面
+function _P.InitRewardView(self)
+	self.content = self.moudle:Get("content")
+	self.listCache = {}
+
+	_P.RefreshItemList(self)
+end
+
+--刷新档位奖励列表
+function _P.RefreshItemList(self)
+	if nil ~= self.listData and self.listData.list then
+		for index, data in pairs(self.listData.list) do
+			_P.CreateItem(self, index, data)
+		end
+	else
+		self:Destroy()
+	end
+end
+
+--创建档位项
+function _P.CreateItem(self, index, data)
+	if nil == self.listCache[index] then
+		_P.InitItem(self, index, data)
+	end
+
+	_P.RefreshItem(self, index, self.listCache[index], data)
+end
+
+--获取档位项引用
+function _P.InitItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	local item = {}
+
+	item.item = itemMoudle.SelfRect
+	if nil == self.defaultHeight then
+		self.defaultHeight = item.item.SizeDelta.y
+	end
+	item.textTitle = itemMoudle:Get("textTitle")
+	item.content = itemMoudle:Get("GoodsItem")
+	if nil == self.rewardColumnCount then
+		if nil ~= item.content then
+			local layout = item.content:AddGridLayoutGroup()
+			if nil ~= layout then
+				self.rewardColumnCount =  layout.constraintCount
+				self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
+			end
+		end
+	end
+
+	self.listCache[index] = item
+end
+
+--刷新Item
+function _P.RefreshItem(self, index, item, data)
+	if not item.item.Activity then
+		item.item.Activity = true
+	end
+
+	item.textTitle.Text = data.title
+	
+	if nil ~= data.rewards then
+		if nil == self.listRewardCache then
+			self.listRewardCache = {}
+		end
+		if self.listRewardCache[index] then
+			for num, rewardItem in ipairs(self.listRewardCache[index]) do
+				rewardItem:Destroy()
+				rewardItem = nil
+			end
+		end
+		self.listRewardCache[index] = {}
+		local num = 0
+		for k, reward in pairs(data.rewards) do
+			local rewardItem = CCommon.CreateItem(item.content, reward.key, CCommon.ShowItemTips, 
+												  {num = reward.value}, Define.SysId.RankReward)
+			num = num + 1
+			self.listRewardCache[index][num] = rewardItem
+		end
+		local row, rest = math.modf(num / self.rewardColumnCount)
+		if rest > 0 then
+			row = row + 1
+		end
+		local width = item.item.SizeDelta.x
+		item.item.SizeDelta = Vector2(width, self.defaultHeight + (row - 1) * self.rewardRowHeight)
+	end
+end
+
+--初始化底部信息
+function _P.InitBottomInfo(self)
+	_P.CalCulateMaxRankPow(self)
+
+	self.textSelfRank = self.moudle:Get("textSelfRank")
+	self.moudle:Get("btnRank"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UTimeLimitActRank", self.listData.rankType, self.listData.rankTitle,
+						 Csv.Text("rankreward_rank_title"), self.listData.rankName)
+	end)
+	self.moudle:Get("textBtnRank").Text = Csv.Text("rankreward_rank")
+
+	self.textGet = self.moudle:Get("textGet")
+	self.btnGet = self.moudle:Get("btnGet")
+	self.getPos = self.moudle:Get("GetPos")
+	self.btnGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CActivity.GetRewardReq(self.actId, 1)
+	end)
+	self.moudle:Get("textBtnGet").Text = Csv.Text("rankreward_get")
+
+	_P.RefreshBottomInfo(self)
+end
+
+--计算最大排名缩减
+function _P.CalCulateMaxRankPow(self)
+	local max = 2 ^ Max_Rank_Pow
+	local num = 0
+	while(max > 0) do
+		local temp = math.modf(max / 10)
+		if 0 == temp then
+			break
+		else
+			max = temp
+			num = num + 1
+		end
+	end
+	self.maxRankPow = num
+end
+
+--刷新底部信息
+function _P.RefreshBottomInfo(self)
+	if nil ~= self.listData then
+		_P.RefreshSelfRank(self)
+		_P.RefreshGetButton(self)
+	end
+end
+
+--刷新自己的排名
+function _P.RefreshSelfRank(self)
+	local rankNum
+	if self.listData.selfRank < 10 ^ Min_Rank_Pow then
+		rankNum = self.listData.selfRank
+	else
+		for pow = self.maxRankPow, Min_Rank_Pow, -1 do
+			if self.listData.selfRank >= 10 ^ pow then
+				rankNum =math.modf(10 ^ pow) .. "+"
+				break
+			end
+		end
+	end
+	self.textSelfRank.Text = Csv.Text("rankreward_self_rank", {rank = rankNum})
+end
+
+--刷新领奖按钮
+function _P.RefreshGetButton(self)
+	local csvTips
+	local isFinish = self.time - HeartBeat.ServSecond() <= 0
+	local isCanNotGet = MActivity.RewardGetState.CanNotGet == self.listData.GetState
+	local isGeted = MActivity.RewardGetState.Geted == self.listData.GetState
+	if isFinish then
+		local isOutRank = self.listData.selfRank > self.listData.maxRewardRank or 0 == self.listData.selfRank
+		if not isGeted then
+			isGeted = false
+			if isOutRank then
+				isCanNotGet = true
+				csvTips = "rankreward_can_not_get"
+			else
+				isCanNotGet = false
+			end
+		end
+	else
+		if isCanNotGet then
+			csvTips = "rankreward_not_get_time"
+		end
+	end
+	if nil ~= csvTips then
+		self.textGet.Text = Csv.Text(csvTips)
+	else
+		self.textGet.Text = ""
+	end
+
+	self.btnGet.Activity = not isGeted
+	self.getPos.Activity = isGeted
+	if not isGeted then
+		self.btnGet.IsGray = isCanNotGet
+		self.btnGet.RaycastTarget = not isCanNotGet
+	end
+end
+
+--重置缓存数据
+function _P.ResetCacheList(self)
+	if nil ~= self.listCache then
+		for index, item in pairs(self.listCache) do
+			if nil ~= item.item then
+				item.item.Activity = false
+			end
+		end
+	end
+end
+
+function _R.OnRefreshView(self)
+	self.listData = MActivity.GetFromId(self.actId)
+	_P.ResetCacheList(self)
+	_P.RefreshItemList(self)
+	_P.RefreshBottomInfo(self)
+end
+
+--刷新按钮状态
+function _R.RefreshGetState(self, data)
+	if self.actId == data.actId and data.isGeted then
+		self.btnGet.Activity = false
+		SoundMgr.Play(10004)
+		CCommon.CreateEffect(self.moudle.SelfRect, GTE_EFFECT_ID, self.getPos.LocalPosition, function( ... ) 
+			self.getPos.Activity = true
+		end)
+		if data.index and self.listData.list[data.index] and self.listData.list[data.index].rewards then
+			WindowMgr.Create("URankRewardActGet", self.listData.selfRank, self.listData.list[data.index].rewards)
+		else
+			error("冲榜活动返回奖励 index 为 " .. (data.index or "nil"))
+		end
+	end
+end
+
+function _R.OnRefreshSelfRank(self)
+	self.listData = MActivity.GetFromId(self.actId)
+	_P.RefreshSelfRank(self)
+end
+
+return _M

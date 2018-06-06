@@ -1,0 +1,118 @@
+local JGuiManager = CS.JGui.JGuiManager
+local MRank = JRequire "Dev.Rank.MRank"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CLogin = JRequire "Dev.Login.CLogin"
+--local CPlayer = JRequire "Dev.Player.CPlayer"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+local itemWidth = 632
+local itemHeight = 158
+local space = 10
+local pageNum = 15
+local pageHeight = 710
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Ranking_Cross_Gang", WindowType.UI, 0)
+	self.mMoudle = moudle
+end
+
+function _M:ResetList(data)
+	_P.SetBottomData(self)
+end
+
+function _P.SetBottomData(self)
+	local rankinfo = MRank.AllRankTable[Define.CrossRankType.Commerce]
+	if rankinfo ~= nil then
+		_P.OnCreateList(self, rankinfo)
+	end
+end
+
+function _P.OnCreateList(self, rankinfo)
+	local list = _P.GetSortList(rankinfo.ranklist)
+	self.mList = list
+	local content = self.mMoudle:Get("content")
+	content:DestroyChildren()
+	local scroll = self.mMoudle:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	local scrollController = RankVertical.new(scroll,content,"M_Ranking_Cross_Gang_Item",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+	self.scrollController = scrollController
+end
+
+function _P.GetSortList(list)
+	local sortList = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			table.insert(sortList,v)
+		end
+		table.sort(sortList,function(a,b)return _P.SortRank(a,b)end)
+	end
+	return sortList
+end
+
+function _P.SortRank(a,b)
+	return a.rank < b.rank
+end
+
+function _P.ScrollCallBack(self,index,value,moudle)
+	if moudle ~= nil then
+		if value.rank > 3 then
+			moudle:Get("Num").Text = value.rank
+		end
+
+		moudle:Get("ShName").Text = value.commername
+		moudle:Get("bossName").Text = Csv.Text("cross_rank_bossname")
+		moudle:Get("NameText").Text = value.playername
+		moudle:Get("SLText").Text = Csv.Text("cross_rank_zsl") -- 总势力
+		moudle:Get("SLNum").Text = value.exp
+		moudle:Get("people").Text = Csv.Text("cross_rank_peoplenum")
+		moudle:Get("qu").Text = Csv.Text("cross_rank_qu")
+		local serverInfo = CLogin.GetServerInfoByID(value.serverid)
+		moudle:Get("quText").Text = serverInfo.name
+		local totalNum = value.totalMum
+		if totalNum == nil then
+			totalNum = 0
+		end
+		moudle:Get("PeopleNum").Text = value.joinMum.."/"..totalNum
+
+		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+
+		-- moudle.SelfRect:AddOnButton(function(...)
+		-- 	SoundMgr.Play(10001)
+		-- 	CPlayer.LookPlayerReq(value.playerid)
+		-- 	print("-----------value.playerid:", value.playerid)
+		-- end,nil,1)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

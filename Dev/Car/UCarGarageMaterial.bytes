@@ -1,0 +1,401 @@
+-- 车库材料分页
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local MatType = 6
+local BatchSellData = Csv.Const(83)
+local BatchSelectBgImgs = {"zj_027", "zj_028", "zj_029", "zj_030", "zj_031"}
+
+local _M = Class()
+local _P = {}
+
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Car_Garage_Material", WindowType.UI, 0)
+	self.mModule = module
+	
+	self.hasRect = module:Get("InfoRect")
+	self.noneRect = module:Get("NoneTips")
+	self.noneRect.Text = Csv.Text("car_garage_none")
+	self.effectRect = module:Get("EffectRect")
+	self.BatchPanel = module:Get("BatchRect")
+	self.BatchPanel.Activity = false
+	self.CurSelectIndex = 1
+
+	module:Get("GoodsDescTitle").Text = Csv.Text("car_garage_danjia")
+	
+	_P.CreateListData(self)
+	_P.OnInitBatchData(self)
+end
+
+
+function _M:UpdateData()
+	_P.CreateListData(self)
+	if self.SelectMatData then
+		self.mModule:Get("GoodsNum").Text = Csv.Text("car_garage_shuliang", {num = self.SelectMatData.itemcount})
+	end
+
+	if next(MCar.SellGetData) ~= nil then
+		_P.PlayItemEffect(self, MCar.SellGetData)
+		MCar.SellGetData = {}
+	elseif MCar.CarMatBreakData then
+		_P.PlayItemsEffect(self, MCar.CarMatBreakData)
+		MCar.CarMatBreakData = nil
+	end
+end
+
+
+function _M:IsShowOneKeyData(isShow)
+	self.IsBatch = isShow or false
+	self.BatchPanel.Activity = isShow
+	self.hasRect.Activity = (not isShow) and self.SelectMatData
+	self.noneRect.Activity = (not isShow) and (not self.SelectMatData)
+
+	for i,v in ipairs(BatchSellData) do
+		if isShow then
+			local isSelect = MCar.BatchSellList[v]
+			_P.UpdateSelectData(self, v, isSelect)
+		else
+			_P.UpdateSelectData(self, v, false)
+		end
+	end
+end
+
+
+function _P.CreateListData(self)
+	local contentTransform = self.mModule:Get("Content")
+	contentTransform:DestroyChildren()
+
+	local matList = _P.GetSortList(MBag.GetBagItems(MatType, true))
+	if matList == nil then return end
+
+	self.mAllMatData = {}
+	self.batchSellIdList = {}
+	for i,v in ipairs(matList) do
+		self.mAllMatData[i] = _P.OnCreateItem(self, contentTransform, v, i)
+	end
+
+	local hasItemNum = #matList
+	local emptyNum = 0
+	if hasItemNum < 30 then
+		emptyNum = 30 - hasItemNum
+	else
+		if hasItemNum % 5 > 0 then
+			emptyNum = 5 - hasItemNum % 5
+		end
+	end
+
+	local MaxListNum = MCar.CarShopListMax
+	if hasItemNum + emptyNum > MaxListNum then
+		emptyNum = MaxListNum - hasItemNum
+	end
+
+	for i=1, emptyNum do
+		_P.OnCreateItem(self, contentTransform, nil)
+	end
+
+
+	local firstData = self.mAllMatData[self.CurSelectIndex]
+	if firstData and firstData.data then
+		_P.OnSelectMatData(self, firstData.data, true, self.CurSelectIndex)
+	else
+		if self.CurSelectIndex ~= 1 then
+			self.CurSelectIndex = 1
+		end
+
+		local oneData = self.mAllMatData[self.CurSelectIndex]
+		if oneData and oneData.data then
+			_P.OnSelectMatData(self, oneData.data, true, self.CurSelectIndex)
+		else
+			self.mAllMatData = {}
+			self.SelectMatData = nil
+			self.hasRect.Activity = false
+			self.noneRect.Activity = (not self.IsBatch)
+		end
+	end
+end
+
+
+-- 数量不为0时才显示
+function _P.GetSortList(list)
+	local sortList = {}
+	for i,v in ipairs(list) do
+		if v.itemcount > 0 then
+			sortList[#sortList + 1] = v
+		end
+	end
+
+	return sortList
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, index)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_GoodsItem", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("Icon")
+		local qualityImg = itemModule:Get("Color")
+		local numText = itemModule:Get("Num")
+		
+		iconImg.Activity = data
+		numText.Activity = data
+		if data then
+			local itemConf = Csv.Item[data.itemid]
+			local sellConf = Csv.CarSellReturn[data.itemid]
+			iconImg.SpriteName = itemConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+			numText.Text = data.itemcount
+
+			item.id = data.itemid
+			item.num = data.itemcount
+			item.qualityId = itemConf.color
+			item.isCanSell = (sellConf and sellConf.isCanSell == 1)
+			item.data = data
+		else
+			qualityImg.SpriteName = "ty_018"
+		end
+
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnSelectMatData(self, data, false, index)
+		end, nil, 0.9)
+		qualityImg.RaycastTarget = data
+	end
+
+	item.module = itemModule
+	return item
+end
+
+
+function _P.OnSelectMatData(self, data, isUpdate, index)
+	if self.SelectMatData == data then return end
+	if self.IsBatch and (not isUpdate) and data then return end
+	self.SelectMatData = data
+	self.CurSelectIndex = index or 1
+
+	self.hasRect.Activity = data and (not self.IsBatch)
+	self.noneRect.Activity = not data and (not self.IsBatch)
+
+	_P.SetItemData(self, data)
+end
+
+
+-- 点击出售
+function _P.OnClickSell(self, data)
+	if not data then return end
+	WindowMgr.Create("UCarSellMoreMaterial", data)
+end
+
+
+function _P.SetItemData(self, data)
+	local sellConf = Csv.CarSellReturn[data.itemid]
+	local itemConf = Csv.Item[data.itemid]
+	local strColor = Csv.ItemColor[itemConf.color].str
+	self.mModule:Get("GoodsName").Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+	self.mModule:Get("GoodsNum").Text = Csv.Text("car_garage_shuliang", {num = data.itemcount})
+	
+	local priceNumText = self.mModule:Get("PriceNum")
+	local priceIcon = self.mModule:Get("PriceIcon")
+	if sellConf and sellConf.getItems then
+		local showData = sellConf.getItems[1]
+		local priceConf = Csv.Item[showData[1]]
+		priceNumText.Text = showData[2]
+		priceIcon.SpriteName = priceConf.icon
+	end
+
+	local isShowSell = (sellConf and sellConf.getItems)
+	priceNumText.Activity = isShowSell
+	priceIcon.Activity = isShowSell
+	self.mModule:Get("GoodsDescTitle").Activity = isShowSell
+	self.mModule:Get("GoodsDesc").Text = itemConf.tips
+	self.mModule:Get("IconColor").SpriteName = itemConf.colorIcon
+	self.mModule:Get("Icon").SpriteName = itemConf.icon
+
+	_P.SetBtnData(self, sellConf)
+end
+
+
+function _P.SetBtnData(self, sellConf)
+	local module = self.mModule
+	local sellBtn = module:Get("BtnUse")
+	local otherBtn = module:Get("BtnHc")
+	sellBtn.Activity = false
+	otherBtn.Activity = false
+
+	if sellConf.useType and sellConf.useType[1] ~= nil then
+		sellBtn.Activity = true
+		otherBtn.Activity = false
+
+		module:Get("C_text").Text = Csv.Text("car_garage_use" .. sellConf.useType[1])
+		sellBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickBtn(self, sellConf.useType[1])
+		end, nil, 0.9)
+	end
+	
+	if sellConf.useType and sellConf.useType[2] ~= nil then
+		sellBtn.Activity = true
+		otherBtn.Activity = true
+
+		module:Get("C_text_0").Text = Csv.Text("car_garage_use" .. sellConf.useType[2])
+		otherBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickBtn(self, sellConf.useType[2])
+		end, nil, 0.9)
+	end
+end
+
+
+function _P.OnClickBtn(self, type)
+	local curData = self.SelectMatData
+	if curData == nil then return end
+
+	if type == 1 then
+		_P.OnClickSell(self, curData)
+	elseif type == 2 then
+		-- 分解
+		if curData.itemid ~= nil then
+			WindowMgr.Create("UCarDecomposeMat", curData)
+		end
+	elseif type == 3 then
+		if curData.itemid ~= nil then
+			WindowMgr.Create("UCarMergePanel", curData.itemid)
+		end
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+-- 出售成功后，播放item往上飘动画
+function _P.PlayItemEffect(self, data)
+	CCommon.ShowFlyItem(self.effectRect, data.id, data.count)
+end
+
+
+function _P.PlayItemsEffect(self, data)
+	local breakConf = Csv.CarItemBreakDown[data.itemid]
+	if breakConf == nil then return end
+
+	local list = {}
+	for k,v in pairs(breakConf.getItems) do
+		list[#list + 1] = {id = v[1], count = data.itemcount * v[2]}
+	end
+
+	local delayCount = 0
+	for k,v in pairs(list) do
+		CCommon.ShowFlyItem(self.effectRect, v.id, v.count, delayCount * 0.5)
+		delayCount = delayCount + 1
+	end
+end
+
+
+-- 初始化一键分解界面数据
+function _P.OnInitBatchData(self)
+	local module = self.mModule
+	module:Get("Tip").Text = Csv.Text("car_batch_breakSelect")
+	module:Get("SellText").Text = Csv.Text("car_batch_sell")
+
+	local batchBtn = module:Get("Sell")
+	batchBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if next(self.batchSellIdList) == nil then
+			CCommon.ShowError(Csv.Text("car_batch_sellErr"))
+		else
+			local list = {}
+			local totalList = {}
+			for k,v in pairs(self.batchSellIdList) do
+				totalList[#totalList + 1] = {id = k, num = v}
+				list[#list + 1] = k
+			end
+			WindowMgr.Create("UCarBatchSellPanel", _P.GetTotalMatNum(self, totalList), list)
+		end
+	end, nil, 0.9)
+
+	local count = 0
+	for i,v in ipairs(BatchSellData) do
+		if i <= 4 then
+			local itemData = {index = v, isSelect = MCar.BatchSellList[v]}
+			_P.OnCreateSelectItem(self, itemData, i)
+			count = count + 1
+		end
+	end
+
+	for i = count + 1, 4 do
+		module:Get("Quality" .. i).Activity = false
+	end
+end
+
+
+-- 创建选择框
+function _P.OnCreateSelectItem(self, data, index)
+	local module = self.mModule
+	local qualityRect = module:Get("Quality" .. index)
+	module:Get("Car" .. index).Text = Csv.Text("car_batch_mat", {num = data.index})
+
+	qualityRect.Activity = true
+	qualityRect.SpriteName = BatchSelectBgImgs[data.index]
+
+	local lightImg = module:Get("Gou" .. index)
+	lightImg.Activity = data.isSelect
+
+	qualityRect:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		lightImg.Activity = not lightImg.Activity
+
+		if lightImg.Activity then
+			MCar.BatchSellList[data.index] = data.index
+		else
+			MCar.BatchSellList[data.index] = nil
+		end
+
+		_P.UpdateSelectData(self, data.index, lightImg.Activity)
+	end, nil, 1.2)
+end
+
+
+-- 更新座驾列表选中效果
+function _P.UpdateSelectData(self, qualityId, isSelect)
+	for i,v in ipairs(self.mAllMatData) do
+		if v.isCanSell == true and v.qualityId == qualityId then
+			v.module:Get("Black").Activity = isSelect
+
+			self.batchSellIdList[v.id] = ((isSelect and v.num) or nil)
+		end
+	end
+end
+
+
+-- 计算一键出售获得的材料列表
+function _P.GetTotalMatNum(self, list)
+	local totalList = {}
+	for k,v in pairs(list) do
+		local sellConf = Csv.CarSellReturn[v.id]
+		local getItems = sellConf.getItems
+		if sellConf and getItems then
+			local getData = getItems[1]
+			local oneItem = totalList[getData[1]]
+			if oneItem then
+				totalList[getData[1]] = oneItem + getData[2] * v.num
+			else
+				totalList[getData[1]] = getData[2] * v.num
+			end
+		end
+	end
+
+	return totalList
+end
+
+return _M

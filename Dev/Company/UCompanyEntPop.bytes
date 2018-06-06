@@ -1,0 +1,22 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Company_Tab3_entrance")
+	local csvPatrol = Csv.Patrol[id]
+	if csvPatrol ~= nil then
+		moudle:Get("title").Text = Csv.Text("company_parT")
+		moudle:Get("text1").Text = Csv.Text("company_entDesc",{name = csvPatrol.name,title = csvPatrol.title})
+		moudle:Get("text2").Text = Csv.Text("company_entTips")
+
+		moudle:Get("BSX").SpriteName = csvPatrol.personIcon
+	end
+	moudle:Get("BtnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+end
+
+return _M

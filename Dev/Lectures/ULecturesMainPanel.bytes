@@ -1,0 +1,432 @@
+-- 经济讲座界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local CLectures = JRequire "Dev.Lectures.CLectures"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+local CityNodeMoveY = -1334
+local LEVEL_UP_EFFECT_ID = 10006
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_Main")
+	self.mModule = module
+
+	self.MoveCount = 0
+	self.Bg1 = module:Get("bg1")
+	self.Bg2 = module:Get("bg2")
+	self.BgRect = module:Get("BgRect")
+	module:Get("titleText").Text = Csv.Text("lecture_city_title")
+
+	local closeBtn = module:Get("back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("HELPBTN")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil, 1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local rankBtn = module:Get("Rank")
+	rankBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("ULecturesRankPanel")
+	end, nil, 0.9)
+	rankBtn.Activity = not GameSetting.IsiOSCommit
+
+	_P.SetPlayerData(self)
+	_P.SetOneKeyData(self)
+	_P.SetCityData(self)
+end
+
+
+function _P.SetCityData(self)
+	if MLectures.CurBattleId == 0 then
+		self.mModule:Get("CityNode").Activity = false
+		self.mModule:Get("ship").Activity = false
+		return
+	end
+	
+	local battleId = (MLectures.CurBattleId > MLectures.MaxLecturesNum and MLectures.MaxLecturesNum) or MLectures.CurBattleId
+	local nowLectureConf = Csv.LecturesBattle[battleId]
+	if nowLectureConf then
+		local moveBgImg = (self.MoveCount % 2 == 0 and self.Bg2) or self.Bg1
+		moveBgImg.SpriteName = nowLectureConf.bgName
+	end
+
+	if MLectures.CurBattleId > MLectures.MaxLecturesNum then
+		_P.SetAllCityFinished(self, MLectures.MaxLecturesNum, true)
+	else
+		_P.SetCityListData(self, MLectures.CurBattleId)
+	end
+end
+
+
+function _P.SetPlayerData(self)
+	local module = self.mModule
+	local nowLevel = MPlayer.GetLevel()
+	local nowCsv = Csv.Company[nowLevel]
+	local roleLevelUpRect = module:Get("RoleLevelUp")
+
+	module:Get("RloeLv").Text = Csv.Text("player_level", {name = nowCsv.name})
+	module:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetHeadIcon()
+	module:Get("RoleName").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
+	module:Get("AptiIcon").SpriteName = 'ygzz_001'
+	module:Get("ExpIcon").SpriteName = 'yg_tb_001_1'
+	module:Get("AptiNum").Text = LuaUtil.NumberFormat(MPlayer.GetAttr(Define.AttrType.Zhili))
+	module:Get("ExpNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+	module:Get("icon").SpriteName = 'zy_002'
+
+	self:RegistRedpoint(roleLevelUpRect, Define.SysId.Player)
+
+	CCommon.CreateEffect(module:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	module:Get("RoleIconBg"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UPlayer")
+	end, nil, 0.9)
+	
+	local nextCsv = Csv.Company[nowLevel + 1]
+	local nowExp = MPlayer.GetExp()
+	module:Get("ProSp").FillAmount = nowExp / nowCsv.cost
+	module:Get("ProText").Text = Csv.Text("player_levelUpExp",{num = nowExp, max = nowCsv.cost})
+end
+
+
+function _P.SetOneKeyData(self)
+	local module = self.mModule
+	local curBattleId = MLectures.CurBattleId
+	local needConditionLv = MLectures.UnLockAutoNum
+	module:Get("AutoText").Text = Csv.Text("lecture_city_oneKeyBtn")
+	module:Get("Tips").Text = Csv.Text("lecture_city_oneOpen", {num = needConditionLv})
+
+	local autoSpeachBtn = module:Get("AutoSpeach")
+	autoSpeachBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+
+		if MLectures.CurBattleId > MLectures.MaxLecturesNum then
+			CCommon.ShowError(Csv.Text("lecture_city_maxErr"))
+		else
+			CLectures.GetOneKeyDataReq()
+		end
+	end, nil, 0.9)
+
+	_P.SetAutoBtnState(self)
+end
+
+
+function _P.SetAutoBtnState(self)
+	local autoSpeachBtn = self.mModule:Get("AutoSpeach")
+	local tipBgImg = self.mModule:Get("TipsBg")
+	local isCanClick = MLectures.IsOpenOneKey
+
+	autoSpeachBtn.RaycastTarget = isCanClick
+	autoSpeachBtn.IsGray = not isCanClick
+	tipBgImg.IsGray = not isCanClick
+end
+
+
+function _P.SetCityListData(self, battleId, isMove)
+	local curBattleMod = (battleId % 10 == 0 and 10) or battleId % 10
+	local shipImg = self.mModule:Get("ship")
+	local addBattleId = 0
+	if battleId > 10 then
+		addBattleId = (battleId - curBattleMod)
+	else
+		addBattleId = 0
+	end
+
+	if self.ArrowAnimTween ~= nil then
+		self.ArrowAnimTween:DOKill()
+	end
+
+	for i=1,10 do
+		local cityRect = self.mModule:Get("City" .. i)
+		local cityNameText = self.mModule:Get("NameText" .. i)
+		local arrowImg = self.mModule:Get("Arrow" .. i)
+		local finishImg = self.mModule:Get("Finished" .. i)
+		local buildImg = self.mModule:Get("Architecture" .. i)
+		local nameImg = self.mModule:Get("NameBg" .. i)
+		
+		local lectureConf = Csv.LecturesBattle[addBattleId + i]
+		if lectureConf then
+			cityNameText.Text = Csv.Text("lectures_main_title", {num = addBattleId + i, name = lectureConf.name})
+			buildImg.SpriteNameAutoScale = lectureConf.icon
+
+			local cityPos = lectureConf.cityPos or {0, 0}
+			local nameBgPos = lectureConf.citynamePos or {0, 0}
+			cityRect.LocalPosition = Vector2(cityPos[1], cityPos[2])
+			nameImg.LocalPosition = Vector2(nameBgPos[1], nameBgPos[2])
+			finishImg.LocalPosition = Vector2(nameBgPos[1], nameBgPos[2])
+		end
+
+		buildImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if lectureConf then
+				WindowMgr.Create("ULecturesCityPanel", lectureConf.id)
+			end
+		end, nil, 0.9)
+		
+		cityRect.Activity = true
+		if i < curBattleMod then
+			buildImg.RaycastTarget = false
+			finishImg.Activity = true
+			arrowImg.Activity = false
+			cityNameText.Activity = true
+			nameImg.Activity = true
+		elseif i == curBattleMod then
+			buildImg.RaycastTarget = true
+			finishImg.Activity = false
+			arrowImg.Activity = true
+			cityNameText.Activity = true
+			nameImg.Activity = true
+
+			self.ArrowAnimTween = arrowImg.CachedTran:GetJTweener("T_WorldIonName")
+			self.ArrowAnimTween:Play()
+			if lectureConf then
+				local shipPos = lectureConf.shipPos or {0, 0, 1}
+				local shipDirPos = Csv.LecturesShip[1]
+				shipImg.SpriteName = shipDirPos.icon
+				if lectureConf.id == 1 or (isMove and isMove == true) then -- 第一关
+					self:Lock()
+					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2] - 100)
+					local moveTween = shipImg:DOAnchorPosY(shipPos[2], 0.5)
+					moveTween:OnComplete(function()
+						self:Unlock()
+
+						local newShipDirPos = Csv.LecturesShip[shipPos[3]]
+						shipImg.SpriteName = newShipDirPos.icon
+					end)
+				else
+					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2])
+				end
+			end
+		else
+			buildImg.RaycastTarget = false
+			finishImg.Activity = false
+			arrowImg.Activity = false
+			cityNameText.Activity = false
+			nameImg.Activity = false
+		end
+	end
+end
+
+
+function _P.SetAllCityFinished(self, battleId, isPass)
+	local curBattleMod = (battleId % 10 == 0 and 10) or battleId % 10
+	local shipImg = self.mModule:Get("ship")
+	local addBattleId = 0
+	if battleId > 10 then
+		local multNum = battleId / 10
+		addBattleId = (multNum - 1) * 10
+	else
+		addBattleId = 0
+	end
+
+	for i=1,10 do
+		local cityRect = self.mModule:Get("City" .. i)
+		local cityNameText = self.mModule:Get("NameText" .. i)
+		local arrowImg = self.mModule:Get("Arrow" .. i)
+		local finishImg = self.mModule:Get("Finished" .. i)
+		local buildImg = self.mModule:Get("Architecture" .. i)
+		local nameImg = self.mModule:Get("NameBg" .. i)
+
+		cityRect.Activity = true
+		buildImg.RaycastTarget = false
+		finishImg.Activity = true
+		arrowImg.Activity = false
+		cityNameText.Activity = true
+		nameImg.Activity = true
+
+		local lectureConf = Csv.LecturesBattle[addBattleId + i]
+		if lectureConf then
+			cityNameText.Text = lectureConf.name
+			buildImg.SpriteNameAutoScale = lectureConf.icon
+
+			local cityPos = lectureConf.cityPos or {0, 0}
+			local nameBgPos = lectureConf.citynamePos or {0, 0}
+			cityRect.LocalPosition = Vector2(cityPos[1], cityPos[2])
+			nameImg.LocalPosition = Vector2(nameBgPos[1], nameBgPos[2])
+			finishImg.LocalPosition = Vector2(nameBgPos[1], nameBgPos[2])
+		end
+	end
+
+	if isPass and isPass == true then
+		shipImg.Activity = false
+	else
+		shipImg.Activity = true
+	end
+end
+
+
+function _P.OnMoveBg(self, bgName)
+	local distance = (self.MoveCount + 1) * CityNodeMoveY
+	local moveBgImg = (self.MoveCount % 2 == 0 and self.Bg1) or self.Bg2
+	moveBgImg.LocalPosition = Vector2(0, math.abs(distance))
+	moveBgImg.SpriteName = bgName
+
+	self:Lock()
+	local bgMoveAnim = self.BgRect:DOAnchorPosY(distance, 1)
+	bgMoveAnim:OnComplete(function ()
+		self:Unlock()
+	end)
+
+	self.MoveCount = self.MoveCount + 1
+end
+
+
+-- 胜利通关后，移动小船
+function _P.OnPassBack(self)
+	local lastLectureConf = Csv.LecturesBattle[MLectures.CurBattleId - 1]
+	if lastLectureConf == nil then return end
+
+	local shipImg = self.mModule:Get("ship")
+	local shipPosData = lastLectureConf.shipPos or {0, 0, 1}
+	local shipDirPos = Csv.LecturesShip[shipPosData[3]]
+	shipImg.LocalPosition = Vector2(shipPosData[1], shipPosData[2])
+	shipImg.SpriteName = shipDirPos.icon
+
+	local shipMoveList = {}
+	if lastLectureConf.shipMovePos ~= nil then
+		for k,v in pairs(lastLectureConf.shipMovePos) do
+			shipMoveList[#shipMoveList + 1] = v
+		end
+	end
+	self.ShipMovePos = shipMoveList
+	if next(self.ShipMovePos) ~= nil then
+		self:Lock()
+	end
+	_P.OnMoveShip(self, function()
+		if MLectures.CurBattleId > 1 and MLectures.CurBattleId % 10 == 1 then
+			_P.OnMoveBg(self, lastLectureConf.nextBgName)
+
+			local cityNode = self.mModule:Get("CityNode")
+			local moveTween = cityNode:DOAnchorPosY(CityNodeMoveY, lastLectureConf.bgMoveTime / 1000)
+			moveTween:OnComplete(function()
+				cityNode.LocalPosition = Vector2.zero
+
+				local nowLectureConf = Csv.LecturesBattle[MLectures.CurBattleId]
+				local lastShipPosData = lastLectureConf.shipPos or {0, 0, 1}
+				local nextShipDirPos = Csv.LecturesShip[lastShipPosData[3]]
+				shipImg.LocalPosition = Vector2(lastShipPosData[1], lastShipPosData[2])
+				shipImg.SpriteName = nextShipDirPos.icon
+				_P.SetCityListData(self, MLectures.CurBattleId, true)
+			end)
+		end
+	end)
+end
+
+
+function _P.OnMoveShip(self, callBack)
+	local pos = self.ShipMovePos[1]
+	if pos then
+		local shipImg = self.mModule:Get("ship")
+		local shipDirPos = Csv.LecturesShip[pos[3]]
+		shipImg.SpriteName = shipDirPos.icon
+		local shipMoveAnim = shipImg:DOAnchorPos(Vector2(pos[1], pos[2]), pos[4] / 1000)
+		shipMoveAnim:OnComplete(function ()
+			table.remove(self.ShipMovePos, 1)
+			if next(self.ShipMovePos) ~= nil then
+				_P.OnMoveShip(self, callBack)
+			else
+				if callBack ~= nil then
+					callBack()
+				end
+
+				self:Unlock()
+			end
+		end)
+	else
+		if callBack ~= nil then
+			callBack()
+		end
+
+		self:Unlock()
+	end
+end
+
+
+function _R.OnBattleResult(self, data)
+	if data.state == MLectures.ResultState.Win then
+		local curBattleId = MLectures.CurBattleId
+		local isPassed = (data.nextId > MLectures.MaxLecturesNum or MLectures.CurBattleId > MLectures.MaxLecturesNum)
+		if curBattleId > 10 and curBattleId % 10 == 1 then
+			_P.SetAllCityFinished(self, MLectures.CurBattleId - 1, isPassed)
+		else
+			_P.SetCityListData(self, MLectures.CurBattleId)
+		end
+
+		if not isPassed then
+			_P.OnPassBack(self)
+		end
+	end
+
+	self.mModule:Get("ExpNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+	_P.SetAutoBtnState(self)
+end
+
+
+-- 一键演讲返回
+function _R.OnAutoBttleResult(self, data)
+	if data.state == MLectures.ResultState.Win then
+		_P.SetCityData(self)
+	end
+	self.mModule:Get("ExpNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+end
+
+
+function _R.GetOneKeyDataBack(self, data)
+	if data == nil or data.chapterList == nil or next(data.chapterList) == nil then
+		CCommon.ShowError(Csv.Text("lecture_city_oneKeyErr"))
+	else
+		WindowMgr.Create("ULecturesOneKeyBattle", data.chapterList)
+	end
+end
+
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+return _M

@@ -1,0 +1,492 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CBuyLand = JRequire "Dev.BuyLand.CBuyLand"
+local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MAX_BATTLE_COUNT = 3
+local LEVEL_UP_EFFECT_ID = 10006
+local DefaultNoReward = "ty_023" --默认无奖励底图
+local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
+local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+local FADE_TIME = 1
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bidding_Main")
+	self.Moudle = moudle
+	self.buildMap = {}
+
+	moudle:Get("back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("HELPBTN")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	--玩家头像
+	self.RoleIcon = moudle:Get("RoleIcon")
+	local RoleLevelUp = moudle:Get("RoleLevelUp")
+	--注册小红点
+	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	--可以升级特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	--点击头像
+	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UPlayer")
+	end, nil, 0.9)
+	--玩家战力
+	self.RolePower = moudle:Get("RoleName")
+	--玩家等级
+	self.RoleLv = moudle:Get("RloeLv")
+	local itemCsv = Csv.Item[Define.AssetsType.Soldier]
+	moudle:Get("AssetIcon_1").SpriteName = itemCsv.miniIcon
+	moudle:Get('AssetIcon_4').SpriteName = 'ygzz_002'
+
+	--自己的兵力
+	self.MoneyText = moudle:Get("AssetNum_1")
+	--自己的武力
+	self.DanShiText = moudle:Get("AssetNum_4")
+	--自己的政绩
+	self.ExpProgress = moudle:Get("ProSp")
+	self.ExpText = moudle:Get("ProText")
+	--背景图
+	self.SceneSp = moudle:Get("BG")
+	--第几关
+	self.BattleIndex = moudle:Get("Num")
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAttr(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if self.Moudle ~= nil and itemId == Define.AssetsType.Soldier then
+			_P.RefreshMoney(self)
+		end
+	end)
+
+	moudle:Get("titleText").Text = Csv.Text("buyland_main_name") --模块名
+	moudle:Get("Btn_Text").Text = Csv.Text("buyland_allin_btn")-- 一键竞标按钮上的文字
+
+	-- 一键竞标按钮
+	local lockLvl = Csv.Const(18006)
+	self.TipsBg = moudle:Get("TipsBg")
+	self.AllInBtn = moudle:Get("Btn1")
+	self.AllInBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		if MBuyLand.CanAllIn() then
+			local curBattleId = MBuyLand.GetNextID()
+			local maxLvl = Csv.Const(18009)
+			if maxLvl < curBattleId then
+				CCommon.ShowError(Csv.Text("buyland_finish2"))
+				return
+			end
+			local money = MBag.GetItemNum(Define.AssetsType.Soldier)
+			local allInMoney = MBuyLand.GetAllInMoney(1)
+			if allInMoney == nil or money < allInMoney then
+				CCommon.ShowError(Csv.Text("buyland_allin_money_tips"))
+				return
+			end
+			WindowMgr.Create("UBuyLandAllInPop", function ()
+				_P.OnResultClose(self)
+			end, 1)
+		else
+			CCommon.ShowError(Csv.Text("buyland_allin_tips",{num = lockLvl}))
+			return
+		end
+	end)
+	moudle:Get("Tips").Text = Csv.Text("buyland_allin_tips",{num = lockLvl}) -- 一键竞标tips
+	
+	local rankBtn = moudle:Get("Icon1")
+	rankBtn:AddOnButton(function ( ... ) -- 排行榜
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBuyLandRank")
+	end, nil, 0.9)
+	rankBtn.Activity = not GameSetting.IsiOSCommit
+	_P.RefreshAttr(self)
+	_P.RefreshAvatar(self)
+	_P.RefreshLevel(self)
+	_P.RefreshMoney(self)
+
+	_R.RefreshLandInfo(self)
+	-- 请求一键所需金钱数据
+	local maxLvl = Csv.Const(18009)
+	local curBattleId = MBuyLand.GetNextID()
+	if maxLvl >= curBattleId then
+		CBuyLand.CInit()
+	end
+end
+
+-- 关闭一键竞标胜利界面后调用
+function _P.OnResultClose(self)
+	if self.Moudle ~= nil then
+		if MBuyLand.isSuc then
+			_R.RefreshLandInfo(self);
+			-- 请求一键所需金钱数据
+			local maxLvl = Csv.Const(18009)
+			local curBattleId = MBuyLand.GetNextID()
+			if maxLvl >= curBattleId then
+				CBuyLand.CInit()
+			end
+		end
+	end
+end
+
+function _R.OnResult(self, data)
+	_P.OnGameOver(self, data)
+end
+
+function _P.OnGameOver(self, data)
+	if MBuyLand.isSuc then
+		WindowMgr.Create("UBuyLandWin", function ()
+			_P.OnResultClose(self)
+		end, data)
+	else
+		WindowMgr.Create("UBuyLandFail", function ()
+			_P.OnResultClose(self)
+		end, 0)
+	end
+end
+
+-- 刷新地皮信息
+function _R.RefreshLandInfo(self)
+	local curBattleId = MBuyLand.GetNextID()
+	local maxLvl = Csv.Const(18009)
+	if maxLvl < curBattleId then
+		_P.ResetFinishInfo(self)
+		self.SceneSp.SpriteName = "BiddingMap_1"
+		return
+	end
+
+	_P.DoRefreshLandInfo(self)
+end
+
+function _P.ResetFinishInfo(self)
+	for i=1,MAX_BATTLE_COUNT do
+		local ImgBuild = self.buildMap[i]
+		if ImgBuild ~= nil then
+			local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+			if btnPai ~= nil then
+				btnPai.IsGray = true
+				btnPai.RaycastTarget = false
+			end
+			ImgBuild:Get("Btn_Text").Text = Csv.Text("buyland_finish")
+			local content = ImgBuild:Get("content")
+			content:DestroyChildren()
+		end
+	end
+	self.BattleIndex.Text = Csv.Text("buyland_finish")
+end
+
+function _P.DoRefreshLandInfo(self)
+	local canAllIn = MBuyLand.CanAllIn()
+	if MBuyLand.CanAllIn() then
+		self.TipsBg.IsGray = false
+		self.AllInBtn.IsGray = false
+		self.AllInBtn.RaycastTarget = true
+	else
+		self.TipsBg.IsGray = true
+		self.AllInBtn.IsGray = true
+		self.AllInBtn.RaycastTarget = false
+	end
+	local curBattleId = MBuyLand.GetNextID()
+	self.BattleIndex.Text = Csv.Text("buyland_main_num",{num = curBattleId})
+	local buyLandConf = Csv.BuyLand[curBattleId]
+	if buyLandConf == nil then
+		for i=1,MAX_BATTLE_COUNT do
+			if self.buildMap[i] ~= nil then
+				self.buildMap[i].SelfRect.Activity = false
+			end
+		end
+		self.SceneSp.SpriteName = "BiddingMap_1"
+		return
+	end
+	self.SceneSp.SpriteName = buyLandConf.scene
+
+	local moudle = self.Moudle
+	local isnew = false
+	for i=1,MAX_BATTLE_COUNT do
+		local landID = curBattleId
+		local landConf = Csv.BuyLandBattle[landID]
+		if landConf ~= nil then
+			local ImgBuild = self.buildMap[i]
+			if self.buildMap[i] == nil then
+				ImgBuild = JGuiManager.GetMoudle(moudle.SelfRect, "M_Bidding_Main_Item", WindowType.UI, 0)
+				self.buildMap[i] = ImgBuild
+				isnew = true;
+
+				local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+				if btnPai ~= nil then
+					btnPai:AddOnButton(function()
+						local money = MBag.GetItemNum(Define.AssetsType.Soldier)
+						if money == 0 then
+							CCommon.ShowError(Csv.Text("buyland_battle_nomoney"))
+							return
+						end
+						SoundMgr.Play(10001)
+						MBuyLand.landIndex = i
+						CBuyLand.CBuyLand()
+					end)
+				end
+			end
+			if ImgBuild ~= nil then
+				ImgBuild.SelfRect.LocalPosition = Vector2(landConf.buildCardPos[i][1], landConf.buildCardPos[i][2])
+
+				local landInfo = MBuyLand.landInfo[i]
+				ImgBuild:Get("Title").Text = landInfo.name
+				ImgBuild:Get("Reward").Text =  Csv.Text("buyland_main_landreward")
+				ImgBuild:Get("RewardNum").Text = Csv.Text("buyland_main_reward",{num = landConf.baseRewards[2][2],assets = landConf.baseRewards[1][2]})
+
+				ImgBuild:Get("Money").Text =  Csv.Text("buyland_main_landmoney")
+				ImgBuild:Get("MoneyNum").Text = landInfo.money
+				ImgBuild:Get("get").Text =  Csv.Text("buyland_main_get")
+
+				local content = ImgBuild:Get("content")
+				content:DestroyChildren()
+
+				local numAdd = 0
+				if landInfo.attr ~= nil then
+					local attr = landInfo.attr
+					for _ii,v in pairs(attr) do
+						if v.type == 1 then
+							local csvGirl = Csv.Girl[v.id]
+							if csvGirl ~= nil then
+								local idesc = Csv.Text("buyland_main_girldesc",{name = csvGirl.name, num = v.value})
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {name = csvGirl.name, desc = idesc, icon = csvGirl.icon, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								if effectMoudle ~= nil then
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+								end
+								numAdd = numAdd+1
+							end
+						else
+							local staffConf = Csv.Personnel[v.id]
+							if staffConf ~= nil then
+								local lnum = v.value
+								local textStr = (v.type == 2 and "buyland_main_staffdesc") or "buyland_main_staffdesc2"
+								local idesc = Csv.Text(textStr,{name = staffConf.name, num = lnum})
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								if effectMoudle ~= nil then
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+								end
+								numAdd = numAdd + 1
+							end
+						end
+					end
+				end
+
+				if numAdd < 5 then
+					for index=1, 5-numAdd do
+						if landInfo.randReward ~= nil then
+							local v = landInfo.randReward[index]
+							if v ~= nil then
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, v.id, CCommon.ShowItemTips, {num = v.count, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								if effectMoudle ~= nil then
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+								end
+							else
+								local rewardItem = CCommon.CreateItem(content, 1, nil, {moudleName = "M_Common_Item_70_55"})
+								rewardItem.SelfRect.SpriteName = DefaultNoReward
+								rewardItem:Get("Icon").Activity = false
+							end
+						else
+							local rewardItem = CCommon.CreateItem(content, 1, nil, {moudleName = "M_Common_Item_70_55"})
+							rewardItem.SelfRect.SpriteName = DefaultNoReward
+							rewardItem:Get("Icon").Activity = false
+						end
+					end
+				end
+
+				local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+				if btnPai ~= nil then
+					btnPai.IsGray = false
+					ImgBuild:Get("Btn_Text").Text = Csv.Text("buyland_main_pai")
+				end
+
+				if isnew then
+					ImgBuild:Get("ActorCanvas").LocalPosition = Vector2(landConf.effectPos[i][1], landConf.effectPos[i][2])
+					CCommon.CreateEffect(ImgBuild:Get("ActorPanel"), 10144)
+				end
+			end
+
+			local ImgBuild2 = moudle:Get("build"..i)
+			if ImgBuild2 ~= nil then
+				ImgBuild2.Activity = true
+				ImgBuild2.SpriteName = landConf.buildImg[i]
+				ImgBuild2.SizeDelta = Vector2(landConf.buildSize[i][1],landConf.buildSize[i][2])
+				ImgBuild2.LocalPosition = Vector2(landConf.buildPos[i][1], landConf.buildPos[i][2])
+			end
+		else
+			print("---------landConf is nil landID:"..landID)
+		end
+	end
+end
+
+function _R.OnWinRefreshLandInfo(self)
+	self.Moudle:Get("BG_switch").Activity = false
+	self.Moudle:Get("BG_next").Activity = false
+
+	local curBattleId = MBuyLand.GetNextID()
+	local maxLvl = Csv.Const(18009)
+	if maxLvl < curBattleId then
+		_P.ResetFinishInfo(self)
+		return
+	end
+
+	for i=1,MAX_BATTLE_COUNT do
+		local ImgBuild = self.buildMap[i]
+		local tween = ImgBuild.SelfRect.CachedTran:GetJTweener(MOUDLE_FADEOUT)
+		tween:Play()
+		ImgBuild:Get("ActorCanvas").Activity = false
+
+		local ImgBuild2 = self.Moudle:Get("build"..i)
+		if ImgBuild2 ~= nil then
+			local tween2 = ImgBuild2:DOFade(0,FADE_TIME)
+			tween2:SetEase(CS.DG.Tweening.Ease.Linear)
+		end
+
+		local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+		if btnPai ~= nil then
+			btnPai.RaycastTarget = false
+		end
+	end
+	self.AllInBtn.RaycastTarget = false
+
+	self.RoleIcon:AddOnTime(function()
+		for i=1,MAX_BATTLE_COUNT do
+			local ImgBuild = self.buildMap[i]
+			local tween = ImgBuild.SelfRect.CachedTran:GetJTweener(MOUDLE_FADEIN)
+			tween:Play()
+			ImgBuild:Get("ActorCanvas").Activity = true
+	
+			local ImgBuild2 = self.Moudle:Get("build"..i)
+			if ImgBuild2 ~= nil then
+				local tween2 = ImgBuild2:DOFade(1,FADE_TIME)
+				tween2:SetEase(CS.DG.Tweening.Ease.Linear)
+			end
+		end
+
+		_P.DoRefreshLandInfo(self)
+		for i=1,MAX_BATTLE_COUNT do
+			local ImgBuild = self.buildMap[i]
+			local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+			if btnPai ~= nil then
+				btnPai.RaycastTarget = false
+			end
+		end
+		self.AllInBtn.RaycastTarget = false
+
+		self.RoleIcon:AddOnTime(function()
+			local buyLandConf = Csv.BuyLand[curBattleId]
+			self.SceneSp.SpriteName = buyLandConf.scene
+
+			for i=1,MAX_BATTLE_COUNT do
+				local ImgBuild = self.buildMap[i]
+				local btnPai = ImgBuild:Get("BigIcon") -- 开始竞拍
+				if btnPai ~= nil then
+					btnPai.RaycastTarget = true
+				end
+			end
+			self.AllInBtn.RaycastTarget = true
+		end, nil, FADE_TIME)
+	end, nil, FADE_TIME)
+
+	-- local bg = self.SceneSp.SpriteName
+	-- _R.RefreshLandInfo(self)
+	-- local curBattleId = MBuyLand.GetNextID()
+	-- local buyLandConf = Csv.BuyLand[curBattleId]
+	-- if buyLandConf ~= nil then
+	-- 	local pos = self.SceneSp.LocalPosition
+	-- 	self.SceneSp.SpriteName = bg
+	-- 	self.Moudle:Get("BG_switch").Activity = true
+	-- 	self.Moudle:Get("BG_switch").SpriteName = "MapSwitch"
+	-- 	self.Moudle:Get("BG_next").Activity = true
+	-- 	self.Moudle:Get("BG_next").SpriteName = buyLandConf.scene
+	-- 	local tween = self.SceneSp:DOAnchorPosX(-self.Moudle:Get("BG_next").LocalPosition.x, 0.8)
+	-- 	-- tween:SetEase(Linear)
+	-- 	tween:OnComplete(function()
+	-- 		self.SceneSp.LocalPosition = pos
+	-- 		self.SceneSp.SpriteName = buyLandConf.scene
+	-- 		self.Moudle:Get("BG_switch").Activity = false
+	-- 		self.Moudle:Get("BG_next").Activity = false
+	-- 	end)
+	-- end
+end
+
+function _P.RefreshAvatar(self)
+	self.RoleIcon.SpriteName = MPlayer.GetHeadIcon()
+end
+
+function _P.RefreshAttr(self)
+	self.RolePower.Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
+	self.DanShiText.Text = LuaUtil.NumberFormat(MPlayer.GetAttr(Define.AttrType.Wuli))
+end
+
+function _P.RefreshLevel(self)
+	local nowLevel = MPlayer.GetLevel() 
+	local csv = Csv.Company[nowLevel]
+	self.RoleLv.Text = Csv.Text("player_level",{name = csv.name})
+	local exp = MPlayer.GetExp()
+	local tmp = {num = exp}
+	if csv.cost == nil or csv.cost <= 0 then
+		tmp.max = "MAX"
+		self.ExpProgress.FillAmount = 1
+	else
+		tmp.max = csv.cost
+		self.ExpProgress.FillAmount = exp / csv.cost
+	end
+	self.ExpText.Text = Csv.Text("company_exp",tmp)	
+end
+
+function _P.RefreshMoney(self)
+	self.MoneyText.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Soldier))
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+return _M

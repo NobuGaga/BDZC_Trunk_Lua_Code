@@ -1,0 +1,159 @@
+----------------------文件引用--------------------------
+--@RefType [Dev.Activity.BaseCActivity.bytes#_M]
+local BaseCActivity = JRequire "Dev.Activity.BaseCActivity"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+
+------------------------------通用接口------------------------------
+function _M.DoUpdate(actType, data)
+	local csvActivityRank = Csv.ActivityRank
+	if nil ~= csvActivityRank then
+		local temp = csvActivityRank
+		csvActivityRank = {}
+		for i, csvValue in pairs(temp) do
+			csvActivityRank[csvValue.id] = csvValue
+		end
+	end
+	for _, v in pairs(data) do
+		local info = BaseCActivity.GetStateInfo(v, actType)
+		local csvValue = csvActivityRank[info.actId]
+		if nil ~= csvValue then
+			info.rankType = csvValue.rankType
+			info.settleTime = csvValue.settleTime
+			info.title1 = csvValue.title1
+			info.title2 = csvValue.title2
+			info.icon = csvValue.icon
+			info.rankTitle = csvValue.rankTitle
+			info.text = csvValue.text
+			info.textNum = csvValue.textNum
+			info.selfRank = v.selfRank
+			info.rankName = csvValue.rankNameTitle
+			info.GetState = v.GetState
+			info.sort = csvValue.sort
+			info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+
+			--设置奖励档位数据
+			local rewardTitles = csvValue.rewardTitle
+			local rewards = csvValue.reward
+			local tos = csvValue.to
+			if nil ~= rewardTitles and nil ~= rewards and nil ~= tos then
+				info.list = {}
+				for key, value in pairs(rewardTitles) do
+					info.list[key] = {}
+					info.list[key].title = value
+					info.maxRewardRank = 0
+					if tos[key] > info.maxRewardRank then
+						info.maxRewardRank = tos[key]
+					end
+					info.list[key].rewards = {}
+					if nil ~= rewards[key] then
+						for rewardKey, rewardValue in pairs(rewards[key]) do
+							local one = {
+								key = rewardValue[1],
+								value = rewardValue[2]
+							}
+							info.list[key].rewards[rewardKey] = one
+						end
+					else
+						error("error csv data, activity ID", info.actId)
+					end
+				end
+				--更新数据层
+				MActivity.UpdateAct(info.actId, actType, info)
+			end
+		end
+		--检查小红点
+		_M.CheckRepoint()
+		--刷新界面
+		WindowMgr.Call("URankReward", "OnRefreshView")
+		WindowMgr.Call("URankRewardAct", "OnRefreshView")
+	end
+end
+
+function _M.CheckRepoint()
+	local listData = MActivity.GetListFromType(Define.ActivityType.RankReward)
+	if nil ~= listData then
+		for index, data in pairs(listData) do
+			if (MActivity.ActivityState.Doing == data.state.state or
+				MActivity.ActivityState.Finish == data.state.state) then
+				local isRedPoint = MActivity.RewardGetState.CanGet == data.GetState
+				if MActivity.ActRedpoint(data.actId, 1, isRedPoint) then
+					CMain.UpdateRedpoint(isRedPoint, Define.SysId.RankReward, data.actId)
+				end
+			end
+		end
+	end
+end
+
+function _M.OnDayout()
+	local listData = MActivity.GetListFromType(Define.ActivityType.RankReward)
+	local isNeedRefresh = false
+	if listData then
+		for index, data in pairs(listData) do
+			if data.state.lefttime and data.state.lefttime - HeartBeat.ServSecond() <= 1 then
+				local isOutRank = data.selfRank > data.maxRewardRank or 0 == data.selfRank
+				if MActivity.RewardGetState.Geted ~= data.GetState and not isOutRank then
+					data.GetState = MActivity.RewardGetState.CanGet
+					isNeedRefresh = true
+				end
+			end
+		end
+	end
+	if isNeedRefresh then
+		_M.CheckRepoint()
+	end
+end
+
+function _M.OnGetSuccess(getData, actData)
+	--冲榜活动领取奖励返回
+	if getData.isGeted then
+		actData.GetState = MActivity.RewardGetState.Geted
+		--检查小红点
+		_M.CheckRepoint()
+		--界面表现
+		WindowMgr.Call("URankRewardAct", "RefreshGetState", getData)
+	end
+end
+
+function _M.OnUpdateState(oldActData, actData)
+	if actData.state.state == MActivity.ActivityState.Close then
+		--关闭入口
+		MActivity.ClearForId(actData.actId)
+		CMain.UpdateRedpoint(false, Define.SysId.RankReward, actData.actId)
+		if nil == MActivity.GetListFromType(oldActData.actType) then
+			WindowMgr.Call("UMain", "RefreshTopBtns")
+		end
+	else
+		local lastState = oldActData.state
+		local newState = actData.state
+		oldActData.state = {
+			state = newState.state,
+			startTime = newState.startTime,
+			endTime = newState.endTime,
+		}
+	end
+	
+	--检查小红点
+	_M.CheckRepoint()
+	--界面刷新
+	WindowMgr.Call("URankReward", "OnRefreshView")
+	WindowMgr.Call("URankRewardAct", "OnRefreshView")
+end
+
+function _M.OnUpdatePro(actData, proData)
+	--冲榜活动进度更新
+	actData.selfRank = proData.pro
+	--检查小红点
+	_M.CheckRepoint()
+	--界面刷新
+	WindowMgr.Call("URankRewardAct", "OnRefreshSelfRank")
+end
+
+return _M

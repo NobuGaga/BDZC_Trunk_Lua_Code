@@ -1,0 +1,177 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+local MONTHCARD_ID = 1
+local CARD_ACTORID = 10066
+local YEARCARD_ID = 2
+local CARD_ACTORID = 10067
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_MonthAndYear", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	_P.ShowMonthCard(self)
+	_P.ShowYearCard(self)
+
+	moudle:Get("Tips").Text = Csv.Text("welfare_godtime_add")
+end
+
+
+-------------------------显示月卡---------------------------------------
+function _P.ShowMonthCard(self)
+	local moudle = self.mMoudle
+	--月卡--
+	local getFirst1 = moudle:Get("text1")
+	local getFirst2 = moudle:Get("text2")
+	local getFirst3 = moudle:Get("text3")
+	local getDay1 = moudle:Get("text4")
+	local getDay2 = moudle:Get("text5")
+	local getDay3 = moudle:Get("text6")
+	local godTimes1 = moudle:Get("text7")
+	local godTimes2 = moudle:Get("text8")
+	local leftTime1 = moudle:Get("text8_0")
+	local leftTime2 = moudle:Get("text9")
+	local leftTime3 = moudle:Get("text10")
+	local costNum = moudle:Get("money")
+	local buyText = moudle:Get("buy")
+	local tipsText = moudle:Get("text7_0")
+
+	getFirst1.Text = Csv.Text("welfare_monthCard_getfirst1")
+	getFirst2.Text = Csv.Const(11006)[2]
+	getFirst3.Text = Csv.Text("welfare_monthCard_getfirst3")
+ 	getDay1.Text = Csv.Text("welfare_monthCard_getday1")
+	getDay2.Text = Csv.Const(11006)[3]
+	getDay3.Text = Csv.Text("welfare_monthCard_getday3")
+	godTimes1.Text = Csv.Text("welfare_card_god1")
+	godTimes2.Text = Csv.Text("welfare_card_god2",{num = 1}) 
+	leftTime1.Text = Csv.Text("welfare_monthCard_leftTime1")
+	leftTime2.Text = 30
+	leftTime3.Text = Csv.Text("welfare_monthCard_leftTime3")
+	costNum.Text = "¥"..Csv.Const(11006)[1]
+	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
+	tipsText.Text =Csv.Text("welfare_monthCard_tips")
+
+	leftTime1.Activity = false
+
+	self.mBuyText_M = buyText
+	self.mLeftTime2_M = leftTime2
+	self.mLeftTime1_M = leftTime1
+
+	local buyBtn = moudle:Get("Btn")
+	buyBtn:AddOnButton(function(...)
+		local monthData = Csv.Recharge[MONTHCARD_ID]
+		local cardName = Csv.Text("welfare_monthCard")
+		SDKMgr.ReqPay(monthData.id,monthData.cost,monthData.diamond,cardName) 
+	end)
+
+	if MWelfare.monthCardData ~= nil then
+		if MWelfare.monthCardData.leftDays ~= nil and MWelfare.monthCardData.leftDays > 0 then
+			buyText.Text = Csv.Text("welfare_buymore")--welfare_buymore
+			leftTime2.Text = MWelfare.monthCardData.leftDays
+			leftTime1.Activity = true
+		end
+	end
+
+	--月卡特效
+	local actorPanel = moudle:Get("ActorPanel")
+	CCommon.CreateEffect(actorPanel, CARD_ACTORID)
+end
+
+function _M:RefreshMonthState()
+	local buyText =  self.mBuyText_M
+	local leftTime2 = self.mLeftTime2_M
+	local leftTime1 =  self.mLeftTime1_M
+
+	buyText.Text = Csv.Text("welfare_buy")
+	leftTime1.Activity = false
+
+	if MWelfare.monthCardData ~= nil then
+		if MWelfare.monthCardData.leftDays ~= nil and MWelfare.monthCardData.leftDays > 0 then
+			buyText.Text = Csv.Text("welfare_buymore")--welfare_buymore
+			leftTime2.Text = MWelfare.monthCardData.leftDays
+			leftTime1.Activity = true
+		end
+	end
+end
+
+-------------------------终身卡-------------------------------------
+function _P.ShowYearCard(self)
+	local moudle = self.mMoudle
+
+	local getFirst1 = moudle:Get("text1_0")
+	local getFirst2 = moudle:Get("text2_0")
+	local getFirst3 = moudle:Get("text3_0")
+	local getDay1 = moudle:Get("text4_0")
+	local getDay2 = moudle:Get("text5_0")
+	local getDay3 = moudle:Get("text6_0")
+	local godTimes1 = moudle:Get("text7_1")
+	local godTimes2 = moudle:Get("text8_1")
+	local costNum = moudle:Get("money_0")
+	local buyText = moudle:Get("buy_0")
+	local tipsText = moudle:Get("text7_2")
+
+	getFirst1.Text = Csv.Text("welfare_yearCard_getfirst1")
+	getFirst2.Text = Csv.Const(11007)[2]
+	getFirst3.Text = Csv.Text("welfare_yearCard_getfirst3")
+ 	getDay1.Text = Csv.Text("welfare_yearCard_getday1")
+	getDay2.Text = Csv.Const(11007)[3]
+ 	getDay3.Text = Csv.Text("welfare_yearCard_getday3")
+	godTimes1.Text = Csv.Text("welfare_card_god1")
+	godTimes2.Text = Csv.Text("welfare_card_god2",{num = 2}) 
+	costNum.Text = "¥"..Csv.Const(11007)[1]
+	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
+	tipsText.Text =Csv.Text("welfare_yearCard_tips")
+
+	self.mBuyText_Y = buyText
+
+	local buyBtn = moudle:Get("Btn_0")
+	self.buyBtn_Y = buyBtn
+	self.mCostNum_Y = costNum
+
+	buyBtn:AddOnButton(function(...)
+		local monthData = Csv.Recharge[YEARCARD_ID]
+		local cardName = Csv.Text("welfare_yearCard")
+		SDKMgr.ReqPay(monthData.id,monthData.cost,monthData.diamond,cardName) 
+	end)
+
+	if MWelfare.yearCard ~= nil then
+		if MWelfare.yearCard.leftDays ~= nil and MWelfare.yearCard.leftDays == -1 then
+			buyText.Text = Csv.Text("err_relarions_buyed")--welfare_buymore
+			buyBtn.RaycastTarget = false
+			costNum.Text = ""
+		end
+	end
+
+	--年卡特效
+	local actorPanel = moudle:Get("ActorPanel_0")
+	CCommon.CreateEffect(actorPanel, CARD_ACTORID)
+end
+
+function _M:RefreshYearState()
+	local buyText =  self.mBuyText_Y
+	local buyBtn = self.buyBtn_Y
+	local costNum = self.mCostNum_Y
+
+	buyText.Text = Csv.Text("err_relarions_buyed")
+	buyBtn.RaycastTarget = false
+	costNum.Text = ""
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

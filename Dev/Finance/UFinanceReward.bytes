@@ -1,0 +1,71 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MVote = JRequire "Dev.Vote.MVote"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local winActorId = 10046
+
+function _M:OnCreate(data,isVote)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		if isVote then
+			--申请领取奖励
+			CFinance.ReqGetResistRankReward(3)
+
+			MVote.isReward = false
+			MVote.RewardData = {}
+		else
+			--申请领取奖励
+			CFinance.ReqGetResistRankReward()
+
+			MFinance.isReward = false
+			MFinance.RewardData = {}
+		end
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PHReward")
+	self.Moudle = moudle
+
+	local text1 = moudle:Get("text1")
+	local text2 = moudle:Get("text2")
+	local text3 = moudle:Get("text3")
+	local text4 = moudle:Get("text4")
+	local text5 = moudle:Get("text5")
+
+	if isVote then
+		text1.Text = Csv.Text("finance_rewardTitle_fb3",{num = data.rank})--"恭喜总裁在【抵御巴菲特】活动中获得第"..data.rank.."名"
+	else
+		text1.Text = Csv.Text("finance_rewardTitle_fb2",{num = data.rank})--"恭喜总裁在【抵御索罗斯】活动中获得第"..data.rank.."名"
+	end
+	text2.Text =  Csv.Text("finance_result_scoreFb2",{num = data.score})--"副本分数："--"副本分数："
+	text3.Text = ""
+	text4.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})----"副本积分："
+	text5.Text = ""
+
+	local itemContent = moudle:Get("Items")
+	if data.items ~= nil then
+		for k,v in pairs(data.items) do
+			CCommon.CreateItem(itemContent, v.id, nil, {num = v.count})
+		end
+	end
+
+	-- 播放战斗胜利特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), winActorId)
+end
+return _M

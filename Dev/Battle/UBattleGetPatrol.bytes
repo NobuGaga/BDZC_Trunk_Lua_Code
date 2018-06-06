@@ -1,0 +1,48 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local EventCenter = JRequire "Dev.EventCenter"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+
+function _M:EndDestroy()
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+
+	EventCenter.CallEventTrigger(Define.EventListenId.GetPatrol, self.PatrolId)
+end
+
+--界面构建
+function _M:OnCreate(bgSp, patrolId, callBack)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	self.OnCloseCall = callBack
+	self.PatrolId = patrolId
+	SoundMgr.Play(10044)
+	local csv = Csv.Patrol[patrolId]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Acquisition")
+	--moudle:Get("bg").SpriteName = bgSp
+	moudle:Get("bsx").SpriteNameAutoScale = csv.personIcon
+	moudle:Get("text").Text = Csv.Text("battle_getPatrol1", {str = csv.companyName})
+	moudle:Get("text4").Text = Csv.Text("battle_getPatrol3")
+	moudle:Get("text3").Text = Csv.Text("battle_getPatrol2", {str = csv.name})
+
+	CCommon.CreateEffect(moudle:Get('EffectNode'), 10050, nil, function()
+		self:Unlock()
+		LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close"))
+	end,nil,nil,5)
+	CCommon.CreateEffect(moudle:Get('EffectNode2'), 10002)
+end
+
+function _M:OnCreateTweenDone()
+	self:Lock()
+end
+
+return _M

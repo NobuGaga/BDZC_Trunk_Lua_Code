@@ -1,0 +1,116 @@
+--商会转让
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--可以转让的会员列表
+function _R.OnTransferList(self, data)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local count = 0
+	if data ~= nil and data.list ~= nil then
+		for _,player in pairs(data.list) do
+			count = count + 1
+			local playerId = player.id
+			local oneMoudle = self:CreateMoudle(content, "M_Gang_Abdication_Item")
+			oneMoudle:Get("ShName").Text = player.name
+			oneMoudle:Get("position").Text = MCommerce.GetJobStr(player.job)
+			if player.buildId ~= nil and player.buildId > 0 then
+				local buildCsv = Csv.CommerceBuild[player.buildId]
+				oneMoudle:Get("build").Text = buildCsv.name
+			end
+			oneMoudle:Get("head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex)
+			oneMoudle:Get("SLText").Text = Csv.Text("club_info_force")
+			oneMoudle:Get("SLNum").Text = tostring(player.power)
+			oneMoudle:Get("Company").Text = Csv.Text("club_info_company")
+			local companyCsv = Csv.Company[player.level]
+			oneMoudle:Get("NameText").Text = companyCsv.name
+			oneMoudle:Get("contribution").Text = Csv.Text("commerce_op11")
+			oneMoudle:Get("contributionText").Text = player.contribution.ncur .. "/" .. player.contribution.nmax
+			oneMoudle:Get("Time").Text = Csv.Text("commerce_op4")
+			oneMoudle:Get("PeopleNum").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - player.lastTime)
+			oneMoudle:Get("C_text").Text = Csv.Text("commerce_op10")
+			
+			oneMoudle:Get("C_Btn_b"):AddOnButton(function()
+				SoundMgr.Play(10001)
+				local info = MCommerce.MyCommerceInfo
+				if info ~= nil then
+					local csv = Csv.Commerce[info.level]
+					CCommon.CheckTips(function (isSure)
+						if isSure then
+							if info.money < csv.transferCost then
+								CCommon.ShowError(Csv.Text("commerce_op12"))
+							else
+								CCommerce.TransferReq(playerId)
+								self:Destroy()
+							end
+						end
+					end, {content = Csv.Text("commerce_op13", {cost = csv.transferCost})})
+				end
+			end)
+		end
+	end
+	if count > 0 then
+		self.NoneText.Activity = false
+	else
+		self.NoneText.Activity = true
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	CCommerce.TransferListReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Abdication")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_manager3")
+	self.NoneText = moudle:Get("None")
+	self.NoneText.Text = Csv.Text("commerce_op7")
+	moudle:Get("WealthText").Text = Csv.Text("commerce_detail5")
+	moudle:Get("condition").Text = Csv.Text("commerce_op9")
+
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local csv = Csv.Commerce[info.level]
+		moudle:Get("WealthNum").Text = tostring(info.money)
+		moudle:Get("consume").Text = Csv.Text("commerce_op8", {num = csv.transferCost})
+	end
+end
+
+return _M

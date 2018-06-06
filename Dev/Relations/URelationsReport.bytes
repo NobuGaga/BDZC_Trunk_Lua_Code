@@ -1,0 +1,472 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+local EFFECT_WOFANG = "T_Relations_Report1"
+local EFFECT_DIFANG = "T_Relations_Report2"
+
+------
+local attackActorId = 10038
+local attackBaoActorId = 10086
+local T_LS_Staff_AttackGo = "T_LS_Staff_AttackGo"
+local T_LS_Staff_AttackBack = "T_LS_Staff_AttackBack"
+local T_LS_Boss_Dark = "T_LS_Boss_Dark"
+local T_LS_Boss_blood = "T_LS_Boss_blood"
+local T_LS_Boss_Hurt = "T_LS_Boss_Hurt"
+local T_LS_Boss_HurtBack = "T_LS_Boss_HurtBack"
+
+local T_LS_Boss_AttackGo = "T_LS_Boss_AttackGo"
+local T_LS_Boss_AttackBack = "T_LS_Boss_AttackBack"
+local T_LS_Staff_Dark = "T_LS_Staff_Dark"
+local T_LS_Staff_blood = "T_LS_Staff_blood"
+local T_LS_Staff_Hurt = "T_LS_Staff_Hurt"
+local T_LS_Staff_HurtBack = "T_LS_Staff_HurtBack"
+------
+
+local EFECT_CRIT = 10028
+
+local StateEnum = {
+	Fail = 0,
+	Win = 1
+}
+
+local AttackEnum = {
+	Wofang = 1,
+	Difang = 2
+}
+
+local FontImgBaoji = "lobby_bj"
+local FontImgBaojiJ = "lobby_bj_j"
+local FontImgBaojiFirst = "lobby_bj_"
+
+local FontImgPutongJ = "lobby_bj_j"
+local FontImgPutongFirst = "lobby_bj_"
+
+local ImgTalkNormal = "di4"
+local ImgTalkBao = "di3"
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_PKing")
+	self.mMoudle = moudle
+
+	moudle:Get("C_text").Text = Csv.Text("relations_toend")
+	local data = MRelations.ReportData
+	self.mData = data
+	local csvMyStaff = Csv.Personnel[data.mstaffinfo.staffid]
+	moudle:Get("OBSX").SpriteName = csvMyStaff.asset
+	moudle:Get("BloodNum2").Text = Csv.Text("company_exp",{num = data.blood.blood,max = data.blood.maxblood})
+	moudle:Get("bar2").FillAmount = data.blood.blood/data.blood.maxblood
+	moudle:Get("StaffName1").Text = Csv.Text("relations_stafflv",{name = MStaff.GetStaffName(csvMyStaff.id),num = data.mstaffinfo.level})
+	moudle:Get("ZZ1").Text = Csv.Text("relations_zongheT")
+	moudle:Get("ZZNum1").Text = data.mstaffinfo.staffattr
+
+	local csvOtherStaff = Csv.Personnel[data.ostaffinfo.staffid]
+	--员工名称
+	local otherStaffName = csvOtherStaff.name
+	if data.ostaffinfo.staffName ~= nil then
+		otherStaffName = data.ostaffinfo.staffName
+	end
+	moudle:Get("DBSX").SpriteName = csvOtherStaff.asset
+	moudle:Get("BloodNum1").Text = Csv.Text("company_exp",{num = data.oblood.blood,max = data.oblood.maxblood})
+	moudle:Get("bar1").FillAmount = data.oblood.blood/data.oblood.maxblood
+	moudle:Get("StaffName1_0").Text = Csv.Text("relations_stafflv",{name = otherStaffName,num = data.ostaffinfo.level})
+	moudle:Get("ZZ1_0").Text = Csv.Text("relations_zongheT")
+	moudle:Get("ZZNum1_0").Text = data.ostaffinfo.staffattr
+
+	moudle:Get("C_Btn_e"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if not self.mIsEnd then
+			self.mIsEnd = true
+			_P.EndView(self)
+		end
+	end,nil,0.9)
+
+	self.mNowMyBlood = data.blood.blood
+	self.mMyMaxBlood = data.blood.maxblood
+	self.mNowOtherBlood = data.oblood.blood
+	self.mOtherMaxBlood = data.oblood.maxblood
+
+	_P.StartPlay(self,data)
+
+	self.mTextSelf = moudle:Get("DHKtext1")
+	self.mTextSelfBg = moudle:Get("DHK1")
+	self.mTextOther = moudle:Get("DHKtext2")
+	self.mTextOtherBg = moudle:Get("DHK2")
+
+	self.mActorSelf = moudle:Get("SelfActor")
+	self.mActorOther = moudle:Get("OtherActor")
+	self.mActorHurtSelf = moudle:Get("SelfHurtActor")
+	self.mActorHurtOther = moudle:Get("OtherHurtActor")
+
+	if WindowMgr.IsCreated("URelationsFight") then
+		WindowMgr.Call("URelationsFight","OnLock")
+	end
+end
+
+function _P.StartPlay(self,data)
+	self.mPlayingIndex = 1
+	local ReportTable = _P.GetSortTable(data.reports)
+	self.mReportTable = ReportTable
+	self.mMoudle.SelfRect:AddOnTime(function()
+		_P.PlayNext(self,ReportTable[self.mPlayingIndex])
+	end,nil,1)
+end
+
+function _P.PlayNext(self,data)
+	if not self.mIsEnd then
+		local moudle = self.mMoudle
+		local transGO = moudle.SelfRect.CachedTran
+		local actor
+
+		local FightEnd = function()
+			moudle.SelfRect:AddOnTime(function()
+				self.mPlayingIndex = self.mPlayingIndex + 1
+				local nextData = self.mReportTable[self.mPlayingIndex]
+				if nextData ~= nil then
+					_P.PlayNext(self,nextData)
+				else
+					if not self.mIsEnd then
+						self.mIsEnd = true
+						_P.EndView(self)
+					end
+				end
+			end,nil,0.5)
+		end
+
+		if data.attack == AttackEnum.Difang then
+			local imgTalk = moudle:Get("DHK2")
+			local imgTalkBao = moudle:Get("DHK2_1")
+			imgTalk.Activity = not data.iscrit
+			imgTalkBao.Activity = data.iscrit
+			if data.iscrit then
+				self.mTextOther = moudle:Get("DHKtext2_1")
+				self.mTextOtherBg = imgTalkBao
+				SoundMgr.Play(10045)
+			else
+				self.mTextOther = moudle:Get("DHKtext2")
+				self.mTextOtherBg = imgTalk
+			end
+			-- if data.iscrit then
+			-- 	imgTalk.SpriteName = ImgTalkBao
+			-- else
+			-- 	imgTalk.SpriteName = ImgTalkNormal
+			-- end
+			local t = transGO:GetJTweener(EFFECT_DIFANG)
+			self.mTweenGO = t
+			local doHurt = function()
+				-----------
+				moudle:Get("blood2"):AddOnTime(function()
+					if not self.mIsEnd then
+						local tweenBlood = moudle:Get("bar2"):DOFillAmount(data.mleftblood/self.mMyMaxBlood,0.65)
+						tweenBlood:OnComplete(function(...)
+							moudle:Get("BloodNum2").Text = Csv.Text("company_exp",{num = data.mleftblood,max = self.mMyMaxBlood})
+							self.mNowMyBlood = data.mleftblood
+						end)
+					end
+				end,nil,0.1)
+	
+				local ImgStaff = moudle:Get("OBSX")
+				local deductBlood = self.mNowMyBlood - data.mleftblood
+				--local strDeduct = Csv.Text("relations_deductB",{num = deductBlood})
+				_P.ShowFlyText(ImgStaff.transform,data.iscrit,deductBlood,0.1)
+				--CCommon.ShowFlyText(ImgStaff.transform,strDeduct,0.1)
+				actor = self.mActorOther
+
+				-- if actor ~= nil and data.iscrit then
+				-- 	CCommon.CreateEffect(actor,EFECT_CRIT)
+				-- end
+				---------------
+			end
+
+			local ownFire = function ()
+				if t ~= nil then
+					t:Restore()
+					FightEnd()
+				end
+			end
+
+			local otherTalk = function()
+				if t ~= nil then
+					_P.OtherTalk(self,false,function()
+						t:Play(T_LS_Staff_blood)
+						t:Play(T_LS_Staff_Hurt)
+		
+						SoundMgr.Play(10021)
+						if data.iscrit then
+							CCommon.CreateEffect(self.mActorHurtSelf, attackBaoActorId)
+						else
+							CCommon.CreateEffect(self.mActorHurtSelf, attackActorId)
+						end
+					end)
+				end
+			end
+		
+			local StaffHurtBack = function()
+				if t ~= nil then
+					t:Play(T_LS_Staff_HurtBack)
+				end
+			end
+		
+			local BossAttackEnd = function()
+				doHurt()
+				t:Play(T_LS_Boss_AttackBack)
+			end
+		
+			local BossRound = function()
+				if t ~= nil then
+					self.mMoudle.SelfRect:AddOnTime(function()
+						ownFire()	
+					end,nil,0.5)	
+				end
+			end
+	
+			t:SetWaitEventOnComplete(T_LS_Boss_AttackGo, otherTalk)
+			t:SetWaitEventOnComplete(T_LS_Staff_Hurt, StaffHurtBack)
+			t:SetWaitEventOnComplete(T_LS_Staff_HurtBack, BossAttackEnd)
+			t:SetWaitEventOnComplete(T_LS_Boss_AttackBack, BossRound)
+		
+			SoundMgr.Play(10020)
+			t:Play(T_LS_Boss_AttackGo)
+			t:Play(T_LS_Staff_Dark)
+
+		elseif data.attack == AttackEnum.Wofang then
+			local imgTalk = moudle:Get("DHK1")
+			local imgTalkBao = moudle:Get("DHK1_1")
+			imgTalk.Activity = not data.iscrit
+			imgTalkBao.Activity = data.iscrit
+			if data.iscrit then
+				self.mTextSelf = moudle:Get("DHKtext1_1")
+				self.mTextSelfBg = imgTalkBao
+				SoundMgr.Play(10045)
+			else
+				self.mTextSelf = moudle:Get("DHKtext1")
+				self.mTextSelfBg = imgTalk
+			end
+			-- if data.iscrit then
+			-- 	imgTalk.SpriteName = ImgTalkBao
+			-- else
+			-- 	imgTalk.SpriteName = ImgTalkNormal
+			-- end
+			local t = transGO:GetJTweener(EFFECT_WOFANG)
+			self.mTweenGO = t
+			local doHurt = function()
+				moudle:Get("blood1"):AddOnTime(function()
+					if not self.mIsEnd then
+						local tweenBlood = moudle:Get("bar1"):DOFillAmount(data.oleftblood/self.mOtherMaxBlood,0.65)
+						tweenBlood:OnComplete(function(...)
+							moudle:Get("BloodNum1").Text = Csv.Text("company_exp",{num = data.oleftblood,max = self.mOtherMaxBlood})
+							self.mNowOtherBlood = data.oleftblood
+						end)
+					end
+				end,nil,0.1)
+				local ImgStaff = moudle:Get("DBSX")
+				local deductBlood = self.mNowOtherBlood - data.oleftblood
+				--local strDeduct = Csv.Text("relations_deductB",{num = deductBlood})
+				_P.ShowFlyText(ImgStaff.transform,data.iscrit,deductBlood,0.1)
+				--CCommon.ShowFlyText(ImgStaff.transform,strDeduct,0.1)
+				actor = self.mActorSelf
+
+				-- if actor ~= nil and data.iscrit then
+				-- 	CCommon.CreateEffect(actor,EFECT_CRIT)
+				-- end
+			end
+
+			local ownFire = function ()
+				if t ~= nil then
+					t:Restore()
+					FightEnd()
+				end
+			end
+
+			local ownTalk = function()
+				if t ~= nil then
+					_P.OwnTalk(self,true,function()
+						t:Play(T_LS_Boss_blood)
+						t:Play(T_LS_Boss_Hurt)
+		
+						SoundMgr.Play(10021)
+						if data.iscrit then
+							CCommon.CreateEffect(self.mActorHurtOther, attackBaoActorId)
+						else
+							CCommon.CreateEffect(self.mActorHurtOther, attackActorId)
+						end
+					end)
+				end
+			end
+		
+			local enemyHurtBack = function()
+				if t ~= nil then
+					t:Play(T_LS_Boss_HurtBack)
+				end
+			end
+		
+			local StaffAttackEnd = function()
+				doHurt()
+				t:Play(T_LS_Staff_AttackBack)
+			end
+		
+			local staffRound = function()
+				if t ~= nil then
+					self.mMoudle.SelfRect:AddOnTime(function()
+						ownFire()	
+					end,nil,0.5)	
+				end
+			end
+
+			
+			t:SetWaitEventOnComplete(T_LS_Staff_AttackGo, ownTalk)
+			t:SetWaitEventOnComplete(T_LS_Boss_Hurt, enemyHurtBack)
+			t:SetWaitEventOnComplete(T_LS_Boss_HurtBack, StaffAttackEnd)
+			t:SetWaitEventOnComplete(T_LS_Staff_AttackBack, staffRound)
+		
+			SoundMgr.Play(10020)
+			t:Play(T_LS_Staff_AttackGo)
+			t:Play(T_LS_Boss_Dark)
+		end
+	else
+		if not self.mIsEnd then
+			self.mIsEnd = true
+			_P.EndView(self)
+		end
+	end
+end
+
+function _P.OwnTalk(self,isSelf,callBack)
+	if not self.mIsEnd then
+		--播放特效
+		if self.LastOwnTalkTween ~= nil then
+			self.LastOwnTalkTween:Restore()
+		end
+		local text = _P.GetTalk(isSelf)
+		self.mTextSelfBg.Activity = true
+		self.mTextSelf.Text = text
+		local t = self.mTextSelfBg.CachedTran:GetJTweener("T_Finance_BattleTalk")
+		self.LastOwnTalkTween = t
+		t:SetOnComplete(function()
+			if self.mMoudle ~= nil then
+				self.mTextSelfBg.Activity = false
+				callBack()
+			end		
+		end)
+		t:Play()
+	end
+end
+
+function _P.OtherTalk(self,isSelf,callBack)
+	if not self.mIsEnd then
+		if self.LastOtherTalkTween ~= nil then
+			self.LastOtherTalkTween:Restore()
+		end
+		local text = _P.GetTalk(isSelf)
+		self.mTextOtherBg.Activity = true
+		self.mTextOther.Text = text
+		local t = self.mTextOtherBg.CachedTran:GetJTweener("T_Finance_BattleTalk")
+		self.LastOtherTalkTween = t
+		t:SetOnComplete(function()
+			if self.mMoudle ~= nil then
+				self.mTextOtherBg.Activity = false
+				callBack()
+			end		
+		end)
+		t:Play()
+	end
+end
+
+function _P.GetTalk(isSelf)
+	local data = MRelations.ReportData
+	local staffid
+	if isSelf then
+		staffid = data.mstaffinfo.staffid
+	else
+		staffid = data.ostaffinfo.staffid
+	end
+	local talkList = Csv.Personnel[staffid].relationsTalk
+	if talkList ~= nil and #talkList > 0 then
+		local index = math.random(1,#talkList)
+		return Csv.Talk[talkList[index]].str
+	end
+	return ""
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	if rawTable ~= nil then
+		for k,v in pairs(rawTable) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b)return _P.Sort(a,b)end)
+	end
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	return a.index < b.index
+end
+
+function _P.EndView(self)
+	local moudle = self.mMoudle
+	local data = self.mData
+	if moudle ~= nil and data ~= nil then
+		if self.mTweenGO ~= nil then
+			self.mTweenGO:Restore()
+		end
+		local sortReportTable = self.mReportTable
+		local lastReport = sortReportTable[#sortReportTable]
+		if lastReport ~= nil then
+			moudle:Get("BloodNum2").Text = Csv.Text("company_exp",{num = lastReport.mleftblood,max = data.blood.maxblood})
+			moudle:Get("bar2").FillAmount = lastReport.mleftblood/data.blood.maxblood
+			moudle:Get("BloodNum1").Text = Csv.Text("company_exp",{num = lastReport.oleftblood,max = data.oblood.maxblood})
+			moudle:Get("bar1").FillAmount = lastReport.oleftblood/data.oblood.maxblood
+		end
+
+		if data.state == StateEnum.Fail then
+			--失败界面
+			WindowMgr.Create("URelationsFail")
+		elseif data.state == StateEnum.Win then
+			--胜利界面
+			WindowMgr.Create("URelationsWin")
+		end
+	end
+end
+
+function _P.ShowFlyText(parent,iscrit,num,delay)
+	if num > 0 then
+		local textTable = {}
+		local str = tostring(num)
+		local len = string.len(str)
+		if iscrit then
+			table.insert(textTable, {name = FontImgBaoji, sizeW = 122, sizeH = 61})
+			table.insert(textTable,{name = FontImgBaojiJ, sizeW = 50, sizeH = 50})
+			for i=1,len do
+				local strSub = FontImgBaojiFirst..string.sub(str,i,i)
+				table.insert(textTable, {name = strSub, sizeW = 50, sizeH = 50})
+			end
+		else
+			table.insert(textTable, {name = FontImgPutongJ, sizeW = 46, sizeH = 46})
+			for i=1,len do
+				local strSub = FontImgPutongFirst..string.sub(str,i,i)
+				table.insert(textTable, {name = strSub, sizeW = 46, sizeH = 46})
+			end
+		end
+
+		CCommon.ShowFlyArtFont(parent, textTable, delay)
+	end
+end
+
+return _M

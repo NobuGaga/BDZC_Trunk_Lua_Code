@@ -1,0 +1,172 @@
+-- 奇遇结算界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
+local JTweenerManager = CS.JTween.JTweenerManager
+local OutBack = CS.DG.Tweening.Ease.OutBack
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ANIM_TIME = 0.2
+local BEGIN_POSX = -753
+local END_POSX = -71
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--聊天气泡动画
+function _P.PopAnim(self,isLeft)
+	local isLeft = not isLeft
+	self.qipao:AddOnTime(function ()
+		local randonSeed
+		if isLeft then
+			randonSeed = math.random(1,2)
+		else
+			randonSeed = math.random(3,4)
+		end
+		local img = self.mModule:Get("QIPAO"..randonSeed)
+		img.Alpha = 1
+		img.LocalScale = Vector3.zero
+		img:DOScale(1, 0.3):OnComplete(function()
+			img:DOFade(0, 0.3)
+		end)
+		_P.PopAnim(self,isLeft)
+	end, nil, 0.6)
+end
+
+--判断当前进度
+function _P.JudegeIsEnd(self)
+	if self.target < self.mData.compatibility * 100 then
+		self.startVal = self.target
+		self.target = _P.GetNextTarget(self)
+		return false
+	else
+		return true
+	end
+end
+
+--开始动画
+function _P.OnInitAnim(self,start,target)
+	self.qipao.Activity = true
+	local fill = target / 100
+	self.slider:DOFillAmount(fill, 1.8)
+	local t = JTweenerManager.IntTween(self.startVal, self.target, 1.8, function(value)
+		self.sliderText.Text = Csv.Text("adventure_handleing", {num = value}) 
+	end, function()
+		self.qipao.Activity = false
+		_P.OnCharterAnim(self,false)
+	end)
+end
+
+--人物入场动画
+function _P.OnCharterAnim(self,isReverse)
+	self.contenBg.Activity = false
+	self.continueBtn.Activity = false
+	if isReverse then
+		self.character:DOAnchorPosX(BEGIN_POSX, 0.4)
+	else
+		self.character:DOAnchorPosX(END_POSX, 0.4):OnComplete(function()
+			self.contenBg.Activity = true
+			self.contenBg.LocalScale = Vector3.zero
+			local t = self.contenBg:DOScale(1,0.5)
+			t:SetEase(OutBack)
+			self.continueBtn.Activity = true
+		end)
+	end
+end
+
+function _P.GetNextTarget(self)
+	--已经第三阶段
+	if self.stage[#self.stage] == self.target then
+		return self.mData.compatibility * 100
+	else
+		for i=1,#self.stage do
+			print("self", self.mData.compatibility * 100)
+			if self.stage[i] == self.target and 
+			self.stage[i+1] < self.mData.compatibility * 100 then
+				return self.stage[i+1]
+			else
+				return self.mData.compatibility * 100
+			end
+		end
+	end
+end
+
+--点击继续
+function _P.OnContinue(self)
+	if _P.JudegeIsEnd(self) then
+		--直接结算
+		WindowMgr.Create("UAdventureReward",self.mData,function( ... )
+			self:Destroy()
+		end)
+	else
+		--下一个阶段
+		_P.OnCharterAnim(self,true)
+		_P.OnInitAnim(self,self.startVal,self.target)
+	end
+end
+
+--界面构造
+function _M:OnCreate(data,OnClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Handleing")
+	self.mModule = module
+
+	self.OnCloseCall = OnClose
+	self.adventureCsv = Csv.Adventure[data.actId]
+	self.advEventCsv = Csv.AdventureMainEvent[data.eventId]
+	self.mData = data
+	self.fillData = data.compatibility
+
+	self.pause = false
+	self.stop = false
+	self.startVal = 0
+	self.qipao = module:Get("qipao")
+	self.slider = module:Get("Fill")
+	self.sliderText = module:Get("SliderNum")
+	self.character = module:Get("Bsx")
+	self.contenBg = module:Get("Dhk") 
+	self.content = module:Get("DhxText")
+	self.continueBtn = module:Get("Btn")
+	module:Get("BtnText").Text = Csv.Text("adventure_continue")
+
+	self.stage = {}
+	for i=1,#self.adventureCsv.popTarget do
+		self.stage[i] = self.adventureCsv.popTarget[i][1]
+	end
+	for i=1,4 do
+		module:Get("QIPAO"..i).Alpha = 0
+	end
+
+	--TODO:妹子图片走配置
+	self.character.SpriteName = "boss_10114"
+
+	self.target = self.stage[1]
+
+	self.continueBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.OnContinue(self)
+	end, nil, 1.2)
+
+	_P.OnInitAnim(self,self.startVal,self.target)
+	_P.PopAnim(self,true)
+	
+end
+
+return _M

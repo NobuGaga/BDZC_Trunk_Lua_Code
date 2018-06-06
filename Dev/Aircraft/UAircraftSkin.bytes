@@ -1,0 +1,518 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+--@RefType [Dev.Aircraft.CAircraft.bytes#_M]
+local CAircraft = JRequire "Dev.Aircraft.CAircraft"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Academy_Skin"
+local textTitle = "textTitle"
+local csvTitleText = "aircraft_skin_title"
+local btnClose = "btnClose"
+local ItemName = "M_Academy_Skin_Item"
+
+--属性表索引
+local PowerCsv = "Girl_skill_type"
+local BuffColorText = "aircraft_skin_buff_color"
+
+local GearItemIcon = "xy_018"
+local ActivateItemIcon = "xy_020"
+local ActivateIcon = "xy_021"
+local NoGetIcon = "xy_022"
+
+local ActivateEffectID = 10081
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitSkinListInfo(self)
+	_P.InitSkinInfoPanel(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	
+	if nil ~= Csv.Rule[Define.SysId.Aircraft] then
+		local btnInfo = self.moudle:Get("btnInfo")
+		if btnInfo ~= nil then
+			btnInfo:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.Aircraft)
+			end, nil, 1.2)
+		end
+	end
+
+	self.moudle:Get("btnAllPowerBox"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UAircraftSkinAll")
+	end)
+	self.moudle:Get("textBtnAllPower").Text = Csv.Text("aircraft_skin_all")
+end
+
+--初始化皮肤列表
+function _P.InitSkinListInfo(self)
+	self.content = self.moudle:Get("Content")
+	self.skinList = {}
+	self.baseSkinList = {}
+	self.selectBorder = {}
+	self.gearSkinCorner = {}
+	for _, csvValue in pairs(Csv.AircraftSkin) do
+		_P.CreateSkinItem(self, csvValue.id)
+	end
+	local baseSkinList = {}
+	for itemID, _ in pairs(Csv.Aircraft) do
+		baseSkinList[#baseSkinList + 1] = itemID
+	end
+	table.sort(baseSkinList)
+	for _, itemID in pairs(baseSkinList) do
+		_P.CreateBaseSkinItem(self, itemID)
+	end
+	self.moudle:Get("textListTitle").Text = Csv.Text("aircraft_skin_list")
+	self.textCollect = self.moudle:Get("textCollect")
+	_P.RefreshSkinList(self)
+	self.selectIndex = 1
+end
+
+--刷新皮肤列表
+function _P.RefreshSkinList(self)
+	local activateSkinNum = 0
+	local activateSkinList = MAircraft.GetActivateSkinList()
+	if nil ~= activateSkinList then
+		for skinID, _ in pairs(activateSkinList) do
+			activateSkinNum = activateSkinNum + 1
+			_P.RefreshSkinItem(self, activateSkinNum, skinID, true)
+		end
+	end
+	local notOwnSkinList = {}
+	for _, csvValue in pairs(Csv.AircraftSkin) do
+		if 0 == MBag.GetItemNum(csvValue.id) or MAircraft.IsAircraftSkinUnActivative(csvValue.id) then
+			notOwnSkinList[#notOwnSkinList + 1] = csvValue.id
+		end
+	end
+	table.sort(notOwnSkinList)
+	for index = 1 + activateSkinNum, #self.skinList do
+		local tempIndex = index - activateSkinNum
+		_P.RefreshSkinItem(self, index, notOwnSkinList[tempIndex], false)
+	end
+
+	local skinOwnNum = 0
+	if nil ~= activateSkinList then
+		skinOwnNum = skinOwnNum + activateSkinNum
+	end
+	if nil ~= MAircraft.BaseSkinList then
+		skinOwnNum = skinOwnNum + #MAircraft.BaseSkinList
+	end		
+	self.textCollect.Text = Csv.Text("aircraft_skin_collect_no_color", {own = skinOwnNum, max = MAircraft.MaxSkinNum})
+end
+
+--创建飞机皮肤Item
+function _P.CreateSkinItem(self, skinID)
+	local index = #self.skinList + 1
+	local skin = {}
+	skin.skinID = skinID
+
+	skin.moudle = JGuiManager.GetMoudle(self.content, ItemName)
+	skin.moudle.SelfRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickSkinItem(self, index)
+	end)
+
+	skin.icon = skin.moudle:Get("Icon")
+	skin.corner = skin.moudle:Get("corner")
+
+	local graySprite = {}
+	graySprite[#graySprite + 1] = skin.icon
+	graySprite[#graySprite + 1] = skin.moudle.SelfRect
+	skin.graySprite = graySprite
+
+	self.skinList[index] = skin
+	self.selectBorder[index] = skin.moudle:Get("select")
+	self.selectBorder[index].Activity = false
+	self.gearSkinCorner[index] = skin.corner
+end
+
+--创建飞机基础皮肤Item
+function _P.CreateBaseSkinItem(self, itemID)
+	local index = #self.selectBorder + 1
+
+	local moudle = JGuiManager.GetMoudle(self.content, ItemName)
+	moudle.SelfRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickSkinItem(self, index)
+	end)
+	local isNotOwn = 0 == MBag.GetItemNum(itemID)
+	moudle.SelfRect.IsGray = isNotOwn
+
+	self.baseSkinList[index] = itemID	
+
+	local spriteName, color = _P.GetSkinSpriteAndColor(self, index)
+	if nil ~= color then
+		moudle.SelfRect.SpriteName = color
+	end
+	local icon = moudle:Get("Icon")
+	icon.SpriteName = spriteName
+	icon.IsGray = isNotOwn
+
+	local isGear = MAircraft.SkinID == itemID
+	local corner = moudle:Get("corner")
+	corner.Activity = isGear
+	if isGear then
+		self.lastGearIndex = index
+	end
+	
+	self.selectBorder[index] = moudle:Get("select")
+	self.selectBorder[index].Activity = false
+	self.gearSkinCorner[index] = corner
+end
+
+--获取飞机皮肤数据
+function _P.GetSkinData(self, skinIndex)
+	local itemID = self.skinList[skinIndex]
+	if nil ~= itemID then
+		local csvAircraftSkin = Csv.AircraftSkin[itemID.skinID]
+		if nil ~= csvAircraftSkin then
+			return csvAircraftSkin
+		else
+			error("表 AircraftSkin 没有对应的ID " .. itemID.skinID)
+		end
+	end
+end
+
+--获取飞机皮肤数据
+function _P.GetBaseSkinData(self, skinIndex)
+	local itemID = self.baseSkinList[skinIndex]
+	if nil ~= itemID then
+		local csvAircraft = Csv.Aircraft[itemID]
+		if nil ~= csvAircraft then
+			return csvAircraft
+		else
+			error("表 Aircraft 没有对应的ID " .. itemID)
+			return nil
+		end
+	end
+end
+
+--获取飞机皮肤图片名
+function _P.GetSkinSpriteAndColor(self, index)
+	local csvValue = _P.GetSkinData(self, index)
+	csvValue = csvValue or _P.GetBaseSkinData(self, index)
+	if nil ~= csvValue then
+		local asset = ""
+		local color = ""
+		if nil ~= csvValue.asset then
+			local temp = Csv.AircraftAnimation[csvValue.asset] 
+			if nil ~= temp then
+				asset = temp.icon
+			end
+		end
+		if nil ~= csvValue.type then
+			color = Csv.ItemColor[csvValue.type].icon
+		end
+		return asset, color
+	end
+	return nil
+end
+
+--刷新飞机皮肤Item信息
+function _P.RefreshSkinItem(self, index, skinID, isOwn)
+	local skin = self.skinList[index]
+	if nil ~= skin then
+		skin.skinID = skinID
+		local isActivate = MAircraft.IsAircraftSkinUnActivative(skinID)
+		local isGear = MAircraft.SkinID == skinID
+		skin.corner.Activity = isActivate or isGear
+		if isGear then
+			self.lastGearIndex = index
+			skin.corner.SpriteName = GearItemIcon
+		elseif isActivate then
+			skin.corner.SpriteName = ActivateItemIcon
+		end
+		local spriteName, color = _P.GetSkinSpriteAndColor(self, index)
+		if nil ~= spriteName then
+			skin.icon.SpriteName = spriteName
+		end
+		if nil ~= color then
+			skin.moudle.SelfRect.SpriteName = color
+		end
+		for _, graySprite in pairs(skin.graySprite) do
+			graySprite.IsGray = not isOwn
+		end
+	end
+end
+
+function _P.OnClickSkinItem(self, index, isFirst)
+	if index ~= self.selectIndex or isFirst then
+		self.selectBorder[self.selectIndex].Activity = false
+		self.selectBorder[index].Activity = true
+		self.selectIndex = index
+
+		local skin = self.skinList[index]
+		if nil ~= skin then
+			_R.RefreshSkinInfoPanel(self)
+		else
+			local itemID = self.baseSkinList[index]
+			if nil ~= itemID then
+				_R.RefreshSkinInfoPanel(self)
+			end
+		end
+	end
+end
+
+--初始化底部飞机皮肤信息
+function  _P.InitSkinInfoPanel(self)
+	self.textSkinName = self.moudle:Get("textSkinName")
+	self.textGetSkin = self.moudle:Get("textGetSkin")
+
+	self.aircraftBg = self.moudle:Get("aircraftBg")
+	self.aircraft = self.moudle:Get("aircraft")
+	self.propeller = self.moudle:Get("propeller")
+	self.notGetFlag = self.moudle:Get("notGetFlag")
+	self.notGetFlag.Activity = false
+
+	self.moudle:Get("textActivateTitle").Text = Csv.Text("aircraft_skin_activate")
+	self.textAttr1 = self.moudle:Get("textAttr1")
+	self.textAttr2 = self.moudle:Get("textAttr2")
+	self.textSkillBuff = self.moudle:Get("textSkillBuff")
+	self.moudle:Get("textScoreTitle").Text = Csv.Text("aircraft_skin_power")
+	self.textScore = self.moudle:Get("textScore")
+
+	self.moudle:Get("textChangeTips").Text = Csv.Text("aircraft_skin_change_tips")
+
+	self.btnChange = self.moudle:Get("btnChange")
+	self.btnChange:AddOnButton(function()
+		SoundMgr.Play(10001)
+		if MAircraft.IsAircraftSkinUnActivative(self.selectSkinID) then
+			CAircraft.AircraftActivate(self.selectSkinID)
+		elseif self.isSelectOwn then
+			CAircraft.AircraftSelectSkin(self.selectSkinID)
+		end
+	end)
+	self.textBtnChange = self.moudle:Get("textBtnChange")
+
+	_P.OnClickSkinItem(self, self.selectIndex, true)
+end
+
+--刷新飞机面板信息
+function _R.RefreshSkinInfoPanel(self)
+	local skinData = self.skinList[self.selectIndex]
+	if nil ~= skinData then
+		local csvAircraftSkin = _P.GetSkinData(self, self.selectIndex)
+		if nil ~= csvAircraftSkin.name then
+			self.textSkinName.Text = csvAircraftSkin.name
+		end
+	
+		self.selectSkinID = skinData.skinID
+		self.isSelectOwn = 0 ~= MBag.GetItemNum(self.selectSkinID)
+		if self.isSelectOwn then
+			self.textGetSkin.Text = ""
+		elseif nil ~= csvAircraftSkin.desc then
+			self.textGetSkin.Text = csvAircraftSkin.desc
+		end
+		local isUnActivative = MAircraft.IsAircraftSkinUnActivative(self.selectSkinID)
+		local isGray = not self.isSelectOwn or isUnActivative
+		self.aircraftBg.IsGray = isGray
+		self.aircraft.IsGray = isGray
+		self.propeller.IsGray = isGray
+		if isUnActivative then
+			self.notGetFlag.SpriteName = ActivateIcon
+		else
+			self.notGetFlag.SpriteName = NoGetIcon
+		end
+		self.notGetFlag.Activity = isGray
+		
+		self.textScore.Text = MAircraft.SkinScore[self.skinList[self.selectIndex].skinID]
+		self.textSkillBuff.Text = Csv.Text("aircraft_skin_effect_buff", {num = _P.GetSkinSchoolBuff(self)})
+
+		local attrData = _P.GetSkinAttr(self)
+		local index = 1
+		for type, value in pairs(attrData) do
+			local textTemp = self[("textAttr" .. index)]
+			if nil == textTemp then 
+				break
+			end
+			textTemp.Text = Csv.Text(PowerCsv .. type) .. ":" .. Csv.Text(BuffColorText, {num = value})
+			index = index + 1
+		end
+	else
+		skinData = self.baseSkinList[self.selectIndex]
+		if nil ~= skinData then
+			local csvAircraft = _P.GetBaseSkinData(self, self.selectIndex)
+			if nil ~= csvAircraft.name then
+				self.textSkinName.Text = csvAircraft.name
+			end
+			self.textAttr1.Text = Csv.Text("aircraft_skin_seat") .. Csv.Text(BuffColorText, {num = csvAircraft.seat_num})
+			self.textScore.Text = MAircraft.CalculatePowerBase(csvAircraft.id)
+			self.textAttr2.Text = ""
+			self.textSkillBuff.Text = ""
+
+			self.selectSkinID = skinData
+		 	self.isSelectOwn = 0 ~= MBag.GetItemNum(self.selectSkinID)
+			if self.isSelectOwn then
+				self.textGetSkin.Text = ""
+			elseif nil ~= csvAircraft.desc then
+				self.textGetSkin.Text = csvAircraft.desc
+			end
+			self.aircraftBg.IsGray = not self.isSelectOwn
+			self.aircraft.IsGray = not self.isSelectOwn
+			self.propeller.IsGray = not self.isSelectOwn
+			self.notGetFlag.Activity = not self.isSelectOwn
+		end
+	end
+	local csvValue = _P.GetSkinData(self, self.selectIndex)
+	csvValue = csvValue or _P.GetBaseSkinData(self, self.selectIndex)
+	if nil ~= csvValue and nil ~= csvValue.asset then
+		self.aircraft.SpriteName = csvValue.asset
+	end
+	_P.RefreshChangeBtnText(self)
+	_P.SetPropellerPos(self, self.propeller, self.aircraft.SpriteName)
+end
+
+--刷新更换按钮
+function _P.RefreshChangeBtnText(self)
+	local isGear = false
+	if (0 ~= MAircraft.SkinID and MAircraft.SkinID == self.selectSkinID) 
+		or (0 == MAircraft.SkinID and MAircraft.AircraftID == self.selectSkinID) then
+		isGear = true
+	end
+	local isUnActivate = MAircraft.IsAircraftSkinUnActivative(self.selectSkinID)
+	local isGray = isGear or (not self.isSelectOwn and not isUnActivate) 
+	self.btnChange.IsGray = isGray
+	self.btnChange.RaycastTarget = not isGray
+
+	local csvText
+	if isGear then
+		csvText = "aircraft_skin_gear"
+	elseif isUnActivate then
+		csvText = "Wharf_pokedex9"
+	else
+		csvText = "player_change6"
+	end
+	self.textBtnChange.Text = Csv.Text(csvText)
+end
+
+--设置螺旋桨位置
+function _P.SetPropellerPos(self, propeller, spriteName)
+	local csvAircraftAnimation = Csv.AircraftAnimation[spriteName]
+	if nil ~= csvAircraftAnimation then
+		local pos = csvAircraftAnimation.prop_skin_pos
+		if nil ~= pos then
+			if nil == pos[1] or nil == pos[2] then
+				error("表 AircraftAnimation 对应的资源图片名 " .. spriteName or "nil" .. " prop_skin_pos 字段配置错误")
+				return
+			end
+		else
+			error("表 AircraftAnimation 对应的资源图片名 " .. spriteName or "nil" .. " prop_skin_pos 字段为空")
+			return
+		end
+		propeller.LocalPosition = Vector2(pos[1], pos[2])
+	else
+		error("表 AircraftAnimation 没有对应的资源图片名 " .. spriteName or "nil")
+		return
+	end
+end
+
+--获取飞机皮肤属性加成
+function _P.GetSkinAttr(self)
+	local data = {}
+	local csvAircraftSkin = _P.GetSkinData(self, self.selectIndex)
+	if nil ~= csvAircraftSkin then
+		if nil ~= csvAircraftSkin.attr then
+			for index, value in pairs(csvAircraftSkin.attr) do
+				if nil ~= value[1] and nil ~= value[2] then
+					data[value[1]] = value[2]
+				else
+					error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 字段 attr " .. index .. " 位置配置错误")
+				end
+			end
+		else
+			error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 没有 asset 字段")
+		end
+	end
+	return data
+end
+
+--获取飞机皮肤属性加成
+function _P.GetSkinSchoolBuff(self)
+	local csvAircraftSkin = _P.GetSkinData(self, self.selectIndex)
+	local get = csvAircraftSkin.get
+	if nil ~= get then
+		for index, value in pairs(get) do
+			if nil ~= value[1] and nil ~= value[2] then
+				if MAircraft.SchoolSysID == value[1] then
+					return math.modf(value[2] / 100)
+				end
+			else
+				error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 字段 get " .. index .. " 位置配置错误")
+			end
+		end
+	else
+		error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 字段 get 错误")
+	end
+	return nil
+end
+
+--更换飞机皮肤成功
+function _R.OnSelectAircraftSkin(self)
+	local lastGearSkin = self.gearSkinCorner[self.lastGearIndex]
+	if nil ~= lastGearSkin then
+		lastGearSkin.Activity = false
+	end
+	self.gearSkinCorner[self.selectIndex].Activity = true
+	self.gearSkinCorner[self.selectIndex].SpriteName = GearItemIcon
+	self.lastGearIndex = self.selectIndex
+	CCommon.ShowRight(Csv.Text("aircraft_skin_change_success", {name = self.textSkinName.Text}))
+end
+
+--激活飞机皮肤成功
+function _R.OnActivateSuccess(self, skinID)
+	_P.RefreshSkinList(self)
+	if nil ~= skinID then
+		for index, skinData in pairs(self.skinList) do
+			if skinID == skinData.skinID then
+				_P.OnClickSkinItem(self, index)
+				break
+			end
+		end
+	end
+	CCommon.CreateEffect(self.moudle:Get("activateEffectNode"), ActivateEffectID)
+end
+
+function _R.RefreshView(self)
+	_P.RefreshSkinList(self)
+	_R.RefreshSkinInfoPanel(self)
+end
+
+return _M

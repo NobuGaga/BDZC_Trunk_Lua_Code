@@ -1,0 +1,654 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+-- @RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Parliament.CParliament.bytes#_M]
+local CParliament = JRequire "Dev.Parliament.CParliament"
+--@RefType [Dev.Parliament.MParliament.bytes#_M]
+local MParliament = JRequire "Dev.Parliament.MParliament"
+--@RefType [Dev.Parliament.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+-- @RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Parliament"
+local BtnClose = "btnClose"
+--官职Item名
+local PosItemName = "M_Parliament_PosItem"
+--官职ItemText名
+local PosItemTextName = "PositionText"
+--官职ItemText2名
+local PosItemTextName2 = "PositionText2"
+
+local DefaultBody = "body_007"
+local DefaultHead = "head_004"
+local GetFlagImage = "ph_010"
+
+--官职列表移动动画时间
+local PosListMoveTime = 0.3
+--钻石ItemID
+local GemItemID = 1
+--背景音乐ID
+local BackgroundMusicID = 113
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyPos = Vector2(-100, 40)
+--膜拜动画
+local GET_EFFECT_ID = 5
+--膜拜动画时间
+local GetEffectTime = 0.4
+
+local ColorBlack = Color(0, 0, 0, 1)
+local ColorWhite = Color(1, 1, 1, 1)
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy()
+	SoundMgr.DestroyMusic(BackgroundMusicID, true)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	self.moudle:Get("textTitle").Text = Csv.Text("parliament_title")
+	self:RegistCallEvent(Define.EventListenId.AutoReconnectEnterGame, function ()
+		self:Unlock()
+	end)
+	self.LockNode = self.moudle:Get("LockNode")
+	self.LockNode:AddOnButton(function () end, nil, 1)
+	self.LockNode.Activity = false
+	SoundMgr.PlayMusic(BackgroundMusicID)
+
+	_P.InitBackground(self)
+	_P.InitBody(self)
+	_P.InitPositionView(self)
+	_P.InitArrow(self)
+	_P.InitInfo(self)
+	_R.RefreshViewData(self, {list = MParliament.list, isGet = MParliament.isGet})
+
+	CParliament.GetGivenList()
+
+	self.moudle:Get("CompanySizeText").Text = Csv.Text("parliament_tip20")
+	self.moudle:Get("CompanySizeText3").Text = Csv.Text("parliament_tip21")
+	self.moudle:Get("WelfareText").Text = Csv.Text("parliament_tip22")
+	self.moudle:Get("WelfareText3").Text = Csv.Item[Define.AssetsType.Gold].name
+end
+
+--初始化殿堂背景
+function _P.InitBackground(self)
+	self.background = self.moudle:Get("background")
+	self.background2 = self.moudle:Get("background2")
+	self.transport = self.moudle:Get("transport")
+	self.beforeBGEffectNode = self.moudle:Get("beforeBGEffectNode")
+	self.afterBGEffectNode = self.moudle:Get("afterBGEffectNode")
+	self.transportEffectNode = self.moudle:Get("transportEffectNode")
+end
+
+--设置背景
+function _P.SetBackground(self, dataIndex)
+	local csvData = Csv.Title[dataIndex]
+	if self.bgGroup and self.bgGroup == csvData.bgGroup then
+		return
+	end
+	self.bgGroup = csvData.bgGroup
+	if nil ~= csvData.background then
+		self.background.Activity = true
+		self.background.SpriteName = csvData.background
+	else
+		self.background.Activity = false
+	end
+	self.background.SpriteName = csvData.background
+	local pos = csvData.bg2_pos
+	if nil == pos or nil == pos[1] or nil == pos[2] then
+		pos = { 0, 0 }
+	end
+	if nil ~= csvData.background2 then
+		self.background2.Activity = true
+		self.background2.SpriteName = csvData.background2
+		self.background2:SetNativeSize()
+		local pos = csvData.bg2_pos
+		if nil == pos or nil == pos[1] or nil == pos[2] then
+			pos = { 0, 0 }
+		end
+		self.background2.LocalPosition = Vector2(pos[1], pos[2])
+		local scale = csvData.bg2_scale
+		if nil == scale or nil == scale[1] or nil == scale[2] then
+			scale = { 1, 1 }
+		end
+		self.background2.LocalScale = Vector3(scale[1], scale[2])
+	else
+		self.background2.Activity = false
+	end
+	if nil ~= csvData.transport then
+		self.transport.Activity = true
+		self.transport.SpriteName = csvData.transport
+		local pos = csvData.transport_pos
+		if nil == pos or nil == pos[1] or nil == pos[2] then
+			pos = { 0, 0 }
+		end
+		self.transport.LocalPosition = Vector2(pos[1], pos[2])
+	else
+		self.transport.Activity = false
+	end
+	self.beforeBGEffectNode:DestroyChildren()
+	if nil ~= csvData.bgEffectID then
+		CCommon.CreateEffect(self.beforeBGEffectNode, csvData.bgEffectID)
+	end
+	self.afterBGEffectNode:DestroyChildren()
+	if nil ~= csvData.bg2EffectID then
+		CCommon.CreateEffect(self.afterBGEffectNode, csvData.bg2EffectID)
+	end
+	self.transportEffectNode:DestroyChildren()
+	if nil ~= csvData.transportEffectID then
+		CCommon.CreateEffect(self.transportEffectNode, csvData.transportEffectID)
+	end
+end
+
+--初始化官职列表
+function _P.InitPositionView(self)
+	self.PostionContent =  self.moudle:Get("PosContent")
+	self.listItemPosition = {}
+	self.listPosIndexCsvData = {}
+	
+	if nil ~= Csv.Title then
+		local csvTitle = {}
+		local index = 1
+		for key, csvValue in pairs(Csv.Title) do
+			if nil ~= csvValue.isInParliament and 0 < csvValue.isInParliament then
+				csvTitle[index] = csvValue
+				index = index + 1
+			end
+		end
+		table.sort(csvTitle, function(left, right) return left.sort < right.sort end )
+		self.maxPosItemCount = #csvTitle
+		for key, csvValue in pairs(csvTitle) do
+			_P.CreatePosItem(self, PosItemName, csvValue, key)
+		end
+	end
+	_P.CalculatePosListPosition(self)
+end
+
+--计算获取列表头尾节点以及列表中间节点位移位置
+function _P.CalculatePosListPosition(self)
+	self.posListPosition = nil
+	local positionBoxViewWidth = self.moudle:Get("PositionBoxView").SizeDelta.x
+	local maxWidth = self.posItemWidth * self.maxPosItemCount - self.posItemSpace
+	if maxWidth > positionBoxViewWidth then
+		self.posListPosition = {}
+		-- local temp, lessNum = self.maxPosItemCount / 2
+		-- local isSingle = 0 ~= lessNum 
+		local moveMaxWidth = maxWidth - positionBoxViewWidth
+		local containItemNum = math.modf(positionBoxViewWidth / self.posItemWidth)
+		if moveMaxWidth > self.posItemWidth then
+			local tempWidth = moveMaxWidth / (self.maxPosItemCount - 1)
+			for index = 1, self.maxPosItemCount do
+				if 1 == index then
+					self.posListPosition[index] = 0
+				elseif self.maxPosItemCount == index then
+					self.posListPosition[index] = -moveMaxWidth
+				else 
+					self.posListPosition[index] = self.posListPosition[index - 1] - tempWidth
+				end
+			end
+		else
+			local tempWidth = moveMaxWidth / (self.maxPosItemCount - 1)
+			for index = 1, self.maxPosItemCount do
+				if 1 == index then
+					self.posListPosition[index] = 0
+				elseif self.maxPosItemCount == index then
+					self.posListPosition[index] = -moveMaxWidth
+				else 
+					self.posListPosition[index] = self.posListPosition[index - 1] - tempWidth
+				end
+			end
+		end
+	end
+end
+
+--创建官职列表Item
+function _P.CreatePosItem(self, itemName, data, index)
+	local itemMoudle = JGuiManager.GetMoudle(self.PostionContent, itemName)
+	local itemRect = itemMoudle.SelfRect
+	if nil == self.posItemWidth then
+		local layout = self.PostionContent:AddHorizontalLayoutGroup()
+		if nil ~= layout then
+			self.posItemSpace = layout.spacing
+			self.posItemWidth = itemRect.SizeDelta.x + self.posItemSpace
+		end
+	end
+
+	itemRect.SpriteName = data.normalIcon
+
+	itemMoudle:Get(PosItemTextName).Text = data.name
+	itemMoudle:Get(PosItemTextName2).Text = data.name
+	local select = itemMoudle:Get("Select")
+	select.SpriteName = data.selectIcon
+	select.Activity = false
+	itemRect:AddOnButton(function()
+		SoundMgr.Play(10025)
+		_P.OnClickPosItem(self, select, index)  
+	end, nil, 1)
+
+	self.listItemPosition[index] = select
+	self.listPosIndexCsvData[index] = data.id
+end
+
+--官职列表Item点击事件
+function _P.OnClickPosItem(self, select, index, isFirst)
+	if nil ~= self.lastSelectIndex and self.lastSelectIndex == index and not isFirst then
+		return
+	end
+	_P.JudgeMovePosItemList(self, index)
+	if nil ~= self.lastSelectIndex then
+		self.listItemPosition[self.lastSelectIndex].Activity = false
+	end
+	if not isFirst then
+		_P.MoveBody(self, index)
+	end
+	select.Activity = true
+	self.lastSelectIndex = index
+end
+
+--移动官职列表计算判断
+function _P.JudgeMovePosItemList(self, index)
+	if nil ~= self.posListPosition then
+		local pos = self.posListPosition[index]
+		if nil ~= pos then
+			_P.MovePosList(self, pos)
+		end
+	end
+end
+
+--移动官职列表
+function _P.MovePosList(self, pos)
+	self.PostionContent:DOAnchorPosX(pos, PosListMoveTime)
+end
+
+--移动人物形象
+function _P.MoveBody(self, index)
+	if nil == self.lastSelectIndex or nil == self.maxPosItemCount then
+		return
+	end
+	if self.lastSelectIndex == index then
+		return
+	end
+	local width = JGuiManager.GuiRoot.Width
+	local isRight = index > self.lastSelectIndex 
+	if 1 == self.lastSelectIndex and self.maxPosItemCount == index then
+		isRight = false
+	end
+	if self.maxPosItemCount == self.lastSelectIndex and 1 == index then
+		isRight = true
+	end
+	if isRight then width = -width end
+	self.LockNode.Activity = true
+	self.Body:DOAnchorPosX(width, PosListMoveTime / 2):OnComplete(function()
+		_P.GetBodyDataToSet(self, index)
+		self.Body.LocalPosition = Vector2(-width, self.Body.LocalPosition.y)
+		self.Body:DOAnchorPosX(0, PosListMoveTime / 2):OnComplete(function()
+			self.LockNode.Activity = false
+		end)
+	end)
+end
+
+--初始化人物形象
+function _P.InitBody(self)
+	self.Body = self.moudle:Get("PosBody")
+	self.Body:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		local titleID = self.listPosIndexCsvData[self.lastSelectIndex]
+		local posData = MParliament.GetListData(titleID)
+		if nil ~= posData then
+			CPlayer.LookPlayerReq(posData.playerID)
+		end
+	end, nil, 1)
+	self.Head = self.moudle:Get("PosHead")
+
+	self.Words = self.moudle:Get("Words")
+	self.Words:AddOnButton(function() _P.OnClickSetMsg(self) end)
+	self.WordsTween = self.Words.CachedTran:GetJTweener("T_Parliament_Disappear")
+	self.WordsTween:SetOnComplete(function() self.Words.Activity = false end)
+	self.WordsText = self.moudle:Get("WordsText")
+	self.WordsTextTween = self.WordsText.CachedTran:GetJTweener("T_Parliament_Disappear")
+	self.WordsArrow = self.moudle:Get("ArrowMsg")
+	self.WordsArrowTween = self.WordsArrow.CachedTran:GetJTweener("T_Parliament_Disappear")
+	self.MsgButton = self.moudle:Get("BtnMsg")
+	self.MsgButton.Activity = false
+	self.MsgButton:AddOnButton(function() _P.OnClickSetMsg(self) end)
+	self.btnPower = self.moudle:Get("Btn_tq")
+	self.btnPower.Activity = true--MParliament.GetSelfTitleState()
+	self.btnPower:AddOnButton(function()
+		local dataIndex = self.listPosIndexCsvData[self.lastSelectIndex]
+		local posData = MParliament.GetListData(dataIndex)
+		WindowMgr.Create("UParliamentAward", self.listPosIndexCsvData[self.lastSelectIndex],
+		 				 					 (nil ~= posData and posData.playerID == MPlayer.GetId()))
+	end, nil, 0.9)
+
+	self.NoneText = self.moudle:Get("NoneText")
+	self.NoneText.Text = Csv.Text("parliament_none")
+	self.PosNameText = self.moudle:Get("PosNameText")
+	self.PlayerNameBox = self.moudle:Get("NameBox")
+	self.PlayerNameText = self.moudle:Get("NameText")
+	_P.SetDefaultBody(self)
+end
+
+--设置默认形象
+function _P.SetDefaultBody(self, dataIndex)
+	self.Body.SpriteName = DefaultBody
+	self.Body.Color = ColorBlack
+	self.Body.RaycastTarget = false
+	
+	self.Head.SpriteName = DefaultHead
+	self.Head.Color = ColorBlack
+
+	self.Words.Activity = false
+	self.MsgButton.Activity = false
+	self.NoneText.Activity = true
+	self.PlayerNameBox.Activity = false
+	if nil ~= dataIndex then
+		local csvData = Csv.Title[dataIndex]
+		self.PosNameText.Text = csvData.name
+	end
+end
+
+--获取称号数据设置形象
+function _P.GetBodyDataToSet(self, index)
+	local dataIndex = self.listPosIndexCsvData[index]
+	local posData = MParliament.GetListData(dataIndex)
+	if nil ~= self.TitleCount then
+		self.TitleCount:Destroy()
+	end
+	_P.SetBackground(self, dataIndex)
+	if nil ~= posData then
+		_P.SetBody(self, dataIndex, posData)
+	else 
+		_P.SetDefaultBody(self, dataIndex) 
+	end
+end
+
+--设置形象
+function _P.SetBody(self, dataIndex, posData)
+	local csvData = Csv.Title[dataIndex]
+	local body = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
+	if nil ~= body then
+		self.Body.SpriteName = body
+		self.Body.Color = ColorWhite
+		self.Body.RaycastTarget = true
+	end
+
+	local head = MParliament.GetBodyByIDSex(posData.head, posData.sex)
+	if nil ~= head then
+		self.Head.SpriteName = head
+		self.Head.Color = ColorWhite
+	end
+
+	local isSelf = MPlayer.GetId() == posData.playerID
+	if nil ~= posData.msg and "" ~= posData.msg then
+		_P.SetAndPlayMessage(self, posData.msg, isSelf)
+	elseif isSelf then
+		_P.SetAndPlayMessage(self, "", true)
+	else
+		self.Words.Activity = false
+		self.MsgButton.Activity = false
+	end
+
+	self.NoneText.Activity = false
+	self.PosNameText.Text = csvData.name
+	self.PlayerNameBox.Activity = true
+	self.PlayerNameText.Text = posData.playerName
+	_P.SetCountTime(self, posData)
+end
+
+function _P.SetAndPlayMessage(self, msg, isSelf)
+	if nil ~= msg and "" ~= msg then
+		self.Words.Activity = true
+	end
+	self.WordsTween:Restore()
+	self.WordsTween:Play()
+	self.WordsTextTween:Restore()
+	self.WordsTextTween:Play()
+	self.WordsArrowTween:Restore()
+	self.WordsArrowTween:Play()
+	
+	self.Words.RaycastTarget = isSelf
+	self.MsgButton.Activity = isSelf
+	if isSelf and "" == msg then
+		self.WordsText.Text = Csv.Text("parliament_input_tips")
+	else
+		self.WordsText.Text = msg
+	end
+end
+
+--设置称号倒计时
+function _P.SetCountTime(self, posData)
+	if nil ~= posData.endTime then
+		local time = posData.endTime - HeartBeat.ServSecond()
+		if 0 >= time then
+			_P.RefreshAllData()
+		else
+			self.TitleCount = self.Body:AddOnUpdate(function() 
+				local time = posData.endTime - HeartBeat.ServSecond()
+				if 0 >= time then
+					if nil ~= self.TitleCount then
+						self.TitleCount:Destroy()
+					end
+					_P.RefreshAllData()
+				end
+			end, nil, 1)
+		end
+	end
+end
+
+--刷新殿堂所有数据
+function _P.RefreshAllData()
+	CCommon.ShowRight(Csv.Text("parliament_refresh_tips"))
+end
+
+--初始化箭头按钮
+function _P.InitArrow(self)
+	local arrowLeft = self.moudle:Get("ArrowLeft")
+	arrowLeft.CachedTran:GetJTweener("T_Parliament_LeftArrow"):Play()
+	local arrowRight = self.moudle:Get("ArrowRight")
+	arrowRight.CachedTran:GetJTweener("T_Parliament_RightArrow"):Play()
+
+	arrowLeft:AddOnButton(function() 
+		SoundMgr.Play(10025)
+		_P.OnClickArrow(self, true) 
+	end, nil, 1)
+	arrowRight:AddOnButton(function() 
+		SoundMgr.Play(10025)
+		_P.OnClickArrow(self, false) 
+	end, nil, 1)
+end
+
+--点击箭头事件
+function _P.OnClickArrow(self, isLeft)
+	if nil == self.lastSelectIndex or nil == self.maxPosItemCount then
+		return
+	end
+	local tempID
+	if isLeft then
+		tempID = self.lastSelectIndex - 1
+		if 0 == tempID then
+			tempID = self.maxPosItemCount
+		end
+	else
+		tempID = self.lastSelectIndex + 1
+		if tempID > self.maxPosItemCount then
+			tempID = 1
+		end
+	end
+
+	if nil ~= self.listItemPosition[tempID] then
+		_P.OnClickPosItem(self, self.listItemPosition[tempID], tempID)
+	end
+end
+
+--初始化信息窗口
+function _P.InitInfo(self)
+	self.moudle:Get("TipsText").Text = Csv.Text("parliament_join")
+	local csvSize = Csv.Company[MPlayer.GetLevel()]
+	if nil ~= csvSize then
+		self.moudle:Get("CompanySizeText2").Text = MPlayer.GetLevel()
+		local csvReward = Csv.ParliamentReward[csvSize.id]
+		if nil ~= csvReward and nil ~= csvReward.item then
+			self.baseRewards = csvReward.item
+			self.extraRewards = csvReward.extra
+			self.WelfareText = self.moudle:Get("WelfareText2")
+		end
+	end
+	self.moudle:Get("BtnMsgText").Text = Csv.Text("parliament_set_msg_button")
+	self.moudle:Get("BtnGetText").Text = Csv.Text("parliament_worship")
+
+	self.GetFlag = self.moudle:Get("GetFlag")
+	self.GetFlag.Activity = false
+	self.GetButton = self.moudle:Get("BtnGet")
+	self.GetButton.Activity = false
+end
+
+function _P.OnClickSetMsg(self)
+	SoundMgr.Play(10001)
+	local titleID = self.listPosIndexCsvData[self.lastSelectIndex]
+	if nil ~= titleID then
+		WindowMgr.Create("UParliamentInput", titleID)
+	end
+end
+
+--获取奖励钻石数量
+function _P.GetGoldRewardNum(self, rewards)
+	for _, reward in pairs(rewards) do
+		if reward and GemItemID == reward[1] then
+			return reward[2]
+		end
+	end
+	return 0
+end
+
+--获取合并奖励
+function _P.GetMergeReward(self)
+	local allReward = {}
+	for key, value in pairs(self.baseRewards) do
+		allReward[key] = {
+			[1] = value[1],
+			[2] = value[2]
+		}
+	end
+	for key, value in pairs(self.extraRewards) do
+		if nil == allReward[key] then
+			allReward[key] = {
+				[1] = value[1],
+				[2] = value[2]
+			}
+		end
+		allReward[key][2] = allReward[key][2] + value[2]
+	end
+	return allReward
+end
+
+--设置领取按钮
+function _P.SetButton(self, isGet)
+	if isGet then
+		self.GetButton.Activity = false
+		self.GetFlag.LocalScale = Vector3(1, 1, 1)
+		self.GetFlag.Activity = true
+	else
+		self.GetButton.Activity = true
+		self.GetFlag.Activity = false
+		self.GetButton:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			CParliament.GetReward()
+		end)
+	end
+end
+
+--刷新界面数据
+function _R.RefreshViewData(self, data)
+	if nil == self.lastSelectIndex then
+		if nil == data.list then
+			self.lastSelectIndex = math.random(1, self.maxPosItemCount)
+		else
+			local titleID = 0
+			if MParliament.GetSelfTitleState() then
+				titleID = MParliament.SelfTitleID
+			else
+				local temp = math.random(1, #data.list)
+				titleID = data.list[temp].titleID
+			end
+			for index, value in pairs(self.listPosIndexCsvData) do
+				if titleID == value then
+					self.lastSelectIndex = index
+					break
+				end
+			end
+		end
+	end
+	if nil ~= self.listItemPosition[self.lastSelectIndex] then
+		_P.OnClickPosItem(self, self.listItemPosition[self.lastSelectIndex], self.lastSelectIndex, true)
+		_P.GetBodyDataToSet(self, self.lastSelectIndex)
+	end
+	local goldNum = _P.GetGoldRewardNum(self, self.baseRewards)
+	if MParliament.GetSelfTitleState() then 
+		goldNum = goldNum + _P.GetGoldRewardNum(self, self.extraRewards) 
+	end
+	self.WelfareText.Text = goldNum
+	self.btnPower.Activity = true	--MParliament.GetSelfTitleState()
+	_P.SetButton(self, data.isGet)
+end
+
+--刷新获取奖励后界面
+function _R.RefreshGetReward(self)
+	self.GetButton.Activity = false
+	self.GetFlag.Activity = true
+	self.GetFlag.Alpha = 0
+
+	SoundMgr.PlaySystem(10004)
+	local effect = CCommon.CreateEffect(self.GetFlag, GET_EFFECT_ID, nil, function()
+		self.GetFlag.Alpha = 1
+		local rewards = self.baseRewards
+		if MParliament.GetSelfTitleState() then 
+			rewards = _P.GetMergeReward(self)
+		end
+		if rewards then
+			local index = 0
+			for _, reward in pairs(rewards) do
+				CCommon.ShowFlyItem(self.GetFlag, reward[1], reward[2], index * RewardFlyDelay, RewardFlyPos, true)
+				index = index + 1
+			end
+		end
+	end, {M_Effect_Get = GetFlagImage}, nil, GetEffectTime)
+	effect.SelfRect.SizeDelta = self.GetFlag.SizeDelta
+end
+
+--设置留言成功, 刷新留言
+function _R.RefreshMessage(self, msg)
+	CCommon.ShowRight(Csv.Text("parliament_set_msg"))
+	_P.SetAndPlayMessage(self, msg, true)
+end
+
+return _M

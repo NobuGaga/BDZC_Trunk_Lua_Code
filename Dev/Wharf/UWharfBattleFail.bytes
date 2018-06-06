@@ -1,0 +1,34 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_PK_Fali")
+	
+	local eventData = Csv.WharfEvent[id]
+	moudle:Get("text").Text = Csv.Text("Wharf_battle_fail",{name = eventData.name})
+
+	moudle:Get("BtnText").Text = Csv.Text("lastgirl_sure")
+	moudle:Get("Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+
+		WindowMgr.Call("UWharfGirlRelation","CheckGirlDone")
+	end)
+end
+
+return _M

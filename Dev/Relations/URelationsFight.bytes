@@ -1,0 +1,410 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local JTweenerManager = CS.JTween.JTweenerManager
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local AWARD_POS = 4
+local AWARD_NUM = 6
+
+local BOX_SHAKE = "T_Effect_RelationBox"
+local SELECT_MOVE = "T_Lobby_Staff_Choose"
+local EFFECT_ID = 10027
+
+local EFFECTID = 16
+
+local POS_GROUP = {{31,128},{211,-85},{-96,-152}}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_StarPK")
+	self.mMoudle = moudle
+
+	-- moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
+	-- moudle:Get("C_text").Text = Csv.Text("relations_linshi")
+	-- moudle:Get("JdText").Text = Csv.Text("relations_jindu")
+	moudle:Get("comprehensive").Text = Csv.Text("relations_zongheT")
+	moudle:Get("attack").Text = Csv.Text("relations_attackT")
+	moudle:Get("Skill").Text = Csv.Text("relations_skillT")
+	moudle:Get("NumText").Text = Csv.Text("relations_point")
+
+	-- moudle:Get("C_Btn_e"):AddOnButton(function()
+	-- 	SoundMgr.Play(10001)
+	-- 	WindowMgr.Create("URelationsBuyAdd")
+	-- end,nil,0.9)
+
+	moudle:Get("C_BackBtn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		CRelations.CMainInit()
+		self:Destroy()
+	end,nil,0.9)
+
+	--_P.RefreshView(self)
+	local actor = moudle:Get("ActorPanel")
+	--CCommon.CreateEffect(actor,EFFECT_ID)
+
+	moudle:Get("ZsNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
+	self.mGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	moudle:Get("ZsNum2").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gongzhang))
+	self.mGongzhang = MBag.GetItemNum(Define.AssetsType.Gongzhang)
+	moudle:Get("Zs2").SpriteName = Csv.Item[Define.AssetsType.Gongzhang].miniIcon
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Gold or itemid == Define.AssetsType.Gongzhang then
+			local TextCost
+			local lastNum
+			if itemid == Define.AssetsType.Gold then
+				TextCost = moudle:Get("ZsNum")
+				lastNum = self.mGold
+			elseif itemid == Define.AssetsType.Gongzhang then
+				TextCost = moudle:Get("ZsNum2")
+				lastNum = self.mGongzhang
+			end
+			TextCost:DOKill()
+			local nowNum = MBag.GetItemNum(itemid)
+			if itemid == Define.AssetsType.Gold then
+				self.mGold = nowNum
+			elseif itemid == Define.AssetsType.Gongzhang then
+				self.mGongzhang = nowNum
+			end
+			if lastNum ~= nowNum then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextCost ~= nil then TextCost.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if TextCost ~= nil then TextCost.Text = LuaUtil.NumberFormat(MBag.GetItemNum(itemid)) end
+				end)
+				t:SetTarget(TextCost.CachedTran)
+			end
+		end
+	end)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local data = MRelations.FightData
+	if data ~= nil then
+		moudle:Get("integral").Text = data.name
+		moudle:Get("Num").Text = data.otherpoint
+		moudle:Get("Staff").Text = Csv.Text("relations_staffnum",{num = data.staffnum - data.surnum,max = data.staffnum})
+		moudle:Get("NameText").Text = Csv.Text("relations_namePointA",{num = data.mypoint})
+		local csvStaff = Csv.Personnel[data.mstaffinfo.staffid]
+		moudle:Get("StaffName").Text = MStaff.GetStaffName(csvStaff.id) 
+		moudle:Get("Leve").Text = data.mstaffinfo.level
+		moudle:Get("comprehensiveText").Text = data.mstaffinfo.staffattr
+		_P.SetSelfData(self,moudle,data)
+		moudle:Get("staff").SpriteName = csvStaff.asset
+		local content = moudle:Get("content")
+		content:DestroyChildren()
+		for k,v in pairs(data.staffs) do
+			local staffMoudle = JGuiManager.GetMoudle(content, "M_Lobby_StarPKItem")
+			if k <= 3 then
+				staffMoudle.SelfRect.LocalPosition = Vector2(POS_GROUP[k][1],POS_GROUP[k][2])
+			end
+			local colorBG = staffMoudle:Get("light")
+			colorBG.SpriteName = MStaff.Color2Image[v.color]
+			staffMoudle:Get("head").SpriteName = Csv.Personnel[v.staffid].asset
+			local textTip = staffMoudle:Get("PKtext")
+			textTip.Text = Csv.Text("relations_click_tips")
+			textTip.CachedTran:GetJTweener(SELECT_MOVE):Play()
+			staffMoudle:Get("M_Lobby_StarPKItem"):AddOnButton(function()
+				SoundMgr.Play(10001)
+
+				if MRelations.FightData.surnum <= 0 then
+					MRelations.isFirstFight = true
+					MRelations.lastMypoint = 0 --重置自我进度
+
+					-- if MRelations.CheckisAdd() == false then
+					-- 	CCommon.CheckTips(function(isSure,rg)
+					-- 		if isSure == true then
+					-- 			WindowMgr.Create("URelationsBuyAdd",v.staffid)
+					-- 		else
+					-- 			MRelations.isFirstFight = false
+					-- 			CRelations.CGetReport(v.staffid)
+					-- 		end
+					-- 	end,{content = Csv.Text("relations_isbuyAttr"),sureText = Csv.Text("relations_tip17"),cancelText = Csv.Text("relations_tip16")},nil)
+					-- else
+						CRelations.CGetReport(v.staffid)
+					-- end
+				else
+					CRelations.CGetReport(v.staffid)
+				end 
+			end,nil,0.9)
+
+			-- local lightBg = staffMoudle:Get("M_Lobby_StarPKItem")
+			-- local t = lightBg:DOFade(0.4, 0.4)
+			-- t:SetEase(CS.DG.Tweening.Ease.Linear)
+			-- t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+			-- local textTip = staffMoudle:Get("PKtext")
+			-- textTip.Text = Csv.Text("relations_tip10")
+			-- local t1 = textTip:DOFade(0.4, 0.8)
+			-- t1:SetEase(CS.DG.Tweening.Ease.Linear)
+			-- t1:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+			-- local t2 = staffMoudle:Get("PkBg"):DOFade(0.4, 0.8)
+			-- t2:SetEase(CS.DG.Tweening.Ease.Linear)
+			-- t2:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+		end
+
+		local _Surnum = data.surnum
+		if Csv.RelationsBox[_Surnum] ~= nil then
+			if Csv.RelationsBox[_Surnum].type == 2 and MRelations.ReportData ~= nil then
+				_P.ShowAwardFly(self,_Surnum)
+				-- MRelations.ReportData = nil
+			end
+		end
+
+		-- local contentAward = moudle:Get("contentAward")
+		-- contentAward:DestroyChildren()
+		-- local index
+		-- if data.surnum - AWARD_POS > 0 then
+		-- 	index = data.surnum - AWARD_POS
+		-- else
+		-- 	index = 0
+		-- end
+		-- for i=index+1,index+AWARD_NUM do
+		-- 	local awardMoudle = JGuiManager.GetMoudle(contentAward, "M_Lobby_StarPKAwardItem")
+		-- 	local csvBoxAward = Csv.RelationsBox[i]
+		-- 	local ImgIcon = awardMoudle:Get("icon")
+		-- 	if data.surnum >= i then
+		-- 		if csvBoxAward.type == 2 then
+		-- 			ImgIcon.SpriteName = "ys_014"
+		-- 		else
+		-- 			ImgIcon.SpriteName = "ys_005"
+		-- 		end
+		-- 	else
+		-- 		if csvBoxAward.type == 2 then
+		-- 			awardMoudle.SelfRect.Name = tostring(i)
+		-- 			ImgIcon.SpriteName = "ys_015"
+		-- 			local tween = awardMoudle.SelfRect.CachedTran:GetJTweener(BOX_SHAKE)
+		-- 			tween:Play()
+		-- 			ImgIcon:AddOnButton(function()
+		-- 				WindowMgr.Create("URelationsShowAward",i)
+		-- 			end,nil,0.9)
+		-- 		else
+		-- 			ImgIcon.SpriteName = "ys_004"
+		-- 		end
+		-- 	end
+		-- 	ImgIcon:SetNativeSize()
+		-- end
+
+		-- local ImgBar = moudle:Get("bar")
+		-- if data.surnum < AWARD_POS then
+		-- 	ImgBar.FillAmount = (data.surnum - 1)/(AWARD_NUM - 1)
+		-- else
+		-- 	ImgBar.FillAmount = (AWARD_POS - 1)/(AWARD_NUM - 1)
+		-- end
+
+		local GoLiansheng = moudle:Get("LsBg")
+		if data.surnum > 0 then
+			GoLiansheng.Activity = true
+			moudle:Get("LsText").Text = Csv.Text("relations_liansheng",{num = data.surnum})
+		else
+			GoLiansheng.Activity = false
+		end
+	end
+
+	local data = MRelations.FightData
+	local content = moudle:Get("buffContent")
+	content:DestroyChildren()
+	self.mAddTable = {}
+	local sortAdds = _P.GetSortTable(data.adds)
+	for k,v in pairs(sortAdds) do
+		local add = {}
+		local addMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Temporary_Item2")
+		local csvAdd = Csv.Relationsbonus[v.key]
+		local csvItem = Csv.Item[csvAdd.cost[1]]
+		addMoudle:Get("icon").SpriteName = csvAdd.icon
+		addMoudle:Get("Effect").Text = csvAdd.desc
+		addMoudle:Get("spend").Text = Csv.Text("relations_xiaohao")
+		addMoudle:Get("zunshi").SpriteName = csvItem.miniIcon
+		addMoudle:Get("spendNum").Text = csvAdd.cost[2]
+		addMoudle:Get("EnemyText").Text = Csv.Text("shop_buy")
+		local BtnBuy = addMoudle:Get("EnemyBtn")
+		BtnBuy:AddOnButton(function()
+			local isEnough,str = MBag.GetCostState(csvAdd.cost,true)
+			if isEnough then
+				if csvAdd.type == 3 then
+					local addValue = data.blood.maxblood * (csvAdd.value/10000) 
+					if data.blood.blood >= data.blood.maxblood then
+						CCommon.ShowError(Csv.Text("relations_bloodmore"))
+					elseif data.blood.blood + addValue  >= data.blood.maxblood then
+						CCommon.CheckTips(function(isSure,rg)
+							if isSure == true then
+								CRelations.CBuyAdd(v.key)
+							end
+						end,{content = Csv.Text("relations_bloodOut")},nil,"UItemCheckBox")
+					else
+						CRelations.CBuyAdd(v.key)
+					end
+				else
+					CRelations.CBuyAdd(v.key)
+				end
+			else
+				CCommon.ShowError(str)
+			end
+		end,nil,0.9)
+
+		local redPoint = addMoudle:Get("RedPoint")
+		local isEnough,str = MBag.GetCostState(csvAdd.cost,true)
+		redPoint.Activity = isEnough
+
+		addMoudle:Get("get").Activity = v.value > 0
+		BtnBuy.Activity = _P.GetAddBtnState(data.adds)
+
+		add.moudle = addMoudle
+		add.data = v
+		self.mAddTable[v.key] = add
+	end	
+
+	MRelations.lastMypoint = data.mypoint
+	self:Unlock()
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	local csvA = Csv.Relationsbonus[a.key]
+	local csvB = Csv.Relationsbonus[b.key]
+	if csvA.level == csvB.level then
+		return a.key < b.key
+	end
+	return csvA.level < csvB.level
+end
+
+function _P.GetAddBtnState(addTable)
+	if addTable ~= nil then
+		for k,v in pairs(addTable) do
+			if v.value > 0 then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+function _P.SetSelfData(self,moudle,data)
+	moudle:Get("attackText").Text = Csv.Text("company_blood",{num = data.attackadd})
+	moudle:Get("SkillText").Text = Csv.Text("company_blood",{num = data.skilladd})
+	moudle:Get("BloodNum").Text = Csv.Text("company_exp",{num = data.blood.blood,max = data.blood.maxblood})
+	moudle:Get("bar_0").FillAmount = data.blood.blood/data.blood.maxblood
+	-- if self.TweenBlood ~= nil then
+	-- 	self.TweenBlood:Kill()
+	-- end
+	-- if data.blood.blood/data.blood.maxblood <= 0.2 then
+	-- 	self.TweenBlood = moudle:Get("bar_0"):DOFade(0.4,0.8)
+	-- 	self.TweenBlood:SetEase(CS.DG.Tweening.Ease.Linear)
+	-- 	self.TweenBlood:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+	-- end
+end
+
+function _R.SetData(self)
+	_P.RefreshView(self)
+end
+
+function _R.ChangeAdd(self,data)
+	local moudle = self.mMoudle
+	-- local data = MRelations.FightData
+	-- if data ~= nil and moudle ~= nil then
+		-- _P.SetSelfData(self,moudle,data)
+	-- end
+	_R.OnBuy(self,data)
+end
+
+function _R.OnBuy(self,data)
+	if data ~= nil then
+		local moudle = self.mMoudle
+		_P.SetBuyAdd(self,moudle,data)
+		for k,v in pairs(self.mAddTable) do
+			v.moudle:Get("EnemyBtn").Activity = false
+		end
+		local add = self.mAddTable[data.id]
+		if add ~= nil then
+			local addMoudle = add.moudle
+			local get = addMoudle:Get("get")
+			SoundMgr.Play(10004)
+			local effectMoudle = CCommon.CreateEffect(addMoudle:Get("M_Lobby_Temporary_Item2"),EFFECTID,get.LocalPosition)
+			effectMoudle.SelfRect.SizeDelta = get.SizeDelta
+		end
+	end
+end
+
+function _P.SetBuyAdd(self,moudle,data)
+	local csvAdd = Csv.Relationsbonus[data.id]
+	if csvAdd ~= nil then
+		if csvAdd.type == 3 then
+			local slider = moudle:Get("bar_0")
+			local tweenBlood = slider:DOFillAmount(data.blood.blood/data.blood.maxblood,0.2)
+			tweenBlood:OnComplete(function(...)
+				moudle:Get("BloodNum").Text = Csv.Text("company_exp",{num = data.blood.blood,max = data.blood.maxblood})
+			end)
+		else
+			local widget
+			local addNum
+			if csvAdd.type == 1 then
+				widget = moudle:Get("attackText")
+				addNum = data.attackadd
+			elseif csvAdd.type == 2 then
+				widget = moudle:Get("SkillText")
+				addNum = data.skilladd
+			end
+			local t = widget:DOScale(1.5,0.3)
+			t:OnComplete(function()
+				widget.Text = Csv.Text("company_blood",{num = addNum})
+				widget:DOScale(1,0.3)
+			end)
+		end
+	end
+end
+
+function _P.ShowAwardFly(self,index)
+	local csv = Csv.RelationsBox[index]
+
+	local delay = 0
+	if csv.award ~= nil then
+		for _,v in pairs(csv.award) do
+			delay = delay +0.2
+			CCommon.ShowFlyItem(self.mMoudle.SelfRect, v[1], v[2],delay)
+		end
+	end
+end
+
+function _M:BeforeDestroy()
+	MRelations.isWaitingReport = false
+end
+
+function _R.OnLock(self)
+	self:Lock()
+end
+
+return _M

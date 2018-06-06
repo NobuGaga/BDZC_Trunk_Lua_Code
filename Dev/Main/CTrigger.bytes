@@ -1,0 +1,615 @@
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Libs.WindowMgr.WindowType.bytes#_M]
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
+--@RefType [Dev.VIPWelfare.MVipWelfare.bytes#_M]
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+--@RefType [Dev.Welfare.MWelfare.bytes#_M]
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = {}
+_M.CleanIndex = 0
+_M.OverGuideId = 0
+
+local SysId = Define.SysId
+local EventListenId = Define.EventListenId
+
+local isDebug = false
+
+function _M.OnUiDestory(funcId)
+	local closeParam = _M.WaitUiCloseParam
+	if closeParam ~= nil and closeParam.FuncId == funcId then
+		_M.WaitUiCloseParam = nil
+		_M.OnEventDone(Csv.Trigger[closeParam.TriggerId])
+		return true
+	end
+
+	return false
+end
+
+function _M.ModuleClean()
+	_M.WaitUiCloseParam = nil
+	_M.OverGuideId = 0
+	_M.CleanIndex = _M.CleanIndex + 1
+end
+
+function _M.OnGuideDone(guideId)
+	if _M.OverGuideId == guideId then
+		_M.OverGuideId = 0
+	end
+end
+
+_M.WindowType2Index = 
+{
+	--所有界面
+	[WindowType.Default] = 0,
+	--场景界面(世界地图和公司地图)
+	[WindowType.Scene] = 1,
+	--主界面
+	[WindowType.Main] = 2,
+	--功能UI界面
+	[WindowType.UI] = 3,
+	--第一层Tips
+	[WindowType.Tips1] = 4,
+	--第二层Tips
+	[WindowType.Tips2] = 5,
+	--第三层Tips
+	[WindowType.Tips3] = 6,
+	--确定框
+	[WindowType.Box] = 7,
+
+
+	[WindowType.Message] = 8,
+	[WindowType.Guide] = 9,
+	[WindowType.Notice] = 10,
+	[WindowType.Loading] = 11,
+}
+_M.WindowIndex2Type = {}
+for k,v in pairs(_M.WindowType2Index) do
+	_M.WindowIndex2Type[v] = k
+end
+
+--事件类型
+_M.EventType = 
+{
+	--执行引导 **等待完成 (引导表id)
+	Guide = 1,
+	--剧情对话 **等待完成 (剧情对话表id)
+	Story = 2,
+	--UI抖动 **等待完成 (动画名)
+	Shake = 3,
+	--闪烁 **等待完成 {"darkTime":0.6,"darkDo":[1,2,3],"lightTime":0.4}
+	Twinkle = 4,
+	--背景音乐 **立即完成 (Sound表id)
+	Music = 5,
+	--声音 **立即完成 (Sound表id)
+	Sound = 6,
+	--特效 **立即完成 {"id":1001,"pos":[100,100],"dura":12,"textMap":{"nodeName1":"xxxx"},"spMap":{"nodeName1":"xxxx"}}
+	Effect = 7,
+	--看向某个功能按钮 **立即完成 (Func表id 只针对于大地图和公司地图下子功能id)
+	LookAtFunc = 8,
+	--打开界面 **立即完成 (Func表id)
+	OpenWin = 9,
+	--关闭界面 **立即完成 (界面类型)
+	CloseWin = 10,
+	--输入事件控制 **立即完成 (0关闭 1打开)
+	LockInput = 11,
+	--等待一段时间进行下一步 **等待完成 (等待的时间)
+	Delay = 12,
+
+	--打开战斗的起航界面 (Part表的id)
+	BattleStart = 13,
+
+	--等待界面关闭 **等待完成 (Func表id)
+	WaitUiClose = 15,
+}
+
+_M.EventFunc = 
+{
+	--执行引导
+	[_M.EventType.Guide] = function (csvLine)
+		WindowMgr.Create("UGuide", csvLine.eventParam, function( ... )
+			_M.OnEventDone(csvLine)
+		end)
+	end,
+	--对话
+	[_M.EventType.Story] = function (csvLine)
+		MMain.EnqueueWaitStory(3,0,csvLine.eventParam, function( ... )
+			_M.OnEventDone(csvLine)
+		end)
+		WindowMgr.Call("UMain","ShowStory")
+	end,
+	--抖动
+	[_M.EventType.Shake] = function (csvLine)
+		local winBase = JGuiManager.GuiRoot.WindowBase
+		local tween = winBase.CachedTran:GetJTweener(csvLine.eventParam)
+		if tween == nil then
+			error(string.format( "CTrigger do Shake error, id:%d, name:%s", csvLine.id, csvLine.eventParam ))
+			_M.OnEventDone(csvLine)
+		else
+			tween:SetOnComplete(function ( ... )
+				_M.OnEventDone(csvLine)
+			end)
+			tween:Play()
+		end
+	end,
+	--闪烁 {"darkTime":0.6,"darkDo":[1,2,3],"lightTime":0.4,"isLock":1}
+	[_M.EventType.Twinkle] = function (csvLine)
+		local param = csvLine.eventParam
+		local isLock = false
+		if param.isLock == 1 then
+			isLock = true
+		end
+		CCommon.PlayTwinkle(param.darkTime, param.lightTime, isLock, function ( ... )
+			if param.darkDo ~= nil then
+				for _,v in pairs(param.darkDo) do
+					_M.Trigger(v)
+				end
+			end
+		end, function ( ... )
+			_M.OnEventDone(csvLine)
+		end)
+	end,
+	--声音
+	[_M.EventType.Music] = function (csvLine)
+		SoundMgr.PlayMusic(csvLine.eventParam)
+		_M.OnEventDone(csvLine)
+	end,
+	--声音
+	[_M.EventType.Sound] = function (csvLine)
+		SoundMgr.Play(csvLine.eventParam)
+		_M.OnEventDone(csvLine)
+	end,
+	--特效  {"id":1001,"pos":[100,100],"dura":12,"textMap":{"nodeName1":"xxxx"},"spMap":{"nodeName1":"xxxx"}}
+	[_M.EventType.Effect] = function (csvLine)
+		local param = csvLine.eventParam
+		local pos = param.pos
+		if pos ~= nil then
+			pos = Vector2(pos[1], pos[2])
+		end
+		CCommon.PlayEffect(param.id,pos,nil,param.spMap,param.textMap,param.dura)
+		_M.OnEventDone(csvLine)
+	end,
+	--看向某个功能按钮 (Func表id)
+	[_M.EventType.LookAtFunc] = function (csvLine)
+		local funcCsv = Csv.Func[csvLine.eventParam]
+		local fid = funcCsv.fid
+		if fid == Define.SysId.World then
+			if not WindowMgr.IsCreated("UWorldMap") then
+				WindowMgr.Create("UWorldMap")
+			end
+			WindowMgr.Call("UWorldMap","LookAtFunc",csvLine.eventParam)
+		elseif fid == Define.SysId.Home then
+			if not WindowMgr.IsCreated("UHomeMap") then
+				WindowMgr.Create("UHomeMap")
+			end
+			WindowMgr.Call("UHomeMap","LookAtFunc",csvLine.eventParam)
+		else
+			error(string.format( "CTrigger do LookAtFunc error, id:%d, funcId:%d", csvLine.id, csvLine.eventParam ))
+		end
+		_M.OnEventDone(csvLine)
+	end,
+	--打开界面 (Func表id)
+	[_M.EventType.OpenWin] = function (csvLine)
+		WindowOpen.Open(csvLine.eventParam)
+		_M.OnEventDone(csvLine)
+	end,
+	--关闭界面 (界面类型)
+	[_M.EventType.CloseWin] = function (csvLine)
+		WindowMgr.DestroyForType(_M.WindowIndex2Type[csvLine.eventParam])
+		_M.OnEventDone(csvLine)
+	end,
+	--输入事件控制
+	[_M.EventType.LockInput] = function (csvLine)
+		local state = false
+		if csvLine.eventParam == 1 then
+			state = true
+		end
+		CCommon.LockInput(state)
+		_M.OnEventDone(csvLine)
+	end,
+	--等待一段时间进行下一步
+	[_M.EventType.Delay] = function (csvLine)
+		TimeDelay.DelayCall(csvLine.eventParam, true, function ( ... )
+			_M.OnEventDone(csvLine)
+		end)
+	end,
+	[_M.EventType.BattleStart] = function (csvLine)
+		WindowMgr.Create("UBattlePartStart", csvLine.eventParam, function()
+			_M.OnEventDone(csvLine)
+		end)
+	end,
+	--等待界面关闭 **等待完成 (Func表id)
+	[_M.EventType.WaitUiClose] = function(csvLine)
+		_M.WaitUiCloseParam =
+		{
+			FuncId = csvLine.eventParam,
+			TriggerId = csvLine.id
+		}
+	end,
+}
+
+--条件类型
+_M.ConditionType = 
+{
+	--功能开放 (Func表id)
+	FuncOpen = 1,
+	--功能没有开放 (Func表id)
+	FuncNotOpen = 2,
+	--引导完成 (Guide表id)
+	GuideDone = 3,
+	--引导没有完成 (Guide表id)
+	GuideNotDone = 4,
+	--打开了某个指定界面 (Func表id)
+	WinOpened = 5,
+	--某个指定界面没有打开 (Func表id)
+	WinNotOpened = 6,
+	--打开了某个类型界面 (界面类型)
+	WinOpenedForType = 7,
+	--某个指定界面没有打开 (界面类型)
+	WinNotOpenedForType = 8,
+	--玩家等级>= (等级)
+	PlayerLevel = 9,
+	--指定任务已经完成 (任务id)
+	TaskDone = 10,
+	--指定任务没有完成 (任务id)
+	TaskNotDone = 11,
+}
+_M.ConditionFunc = 
+{
+	--功能开放
+	[_M.ConditionType.FuncOpen] = function (condParam)
+		if not MMain.FuncIsOpen(condParam) then
+			return false
+		end
+		return true
+	end,
+	--功能没有开放
+	[_M.ConditionType.FuncNotOpen] = function (condParam)
+		if MMain.FuncIsOpen(condParam) then
+			return false
+		end
+		return true
+	end,
+	--引导完成
+	[_M.ConditionType.GuideDone] = function (condParam)
+		if not MMain.GuideIsDone(condParam) then
+			return false
+		end
+		return true
+	end,
+	--引导没有完成
+	[_M.ConditionType.GuideNotDone] = function (condParam)
+		if MMain.GuideIsDone(condParam) then
+			return false
+		end
+		return true
+	end,
+	--打开了某个指定界面
+	[_M.ConditionType.WinOpened] = function (condParam)
+		if not WindowMgr.IsCreatedForSysId(condParam) then
+			return false
+		end
+		return true
+	end,
+	--某个指定界面没有打开
+	[_M.ConditionType.WinNotOpened] = function (condParam)
+		if WindowMgr.IsCreatedForSysId(condParam) then
+			return false
+		end
+		return true
+	end,
+	--打开了某个类型界面
+	[_M.ConditionType.WinOpenedForType] = function (condParam)
+		if not WindowMgr.IsCreatedForType(_M.WindowIndex2Type[condParam]) then
+			return false
+		end
+		return true
+	end,
+	--某个指定界面没有打开
+	[_M.ConditionType.WinNotOpenedForType] = function (condParam)
+		if WindowMgr.IsCreatedForType(_M.WindowIndex2Type[condParam]) then
+			return false
+		end
+		return true
+	end,
+	--玩家等级>=
+	[_M.ConditionType.PlayerLevel] = function (condParam)
+		if MPlayer.GetLevel() < condParam then
+			return false
+		end
+		return true
+	end,
+	--指定任务已经完成
+	[_M.ConditionType.TaskDone] = function (condParam)
+		if not MQuest.TaskIsDone(condParam) then
+			return false
+		end
+		return true
+	end,
+	--指定任务没有完成
+	[_M.ConditionType.TaskNotDone] = function (condParam)
+		if MQuest.TaskIsDone(condParam) then
+			return false
+		end
+		return true
+	end,
+}
+
+--触发类型
+_M.TriggerFunc = 
+{
+	--打开界面 (SysId)
+	[EventListenId.CreateWindow] = function (line, sysId)
+		if line.listenParam ~= sysId then
+			return false
+		end
+		return true
+	end,
+	--关闭界面 (SysId)
+	[EventListenId.DestroyWindow] = function (line, sysId)
+		if line.listenParam ~= sysId then
+			return false
+		end
+		return true
+	end,
+	--打开界面 (界面类型)
+	[EventListenId.CreateWindowForType] = function (line, winType)
+		if line.listenParam ~= _M.WindowType2Index[winType] then
+			return false
+		end
+		return true
+	end,
+	--关闭界面 (界面类型)
+	[EventListenId.DestroyWindowForType] = function (line, winType)
+		if line.listenParam ~= _M.WindowType2Index[winType] then
+			return false
+		end
+		return true
+	end,
+	--功能开放 [sysId]
+	[EventListenId.FuncOpenEvent] = function (line, sysId, isOpen)
+		if not isOpen or line.listenParam ~= sysId then
+			return false
+		end
+		return true
+	end,
+	--获得新美女 (grilId)
+	[EventListenId.GetGirl] = function (line, grilId)
+		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam ~= grilId then
+			return false
+		end
+		return true
+	end,
+	--获得新员工 (staffId)
+	[EventListenId.GetStaff] = function (line, staffId)
+		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam ~= staffId then
+			return false
+		end
+		return true
+	end,
+	--进入游戏
+	[EventListenId.EnterGame] = function (line)
+		return true
+	end,
+	--第一次进入游戏
+	[EventListenId.FirstEnterGame] = function (line)
+		return true
+	end,
+	--Story剧情播放结束
+	[EventListenId.StoryDone] = function (line, storyId)
+		if line.listenParam ~= storyId then
+			return false
+		end
+		return true
+	end,	
+	--主线任务前往触发
+	[EventListenId.MainQuestOpen] = function (line, questId)
+		if line.listenParam ~= questId then
+			return false
+		end
+		return true
+	end,
+	--收购成功界面触发 (视频会议id)
+	[EventListenId.GetPatrol] = function (line, patrolId)
+		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam ~= patrolId then
+			return false
+		end
+		return true
+	end,
+}
+
+function _M.OnEventDone(csvLine)
+	if csvLine.next ~= nil then
+		for _,v in pairs(csvLine.next) do
+			_M.Trigger(v)
+		end		
+	end
+end
+
+function _M.ExecEvent(csvLine, isGM)
+	local doExec = function(csvLine)
+		if _M.Condition(csvLine) then
+			if isDebug then
+				print(csvLine.id, "ExecEvent::doExec-->>", _M.OverGuideId, csvLine.isGuideStage )
+			end
+			if csvLine.isGuideStage ~= nil and csvLine.isGuideStage > 0 then
+				if _M.OverGuideId > 0 and _M.OverGuideId ~= csvLine.isGuideStage then
+					return
+				end
+				_M.OverGuideId = csvLine.isGuideStage
+			end
+			if csvLine.event ~= nil then
+				CS.Utility.LogPoint.LogPost(14, csvLine.id)
+				local eventFunc = _M.EventFunc[csvLine.event]
+				if eventFunc ~= nil then
+					eventFunc(csvLine)
+				else
+					_M.OnEventDone(csvLine)
+				end
+			else
+				_M.OnEventDone(csvLine)
+			end
+			return true
+		end
+		return false
+	end
+
+	if isGM then
+		doExec(csvLine)
+		return
+	end
+
+	if not _M.Condition(csvLine) then
+		return
+	end
+
+	if csvLine.isGuideStage ~= nil and csvLine.isGuideStage > 0 then
+		if _M.OverGuideId > 0 and _M.OverGuideId ~= csvLine.isGuideStage then
+			return
+		end
+		MMain.EnqueueWaitStory(4,csvLine.id,0, function( ... )
+			if not doExec(csvLine) then
+				WindowMgr.Call("UMain","ShowStory")
+			end
+		end)
+		WindowMgr.Call("UMain","ShowStory")
+	else
+		doExec(csvLine)
+	end	
+end
+
+function _M.Condition(csvLine)
+	if csvLine.condition ~= nil then
+		local conditionFunc
+		for k,v in pairs(csvLine.condition) do
+			conditionFunc = _M.ConditionFunc[k]
+			if conditionFunc ~= nil and not conditionFunc(v) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+function _M.Trigger(triggerId, isGM)
+	local line = Csv.Trigger[triggerId]
+	if line ~= nil then
+		_M.ExecEvent(line, isGM)
+	else
+		error(string.format("find csvline from Trigger error, triggerId:%d!!!,", triggerId))
+	end
+end
+
+function _M.Listen(eventId, ...)
+	if eventId == EventListenId.DestroyWindow then
+		_M.OnUiDestory(...)
+	end
+
+	local csvLines = Csv.TriggerMap[eventId]
+	if csvLines ~= nil and #csvLines > 0 then
+		local triggerFunc = _M.TriggerFunc[eventId]
+		local execLines = {}
+		for _,line in pairs(csvLines) do
+			if triggerFunc == nil or triggerFunc(line, ...) then
+				table.insert(execLines, line)
+			end			
+		end
+		table.sort(execLines, function(a, b)
+			return a.id < b.id
+		end)
+		for _,v in pairs(execLines) do
+			_M.ExecEvent(v)
+		end
+	end
+end
+
+--当获取美女的时候调用
+function _M.OnGetNewGirl(girlId)
+	local csv = Csv.Girl[girlId]
+	if csv.story ~= nil then
+		MMain.EnqueueWaitStory(1,girlId,csv.story)
+		WindowMgr.Call("UMain","ShowStory")
+	end	
+end
+
+--当认识美女的时候调用
+function _M.OnGetKnownGirl(girlId)
+	local csv = Csv.Girl[girlId]
+	if csv.knownStory ~= nil then
+		
+		if csv.showSysid == Define.SysId.VIPWelfare then
+			MVipWelfare.EnqueueWaitShow(6,girlId,csv.knownStory)
+			WindowMgr.Call("UVipWelfare","ShowMoudle")
+		elseif csv.showSysid == Define.SysId.FirstRecharge then
+			MWelfare.EnqueueWaitShow(6,girlId,csv.knownStory)
+			WindowMgr.Call("UFirstRecharge","ShowMoudle")
+		else
+			MMain.EnqueueWaitStory(5,girlId,csv.knownStory)
+			WindowMgr.Call("UMain","ShowStory")
+		end
+		
+	end	
+end
+
+--当获取到员工的时候调用
+function _M.OnGetNewStaff(staffId)
+	local csv = Csv.Personnel[staffId]
+	if csv.story ~= nil then
+		if csv.showSysid == Define.SysId.VIPWelfare then
+			MVipWelfare.EnqueueWaitShow(2,staffId,csv.story)
+			WindowMgr.Call("UVipWelfare","ShowMoudle")
+		elseif csv.showSysid == Define.SysId.FirstRecharge then
+			MWelfare.EnqueueWaitShow(2,staffId,csv.story)
+			WindowMgr.Call("UFirstRecharge","ShowMoudle")
+		else
+			MMain.EnqueueWaitStory(2,staffId,csv.story)
+			WindowMgr.Call("UMain","ShowStory")
+		end
+	end	
+end
+
+--获取座驾的时候调用(只在特权界面)
+function _M.OnGetNewCar(carData)
+	local csv = Csv.Car[carData.carid]
+	if csv.showSysid == Define.SysId.VIPWelfare then
+		MVipWelfare.EnqueueWaitShow(7,carData.carid,csv.story,nil,carData)
+		WindowMgr.Call("UVipWelfare","ShowMoudle")
+	elseif csv.showSysid == Define.SysId.FirstRecharge then
+		MWelfare.EnqueueWaitShow(7,carData.carid,csv.story,nil,carData)
+		WindowMgr.Call("UFirstRecharge","ShowMoudle")
+	end
+end
+
+--获取飞机的时候调用(只在特权界面)
+function _M.OnGetNewFly(flyId)
+	local csv = Csv.AircraftSkin[flyId]
+	
+	if csv.showSysid == Define.SysId.VIPWelfare then
+		MVipWelfare.EnqueueWaitShow(8,flyId,csv.story)
+		WindowMgr.Call("UVipWelfare","ShowMoudle")
+	elseif csv.showSysid == Define.SysId.FirstRecharge then
+		MWelfare.EnqueueWaitShow(8,flyId,csv.story)
+		WindowMgr.Call("UFirstRecharge","ShowMoudle")
+	end
+end
+
+function _M.Init( ... )
+	EventCenter.RegistAlwaysCallEvent(_M.Listen)
+end
+
+return _M

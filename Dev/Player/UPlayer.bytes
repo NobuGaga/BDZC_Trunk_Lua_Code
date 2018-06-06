@@ -1,0 +1,303 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MParliament = JRequire "Dev.Parliament.MParliament"
+local CParliament = JRequire "Dev.Parliament.CParliament"
+local MMain = JRequire "Dev.Main.MMain"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+local btnActorId = 10003
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+local SHOW_ASSET_LIST = 
+{
+	[Define.AssetsType.Record] = 1,
+	[Define.AssetsType.Coin] = 2,
+	[Define.AssetsType.Food] = 3,
+	[Define.AssetsType.Soldier] = 4,
+}
+
+local LEVEL_UP_EFFECT_ID = 7
+
+function _P.RefreshName(self)
+	self.Name.Text = MPlayer.GetName()
+end
+
+function _P.RefreshLevel(self)
+	local nowLevel = MPlayer.GetLevel() 
+	local csv = Csv.Company[nowLevel]
+	self.Level.Text = csv.name
+	local tmp = {num = MPlayer.GetExp()}
+	if csv.cost == nil or csv.cost <= 0 then
+		tmp.max = "MAX"
+	else
+		tmp.max = csv.cost
+	end
+	self.AssetInfo[Define.AssetsType.Record].Text = Csv.Text("company_exp",tmp)
+	if self.LastLevel ~= nowLevel then
+		WindowMgr.Create("UPlayerLevelUpTips", self.LastLevel)
+		self.LastLevel = nowLevel
+	end	
+end
+
+function _P.RefreshAvatar(self)
+	if self.head_prefab ~= nil then
+        self.head_prefab:Destroy()
+        self.head_prefab = nil
+    end
+    if self.body_prefab ~= nil then
+        self.body_prefab:Destroy()
+        self.body_prefab = nil
+    end
+    local headPrefab = MPlayer.GetHeadPrefabID()
+    local bodyPrefab = MPlayer.GetBodyPrefabID()
+	-- print(MPlayer.GetName(), MPlayer.GetAvatar().head, MPlayer.GetAvatar().body, "--------------------Self--------------------")
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        self.Body.SpriteName = ""
+        self.Head.SpriteName = ""
+
+        self.body_prefab,self.head_prefab = CCommon.CreateRole(self.MaskNode, bodyPrefab, headPrefab, CCommon.ActorFieldMap.player)
+    else
+        self.Body.SpriteName = MPlayer.GetBodySp()
+		self.Head.SpriteName = MPlayer.GetHeadSp()
+    end	
+end
+
+function _P.RefreshAttr(self)
+	for k,_ in pairs(Define.AttrType) do
+		self.AttrInfo[k].Text = MPlayer.GetAttr(k)
+	end
+
+	self.Power.Text = Csv.Text("palyer_myPower",{num = tostring(MPlayer.GetPower())})
+end
+
+function _P.RefreshAssets(self)
+	for itemId,_ in pairs(SHOW_ASSET_LIST) do
+		if itemId ~= Define.AssetsType.Record then
+			self.AssetInfo[itemId].Text = tostring(MBag.GetItemNum(itemId))
+		end		
+	end
+end
+
+function _P.RefreshVip(self)
+	self.Vip.SpriteNameAutoScale = "vip_"..MPlayer.GetVip()
+end
+
+--称号刷新
+function _P.RefreshTitle(self)
+	local titleID = MPlayer.GetTitleID()
+	if titleID ~= nil then
+		self.TitleBG.Activity = true
+		local csvTitle = Csv.Title[titleID]
+		if csvTitle ~= nil then
+			self.TitleText.Text = csvTitle.name
+		else
+			self.TitleBG.Activity = false
+		end
+	else
+		self.TitleBG.Activity = false
+	end
+end
+
+function _P.RefreshAll(self)
+	_P.RefreshName(self)
+	_P.RefreshLevel(self)
+	_P.RefreshAvatar(self)
+	_P.RefreshAttr(self)
+	_P.RefreshAssets(self)
+	_P.RefreshVip(self)
+	_P.RefreshTitle(self)
+end
+
+function _M:OnCreate()
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_Role_UMain")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("scale_btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UPlayerLevelUp")
+	end, nil, 0.9)
+
+	moudle:Get("C_Text").Text = Csv.Text("palyer_title")
+
+	moudle:Get("text2").Text = Csv.Text("player_ID", {id = MPlayer.GetId()})
+
+	self.Power = moudle:Get("power")
+	self.Body = moudle:Get("body")
+	self.Head = moudle:Get("head")
+	self.MaskNode = moudle:Get("MASK")
+	self.head_prefab = nil
+    self.body_prefab = nil
+
+	self.Vip = moudle:Get("vip")
+	self.Name = moudle:Get("name")
+	self.Level = moudle:Get("text1")
+	self.ChooseRoot = moudle:Get("scale_choose")
+	self.LastLevel = MPlayer.GetLevel()
+	self.TitleBG = moudle:Get("scaleBG")
+	self.TitleText = moudle:Get("scaleText")
+	--注册小红点
+	self:RegistRedpoint(self.ChooseRoot, self._SysId)
+	--可以升级特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), btnActorId)
+
+	self.AttrInfo = {}
+	for k,v in pairs(Define.AttrType) do
+		moudle:Get("attrTitle" .. v).Text = MPlayer.Attr2Str(k)
+		self.AttrInfo[k] = moudle:Get("attrNum" .. v)
+	end
+
+	self.AssetInfo = {}
+	local csvLine
+	for itemId,index in pairs(SHOW_ASSET_LIST) do
+		csvLine = Csv.Item[itemId]
+		moudle:Get("assetIcon" .. index).SpriteName = csvLine.miniIcon
+		moudle:Get("assetName" .. index).Text = csvLine.name .. ":"
+		self.AssetInfo[itemId] = moudle:Get("assetNum" .. index)
+	end
+
+	_P.RefreshAll(self)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAttr(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerNameUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshName(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshVip(self)
+		end
+	end)
+
+	_P.RefreshDress(self)
+	self.TitleTable = {}
+	_P.RefreshTitleList(self)
+
+	local btnMakeUp = moudle:Get("Cosmetology")
+	btnMakeUp.Activity = MMain.FuncIsOpen(Define.SysId.MakeUp)
+	btnMakeUp:AddOnButton(function()
+		WindowOpen.Open(Define.SysId.MakeUp)
+	end,nil,0.9)
+end
+
+function _P.RefreshDress(self)
+	local moudle =self.Moudle
+	local car = moudle:Get("car")
+	local yacht = moudle:Get("yacht")
+	local air = moudle:Get("air")
+	local girl1 = moudle:Get("girl1")
+	local girl2 = moudle:Get("girl2")
+
+	local dressTable = MPlayer.GetDress()
+	if dressTable[Define.SysId.Car] ~= nil then
+		car.SpriteName = Csv.Item[dressTable[Define.SysId.Car]].asset
+	end
+	if dressTable[Define.SysId.Yacht] ~= nil then
+		yacht.SpriteName = Csv.Item[dressTable[Define.SysId.Yacht]].asset
+	end
+	if dressTable[Define.SysId.Aircraft] ~= nil then
+		air.SpriteName = Csv.Item[dressTable[Define.SysId.Aircraft]].asset
+	end
+	if dressTable[Define.SysId.Girl] ~= nil then
+		girl1.SpriteName = Csv.Item[dressTable[Define.SysId.Girl]].asset
+	end
+	if dressTable[Define.SysId.Manage] ~= nil then
+		girl2.SpriteName = Csv.Item[dressTable[Define.SysId.Manage]].asset
+	end
+end
+
+function _P.RefreshTitleList(self)
+	local moudle =self.Moudle
+	local content = moudle:Get("content")
+	local titleList = MParliament.GetTitleList()
+	local titleTable = {}
+	if titleList ~= nil then
+		for k,v in pairs(titleList) do 
+			local titleMoudle = JGuiManager.GetMoudle(content,"M_Role_UMain_Item")
+			local csvItem = Csv.Item[v.titleID]
+			if csvItem ~= nil then
+				local icon = titleMoudle:Get("Icon")
+				icon.SpriteName = csvItem.icon
+				titleMoudle:Get("name").Text = csvItem.name
+				icon:AddOnButton(function()
+					_P.OnClickChangeTitle(self,v.titleID)
+				end,nil,1)
+			end
+			titleTable[v.titleID] = titleMoudle
+		end
+	end
+	self.TitleTable = titleTable
+
+	_P.ChangSelect(self)
+end
+
+function _P.ChangSelect(self)
+	local moudle = self.Moudle
+	local ImgLight = moudle:Get("Ing")
+	local titleId = MPlayer.GetTitleID()
+	if titleId ~= nil and titleId > 0 then
+		local titleMoudle = self.TitleTable[titleId]
+		if titleMoudle ~= nil then
+			ImgLight.Activity = true
+			ImgLight:SetParent(titleMoudle.SelfRect.CachedTran)
+			ImgLight.LocalPosition = Vector2(0,0)
+		else
+			ImgLight.Activity = false
+		end
+	else
+		ImgLight.Activity = false
+	end
+end
+
+function _P.OnClickChangeTitle(self,titleID)
+	if titleID ~= MPlayer.GetTitleID() then
+		CParliament.UseTitleItem(titleID, true)
+	end
+end
+
+function _R.UpdateTitle(self)
+	_P.ChangSelect(self)
+	_P.RefreshTitle(self)
+	_P.RefreshAvatar(self)
+end
+
+return _M

@@ -1,0 +1,102 @@
+--商会副本已经击杀时显示去请求伤害排行的界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+function _R.OnBattleReport(self, data)
+	local battleCsv = Csv.CommerceBattle[self.BattleId]
+	local moudle = self.Moudle
+	moudle:Get('notis').Text = Csv.Text("commerce_battle26", {
+		name = data.killer,
+		battle = battleCsv.name,
+		exp = battleCsv.reward2
+	})
+	local isHave = false
+	if data.rank ~= nil then
+		local content = moudle:Get("content")
+		content:DestroyChildren()
+		local myId = MPlayer.GetId()
+		for _,v in pairs(data.rank) do
+			local oneMoudle
+			if v.rank == 1 then
+				oneMoudle = self:CreateMoudle(content, "M_Gang_Ranking1")
+			elseif v.rank == 2 then
+				oneMoudle = self:CreateMoudle(content, "M_Gang_Ranking2")
+			elseif v.rank == 3 then
+				oneMoudle = self:CreateMoudle(content, "M_Gang_Ranking3")
+			else
+				oneMoudle = self:CreateMoudle(content, "M_Gang_Ranking4")
+				oneMoudle:Get("rank").Text = tostring(v.rank)
+			end
+			oneMoudle:Get("name").Text = v.name
+			oneMoudle:Get("guimo").Text = tostring(v.hurt)
+			oneMoudle:Get("value").Text = tostring(v.contribution)
+
+			if v.id == myId then
+				moudle:Get("HurtText").Text = tostring(v.hurt)
+				moudle:Get("RankText").Text = tostring(v.rank)
+				moudle:Get("GongXianText").Text = tostring(v.contribution)
+				isHave = true
+			end
+		end
+	end
+
+	if not isHave then
+		moudle:Get("HurtText").Text = Csv.Text('staff_none')
+		moudle:Get("RankText").Text = Csv.Text('staff_none')
+		moudle:Get("GongXianText").Text = Csv.Text('staff_none')
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(battleId)
+	CCommerce.BattleReportReq(battleId)
+	self.BattleId = battleId
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Ranking")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_battle21")
+	moudle:Get("ranking").Text = Csv.Text("rank_rank")
+	moudle:Get("name").Text = Csv.Text("rank_name")
+	moudle:Get("Fraction").Text = Csv.Text("commerce_battle27")
+	moudle:Get("JiFen").Text = Csv.Text("commerce_battle22")
+	moudle:Get("OwnName").Text = Csv.Text("commerce_battle23")
+	moudle:Get("OwnHurt").Text = Csv.Text("commerce_battle24")
+	moudle:Get("OwnRank").Text = Csv.Text("rank_rankT")
+	moudle:Get("OwnGongXian").Text = Csv.Text("commerce_battle25")
+	moudle:Get("NameText").Text = MPlayer.GetName()
+end
+
+return _M

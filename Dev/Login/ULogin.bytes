@@ -1,0 +1,179 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _R = {}
+local _P = {}
+
+local FX_ID = 10060
+local LogoSize = Vector2(512, 256)
+local LoadingSize = Vector2(512, 1024)
+
+function _M:BeforeDestroy(...)
+	WindowMgr.Call("ULoginInput", "Close")
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCallLogin()
+	SoundMgr.Play(10001)
+	CLogin.DoLogin(MLogin.Account, MLogin.Password)
+end
+
+--刷新服务器信息
+function _R.RefreshServerInfo(self)
+	self.SrvName.Text = MLogin.SelectServer.name
+	MLogin.SetSrvStatusName(MLogin.SelectServer.status, self.SrvStatus, self.RedStatus)
+end
+
+function _R.RefreshLoginState(self)
+	local isNoLogin = MLogin.Status == MLogin.ELoginStatus.NotLogin
+	self.Btn_SelectSrv.Activity = not isNoLogin
+	self.Btn_Login.Activity = not isNoLogin
+	self.Btn_SDK_Login.Activity = isNoLogin
+
+	if isNoLogin then
+		self.LoginBtnCtrl.Activity = false
+		self.mMoudle.SelfRect:AddOnTime(function ( ... )
+			self.LoginBtnCtrl.Activity = true
+		end, nil, 2)
+		self.TxLogin.Text = Csv.Text("login_btn1")
+	else
+		self.TxLogin.Text = Csv.Text("login_btn2")
+		_R.RefreshServerInfo(self)
+		--检查是否弹出隐私政策的界面
+		_P.CheckPrivacy()
+	end
+end
+
+function _R.Close(self)
+	self:Destroy()
+end
+
+function _P.CheckPrivacy()
+	if GameSetting.IsShowPrivacy then
+		local isHaveKey = CS.UnityEngine.PlayerPrefs.HasKey("_login_Privacy_")
+		if isHaveKey then
+			return
+		else
+			WindowMgr.Create("UPrivacy")
+		end
+	end
+end
+
+--界面构建
+function _M:OnCreate(reloginType)
+	GameSetting.IsOnGame = false
+	CS.Net.LuaConnect.AutoReconnect = false
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_Login_UMain")
+	self.mMoudle = moudle
+	
+	self.LoginBtnCtrl = moudle:Get("LoginBtnCtrl")
+	self.Btn_SelectSrv = moudle:Get("Btn_SelectSrv")
+	self.Btn_SelectSrv:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("USelectServer")
+	end, nil, 0.9)
+	self.Btn_SwitchAccount = moudle:Get("Btn_SwitchAccount")
+	local isShowSwitch = true
+	if Define.PlatformType.Editor ~= GameSetting.Platform then
+		isShowSwitch = self.Btn_SwitchAccount.Activity and GameSetting.isHasSwitchAccount
+	end
+	self.Btn_SwitchAccount.Activity = isShowSwitch
+	if GameSetting.isHasSwitchAccount then
+		self.Btn_SwitchAccount:AddOnButton(function()
+			SoundMgr.Play(10001)
+			SDKMgr.ReqSwitchAccount()
+		end, nil, 0.9)
+	end
+	local Btn_GM = moudle:Get("Btn_GM")
+	Btn_GM.Activity = Define.PlatformType.Editor == GameSetting.Platform
+	Btn_GM:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Login)
+	end, nil, 1.2)
+	self.TxLogin = moudle:Get("TxLogin")
+	self.Btn_Login = moudle:Get("Btn_Login")
+	self.Btn_Login:AddOnButton(function ()
+		SoundMgr.Play(9000)
+		if MLogin.Status == MLogin.ELoginStatus.NotLogin then
+			SDKMgr.ReqLogin()
+		else
+			CLogin.DoLogin(MLogin.Account, MLogin.Password)
+		end
+	end, nil, 0.9)
+	self.Btn_Login.Activity = false
+
+	moudle:Get("TxSDKLogin").Text = Csv.Text("login_btn1")
+	self.Btn_SDK_Login = moudle:Get("Btn_SDK_Login")
+	self.Btn_SDK_Login:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		SDKMgr.ReqLogin()
+	end, nil, 0.9)
+
+	moudle:Get("text_a").Text = Csv.Text("login_switch_acc")
+	moudle:Get("text_b").Text = Csv.Text("login_call_gm")
+
+	--获取&刷新服务器信息
+	self.SrvStatus = moudle:Get("SrvStatus")
+	self.RedStatus = moudle:Get("red")
+	self.SrvStatus.Text = Csv.Text("login_srv_1")
+	self.SrvName = moudle:Get("SrvName")
+	self.SrvName.Text = Csv.Text("login_def_srv_name")
+	moudle:Get("text3").Text = Csv.Text("login_change_srv")
+	--防沉迷
+	moudle:Get("FangCM").Text = Csv.Text("login_FangCM")
+	_R.RefreshLoginState(self)
+
+	if reloginType == GameSetting.ReLoginType.ChangeAccount then
+		SDKMgr.ReqSwitchAccount()
+	elseif reloginType == GameSetting.ReLoginType.ToLogin then
+		SDKMgr.ReqLogin()
+	end
+
+	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, "logo.png", 
+											LogoSize.x, LogoSize.y, 
+											function (sp)
+												if moudle ~= nil then
+													moudle:Get("logo").Sprite = sp
+												end
+											end)
+
+	if not GameSetting.IsiOSCommit then
+		CCommon.CreateEffect(moudle:Get("FxNode"), FX_ID)
+		CCommon.CreateEffect(moudle:Get("DBNode"), 20001)
+	else
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, "loading.png", 
+												LoadingSize.x, LoadingSize.y, 
+												function (sp)
+													if moudle ~= nil then
+														moudle:Get("bg").Sprite = sp
+													end
+												end)
+	end
+end
+
+return _M

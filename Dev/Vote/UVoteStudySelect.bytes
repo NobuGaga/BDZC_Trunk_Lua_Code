@@ -1,0 +1,99 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local CVote = JRequire "Dev.Vote.CVote"
+
+----------------------CS类引用--------------------------
+local JGuiManager = CS.JGui.JGuiManager
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(index)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_ChooseStaff")
+
+	moudle:Get("textTitle").Text = Csv.Text("battle_chooseTitle")
+	moudle:Get("btnClose"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local upingList = {}
+	local staffList = _P.GetSortStaffList(MStaff.StaffTable, upingList)
+	local content = moudle:Get("content")
+	for _, staff in ipairs(staffList) do
+		local staffMoudle = JGuiManager.GetMoudle(content, "M_Dispatch_Aca_Item")
+		local csvStaff = Csv.Personnel[staff.id]
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[staff.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset
+		staffMoudle:Get("textName").Text = csvStaff.name
+		staffMoudle:Get("textLevel").Text = Csv.Text("school_level", {num = staff.level})
+		staffMoudle:Get("textAllQuality").Text = Csv.Text("school_allQuality", {num = MStaff.GetAllApitude(staff.id)})
+		staffMoudle:Get("textAllPower").Text = Csv.Text("school_allPower", {num = MStaff.GetAllAttr(staff.id)})
+		staffMoudle:Get("textSkillExp").Text = Csv.Text("school_skillExp", {num = MStaff.GetStaffDataByID(staff.id).skillexp})
+		staffMoudle:Get("textExp").Text = Csv.Text("school_exp", {num = staff.bookexp})
+		staffMoudle:Get("C_text").Text = Csv.Text("school_select")
+		local btnUp = staffMoudle:Get("C_Btn_b")
+		local dispatched = staffMoudle:Get("Dispatched")
+		btnUp.Activity = true
+		btnUp:AddOnButton(function()
+			SoundMgr.Play(10001)
+			CVote.ReqStudyUp(index,staff.id)
+			self:Destroy()
+		end, nil, 0.9)
+		dispatched.Activity = false
+	end
+end
+
+function _P.GetUpingList(seatList)
+	local upingList = {}
+	if nil ~= seatList then
+		for _, seatData in pairs(seatList) do
+			if nil ~= seatData.staffid then
+				upingList[seatData.staffid] = true
+			end
+		end
+	end
+	return upingList
+end
+
+function _P.GetSortStaffList(staffList, upingList)
+	local sortList = {}
+	for _, staff in pairs(staffList) do
+		table.insert(sortList, staff)
+	end
+	table.sort(sortList, function(left, right)return _P.SortStaff(left, right, upingList) end)
+	return sortList
+end
+
+function _P.SortStaff(left, right, upingList)
+	local isLeftUp = nil ~= upingList[left.id]
+	local isRight = nil ~= upingList[right.id]
+	if isLeftUp and not isRight then
+		return true
+	elseif not isLeftUp and isRight then
+		return false
+	end
+	
+	local leftData = MStaff.GetAllApitude(left.id)
+	local rightData = MStaff.GetAllApitude(right.id)
+	if leftData ~= rightData then
+		return leftData > rightData
+	end
+	leftData = MStaff.GetAllAttr(left.id)
+	rightData = MStaff.GetAllAttr(right.id)
+	return leftData > rightData
+end
+
+return _M

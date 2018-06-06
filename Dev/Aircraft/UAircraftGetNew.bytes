@@ -1,0 +1,132 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.CTrigger.bytes#_M]
+local CTrigger = JRequire "Dev.Main.CTrigger"
+
+----------------------常量定义--------------------------
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+local MoudleName = "M_Grt_New_Air"
+local textTitle = "textTitle"
+
+--属性表索引
+local PowerCsv = "Girl_skill_type"
+local BuffColorText = "aircraft_skin_buff_color"
+
+local GetAircraftEffectID = 10124
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:ctor(parent, skinID)
+	SoundMgr.Play(10042)
+	local skinData = Csv.AircraftSkin[skinID]
+	if nil == skinData then
+		error("AircraftSkin 表没有 id " .. skinID or "nil")
+		return
+	end
+
+	local showSysID = skinData.showSysid
+	local mainLayerInfo = {}	
+	if Define.SysId.VIPWelfare == showSysID then
+		WindowMgr.Call("UVipWelfare", "GetSortLayer", mainLayerInfo)
+	elseif Define.SysId.FirstRecharge == showSysID then
+		WindowMgr.Call("UFirstRecharge", "GetSortLayer", mainLayerInfo)
+	else
+		WindowMgr.Call("UMain", "GetSortLayer", mainLayerInfo)
+	end
+	
+	self.module = JGuiManager.GetMoudle(parent, MoudleName, mainLayerInfo.type, mainLayerInfo.index)
+	self.module.SelfRect.RaycastTarget = true
+	self.module.SelfRect:AddOnTime(function( ... )
+		self.module.SelfRect.RaycastTarget = false
+		_P.ShowTips(self)
+	end, nil, 1.2)
+
+	local startIndex = mainLayerInfo.index
+	mainLayerInfo.index = self.module.SortingOrder + 1
+
+	_P.InitVuew(self, skinData)
+
+	WindowMgr.Call("UMain", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	CCommon.CreateEffect(self.module:Get("EffectNode"), GetAircraftEffectID)
+end
+
+function _P.InitVuew(self, skinData)
+	if nil ~= skinData.asset then
+		self.module:Get("aircraft").SpriteName = skinData.asset
+		local csvAircraftAnimation = Csv.AircraftAnimation[skinData.asset]
+		if nil ~= csvAircraftAnimation then
+			local pos = csvAircraftAnimation.prop_skin_pos
+			if nil ~= pos and nil ~= pos[1] and nil ~= pos[2] then
+				self.module:Get("propeller").LocalPosition = Vector2(pos[1], pos[2])
+			end
+		end
+	end
+
+	self.module:Get("textTitle").Text = skinData.name
+ 	self.module:Get("textPowerTitle").Text = Csv.Text("aircraft_skin_info")
+	_P.InitPowerBuff(self, skinData.id)
+
+	self.module:Get("textEffectTitle").Text = Csv.Text("aircraft_skin_effect")
+	self.module:Get("textSkillBuff").Text = Csv.Text("aircraft_skin_effect_buff", 
+													 {num = _P.GetSkinSchoolBuff(skinData)})
+	
+	self.module:Get("textScore").Text = Csv.Text("aircraft_skin_score", 
+												 {num = MAircraft.SkinScore[skinData.id]})
+end
+
+function _P.InitPowerBuff(self, skinID)
+	local attrData = MAircraft.SkinPowerBuff[skinID]
+	if nil ~= attrData then
+		local index = 1
+		for type, value in pairs(attrData) do
+			local textAttr = self.module:Get("textAttr" .. index)
+			if nil == textAttr then 
+				break
+			end
+			textAttr.Text = Csv.Text(PowerCsv .. type) .. ":" .. Csv.Text(BuffColorText, {num = value})
+			index = index + 1
+		end
+	end
+end
+
+--获取飞机皮肤游学经验加成
+function _P.GetSkinSchoolBuff(skinData)
+	if nil ~= skinData.get then
+		for _, value in pairs(skinData.get) do
+			if nil ~= value[1] and nil ~= value[2] then
+				if MAircraft.SchoolSysID == value[1] then
+					return math.modf(value[2] / 100)
+				end
+			end
+		end
+	end
+	return 0
+end
+
+function _M:Destroy()
+	if nil ~= self.module then
+		SoundMgr.DestroySystem()
+		self.module:Destroy()
+	end
+end
+
+function _P.ShowTips(self)
+	local tipsText = self.module:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+return _M

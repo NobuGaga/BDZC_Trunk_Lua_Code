@@ -1,0 +1,287 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MAXINPUTNUM = 12
+
+function _M:BeforeDestroy(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+    local fun = _R[funcName]
+    if fun ~= nil then
+        fun(self, ...)
+    end
+end
+
+--界面构建
+function _M:OnCreate()
+    --播放剧情
+    local isIos = GameSetting.Platform == Define.PlatformType.iPhone
+    if not isIos then
+        WindowMgr.Create("UMoviePlay", "StartMovie")
+    end    
+
+    local moudle = self:CreateMoudle(self._RootNode, "M_Login_Establish")
+    self.mMoudle = moudle
+
+    local backBtn = moudle:Get("Back_Btn")
+    backBtn:AddOnButton(function(...)
+        GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+    end, nil, 1.2)
+
+    -- 固定内容初始化
+    moudle:Get("text").Text = Csv.Text("create_char_title")
+    self.input = moudle:Get("input")
+    self.input.PlaceholderWidget.Text = Csv.Text("create_char_tips2")
+    self.HandSelect = moudle:Get("HandSelect")
+    self.vHeadFrame = {}
+    for i = 1, 4 do
+        local headimg2 = moudle:Get("head" .. i)
+        if headimg2 then
+            table.insert(self.vHeadFrame, headimg2)
+            headimg2:AddOnButton(
+                function(...)
+                    SoundMgr.Play(10001)
+                    if self.mHeadIndex ~= nil and i ~= self.mHeadIndex then
+                        self.mHeadIndex = i
+                        self:BsxOut(false, i)
+                    end
+                end,
+                nil,
+                0.9
+            )
+        end
+    end
+    self.bsx_head = moudle:Get("bsx_head")
+    self.bsx_body = moudle:Get("bsx_body")
+    self.bsxNode = moudle:Get("bsx")
+    self.head_prefab = nil
+    self.body_prefab = nil
+    -- 性别
+    self.BtnGenderMale = moudle:Get("BtnGenderMale")
+    self.BtnGenderFemale = moudle:Get("BtnGenderFemale")
+
+    local bigSize = Vector2(132, 136)
+    local minSize = Vector2(99, 102)
+    self.BtnGenderMale:AddOnButton(
+        function()
+            SoundMgr.Play(10001)
+            self.BtnGenderMale.SizeDelta = bigSize
+            self.BtnGenderFemale.SizeDelta = minSize
+            self.gender = Define.Sex.Male
+            self:BsxOut(true)
+        end,
+        nil,
+        0.9
+    )    
+    self.BtnGenderFemale:AddOnButton(
+        function()
+            SoundMgr.Play(10001)
+            self.BtnGenderMale.SizeDelta = minSize
+            self.BtnGenderFemale.SizeDelta = bigSize
+            self.gender = Define.Sex.Female
+            self:BsxOut(true)
+        end,
+        nil,
+        0.9
+    )
+    -- 刷新性别
+    self.gender = Define.Sex.Male
+    self.BtnGenderMale.SizeDelta = bigSize
+    self.BtnGenderFemale.SizeDelta = minSize
+    self.headId = 1
+    CLogin.SendRandomName(self.gender)
+    self:UpdateGenderChange()
+
+    moudle:Get("BtnRandName"):AddOnButton(
+        function(...)
+            SoundMgr.Play(10001)
+            CLogin.SendRandomName(self.gender)
+        end,
+        nil,
+        0.9
+    )
+
+    local BtnCreateChar = moudle:Get("BtnCreateChar")
+    self.BtnCreateChar = BtnCreateChar
+    moudle:Get("C_text").Text = Csv.Text("login_btn2")
+    BtnCreateChar:AddOnButton(
+        function()
+            SoundMgr.Play(9001)
+            self:CreateChar()
+        end,
+        nil,
+        0.9
+    )
+
+    moudle:Get("BtnCreateChar").SpriteName = "dl_027"
+end
+
+function _M:BsxOut(isChangSex, headid)
+    self:Lock()
+    local BSX = self.mMoudle:Get("bsx")
+    BSX:DOAnchorPosX(750, 0.2)
+    if isChangSex then
+        BSX:AddOnTime(
+            function()
+                local pos = BSX.LocalPosition
+                pos.x = -750
+                BSX.LocalPosition = pos
+                self:UpdateGenderChange()
+                CLogin.SendRandomName(self.gender)
+            end,
+            nil,
+            0.2
+        )
+    else
+        if headid ~= nil then
+            BSX:AddOnTime(
+                function()
+                    local pos = BSX.LocalPosition
+                    pos.x = -750
+                    BSX.LocalPosition = pos
+                    self:UpdateGenderChange()
+                    self:UpdateHeaderChange(headid)
+                    BSX:DOAnchorPosX(0, 0.2)
+                    self:Unlock()
+                end,
+                nil,
+                0.2
+            )
+        end
+    end
+end
+
+function _R.SetEnterBtnState(self, isGray)
+    if isGray then
+        self.BtnCreateChar.IsGray = true
+        self.BtnCreateChar.RaycastTarget = false
+    else
+        self.BtnCreateChar.IsGray = false
+        self.BtnCreateChar.RaycastTarget = true
+    end
+end
+
+function _M:CreateChar()
+    local name = LuaUtil.Trim(self.input.Text)
+    if not name or name == "" then
+        CCommon.ShowError(Csv.Text("login_err_no_name"))
+        return
+    end
+
+	local nameNum = CS.Utility.Utils.UnicodeStringLength(name)
+    if nameNum > MAXINPUTNUM then
+        CCommon.ShowError(Csv.Text("login_err_name_len"))
+        return
+    end
+    self.BtnCreateChar.IsGray = true
+    self.BtnCreateChar.RaycastTarget = false
+    CLogin.SendCreateChar(name, self.headId, self.gender)
+end
+
+function _M:UpdateGenderChange()
+    local maxValue = 1
+    for i = 1, 4 do
+        local icon = _P.GetHeadIcon(self.gender, i)
+        if icon then
+            self.vHeadFrame[i].SpriteName = icon
+            maxValue = i
+        else
+            self.vHeadFrame[i].Activity = false
+        end
+    end
+    self:UpdateHeaderChange(math.random(maxValue))
+end
+
+function _M:UpdateHeaderChange(headidx)
+    self.mHeadIndex = headidx
+    local config = Csv.CreateRole[headidx]
+    self.headId = config.head
+
+    self.HandSelect.LocalPosition = self.vHeadFrame[headidx].LocalPosition + Vector2(-46, 52)
+
+    if self.head_prefab ~= nil then
+        self.head_prefab:Destroy()
+        self.head_prefab = nil
+    end
+    if self.body_prefab ~= nil then
+        self.body_prefab:Destroy()
+        self.body_prefab = nil
+    end
+    local headSp, headPrefab = _P.GetHeadAsset(self.gender, headidx)
+    local bodySp, bodyPrefab = _P.GetBodyId(self.gender, headidx)
+
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        self.bsx_body.SpriteName = ""
+        self.bsx_head.SpriteName = ""
+
+        self.body_prefab,self.head_prefab = CCommon.CreateRole(self.bsxNode, bodyPrefab, headPrefab, CCommon.ActorFieldMap.login)
+    else
+        self.bsx_body.SpriteName = bodySp
+        self.bsx_head.SpriteName = headSp
+    end    
+end
+
+function _R.SetCharName(self, name)
+    self.input.Text = name
+    local BSX = self.mMoudle:Get("bsx")
+    BSX:DOAnchorPosX(0, 0.2)
+    BSX:AddOnTime(
+        function()
+            self:Unlock()
+        end,
+        nil,
+        0.2
+    )
+end
+
+function _P.GetHeadIcon(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return nil
+    end
+    config = Csv.Avatar[config.head]
+    return config["flatIcon_" .. gender]
+end
+
+function _P.GetHeadAsset(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return "head_001"
+    end
+    config = Csv.Avatar[config.head]
+    return config["asset_" .. gender], config["prefab_" .. gender]
+end
+
+function _P.GetBodyId(gender, headidx)
+    local config = Csv.CreateRole[headidx]
+    if config == nil then
+        return "head_001"
+    end
+    config = Csv.Avatar[config.body]
+    return config["asset_" .. gender], config["prefab_" .. gender]
+end
+
+return _M

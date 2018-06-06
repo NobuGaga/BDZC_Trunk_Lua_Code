@@ -1,0 +1,959 @@
+local WindowRegist = JRequire "Libs.WindowMgr.WindowRegist"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local EventCenter = JRequire "Dev.EventCenter"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local WIN_ROOT_MOUDLE = "M_UIRootNode"
+
+local profiler = require("Libs.xlua.profiler")
+local memory = require("Libs.xlua.memory")
+
+local _M = {WindowGCCollect = false}
+local _P = {}
+
+--当前打开中的界面
+_P.OpenedWindow = {}
+--UI界面回弹处理
+_P.UICoveredWindow = {}
+local _MAX_UI_COVER_WINDOW = 4
+
+function _M.CleanPopWindow()
+	_P.UICoveredWindow = {}
+end
+
+function _P.IsCreated(win)
+	return win._CanvasNode ~= nil
+end
+
+function _M.IsCreated(winName)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		return win ~= nil and win._Name == winName and win._CanvasNode ~= nil
+	end
+	return false
+end
+
+function _M.IsActivity(winName)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		return win ~= nil and win._Name == winName and win._CanvasNode ~= nil and win._CanvasNode.Activity == true
+	end
+	return false
+end
+
+function _M.IsCreatedForType(winType)
+	local win = _P.OpenedWindow[winType]
+	return win ~= nil and win._CanvasNode ~= nil
+end
+
+function _M.IsCreatedForSysId(sysId)
+	for k,v in pairs(_P.OpenedWindow) do
+		if v ~= nil and v._SysId == sysId and v._CanvasNode ~= nil then
+			return true
+		end
+	end
+	return false
+end
+
+function _M.DestroyRoot()
+	CS.JGui.JGuiManager.GuiRoot.WindowBase:DestroyChildren()
+
+	for k,v in pairs(_P.OpenedWindow) do
+		v:delete()
+	end
+
+	_P.OpenedWindow = {}
+	_P.UICoveredWindow = {}
+end
+
+_P.UN_ACTIVE_LOWER_TYPE = 
+{
+	[WindowType.UI] = function (isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+	end,
+	[WindowType.Tips1] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+	end,
+	[WindowType.Tips2] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, false)
+			end
+		end
+	end,
+	[WindowType.Tips3] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips2]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, false)
+			end
+		end
+	end,
+	[WindowType.Tips4] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips2]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips3]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, false)
+			end
+		end
+	end,
+	[WindowType.Box] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips2]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips3]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips4]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips4, false)
+			end
+		end
+	end,
+	[WindowType.Notice] = function ( isBefore)
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips2]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips3]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Tips4]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips4, false)
+			end
+		end
+		uiUI = _P.OpenedWindow[WindowType.Box]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			if isBefore then
+				uiUI:DisCreateOrDestroyTween()
+			else
+				uiUI._CanvasNode.Activity = false
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Box, false)
+			end
+		end
+	end,
+}
+
+function _P.OnWillCreate(winType)
+	local func = _P.UN_ACTIVE_LOWER_TYPE[winType]
+	if func ~= nil then
+		func(true)
+		JGuiManager.GuiRoot:SetCameraTexure(winType, true, true)
+		func(false)
+	end
+end
+
+_P.ACTIVE_LOWER_TYPE = 
+{
+	[WindowType.UI] = function ()
+		local uiUI = _P.OpenedWindow[WindowType.Scene]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+		end
+		uiUI = _P.OpenedWindow[WindowType.Main]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+		end
+		JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+	end,
+	[WindowType.Tips1] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.UI]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.Scene]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+			end
+			uiUI = _P.OpenedWindow[WindowType.Main]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+			end
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+		end
+	end,
+	[WindowType.Tips2] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.Tips1]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips1, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.UI]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)				
+			else
+				uiUI = _P.OpenedWindow[WindowType.Scene]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+				end
+				uiUI = _P.OpenedWindow[WindowType.Main]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+				end
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+			end
+		end
+	end,
+	[WindowType.Tips3] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.Tips2]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips2, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.Tips1]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, true)
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips1, true, false)			
+			else
+				uiUI = _P.OpenedWindow[WindowType.UI]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+					JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)				
+				else
+					uiUI = _P.OpenedWindow[WindowType.Scene]
+					if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+						uiUI._CanvasNode.Activity = true
+						EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+					end
+					uiUI = _P.OpenedWindow[WindowType.Main]
+					if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+						uiUI._CanvasNode.Activity = true
+						EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+					end
+					JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+				end
+			end
+		end
+	end,
+	[WindowType.Tips4] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.Tips3]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips3, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.Tips2]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, true)
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips2, true, false)			
+			else
+				uiUI = _P.OpenedWindow[WindowType.Tips1]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, true)
+					JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips1, true, false)			
+				else
+					uiUI = _P.OpenedWindow[WindowType.UI]
+					if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+						uiUI._CanvasNode.Activity = true
+						EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+						JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)				
+					else
+						uiUI = _P.OpenedWindow[WindowType.Scene]
+						if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+							uiUI._CanvasNode.Activity = true
+							EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+						end
+						uiUI = _P.OpenedWindow[WindowType.Main]
+						if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+							uiUI._CanvasNode.Activity = true
+							EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+						end
+						JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+					end
+				end
+			end
+		end
+	end,
+	[WindowType.Box] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.Tips4]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips4, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips4, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.Tips3]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, true)
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips3, true, false)			
+			else
+				uiUI = _P.OpenedWindow[WindowType.Tips2]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, true)
+					JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips2, true, false)			
+				else
+					uiUI = _P.OpenedWindow[WindowType.Tips1]
+					if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+						uiUI._CanvasNode.Activity = true
+						EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, true)
+						JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips1, true, false)			
+					else
+						uiUI = _P.OpenedWindow[WindowType.UI]
+						if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+							uiUI._CanvasNode.Activity = true
+							EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+							JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)				
+						else
+							uiUI = _P.OpenedWindow[WindowType.Scene]
+							if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+								uiUI._CanvasNode.Activity = true
+								EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+							end
+							uiUI = _P.OpenedWindow[WindowType.Main]
+							if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+								uiUI._CanvasNode.Activity = true
+								EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+							end
+							JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+						end
+					end
+				end
+			end
+		end
+	end,
+	[WindowType.Notice] = function ( )
+		local uiUI = _P.OpenedWindow[WindowType.Box]
+		if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+			uiUI._CanvasNode.Activity = true
+			EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Box, true)
+			JGuiManager.GuiRoot:SetCameraTexure(WindowType.Box, true, false)			
+		else
+			uiUI = _P.OpenedWindow[WindowType.Tips4]
+			if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+				uiUI._CanvasNode.Activity = true
+				EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips4, true)
+				JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips4, true, false)			
+			else
+				uiUI = _P.OpenedWindow[WindowType.Tips3]
+				if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+					uiUI._CanvasNode.Activity = true
+					EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips3, true)
+					JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips3, true, false)			
+				else
+					uiUI = _P.OpenedWindow[WindowType.Tips2]
+					if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+						uiUI._CanvasNode.Activity = true
+						EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips2, true)
+						JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips2, true, false)			
+					else
+						uiUI = _P.OpenedWindow[WindowType.Tips1]
+						if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+							uiUI._CanvasNode.Activity = true
+							EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Tips1, true)
+							JGuiManager.GuiRoot:SetCameraTexure(WindowType.Tips1, true, false)			
+						else
+							uiUI = _P.OpenedWindow[WindowType.UI]
+							if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+								uiUI._CanvasNode.Activity = true
+								EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.UI, true)
+								JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, true, false)				
+							else
+								uiUI = _P.OpenedWindow[WindowType.Scene]
+								if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+									uiUI._CanvasNode.Activity = true
+									EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Scene, true)
+								end
+								uiUI = _P.OpenedWindow[WindowType.Main]
+								if uiUI ~= nil and uiUI._CanvasNode ~= nil then
+									uiUI._CanvasNode.Activity = true
+									EventCenter.CallEventTrigger(Define.EventListenId.ActivityWindowForType, WindowType.Main, true)
+								end
+								JGuiManager.GuiRoot:SetCameraTexure(WindowType.UI, false, false)
+							end
+						end
+					end
+				end
+			end
+		end
+	end,
+}
+function _P.OnDestoryed(winType)
+	local func = _P.ACTIVE_LOWER_TYPE[winType]
+	if func ~= nil then
+		func()
+	end
+end
+
+function _P.execDestroy(winType, isCover, noPop, ...)
+	local delWin = _P.OpenedWindow[winType]
+	if delWin ~= nil then
+		if delWin._CanvasNode ~= nil then
+			local popWindowName = nil
+			if winType == WindowType.UI then
+				if isCover then
+					for i=1,#_P.UICoveredWindow do
+						if _P.UICoveredWindow[i] == delWin._Name then
+							table.remove(_P.UICoveredWindow, i)
+							break
+						end
+					end
+					if delWin._CanPop then
+						table.insert(_P.UICoveredWindow, delWin._Name)
+					end					
+					if 	#_P.UICoveredWindow > _MAX_UI_COVER_WINDOW then
+						table.remove(_P.UICoveredWindow, 1)
+					end
+				else
+					if noPop then
+						_P.UICoveredWindow = {}
+					else
+						local uiCount = #_P.UICoveredWindow
+						if uiCount > 0 then
+							popWindowName = _P.UICoveredWindow[uiCount]
+						end
+					end
+				end
+			end
+
+			_P.OpenedWindow[winType] = nil
+			local r, err = pcall(delWin.BeforeDestroy, delWin, ...)
+			if not r then
+				error("BeforeDestroy Window error::", delWin._Name, "error info: ", err)
+			end
+			delWin._CanvasNode:Destroy()
+			delWin:UnRegistAllEvent()
+			delWin:UnRegistRedpoint()
+			if delWin._MusicID ~= nil and delWin._MusicID > 0 then
+				SoundMgr.DestroyMusic(delWin._MusicID, true)
+			end
+			_P.OnDestoryed(delWin._Type)
+			local r, err = pcall(delWin.EndDestroy, delWin, ...)
+			if not r then
+				error("EndDestroy Window error::", delWin._Name, "error info: ", err)
+			end
+
+			if delWin._SysId ~= nil then
+				EventCenter.CallEventTrigger(Define.EventListenId.DestroyWindow, delWin._SysId, ...)
+			end
+			EventCenter.CallEventTrigger(Define.EventListenId.DestroyWindowForType, delWin._Type, ...)
+			local uiType = delWin._Type
+			_P.SendLogPoint(false, delWin._Name)
+			
+			local winName = delWin._Name
+			local beginMem = delWin._BeginMemory or 0
+
+			delWin:delete()
+			delWin = nil
+
+			if uiType == WindowType.UI or uiType == WindowType.Scene or uiType == WindowType.Tips1 then
+				CS.GameManager.Inst:GC()
+			end
+			if _M.WindowGCCollect then
+				local _memory = memory.total()
+				print(winName, "DestroyedWindow Memory:" .. _memory, "notGC:" ..(_memory - beginMem))
+				
+				CS.Loader.LoadAccessor.AppendText("debug/profiler.txt","\nDESTORY --------------------- " .. winName .. ": " .. _memory .. "notGC:" ..(_memory - beginMem))
+				local tmp = memory.snapshot()
+				for k,v in pairs(tmp) do
+					CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
+				end	
+			end
+			if popWindowName ~= nil and _P.OpenedWindow[winType] == nil then
+				--这里可能在别的地方又打开了界面
+				_P.DoCreate(popWindowName, true)
+			end
+
+			-- if winType == WindowType.UI then
+			-- 	JGuiManager.UICloseClean()
+			-- end
+		else
+			_P.OpenedWindow[winType] = nil
+
+			error(delWin._Name .. " window has destroyed bug stell in  OpenedWindow")
+		end		
+	end
+end
+
+function _P.SendLogPoint(isOpen, winName)
+	if isOpen then
+		local oepnKey = "open_logpoint_" .. winName
+		if not CS.UnityEngine.PlayerPrefs.HasKey(oepnKey) then
+			CS.UnityEngine.PlayerPrefs.SetInt(oepnKey, 1)
+			CS.Utility.LogPoint.LogPost(8, 1, winName)
+		end		
+	else
+		local closeKey = "close_logpoint_" .. winName
+		if not CS.UnityEngine.PlayerPrefs.HasKey(closeKey) then
+			CS.UnityEngine.PlayerPrefs.SetInt(closeKey, 1)
+			CS.Utility.LogPoint.LogPost(9, 1, winName)
+		end		
+	end
+end
+
+function _P.DoDestroy(winType, isCover, noPop, ...)
+	if winType == WindowType.Main then
+		_P.execDestroy(WindowType.Scene, false)
+		_P.execDestroy(WindowType.UI, false)
+		_P.execDestroy(WindowType.Tips1, false)
+		_P.execDestroy(WindowType.Tips2, false)
+		_P.execDestroy(WindowType.Tips3, false)
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+		_P.execDestroy(WindowType.Message, false)
+		_P.execDestroy(WindowType.Guide, false)
+		_P.execDestroy(WindowType.Notice, false)
+	elseif winType == WindowType.Scene then
+		_P.execDestroy(WindowType.UI, false)
+		_P.execDestroy(WindowType.Tips1, false)
+		_P.execDestroy(WindowType.Tips2, false)
+		_P.execDestroy(WindowType.Tips3, false)
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+	elseif winType == WindowType.UI then
+		_P.execDestroy(WindowType.Tips1, false)
+		_P.execDestroy(WindowType.Tips2, false)
+		_P.execDestroy(WindowType.Tips3, false)
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+	elseif winType == WindowType.Tips1 then
+		_P.execDestroy(WindowType.Tips2, false)
+		_P.execDestroy(WindowType.Tips3, false)
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+	elseif winType == WindowType.Tips2 then
+		_P.execDestroy(WindowType.Tips3, false)
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+	elseif winType == WindowType.Tips3 then
+		_P.execDestroy(WindowType.Tips4, false)
+		_P.execDestroy(WindowType.Box, false)
+	elseif winType == WindowType.Tips4 then
+		_P.execDestroy(WindowType.Box, false)
+	end
+
+	_P.execDestroy(winType, isCover, noPop, ...)
+end
+
+function _P.DoCreate(winName, isPop, ... )
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local inst = JRequire(winInfo.Moudle)
+
+		_P.OnWillCreate(winInfo.WinType)
+
+		local win = inst.new(winInfo.WinType, winName, winInfo.IsCanPop or false, winInfo.SysId)
+		-- win._CreateTweenInfo = winInfo.CreateTween
+		-- win._DestroyTweenInfo = winInfo.DestroyTween
+		win._MusicID = winInfo.MusicId
+
+		_P.SendLogPoint(true, winName)
+
+		if _M.WindowGCCollect then
+			CS.GameManager.Inst:GC()
+			local _memory = memory.total()
+			win._BeginMemory = _memory
+			print(winName, "StartCreateWindow Memory:" .. _memory)		
+			-- print("memory.snapshot:", memory.snapshot())		
+			CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\nSTART --------------------- " .. winName .. ": " .. _memory)
+			local tmp = memory.snapshot()
+			for k,v in pairs(tmp) do
+				CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
+			end			
+		end		
+		if win._Type == WindowType.UI then
+			for i=1,#_P.UICoveredWindow do
+				if _P.UICoveredWindow[i] == win._Name then
+					table.remove(_P.UICoveredWindow, i)
+					break
+				end
+			end
+		end
+
+		local uiRoot = JGuiManager.GuiRoot
+		local windowParent = uiRoot.WindowBase
+		local rootMoudle = win:CreateMoudle(windowParent, WIN_ROOT_MOUDLE)
+		win._CanvasNode = rootMoudle.SelfRect -- windowCanvas
+		win._EventNode = rootMoudle:Get("_EventNode") --eventNode
+		win._RootNode = rootMoudle:Get("_RootNode") --rootNode
+		win._LockNode = rootMoudle:Get("_LockNode")
+		win._BlackNode = rootMoudle:Get("_BlackNode")
+		win._CanvasNode.Name = winName
+
+		_P.OpenedWindow[win._Type] = win
+
+		if win._MusicID ~= nil and win._MusicID > 0 then
+			SoundMgr.PlayMusic(win._MusicID)
+		end
+
+		if isPop then
+			local r, err = pcall(win.OnPopCreate, win, ...)
+			if not r then
+				error("Create Window<OnPopCreate> error::", winName, "error info: ", err)
+			end
+		else
+			local r, err = pcall(win.OnCreate, win, ...)
+			if not r then
+				error("Create Window<OnCreate> error::", winName, "error info: ", err)
+			end
+		end
+
+		if win._CreateTweenInfo ~= nil then
+			win:Lock()
+			if win._CreateTweenInfo.func ~= nil then
+				win._CreateTweenInfo.func(win)
+			end
+			win._CreateOrDestroyTweenCom = win._EventNode.CachedTran:GetJTweener(win._CreateTweenInfo.name)
+			win._CanvasTweenState = 1
+			win._CreateOrDestroyTweenCom:SetOnComplete(function ( ... )
+				win._CanvasTweenState = 2
+				win:Unlock()
+				win:OnCreateTweenDone()
+			end)
+			win._CreateOrDestroyTweenCom:Play()
+		end		
+		if win._SysId ~= nil then	
+			EventCenter.CallEventTrigger(Define.EventListenId.CreateWindow, win._SysId, ...)
+		end
+		EventCenter.CallEventTrigger(Define.EventListenId.CreateWindowForType, win._Type, ...)
+	else
+		error(string.format("Create Window %s error, please to regist first!!!", winName))
+	end	
+end
+
+function _M.Create(winName, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		_P.DoDestroy(winInfo.WinType, true)
+		_P.DoCreate(winName, false, ... )
+	else
+		error(string.format("Create Window %s error, please to regist first!!!", winName))
+	end
+end
+
+function _M.Call(winName, funName, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		if win ~= nil and win._Name == winName and win._CanvasNode ~= nil then
+			local r, err = pcall(win.Dispatch, win, funName, ...)
+			if not r then
+				error("Dispatch Window error::", win._Name, funName, "error info: ", err)
+			end
+		end
+	end
+end
+
+function _M.Destroy(winName, noPop, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		_P.DoDestroy(winInfo.WinType, false, noPop, ...)
+	else
+		error(string.format("Destroy Window %s error, please to regist first!!!", winName))	
+	end	
+end
+
+function _M.DestroyForType(type)
+	_P.DoDestroy(type, false, true)
+end
+
+function _M.ToSysId(winName)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		return winInfo.SysId
+	else
+		error(string.format("ToSysId WindowName %s error, please to regist first!!!", winName))	
+	end	
+	return 0
+end
+
+function _M.OnRedpointUpdate(isActive, ... )
+	for k,win in pairs(_P.OpenedWindow) do
+		if win ~= nil and win._CanvasNode ~= nil then
+			if k == WindowType.Scene or 
+				k == WindowType.Main or
+				k == WindowType.UI or
+				k == WindowType.Tips1 or 
+				k == WindowType.Tips2 or 
+				k == WindowType.Tips3 or 
+				k == WindowType.Tips4 then
+			win:OnRedpointUpdate(isActive, ... )
+			end 
+		end
+	end
+end
+
+return _M

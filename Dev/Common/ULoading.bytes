@@ -1,0 +1,233 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local WAIT_SHOW_LOADING_TIME = 1
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+function _R.ShowFog(self, color)
+	if self.FogTexture == nil then
+		self.FogTexture = JGuiManager.CreateImage(self._RootNode, "FogTexture")
+		self.FogTexture.SizeDelta = Vector2(2000, 2000)
+		self.FogTexture.SpriteName = "Floor_alpha"
+	end
+	self.FogTexture.Color = color
+end
+
+--调用显示菊花
+--1. 普通
+--10. 断线重连
+function _R.ShowLoading(self, level)
+	if level == nil then
+		level = 1
+	end	
+
+	if self.Loading ~= nil then
+		if self.Level < level then
+			self.Level = level
+		end
+		return
+	end
+
+	self.Level = level
+	self.Loading = JGuiManager.CreateEmpty(self._RootNode, "Loading")
+	self.Loading.SizeDelta = JGuiManager.GuiRoot.Size + Vector2(10, 10)
+	self.Loading.RaycastTarget = true
+	self.Loading:AddOnTime(function(...)
+		if self.Loading ~= nil and self.LoadingEffect == nil then
+			self.LoadingEffect = CCommon.CreateEffect(self.Loading, 2, Vector2.zero)
+		end
+	end, nil, WAIT_SHOW_LOADING_TIME)
+end
+--隐藏菊花
+function _R.HideLoading(self, level)
+	if self.Loading ~= nil then
+		if level == nil then
+			level = 1
+		end	
+		if level >= self.Level then
+			self.Loading:Destroy()
+			self.Loading = nil
+		end
+	end
+end
+
+--显示断线重连
+function _R.ReloginBox(self, content, sureText, onChooseCall, cancelText, level)
+	if level == nil then
+		level = 0
+	end
+	if self.CheckBox ~= nil then
+		if self.CheckBoxLevel <= level then
+			self.CheckBox:Destroy()
+		else
+			return
+		end
+	end
+	self.CheckBoxLevel = level
+	self.CheckBox = self:CreateCanvas(self._RootNode, "CheckNode")
+	local moudle = self:CreateMoudle(self.CheckBox, "M_choose")
+	local sure = moudle:Get("C_Btn_a")
+	local cancel = moudle:Get("C_Btn_e")
+	moudle:Get("Text").Text = content
+	moudle:Get("C_text").Text = sureText
+	moudle:Get("View").Activity = false
+	moudle:Get("Toggle").Activity = false
+
+	sure:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self.CheckBox:Destroy()
+		self.CheckBox = nil
+		onChooseCall(true, isChooseNoAgain)
+	end, nil, 0.9)
+
+	if cancelText == nil then
+		local cenpos = sure.LocalPosition
+		cenpos.x = 0
+		sure.LocalPosition = cenpos
+		cancel.Activity = false
+	else
+		moudle:Get("C_text_0").Text = cancelText
+		
+		cancel:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			self.CheckBox:Destroy()
+			self.CheckBox = nil
+			onChooseCall(false, isChooseNoAgain)		
+		end, nil, 0.9)
+	end
+end
+
+function _R.HideReloginBox(self)
+	if self.CheckBox ~= nil then
+		self.CheckBox:Destroy()
+		self.CheckBox = nil
+	end
+end
+
+function _P.RefreshMainTopBtns(isShow)
+	WindowMgr.Call("UMain", "RefreshNotice", isShow)
+end
+local Linear = CS.DG.Tweening.Ease.Linear
+function _P.DoNiticeFunc(notice, TopNode, NoticeMainCtrl, NoticeIcon, NoticeText, NoticeFx, ScreenWidth)
+	if NoticeIcon == nil then
+		return
+	end
+	NoticeIcon:DOKill()
+	NoticeIcon.LocalPosition = Vector2.zero
+	NoticeText.Text = notice.str
+	local layerName
+	if notice.hierarchy ~= 1 then	
+		layerName = 'Loading'
+		NoticeMainCtrl.Activity = true
+	else
+		layerName = 'Main'
+		NoticeMainCtrl.Activity = WindowMgr.IsActivity("UMain")
+	end
+	TopNode.SortingLayerName = layerName
+	_P.RefreshMainTopBtns(true)
+	TopNode.SortingOrder = 255
+	NoticeFx:DestroyChildren()
+	if notice.effectType == 1 then
+		
+	elseif notice.effectType == 2 then
+		CCommon.CreateEffect(NoticeFx, 10108)
+		NoticeFx:SetEffectSortingLayer(layerName, 256)
+	elseif notice.effectType == 3 then
+
+	end
+	
+	local t = NoticeIcon:DOAnchorPosX( - NoticeText.PreferredWidth - ScreenWidth - 40, 10)
+	t:SetEase(Linear)
+	t:OnComplete(function()
+		NoticeFx:DestroyChildren()
+		if TopNode ~= nil then
+			local notice = MPlayer.DequeueNotice()
+			if notice ~= nil then
+				_P.DoNiticeFunc(notice, TopNode, NoticeMainCtrl, NoticeIcon, NoticeText, NoticeFx, ScreenWidth)
+			else
+				TopNode.Activity = false
+				_P.RefreshMainTopBtns(false)
+			end
+		end
+	end)
+end
+--公告刷新
+function _R.RefreshNotice(self)
+	local notice = MPlayer.PeekNotice()
+	if notice ~= nil then
+		local isOk = false
+		if self.Notice == nil then
+			self.Notice = self:CreateMoudle(self._RootNode, "M_TopNotice")
+			self.NoticeMainCtrl = self.Notice:Get("Image")
+			isOk = true
+		end
+		if self.Notice.SelfRect.Activity == false then 
+			self.Notice.SelfRect.Activity = true
+			isOk = true
+		end
+		if isOk then
+			_P.DoNiticeFunc(MPlayer.DequeueNotice(), self.Notice.SelfRect, self.NoticeMainCtrl, self.Notice:Get("NoticeIcon"), self.Notice:Get("NoticeText"), self.Notice:Get("NoticeFx"), self.ScreenWidth)
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self:UnBlack()
+	self._EventNode.RaycastTarget = false
+
+	--雾板
+	self.FogTexture = nil
+	
+	--菊花
+	self.Loading = nil
+	self.LoadingEffect = nil
+
+	--确定框
+	self.CheckBox = nil
+	self.CheckBoxLevel = 0
+	
+	--跑马灯
+	self.ScreenWidth = CS.JGui.JGuiManager.GuiRoot.Width
+	self.Notice = nil
+	self.NoticeMainCtrl = nil
+	self:RegistCallEvent(Define.EventListenId.ToReLogin, function (eventHandle)
+		if self.Notice ~= nil then
+			self.Notice:Destroy()
+			self.Notice = nil
+			self.NoticeMainCtrl = nil
+			_P.RefreshMainTopBtns(false)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.ActivityWindowForType, function (eventHandle, winType, isActivity)
+		if self.Notice ~= nil and winType == WindowType.Main and self.Notice.SelfRect.Activity == true then
+			if self.Notice.SelfRect.SortingLayerName == "Main" then
+				self.NoticeMainCtrl.Activity = isActivity
+			end
+		end
+	end)
+end
+
+return _M

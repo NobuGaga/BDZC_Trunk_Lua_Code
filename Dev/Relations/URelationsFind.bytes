@@ -1,0 +1,123 @@
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local JGuiManager = CS.JGui.JGuiManager
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Lobby_Ranking_Zhuisu")
+	self.mMoudle = moudle
+
+	self.mFindPlayerID = nil
+	moudle:Get("Placeholder").Text = Csv.Text("relations_inputOtherNum")
+	moudle:Get("PursuitText").Text = Csv.Text("relations_findduiX")
+	moudle:Get("title").Text = Csv.Text("relations_findL")
+	moudle:Get("tielw").Text = Csv.Text("relations_message")
+	moudle:Get("jifen").Text = Csv.Text("relations_pointminus")
+	moudle:Get("shili").Text = Csv.Text("relations_findpower")
+	moudle:Get("staff").Text = Csv.Text("relations_findstaff")
+	moudle:Get("Paiming").Text = Csv.Text("relations_findpai")
+	moudle:Get("C_text").Text = Csv.Text("relations_find")
+	moudle:Get("C_text_1").Text = Csv.Text("relations_zhuisu")
+	moudle:Get("Btn_a"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickFind(self)
+	end,nil,0.9)
+	moudle:Get("Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickFight(self)
+	end,nil,0.9)
+	_P.RefreshView(self)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local logData = MRelations.LogData
+	if logData ~= nil then
+		content:DestroyChildren()
+		local logTable = _P.GetSortTable(logData.list)
+		if logTable ~= nil then
+			for k,v in pairs(logTable) do
+				local logMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Record_Item")
+				logMoudle:Get("name").Text = Csv.Text("relations_tip8",{name = v.name,num = v.playerid})
+				local companyMode = Csv.Company[v.level].name
+				logMoudle:Get("guanpin").Text = Csv.Text("relations_companyLv",{name = companyMode})
+				logMoudle:Get("Btntext").Text = Csv.Text("relations_again")
+				logMoudle:Get("Btn"):AddOnButton(function()
+					SoundMgr.Play(10001)
+					MRelations.FightType = 2
+					MRelations.PlayerID = v.playerid
+					WindowMgr.Create("URelationsSelectStaff")
+				end,nil,0.9)
+			end
+		end
+	end
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	return a.index > b.index
+end
+
+function _P.OnClickFind(self)
+	local moudle = self.mMoudle
+	local id = moudle:Get("input").Text
+	if string.len(id) > 0 then
+		CRelations.CFind(id)
+	else
+		CCommon.ShowError(Csv.Text("relations_findtip"))
+	end
+end
+
+function _P.OnClickFight(self)
+	local moudle = self.mMoudle
+	if self.mFindPlayerID ~= nil then
+		MRelations.FightType = 2
+		MRelations.PlayerID = self.mFindPlayerID
+		WindowMgr.Create("URelationsSelectStaff")
+	else
+		CCommon.ShowError(Csv.Text("relations_tip6"))
+	end
+end
+
+function _M:Refresh()
+	_P.RefreshView(self)
+end
+
+function _M:FindSuccess(data)
+	local moudle = self.mMoudle
+	self.mFindPlayerID = data.playerid
+	moudle:Get("PlayerInfo").Activity = true
+	moudle:Get("head").SpriteName = Csv.Avatar[data.avatar.head]["asset_"..data.sex]
+	moudle:Get("Body").SpriteName = Csv.Avatar[data.avatar.body]["asset_"..data.sex]
+	moudle:Get("NameText").Text = data.name
+	moudle:Get("jifenNum").Text = data.point
+	moudle:Get("shiliNum").Text = data.power
+	moudle:Get("PaimingNum").Text = data.rank
+	moudle:Get("staffNum").Text = data.staffnum
+
+	local csvCompany = Csv.Company[data.level]
+	moudle:Get("guimoText").Text = csvCompany.name
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

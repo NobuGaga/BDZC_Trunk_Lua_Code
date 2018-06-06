@@ -1,0 +1,96 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:BeforeDestroy(...)
+end
+
+function _M:OnSelectServer()
+	WindowMgr.Call("ULogin", "OnSelectServer", self.CurrSelectedSrvData)
+end
+
+function _P:UpdateServerGroup(self, groupName)
+	self.ContentSrvList:DestroyChildren()
+	local srvList = CLogin.FindServerListByGroupName(groupName)
+	for k,v in pairs(srvList) do
+		local ServerModule = JGuiManager.GetMoudle(self.ContentSrvList,"M_Login_SrvNode", WindowType.UI, 0)
+		ServerModule:Get("SrvName").Text = v.name
+		MLogin.SetSrvStatusName(v.status, ServerModule:Get("SrvStatus"), ServerModule:Get("Img"))
+		ServerModule:Get("bg"):AddOnButton(function(...)
+			SoundMgr.Play(10001)
+				CLogin.SetSelectedServer(v)
+				WindowMgr.Call("ULogin", "RefreshServerInfo")
+				self:Destroy()
+			end, nil, 0.9)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Login_Server")
+
+	-- 固定内容初始化
+	moudle:Get("C_Text").Text = Csv.Text("select_srv_title")
+	moudle:Get("text").Text = Csv.Text("select_srv_last")
+	moudle:Get("text1_0").Text = Csv.Text("select_srv_curr")
+	moudle:Get("LastSrvName").Text = MLogin.LastLoginServer.name
+	MLogin.SetSrvStatusName(MLogin.LastLoginServer.status, moudle:Get("LastSrvStatus"), moudle:Get("line1"))
+	moudle:Get("Btn_Back"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local ContentSrvGroup = moudle:Get("ContentSrvGroup")
+	local firstGroupName = nil
+	self.GroupTabs = {}
+	for k,v in pairs(MLogin.ServerList) do
+		local GroupModuel = JGuiManager.GetMoudle(ContentSrvGroup,"M_Login_SrvGroup", WindowType.UI, 0)
+		GroupModuel:Get("Text").Text = v.name
+		GroupModuel:Get("text2").Text = v.name
+		GroupModuel.SelfRect:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				for _k,group in pairs(self.GroupTabs) do
+					if _k == k then
+						group.bg.Activity = false
+						group.bg2.Activity = true
+					else
+						group.bg.Activity = true
+						group.bg2.Activity = false
+					end
+				end
+				_P:UpdateServerGroup(self, v.name)
+		end, nil, 0.9)
+
+		local bg = GroupModuel:Get("bg")
+		local bg2 = GroupModuel:Get("bg2")
+		self.GroupTabs[k] = {bg = bg, bg2 = bg2}
+
+		if not firstGroupName then
+			firstGroupName = v.name
+
+			bg.Activity = false
+			bg2.Activity = true
+		end
+	end
+	self.ContentSrvList = moudle:Get("ContentSrvList")
+	_P:UpdateServerGroup(self, firstGroupName)
+end
+
+return _M

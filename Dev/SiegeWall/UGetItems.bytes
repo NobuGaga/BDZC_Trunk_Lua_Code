@@ -1,0 +1,44 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:OnCreate(data,isCloseUdisk)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Get")
+	self.Moudle = moudle
+
+	moudle:Get("C_text_0").Text = Csv.Text("siege_udisk_get")
+	local getBtn = moudle:Get("C_Btn_b")
+	getBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		if isCloseUdisk ~= nil and isCloseUdisk == true then
+			print("isCloseUdisk______",isCloseUdisk)
+			WindowMgr.Call("UGetUDisk","CloseView")
+		end
+	end,nil,0.9)
+
+	local jifen = moudle:Get("Tips1")
+	local gongxian = moudle:Get("Tips2")
+
+	jifen.Text = Csv.Text("siege_get_jifen",{num = data.jifen})
+	gongxian.Text = Csv.Text("siege_get_gongxian",{num = data.score})
+
+	local content = moudle:Get("content")
+	if data.items ~= nil then
+		for k,v in pairs(data.items) do
+			CCommon.CreateItem(content, v.id, nil, {num = v.count})
+		end
+	end
+end
+return _M

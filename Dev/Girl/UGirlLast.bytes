@@ -1,0 +1,252 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local DATE_EFFECT_ID = 10098
+
+local _M = Class()
+local _P = {}
+
+function _M:UpdateLastGirl(data)
+	local itemTab = self.mItemTab
+
+	for k,v in pairs(itemTab)do
+		if v.data.girlid == data.girlid then
+			v.data = data
+			_P.ShowItem(self,v.item,data)
+		end
+	end
+	self.mItemTab = itemTab
+
+	_P.Sort(self)
+end
+
+--已解锁放到最后取消红点
+function _M:RefuseLastGirl(data)
+	local itemTab = self.mItemTab
+	local content = self.mContent
+	
+	for k,v in pairs(itemTab)do
+		if v.data.girlid == data.id then
+			v.data = data
+			_P.ShowItem(self,v.item,data)
+		end
+	end
+	self.mItemTab = itemTab
+
+	_P.Sort(self)
+end
+
+--判断聊天红点问题
+function _M:RefreshGirlTalk(data)
+	local itemTab = self.mItemTab
+	local content = self.mContent
+	
+	for k,v in pairs(itemTab)do
+		if v.data.girlid == data.girlid then
+
+			_P.ShowItem(self,v.item,data)
+		end
+	end
+	self.mItemTab = itemTab
+
+	_P.Sort(self)
+end
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Last", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local content = moudle:Get("Content")
+	self.mContent = content
+
+	self.mRedTable = {}
+	
+	_P.CreateItems(self,content)
+end
+
+function _P.CreateItems(self,content)
+
+	local dataTab = MGirl.knowGirl
+	local items = {}
+	if dataTab ~= nil then
+		for k,v in pairs(dataTab) do
+			local _item = _P.SetLockGirlItem(self,v,content)
+			table.insert(items,{item = _item,data = v})
+		end
+	end
+	self.mItemTab = items
+
+	_P.Sort(self)
+end
+
+function _P.SetLockGirlItem(self,data,parent)
+
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Last_Item", WindowType.UI, 10)
+
+	_moudle.SelfRect:AddOnButton(function()
+		WindowMgr.Create("UGirlLastTalk",data.girlid,1)
+	end,nil)
+
+	local btnGame = _moudle:Get("BtnGame")
+	btnGame:AddOnButton(function(...)
+		_P.ClickToGame(self,data.girlid)
+	end)
+	local btnDate = _moudle:Get("BtnDate")
+	btnDate:AddOnButton(function(...)
+		_P.ClickToDate(self,data.girlid)
+	end)
+
+	local dateActor = _moudle:Get("dateActorPanel")
+	local gameActor = _moudle:Get("gameActorPanel")
+	CCommon.CreateEffect(dateActor,DATE_EFFECT_ID)
+	CCommon.CreateEffect(gameActor,DATE_EFFECT_ID)
+
+	_P.ShowItem(self,_moudle,data)
+
+	return _moudle
+end
+
+function _P.ShowItem(self,_moudle,data)
+	local girlsData = Csv.Girl[data.girlid]
+
+	local bsxSp = _moudle:Get("bsx")
+	local name = _moudle:Get("Name")
+	local tips = _moudle:Get("tips")
+	local btnGame = _moudle:Get("BtnGame")
+	local btnDate = _moudle:Get("BtnDate")
+	local redPoint = _moudle:Get("redPoint")
+
+	btnGame.Activity = false
+	btnDate.Activity = false
+	if data.state == 2 then
+		btnGame.Activity = true
+	elseif data.state == 3 then
+		btnDate.Activity = true
+	end
+	bsxSp.SpriteName = girlsData.lockicon
+	name.Text = MGirl.GetGirlName(data.girlid)----girlsData.name
+	tips.Text = _P.GetLastTalk(data)
+
+	--检测提示
+	local isRed = true
+	if data.state <= 1 then
+		if data.cd ~= nil then
+			if data.cd > 0 then
+				isRed = false
+			end
+		end
+	elseif data.state > 3 then
+		--已解锁红点
+		isRed = _P.CheckCanTalk(data)
+	end
+	
+	
+	redPoint.Activity = isRed
+	_P.SetItemRed(self,data.girlid,isRed)
+	
+	--无红点押后
+	if not isRed then
+		--_moudle.SelfRect.CachedTran:SetSiblingIndex(-1)
+	end
+end
+
+function _P.ClickToGame(self,id)
+	WindowMgr.Create("UGirlLastGame",id)
+end
+
+function _P.ClickToDate(self,id)
+	WindowMgr.Create("UGirlLastDate",id)
+end
+
+function _P.GetLastTalk(data)
+	if data.chat.dialogues == nil then
+		return ""
+	end
+
+	local talkTab = data.chat.dialogues--Csv.KnowGirl[data.girlid].firstTalk
+	local talkID = 0
+	for k,v in pairs(data.chat.dialogues)do
+		local talkData = Csv.GirlTalk[v]
+		if talkData ~= nil then
+			if talkData.people ~= 0 then --data.girlid
+				if data.cd ~= nil and data.cd > 0 then
+					if k < #talkTab then
+						talkID = v
+					end
+				else
+					talkID = v
+				end
+			end
+		end
+	end
+
+	local str = ""
+	local talkData = Csv.GirlTalk[talkID]
+	if talkData.value ~= nil then
+		str = talkData.value[1]
+	end
+	return str
+end
+
+function _P.CheckCanTalk(data)
+	if data.chat.dialogues == nil then
+		return false
+	end
+
+	local talkID = data.chat.dialogues--Csv.KnowGirl[data.girlid].firstTalk
+	for k,v in pairs(data.chat.dialogues)do
+		local talkData = Csv.GirlTalk[v]
+		talkID = v
+	end
+
+	local str = ""
+	local talkData = Csv.GirlTalk[talkID]
+	if talkData.nextTalk ~= nil then
+		if #talkData.nextTalk > 0 then
+			return true
+		end
+	end
+	return false
+end
+
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+function _P.Sort(self)
+	local itemTab = self.mItemTab
+	
+	for k,v in pairs(itemTab)do
+		local isRed = _P.GetItemRed(self,v.data.girlid)
+		if isRed then
+			v.item.SelfRect.CachedTran:SetSiblingIndex(0)
+		else
+			v.item.SelfRect.CachedTran:SetSiblingIndex(-1)
+		end
+	end
+end
+
+function _P.SetItemRed(self,id,isRed)
+	local redTab = self.mRedTable
+	if redTab[id] == nil then
+		redTab[id] = false
+	end
+	redTab[id] = isRed
+end
+
+function _P.GetItemRed(self,id)
+	local redTab = self.mRedTable
+	if redTab[id] == nil then
+		return false
+	end
+	return redTab[id]
+end
+
+return _M

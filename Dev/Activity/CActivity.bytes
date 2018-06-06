@@ -1,0 +1,2084 @@
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.VIPWelfare.MVipWelfare.bytes#_M]
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Activity.RankReward.CRankReward.bytes#_M]
+local CRankReward = JRequire "Dev.Activity.RankReward.CRankReward"
+--@RefType [Dev.Activity.SevenDayTarget.CSevenDayTarget.bytes#_M]
+local CSevenDayTarget = JRequire "Dev.Activity.SevenDayTarget.CSevenDayTarget"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+-- @RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local DataNameToType = {
+	rankReward = Define.ActivityType.RankReward,
+	jianChen = Define.ActivityType.JianChen,
+	timeLimit = Define.ActivityType.TimeLimit,
+	rechargeReward_Day = Define.ActivityType.RechargeReward_Day,
+	rechargeReward_Total = Define.ActivityType.RechargeReward_Total,
+	rechargeReward_TotalDay = Define.ActivityType.RechargeReward_TotalDay,
+	jinGuo = Define.ActivityType.JinGuo,
+	xinguan1 = Define.ActivityType.XinGuan1,
+	xinguan2 = Define.ActivityType.XinGuan2,
+	commerce_Recharge = Define.ActivityType.Commerce_Recharge,
+	shop_Package = Define.ActivityType.Shop_Package,
+	lottery = Define.ActivityType.Lottery,
+	sevenDayTarget = Define.ActivityType.SevenDayTarget,
+	charitable = Define.ActivityType.Charitable
+}
+
+local DataNameToSysID = {
+	rankReward = Define.SysId.RankReward,
+	jianChen = Define.SysId.JianChen,
+	timeLimit = Define.SysId.TimeLimit,
+	rechargeReward_Day = Define.SysId.RechargeReward_Day,
+	rechargeReward_Total = Define.SysId.RechargeReward_Total,
+	rechargeReward_TotalDay = Define.SysId.RechargeReward_TotalDay,
+	jinGuo = Define.SysId.JinGuo,
+	xinguan1 = Define.SysId.XinGuan1,
+	xinguan2 = Define.SysId.XinGuan2,
+	commerce_Recharge = Define.SysId.Commerce_Recharge,
+	shop_Package = Define.SysId.Shop_Package,
+	lottery = Define.SysId.Lottery,
+	sevenDayTarget = Define.SysId.SevenDayTarget,
+	charitable = Define.SysId.Charitable
+}
+
+local ActTypeToModule = {
+	Default = "Dev.Activity.BaseCActivity",
+	[Define.ActivityType.RankReward] = "Dev.Activity.RankReward.CRankReward",
+	[Define.ActivityType.TimeLimit] = "Dev.Activity.TimeLimit.CTimeLimit",
+	[Define.ActivityType.SevenDayTarget] = "Dev.Activity.SevenDayTarget.CSevenDayTarget",
+}
+
+local ActivityTypeModule = {}
+function _P.GetActivityModuleForType(actType)
+	if not ActivityTypeModule[actType] then
+		local path = ActTypeToModule[actType]
+		if path then
+			--JRequire会把根层CActivity require 进来？
+			ActivityTypeModule[actType] = JRequire (path)
+		end
+	end
+	return ActivityTypeModule[actType]
+end
+
+local CMD_ID = 
+{
+	cGet = 1,						--领取奖励 PActivity.CGet
+	cGetInfo = 2,				   	--获取活动数据更新 PActivity.CGetActivityInfo
+	cNewEnter = 4,					--(新官上任)进入战斗界面 PActivity.CNewEnter
+	cNewBuyGoods = 5,				--(新官上任)购买商城道具 PActivity.CNewBuyGoods
+	cNewExchangeGoods = 6,			--(新官上任)兑换道具 PActivity.CNewExchangeGoods
+	cNewUseGoods = 7,				--(新官上任)使用道具 PActivity.CNewUseGoods
+	cNewRefreshInfo = 8,			--(新官上任)刷新最新10条公告 PActivity.CNewRefreshInfo
+	cActivityCommerceMember = 9,	--(商会充值)获取成员充值信息列表(空结构)
+	cActivityCommerceGeted = 10,    --(商会充值)获取已领取该阶段奖励成员信息列表 PActivity.CCommerceGeted
+	cActivityNewRest = 11,		 	--(新官上任)送去休息 PActivity.CNewEnter
+	cLottery = 12,					--(抽奖)请求抽奖 PActivity.CLottery
+	cLotteryNumGet = 13,			--(抽奖)请求次数奖励 PActivity.CLottery
+	cLotteryOpen = 14,				--(抽奖)打开界面 - 返回历史消息
+	cLotteryClose = 15,				--(抽奖)关闭界面
+	cVipDiscountGet = 19,			--（vip折扣礼包）领取奖励 PActivity.CGet
+	cSevenDayGetRank = 20,			--(七日目标)获取自己的排名PActivity.CSevenDayGetRank
+	cChairtyBuy	= 21,				--(慈善)购买捐赠物 Pcommon.PItem
+	cChairtyDonation = 22,			--(慈善)捐赠 	Pcommon.PItem
+	cChairtyDrow = 23,				--(慈善)抽奖 	PActivity.CChairtyDrow
+	cChairtyOpen = 24,				--(慈善)打开界面，推送公告
+	cChairtyClose = 25,				--(慈善)关闭界面，不再推送公告
+	cChairtyGetRank = 26,			--(慈善)获取自己的排名和进度
+	cChaityOpenDonation = 27,		--(慈善)打开捐赠界面,推送积分公告
+	cChaityCloseDonation = 28,		--(慈善)关闭捐赠界面，不再推送积分公告
+	cAdventureEventCompelete = 29,  --(奇遇)完成个人事件,PActivity.CCompeleteEvent
+	cAdventureGangEventCompelete = 30, --(奇遇)完成后续事件，PActivity.CCompeleteGangEvent
+	cAdventureOpenRank = 31,		--(奇遇)打开奇遇排行榜请求,返回PActivity.SAdventureOpenRank
+	cAdventureGongGetReward = 32,	--(奇遇)领取后续事件奖励，PActivity.CGetGangEventReward
+	cAdventureShopRefresh =	33, 	--(奇遇)刷新商城	PActivity.CAdventureShopRefresh
+	cAdventureShopBuy = 34,			--(奇遇)商城购买（兑换）PActivity.CAdventureShopBuy
+	cAdventureStaffOver = 35,		--(奇遇)奇遇员工加班 PActivity.CStaffOverTime
+
+
+	sInit = 1,						--初始化 PActivity.SActivity
+	sUpdate = 2,					--更新 PActivity.SActivity
+	sGetSuccess = 3,				--获取/操作成功反馈 PActivity.SActivityGeted
+	sUpdateState = 4,				--更新状态 PActivity.SUpdateState
+	sUpdatePro = 5, 				--更新进度 PActivity.SUpdatePro
+	sNewEnter = 6,					--(新官上任)进入战斗界面 PActivity.SNewEnter
+	sNewBuyGoods = 7,				--(新官上任)购买商城道具 PActivity.SNewBuyGoods
+	sNewExchangeGoods = 8,			--(新官上任)兑换道具 PActivity.SNewExchangeGoods
+	sNewUseGoods = 9,				--(新官上任)使用道具 PActivity.SNewUseGoods
+	sNewRefreshInfo = 10,			--(新官上任)刷新最新10条公告 PActivity.SNewRefreshInfo
+	sNewStatus = 11,				--(新官上任)活动当日开启、结束推送 PActivity.SNewStatus
+	sCommerceMember = 12,			--(商会充值)获取成员充值信息列表 PActivity.SCommerceMember
+	sCommerceGeted = 13,			--(商会充值)获取已领取该阶段奖励成员信息列表 PActivity.SCommerceGeted
+	sActivityNewRest = 14,			--(新官上任)送去休息 PActivity.SNewRest
+	sLottery = 15,					--(抽奖)抽奖返回 PActivity.SLottery
+	sLotteryNumGet = 16,			--(抽奖)次数奖励返回 PActivity.SLotteryNumGet
+	sLotteryMessage = 17,			--(抽奖)消息刷新 PActivity.SLotteryMessage
+	sLotteryMsgList = 18,			--(抽奖)历史消息列表 PActivity.SLotteryMsgList
+	sVipDisCountGift = 19,			--VIP 折扣礼包领取后状态推送 PActivity.PVIPDiscountGift
+	sUpdateDailyGift = 20,			--更新每日礼包 PActivity.PDailyGiftInfo
+	sSevenDayRank = 21,				--(七日目标)返回排名PActivity.SSevenDayRank
+	sChairtyBuy	= 22,				--(慈善)购买捐赠物返回 PActivity.PChairtyAct
+	sChairtyDonation = 23,			--(慈善)捐赠返回 PActivity.PChairtyAct
+	sChairtyDrow = 24,				--(慈善)抽奖返回 PActivity.SCharityDrow
+  	sChairtyOpen = 25,				--(慈善)打开界面返回 PActivity.SCharityMsgList
+	sCharityMessage = 26,			--(慈善)推送公告PActivity.SCharityMessage
+	sCharityGetRank = 27,			--(慈善)获取排名返回PActivity.SCharityRank
+	sChaityOpenDonation = 28,		--(慈善)打开捐赠界面返回PActivity.SCharityMsgList
+	sCharityScoreMessage = 29,		--(慈善)推送积分公告PActivity.SCharityMessage
+	sAdventureEventCompelete = 30,	--(奇遇)完成个人事件,PActivity.SAdventureEventCompelete
+	sAdventureGangEventCompelete = 31, --(奇遇)完成奇遇后续事件,PActivity.SAdventureEventCompelete
+	sAdventureOpenRank = 32,		--(奇遇)打开奇遇排行榜返回 PActivity.SAdventureOpenRank
+	sAdventureGongGetReward = 33,	--(奇遇)领取后续事件奖励返回， PActivity.PGangEventRewardItemInfo
+	sAdventureNewEventSend	= 34,	--(奇遇)新事件推送 PActivity.PEventItemInfo
+	sAdventureGangEventSend = 35,	--(奇遇)后续事件推送 PActivity.PGangEventItemInfo
+	sAdventureShopRefresh =	36,		--(奇遇)刷新商城 PClub.SAdventureShopRefresh
+	sAdventureShopBuy =	37,			--(奇遇)商城购买 PClub.SAdventureShopBuy
+	sAdventureStaffOver = 38,		--(奇遇)员工加班返回 PActivity.SStaffOverTime
+}
+
+function _M.ModuleClean()
+	MActivity.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cGet] 					 = "PActivity.CGet",
+		[CMD_ID.cGetInfo] 				 = "PActivity.CGetActivityInfo",
+		[CMD_ID.cNewEnter] 				 = "PActivity.CNewEnter",
+		[CMD_ID.cNewBuyGoods] 			 = "PActivity.CNewBuyGoods",
+		[CMD_ID.cNewExchangeGoods] 		 = "PActivity.CNewExchangeGoods",
+		[CMD_ID.cNewUseGoods] 			 = "PActivity.CNewUseGoods",
+		[CMD_ID.cNewRefreshInfo] 		 = "PActivity.CNewRefreshInfo",
+		[CMD_ID.cActivityCommerceMember] = "",
+		[CMD_ID.cActivityCommerceGeted]  = "PActivity.CCommerceGeted",
+		[CMD_ID.cActivityNewRest]    	 = "PActivity.CNewEnter",
+		[CMD_ID.cLottery] 			  	 = "PActivity.CLottery",
+		[CMD_ID.cLotteryNumGet] 		 = "PActivity.CLottery",
+		[CMD_ID.cLotteryOpen] 			 = "",
+		[CMD_ID.cLotteryClose] 			 = "",
+		[CMD_ID.cVipDiscountGet] 		 = "PActivity.CGet",
+		[CMD_ID.cSevenDayGetRank] 		 = "PActivity.CSevenDayGetRank",
+		[CMD_ID.cChairtyOpen]			 = "PActivity.SCharityMsgList",
+		[CMD_ID.cChairtyDrow]			 = "PActivity.CChairtyDrow",
+		[CMD_ID.cChairtyBuy]			 = "PItem",
+		[CMD_ID.cChairtyClose]			 = "",
+		[CMD_ID.cChairtyDonation]		 = "PItem",
+		[CMD_ID.cChairtyGetRank]		 = "",
+		[CMD_ID.cChaityOpenDonation]	 = "",
+		[CMD_ID.cChaityCloseDonation]	 = "",
+		[CMD_ID.cAdventureEventCompelete] = "PActivity.CCompeleteEvent",
+		[CMD_ID.cAdventureGangEventCompelete] = "PActivity.CCompeleteGangEvent" ,
+		[CMD_ID.cAdventureOpenRank]		 = "",
+		[CMD_ID.cAdventureGongGetReward] = "PActivity.CGetGangEventReward",
+		[CMD_ID.cAdventureShopRefresh]	 = "PActivity.CAdventureShopRefresh",
+		[CMD_ID.cAdventureShopBuy]		 = "PActivity.CAdventureShopBuy",
+		[CMD_ID.cAdventureStaffOver]	 = "PActivity.CStaffOverTime",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sInit] 			   		 = {proto = "PActivity.SActivity", 				handle = _P.OnInit},
+		[CMD_ID.sUpdate]           		 = {proto = "PActivity.SActivity", 				handle = _P.OnUpdate},
+		[CMD_ID.sGetSuccess] 	   		 = {proto = "PActivity.SActivityGeted", 		handle = _P.OnGetSuccess},
+		[CMD_ID.sUpdateState] 	   		 = {proto = "PActivity.SUpdateState", 			handle = _P.OnUpdateState},
+		[CMD_ID.sUpdatePro] 	   		 = {proto = "PActivity.SUpdatePro", 			handle = _P.OnUpdatePro},
+		[CMD_ID.sNewEnter] 		   		 = {proto = "PActivity.SNewEnter", 				handle = _P.OnNewEnter},
+		[CMD_ID.sNewBuyGoods]      		 = {proto = "PActivity.SNewBuyGoods", 			handle = _P.OnNewBuyGoods},
+		[CMD_ID.sNewExchangeGoods] 		 = {proto = "PActivity.SNewExchangeGoods",		handle = _P.OnNewExchangeGoods},
+		[CMD_ID.sNewUseGoods]      		 = {proto = "PActivity.SNewUseGoods", 			handle = _P.OnNewUseGoods},
+		[CMD_ID.sNewRefreshInfo]   		 = {proto = "PActivity.SNewRefreshInfo", 		handle = _P.OnNewRefreshInfo},
+		[CMD_ID.sNewStatus] 	   		 = {proto = "PActivity.SNewStatus", 			handle = _P.OnNewStatus},
+		[CMD_ID.sCommerceMember]   		 = {proto = "PActivity.SCommerceMember", 		handle = _P.OnCommerceMember},
+		[CMD_ID.sCommerceGeted]    		 = {proto = "PActivity.SCommerceGeted", 		handle = _P.OnCommerceGeted},
+		[CMD_ID.sActivityNewRest]  		 = {proto = "PActivity.SNewRest", 				handle = _P.OnNewToRest},	
+		[CMD_ID.sLottery] 		   		 = {proto = "PActivity.SLottery", 				handle = _P.OnLottery},			--(抽奖)抽奖返回 PActivity.SLottery
+		[CMD_ID.sLotteryNumGet]    		 = {proto = "PActivity.SLotteryNumGet", 		handle = _P.OnLotteryNumGet},	--(抽奖)次数奖励返回 PActivity.SLotteryNumGet
+		[CMD_ID.sLotteryMessage]   		 = {proto = "PActivity.SLotteryMessage", 		handle = _P.OnLotteryMessage},	--(抽奖)消息刷新 PActivity.SLotteryMessage
+		[CMD_ID.sLotteryMsgList]   		 = {proto = "PActivity.SLotteryMsgList", 		handle = _P.OnLotteryMsgList},	--(抽奖)历史消息列表 PActivity.SLotteryMsgList	
+		[CMD_ID.sVipDisCountGift]  		 = {proto = "PActivity.PVIPDiscountGift", 		handle = _P.OnVipDiscountGift},
+		[CMD_ID.sUpdateDailyGift]  		 = {proto = "PActivity.PDailyGiftInfo", 		handle = _P.OnUpdateDailyGift},	--更新每日礼包 PActivity.PDailyGiftInfo	
+		[CMD_ID.sSevenDayRank]    		 = {proto = "PActivity.SSevenDayRank", 			handle = _P.OnUpdateSevenRank},		--(七日目标)返回排名PActivity.SSevenDayRank
+		[CMD_ID.sChairtyBuy]			 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyBuy},		--(慈善活动)购买返回PActivity.PChairtyAct
+		[CMD_ID.sChairtyDonation]		 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyDonate},	--(慈善活动)捐赠返回PActivity.PChairtyAct
+		[CMD_ID.sChairtyDrow]			 = {proto = "PActivity.SCharityDrow",			handle = _P.OnChairtyDrow}, 	--(慈善活动)抽奖返回PActivity.SCharityDrow
+		[CMD_ID.sChairtyOpen]			 = {proto = "PActivity.SCharityMsgList",		handle = _P.OnChairtyOpen},		--(慈善活动)打开界面返回PActivity.SCharityMsgList
+		[CMD_ID.sCharityMessage]		 = {proto = "PActivity.SCharityMessage",		handle = _P.OnChairtyMsg},		--(慈善活动)消息推送
+		[CMD_ID.sCharityGetRank]		 = {proto = "PActivity.SCharityRank",			handle = _P.OnChairtyRank},		--(慈善活动)排名榜消息
+		[CMD_ID.sChaityOpenDonation]	 = {proto = "PActivity.SCharityMsgList",		handle = _P.OnChairtyDonateOpen},--(慈善活动)打开捐赠界面返回PActivity.SCharityMsgList
+		[CMD_ID.sCharityScoreMessage]	 = {proto = "PActivity.SCharityMessage",		handle = _P.OnChairtyScoreMsg},--(慈善活动)慈善活动积分推送
+		[CMD_ID.sAdventureOpenRank]		 = {proto = "PActivity.SAdventureOpenRank",		handle = _P.OnAdvRank},		--(奇遇)打开排行榜返回
+		[CMD_ID.sAdventureEventCompelete] = {proto = "PActivity.SAdventureEventCompelete", handle = _P.OnAdvPerson}, --(奇遇)完成个人事件返回
+		[CMD_ID.sAdventureGangEventCompelete] = {proto = "PActivity.SAdventureEventCompelete", handle = _P.OnAdvGang}, --(奇遇)完成公会事件返回
+		[CMD_ID.sAdventureGongGetReward] = {proto = "PActivity.PGangEventRewardItemInfo", handle = _P.OnAdvGetGangReward}, --(奇遇)领取后续事件奖励返回
+		[CMD_ID.sAdventureNewEventSend]  = {proto = "PActivity.PEventItemInfo",			handle = _P.OnNewEvent},		--(奇遇)新个人事件推送
+		[CMD_ID.sAdventureGangEventSend] = {proto = "PActivity.PGangEventItemInfo",		handle = _P.OnNewGangEvent},	--(奇遇)新商会事件推送
+		[CMD_ID.sAdventureShopRefresh]	 = {proto = "PActivity.SAdventureShopRefresh",	handle = _P.OnAdvShopRefrash},	--(奇遇)兑换商城刷新		
+		[CMD_ID.sAdventureShopBuy]		 = {proto = "PActivity.SAdventureShopBuy",		handle = _P.OnAdvShopBuy},		--(奇遇)商城购买返回
+		[CMD_ID.sAdventureStaffOver]	 = {proto = "PActivity.SStaffOverTime",			handle = _P.OnAdvStaffOver},	--(奇遇)员工加班返回
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Activity, func_send, func_recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+--领取奖励
+function _M.GetRewardReq(actId, index)
+	_M.Send(CMD_ID.cGet, {actId = actId, index = index})
+end
+
+function _M.SevenDayGetRank(actId)
+	_M.Send(CMD_ID.cSevenDayGetRank, {actId = actId})
+end
+
+function _M.GetVipDiscontRewardReq(actId, index)
+	_M.Send(CMD_ID.cVipDiscountGet, {actId = actId, index = index})
+end
+
+--获取活动信息
+function _M.GetInfoReq(actId, index)
+	_M.Send(CMD_ID.cGetInfo, {actId = actId, index = index})
+end
+
+--(新官上任)进入战斗界面
+function _M.EnterNewReq(actId)
+	_M.Send(CMD_ID.cNewEnter, {actId = actId})
+end
+
+--(新官上任)购买商城道具
+function _M.BuyNewGoodsReq(actId, index)
+	_M.Send(CMD_ID.cNewBuyGoods, {actId = actId, index = index})
+end
+
+--(新官上任)兑换道具
+function _M.ExchangeNewReq(actId, index)
+	_M.Send(CMD_ID.cNewExchangeGoods, {actId = actId, index = index})
+end
+
+--(新官上任)使用道具
+function _M.UseNewGoodsReq(actId, index)
+	_M.Send(CMD_ID.cNewUseGoods, {actId = actId, index = index})
+end
+
+--(新官上任)刷新最新10条公告
+function _M.RefreshNewInfoReq(actId)
+	_M.Send(CMD_ID.cNewRefreshInfo, {actId = actId})
+end
+
+--(商会充值)获取充值成员信息
+function _M.GetComRechargeMember()
+	_M.Send(CMD_ID.cActivityCommerceMember)
+end
+
+--(商会充值)充值成员领取奖励信息
+function _M.GetComRechargeGeted(INDEX)
+	_M.Send(CMD_ID.cActivityCommerceGeted,{index = INDEX})
+end
+
+--(新官上任)送去休息
+function _M.ToRestReq(actId)
+	_M.Send(CMD_ID.cActivityNewRest, {actId = actId})
+end
+
+--抽奖
+function _M.ReqLottery(num)
+	_M.Send(CMD_ID.cLottery, {num = num})	
+end
+function _M.ReqLotteryNumGet(num)
+	_M.Send(CMD_ID.cLotteryNumGet, {num = num})
+end
+function _M.ReqLotteryOpen()
+	_M.Send(CMD_ID.cLotteryOpen)
+end
+function _M.ReqLotteryClose()
+	_M.Send(CMD_ID.cLotteryClose)
+end
+
+--慈善活动购买商品
+function _M.ReqCharitableBuy(id,count)
+	_M.Send(CMD_ID.cChairtyBuy, {id = id, count = count})
+end
+
+--慈善活动抽奖
+function _M.ReqCharitableDrop(type)
+	_M.Send(CMD_ID.cChairtyDrow, {type = type})
+end
+
+--慈善活动捐赠
+function _M.ReqCharitableDonate(id, count)
+	_M.Send(CMD_ID.cChairtyDonation, {id = id, count = count})
+end
+
+--慈善活动打开界面
+function _M.ReqCharitableOpen()
+	_M.Send(CMD_ID.cChairtyOpen)
+end
+
+--慈善活动关闭界面
+function _M.ReqCharitableClose()
+	_M.Send(CMD_ID.cChairtyClose)
+end
+
+--慈善活动打开捐赠界面
+function _M.ReqCharitableDonateOpen()
+	_M.Send(CMD_ID.cChaityOpenDonation)
+end
+
+--慈善活动关闭捐赠界面
+function _M.ReqCharitableDonateClose()
+	_M.Send(CMD_ID.cChaityCloseDonation)
+end
+
+--慈善活动获取个人排名信息
+function _M.ReqCharitableGetRank()
+	_M.Send(CMD_ID.cChairtyGetRank)
+end
+
+--奇遇活动完成事件
+function _M.ReqAdvPersonEvent(actId,eventId,staffIds)
+	_M.Send(CMD_ID.cAdventureEventCompelete,{actId = actId, eventId = eventId, staffIds = staffIds})
+end
+
+--奇遇打开排行榜
+function _M.ReqRankOpen()
+	_M.Send(CMD_ID.cAdventureOpenRank)
+end
+
+--奇遇完成后续事件
+function _M.ReqAdvGangEventEnd(actId, eventIndex, staffId)
+	_M.Send(CMD_ID.cAdventureGangEventCompelete,{actId = actId, eventIndex = eventIndex, staffId = staffId})
+end
+
+--奇遇刷新兑换商城
+function _M.ReqAdvRefrashShop(pay)
+	_M.Send(CMD_ID.cAdventureShopRefresh,{pay = pay})
+end
+
+--奇遇商城购买
+function _M.ReqAdvShopBuy(index, count)
+	_M.Send(CMD_ID.cAdventureShopBuy,{index = index, count = count})
+end
+
+--奇遇员工加班
+function _M.ReqAdvStaffOver(actId, staffId)
+	_M.Send(CMD_ID.cAdventureStaffOver,{actId = actId, staffId = staffId})
+end
+
+--奇遇活动领取后续事件奖励
+function _M.ReqAdvGetReward(actId, eventIndex)
+	_M.Send(CMD_ID.cAdventureGongGetReward,{actId = actId, eventIndex = eventIndex})
+end
+-------------------服务器回包---------------------
+function _P.StateInfo(data, actType)
+	if data == nil then return nil end
+
+	local state = data.state
+	local info = 
+	{
+		actId = data.actId,
+		actType = actType,
+		state = {
+			state = state.state
+		}
+		
+	}
+	if nil ~= state.startTime then
+		info.state.startTime = state.startTime
+	end
+	if nil ~= state.endTime then
+		info.state.endTime = state.endTime
+	end
+	if nil ~= state.lefttime then
+		info.state.lefttime = state.lefttime
+	end
+	return info
+end
+--四大奸臣
+	--四大奸臣小红点检查
+	function _P.CheckJianChenRepoint(actId, actType)
+		local data = MActivity.GetListFromType(actType)
+		if data == nil then return end
+
+		local sysId = (actType == Define.ActivityType.JianChen and Define.SysId.JianChen) or Define.SysId.JinGuo
+		if data[actId] ~= nil and data[actId].list ~= nil then
+			for k,v in pairs(data[actId].list) do
+				local ownNum = MBag.GetItemNum(v.cost.id)
+				local isListItemRed = (ownNum ~= nil and ownNum >= v.cost.num and (not v.isGeted))
+
+				if MActivity.ActRedpoint(actId, v.index, isListItemRed) then
+					CMain.UpdateRedpoint(isListItemRed, sysId, v.index)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.SuperStaff, actId, v.index)
+				end
+			end
+		end
+	end
+
+	--四大奸臣数据更新
+	function _P.DoUpdateJianChen(actType, data)
+		if data == nil then return end
+		
+		local info = _P.StateInfo(data, actType)
+		info.mainPrefabName = data.mainPrefabName
+		info.itemPrefabName = data.itemPrefabName
+		info.title = data.title
+		info.list = {}
+		for k,v in pairs(data.list) do
+			local one = {
+				index = v.index,
+				attrid = v.attrid,
+				icon = v.icon,
+				tips = v.tips,
+				cost = {id = v.cost.id, num = v.cost.num},
+				isGeted = v.isGeted,
+			}
+			info.list[v.index] = one
+		end
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		--检查小红点
+		_P.CheckJianChenRepoint(info.actId, actType)
+		--刷新界面
+		WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", actType)
+		WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", actType, info.actId)
+	end
+
+--新官上任
+	--新官上任数据更新
+	function _P.DoUpdateXinGuan(actType, data)
+		if data == nil then return end
+		
+		local info = _P.StateInfo(data, actType)
+		if info.state.lefttime then
+			info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+		else
+			info.state.lefttime = HeartBeat.ServSecond()
+		end
+		
+		info.point = data.point
+		info.itemList = {}
+		-- 兑换商店列表
+		local exchangeConf = Csv.ActivityNewExchange[data.actId]
+		if exchangeConf then
+			for k,v in pairs(data.itemList) do
+				local index = v.index
+				local one = {
+					index = index,
+					itemId = v.goodId,
+					itemCount = exchangeConf.itemCount[k],
+					itemPoint = exchangeConf.costPoint[k],
+					maxBuy = exchangeConf.maxBuy[k],
+					buyCount = v.buyCount,
+				}
+				info.itemList[index] = one
+			end
+		end
+
+		-- 活动商城列表
+		info.shopList = {}
+		local shopConf = Csv.ActivityNewTake[data.actId]
+		if shopConf then
+			for k,v in pairs(data.shopList) do
+				local index = v.index
+				local one = {
+					index = index,
+					itemId = v.goodId,
+					shopPrice = shopConf.shopPrice[k],
+					shopPoint = shopConf.shopPoint[k],
+					shopDesc = shopConf.shopDesc[k],
+					shopType = shopConf.shopType[k],
+					shopMax = shopConf.shopMax[k],
+					shopBuyCount = shopConf.buyCount[k],
+					shopUseCount = shopConf.useCount[k],
+					shopReward = shopConf.shopReward[k],
+					buyCount = v.buyCount,
+				}
+				info.shopList[index] = one
+			end
+		end
+
+		info.selfGetState = data.selfGetState
+		info.gangGetState = data.gangGetState
+
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+
+		--刷新界面
+		WindowMgr.Call("UXinGuanRank", "OnUpdateData", data.actId)
+		WindowMgr.Call("UXinGuanMain", "UpdateTime", actType)
+
+		_P.CheckXinGuanRedPoint(data.actId, actType)
+	end
+--慈善活动
+	--慈善活动数据更新
+	function _P.DoUpdateCharity(actType, data)
+		if data == nil then return end
+		local info = _P.StateInfo(data, actType)
+		if not info.state.lefttime then
+			info.state.lefttime = HeartBeat.ServSecond()
+		end
+
+		local CharityCsv = Csv.Charity[data.actId]
+		--捐赠商店购买列表
+		info.shopList = {}
+		for i=1,#CharityCsv.shopItem do
+			local one ={
+			itemId = CharityCsv.shopItem[i][1],
+			itemNum = CharityCsv.shopItem[i][2],
+			shopPrice = CharityCsv.price[i],
+			shopDesc = CharityCsv.shopItemsdesc[i],
+			reward = {rewardItemId = CharityCsv.rewardItems[i][2][1],point = CharityCsv.rewardItems[i][2][2]}
+			}
+			info.shopList[i] = one
+		end
+		info.selfGetState = data.rewardState
+
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		_P.CheckCharityRedPoint(data.actId, actType)
+	end
+
+--奇遇活动
+	--奇遇活动数据更新
+	function _P.DoUpdateAdventure(actType, data)
+		if data == nil then return end
+		local info = _P.StateInfo(data, actType)
+		if not info.state.lefttime then
+			info.state.lefttime = HeartBeat.ServSecond()
+		end
+
+		local AdventureCsv = Csv.Adventure[data.actId]
+		--更新个人事件列表
+		info.personEventList = {}
+		for k,v in pairs(data.personalEventlist) do
+			local adventureItemCsv = Csv.AdventureMainEvent[v.eventId]
+			local eventInfo = {}
+			for i=1, #v.eventInfo do
+				local attrInfo = {}
+				local item = {
+					index = v.eventInfo[i].index,
+				}
+				for t,p in pairs(v.eventInfo.attrInfo) do
+					local one = {
+						type = p.type,
+						val = p.value,
+					}
+					attrInfo[i] = one
+				end
+				item.attrInfo = attrInfo
+				eventInfo[i] = item
+			end
+			local one = {
+				title = adventureItemCsv.title,
+				start = adventureItemCsv.start,
+				quality = adventureItemCsv.quality,
+				desc = adventureItemCsv.desc,
+				eventInfo = eventInfo,
+			}
+			info.personEventList[v.eventsIndex] = one
+		end
+		--活动信息
+		info.hotval = data.hotval
+		info.selfGetState = data.rewardState
+		info.gangGetState = data.gangrewardState
+		info.personeventTimes = data.personalEventTimes
+		info.nextUpdateTime = data.nextUpdateTime
+		--兑换商店
+		info.shopData = {
+			nextUpdateTime = data.shop.nextRefreshLeftTime,
+			refreshCount = data.shop.todayRefreshCount,
+			point = data.shop.point,
+		}
+		info.shopData.shoplist = {}
+		for i=1,#data.shop.itemList do
+			local one = {}
+			one.index = data.shop.itemList[i].index
+			one.goodId = data.shop.itemList[i].goodId
+			one.buyCount = data.shop.itemList[i].buyCount
+			info.shopData.shoplist[i] = one
+		end
+
+		--后续事件列表
+		info.shopEventList = {}
+		for i=1,#data.gangeventlist do
+			local v = data.gangeventlist[i]
+			local tplayerlist = {}
+			local one = {}
+			one.eventId = v.eventId
+			one.eventIndex = v.eventsIndex
+			one.triggerTime = v.triggerTime
+			one.playerInfo = {
+				icon = v.playerInfo.icon,
+				level = v.playerInfo.level,
+				power = v.playerInfo.power,
+				devote = v.playerInfo.devote,
+				staffName = v.playerInfo.staffName,
+				job = v.playerInfo.job,
+				name = v.playerInfo.name,
+			}
+			for k, v in pairs(v.playerlist) do
+				local playerInfo = {
+					icon = v.icon,
+					level = v.level,
+					power = v.power,
+					devote = v.devote,
+					staffName = v.staffName,
+					job = v.job,
+					name = v.name,
+				}
+				table.insert(tplayerlist, playerInfo)
+			end
+			--需求
+			one.eventInfo = {
+				--params -1为任意员工，其他为指定员工
+				type = v.eventInfo.attrInfo.type,
+				val = v.eventInfo.attrInfo.value,
+				params = v.eventInfo.attrInfo.params,
+			}
+			one.playerlist = tplayerlist
+			info.shopEventList[one.eventIndex] = one
+		end
+		--后续事件可领奖事件列表
+		info.shopRewardEventList = {}
+		for i=1,#data.gangRewardEventList do
+			local v = data.gangeventlist[i]
+			local tplayerlist = {}
+			local one = {}
+			one.eventId = v.eventId
+			one.eventIndex = v.eventsIndex
+			one.triggerTime = v.triggerTime
+			one.playerInfo = {
+				icon = v.playerInfo.icon,
+				level = v.playerInfo.level,
+				power = v.playerInfo.power,
+				devote = v.playerInfo.devote,
+				staffName = v.playerInfo.staffName
+			}
+			for k, v in pairs(v.playerlist) do
+				local playerInfo = {
+					icon = v.icon,
+					level = v.level,
+					power = v.power,
+					devote = v.devote,
+					staffName = v.staffName
+				}
+				table.insert(tplayerlist, playerInfo)
+			end
+			one.playerlist = tplayerlist
+			info.shopRewardEventList[one.eventIndex] = one
+		end
+		info.shopEventtimes = data.gangEventTimes
+		--已加班列表
+		info.staffoverlist = {}
+		for i=1,#data.staffoverTime do
+			info.staffoverlist[i] = data.staffoverTime[i]
+		end
+		--已参加的个人事件员工列表
+		info.staffjoinlist = {}
+		for i=1,#data.staffjoinList do
+			info.staffjoinlist[i] = data.staffjoinList[i]
+		end
+		--参与过商会事件的员工列表
+		info.staffshoplist = {}
+		for i=1,#data.staffShopList do
+			info.staffshoplist[i] = data.staffShopList[i]
+		end
+		--刷新红点用
+		info.isNew = data.isNew
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		_P.CheckAdventureRedPoint(data.actId, actType)
+	end
+
+--每日充值
+	--每日充值红点检测
+	function _P.CheckRechargeDayRepoint(actId,actType)
+		local info = MActivity.GetFromId(actId)
+		if info ~= nil then
+			for k,v in pairs(info.list) do
+				local csvRecharge = Csv.RechargeDay[actId]
+				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
+				if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
+					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_Day,actId,v.id)
+				end
+			end
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Day)
+		end
+	end
+	--每日充值数据更新
+	function _P.DoUpdateRechargeDay(actType, data)
+		local info = _P.StateInfo(data,actType)
+		info.num = data.num
+		local list = {}
+		if data.list ~= nil then
+			for k,v in pairs(data.list) do
+				local csvRecharge = Csv.RechargeDay[data.actId]
+				if csvRecharge ~= nil then
+					if csvRecharge.grade[v.id] ~= nil then
+						local item = {id = v.id,isGeted = v.isGeted,desc = csvRecharge.desc[v.id],award = csvRecharge.award[v.id],grade = csvRecharge.grade[v.id],displayNum = csvRecharge.displayNum[v.id]}
+						table.insert(list,item)
+					end
+				end
+			end
+			table.sort(list,function(a,b) return a.id < b.id end)
+			info.list = list
+			--更新数据层
+			MActivity.UpdateAct(info.actId, actType, info)
+			--检查小红点
+			_P.CheckRechargeDayRepoint(info.actId, actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",actType)
+		end
+	end
+
+--累计充值
+	--累计充值红点检测
+	function _P.CheckRechargeTotalRepoint(actId,actType)
+		local info = MActivity.GetFromId(actId)
+		if info ~= nil then
+			for k,v in pairs(info.list) do
+				local csvRecharge = Csv.RechargeTotal[actId]
+				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
+				if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
+					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_Total,actId,v.id)
+				end
+			end
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Total)
+		end
+	end
+	--累计充值数据更新
+	function _P.DoUpdateRechargeTotal(actType, data)
+		local info = _P.StateInfo(data,actType)
+		info.num = data.num
+		local list = {}
+		if data.list ~= nil then
+			for k,v in pairs(data.list) do
+				local csvRecharge = Csv.RechargeTotal[data.actId]
+				if csvRecharge ~= nil then
+					if csvRecharge.grade[v.id] ~= nil then
+						local item = {id = v.id,isGeted = v.isGeted,desc = csvRecharge.desc[v.id],award = csvRecharge.award[v.id],grade = csvRecharge.grade[v.id],displayNum = csvRecharge.displayNum[v.id]}
+						table.insert(list,item)
+					end
+				end
+			end
+			table.sort(list,function(a,b) return a.id < b.id end)
+			info.list = list
+			--更新数据层
+			MActivity.UpdateAct(info.actId, actType, info)
+			--检查小红点
+			_P.CheckRechargeTotalRepoint(info.actId, actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",actType)
+		end
+	end
+
+--累天充值
+--累天充值红点检测
+	function _P.CheckRechargeTotalDayRepoint(actId, actType)
+		local info = MActivity.GetFromId(actId)
+		if info ~= nil then
+			for k,v in pairs(info.list) do
+				local csvRecharge = Csv.RechargeTotalDay[actId]
+				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
+				if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
+					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_TotalDay,actId,v.id)
+				end
+			end
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_TotalDay)
+		end
+	end
+--累天充值数据更新
+	function _P.DoUpdateRechargeTotalDay(actType, data)
+		local info = _P.StateInfo(data,actType)
+		info.num = data.num
+		local list = {}
+		if data.list ~= nil then
+			for k,v in pairs(data.list) do
+				local csvRecharge = Csv.RechargeTotalDay[data.actId]
+				if csvRecharge ~= nil then
+					if csvRecharge.grade[v.id] ~= nil then
+						local item = {id = v.id,isGeted = v.isGeted,desc = csvRecharge.desc[v.id],award = csvRecharge.award[v.id],grade = csvRecharge.grade[v.id]}
+						table.insert(list,item)
+					end
+				end
+			end
+			table.sort(list,function(a,b) return a.id < b.id end)
+			info.list = list
+			--更新数据层
+			MActivity.UpdateAct(info.actId, actType, info)
+			--检查小红点
+			_P.CheckRechargeTotalDayRepoint(info.actId, actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",actType)
+		end
+	end
+
+--1, 3, 6元礼包
+	--1, 3, 6元礼包红点检测
+	function _P.CheckDailyGiftRepoint(actId)
+		local info = MActivity.GetFromId(actId)
+		if nil ~= info then
+			for _, data in pairs(info.list) do
+				if MActivity.ActivityState.Doing == info.state.state then
+					local isUpdateRedpoint = MActivity.RewardGetState.CanGet == data.getState
+					if MActivity.ActRedpoint(actId, data.index, isUpdateRedpoint) then
+						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward_DailyGift, actId, data.index)
+					end
+				end
+				
+			end
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_DailyGift)
+		end
+	end
+	--1, 3, 6元礼包数据更新
+	function _P.DoUpdateDailyGift(actType, data)
+		if nil ~= data.list then
+			local info = _P.StateInfo(data, actType)
+			local list = {}
+			for _, value in pairs(data.list) do
+				local csvDailyGift = Csv.DailyGift[data.actId]
+				if csvDailyGift and csvDailyGift.award and csvDailyGift.award[value.index] then
+					local productID = 0
+					local maxTime = 1
+					if nil ~= csvDailyGift.productID and nil ~= csvDailyGift.productID[value.index] then
+						local productIDData = csvDailyGift.productID[value.index]
+						productID = productIDData[1] or 0
+						maxTime = productIDData[2] or 1
+					end
+					local desc = ""
+					if nil ~= csvDailyGift.desc and nil ~= csvDailyGift.desc[value.index] then
+						desc = csvDailyGift.desc[value.index]
+					end
+					local award = {}
+					if nil ~= csvDailyGift.award and nil ~= csvDailyGift.award[value.index] then
+						local temp = csvDailyGift.award[value.index]
+						award = temp
+					end
+					local titleBg
+					if nil ~= csvDailyGift.titleBg and nil ~= csvDailyGift.titleBg[value.index] then
+						titleBg = csvDailyGift.titleBg[value.index]
+					end
+					local worthText = ""
+					if nil ~= csvDailyGift.worthText and nil ~= csvDailyGift.worthText[value.index] then
+						worthText = csvDailyGift.worthText[value.index]
+					end
+					local productName = ""
+					if nil ~= csvDailyGift.name and nil ~= csvDailyGift.name[value.index] then
+						productName = csvDailyGift.name[value.index]
+					end
+					local item = { 
+						index = value.index, 
+						getState = value.state,
+						time = value.time,
+						maxTime = maxTime,
+						productID = productID,
+						desc = desc,
+						award = award,
+						titleBg = titleBg,
+						worthText = worthText,
+						productName = productName,
+					}
+					table.insert(list, item)
+				end
+			end
+			table.sort(list, function(left, right) return left.index < right.index end)
+			info.list = list
+			--更新数据层
+			MActivity.UpdateAct(info.actId, actType, info)
+			--检查小红点
+			_P.CheckDailyGiftRepoint(info.actId)
+			WindowMgr.Call("URechargeAward", "OnRefreshView", actType)
+		end
+	end
+	function _P.OnUpdateDailyGift(data)
+		local typeData = MActivity.GetListFromType(Define.ActivityType.RechargeReward_DailyGift)
+		local actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_DailyGift]
+		if nil ~= typeData and nil ~= actId then
+			local info = typeData[actId]
+			if nil ~= info and nil ~= info.list then
+				for _, value in pairs(info.list) do
+					if data.index == value.index then
+						value.getState = data.state
+						value.time = data.time
+						break
+					end
+				end
+				--检查小红点
+				_P.CheckDailyGiftRepoint(actId)
+				WindowMgr.Call("URechargeAward", "RefreshItemState", data, Define.ActivityType.RechargeReward_DailyGift)
+			end
+		end
+	end
+--商城礼包
+	function _P.DoUpdateShopPackage(actType, data)
+		if data ~= nil then
+			for k, v in pairs(data) do
+				local info = _P.StateInfo(v, actType)
+				info.times = v.times
+				MActivity.UpdateAct(info.actId, actType, info)
+			end
+			WindowMgr.Call("UShop", "OnRefreshPackage")
+		end
+	end
+--商城限购
+function _P.DoUpdateLimitBuy(actType, data)
+	if data ~= nil then
+		MActivity.ClearForType(actType)
+		for k, v in pairs(data) do
+			local info = _P.StateInfo(v, actType)
+			info.times = v.times
+			MActivity.UpdateAct(info.actId, actType, info)
+		end
+		WindowMgr.Call("UShop", "OnRefreshLimit")
+	end
+end
+--商会充值
+	--商会充值红点检测
+	function _P.CheckCommerceRechargeRepoint(actId, actType)
+		local info = MActivity.GetFromId(actId)
+		if info ~= nil then
+			for k,v in pairs(info.list) do
+				local csvCommerceRecharge = Csv.CommerceRecharge[actId]
+				local isListItemRed = (v.isGeted == false and info.isRecharge and v.isCanGet)
+				if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.Commerce_Recharge,actId,v.id)
+				end
+			end
+		end
+	end
+	--商会充值数据更新
+	function _P.DoUpdateCommerceRecharge(actType, data)
+		local info = _P.StateInfo(data,actType)
+		info.num = data.num
+		info.isRecharge = data.isRecharge
+		local list = {}
+		if data.list ~= nil then
+			for k,v in pairs(data.list) do
+				local csvCommerceRecharge = Csv.CommerceRecharge[data.actId]
+				if csvCommerceRecharge ~= nil then
+					if csvCommerceRecharge.grade[v.id] ~= nil then
+						local item = {id = v.id,isGeted = v.isGeted,isCanGet = v.isCanGet,desc = csvCommerceRecharge.desc[v.id],award = csvCommerceRecharge.award[v.id],grade = csvCommerceRecharge.grade[v.id]}
+						table.insert(list,item)
+					end
+				end
+			end
+			table.sort(list,function(a,b) return a.id < b.id end)
+			info.list = list
+			--更新数据层
+			MActivity.UpdateAct(info.actId, actType, info)
+			--检查小红点
+			_P.CheckCommerceRechargeRepoint(info.actId, actType)
+			WindowMgr.Call("UComRecharge", "OnRefreshView")
+			WindowMgr.Call("UCommerce", "OnRefreshActivityBtn")
+		end
+	end
+--抽奖活动
+	function _P.CheckLotteryRepoint(actId)
+		local data = MActivity.GetFromId(actId)
+		if data == nil then return end
+
+		local isNeedRedpoint = false
+		if data.isFree then
+			isNeedRedpoint = true
+		else
+			local csvLine = Csv.Lottery[actId]
+			if csvLine ~= nil then
+				if csvLine.num ~= nil and csvLine.reward ~= nil then
+					for _,v in pairs(csvLine.num) do
+						if v <= data.todayNum and data.numGets[v] ~= true then
+							isNeedRedpoint = true
+							break
+						end
+					end
+				end
+			else
+				error("Lottery csv error!!!", actId)
+			end
+		end
+		if MActivity.ActRedpoint(actId, 0, isNeedRedpoint) then
+			CMain.UpdateRedpoint(isNeedRedpoint, Define.SysId.Lottery, 0)
+		end
+	end
+	function _P.OnLottery(data)
+		-- print("----------OnLottery----------", data.actId)
+		local info = MActivity.GetFromId(data.actId)
+		if info == nil then return end
+		info.todayNum = data.todayNum
+		info.isFree = data.isFree
+		_P.CheckLotteryRepoint(info.actId)
+		--刷新界面
+		WindowMgr.Call("ULottery", "OnLottery", info.actId, data.itemList)
+	end
+	function _P.OnLotteryNumGet(data)
+		-- print("----------OnLotteryNumGet----------", data.actId)
+		local info = MActivity.GetFromId(data.actId)
+		if info == nil then return end
+		local lastGets = info.numGets
+		info.numGets = {}
+		local getNum = 0
+		for k,v in pairs(data.numGets) do
+			info.numGets[v] = true
+			if lastGets[v] ~= true then
+				getNum = v
+			end
+		end
+		_P.CheckLotteryRepoint(info.actId)
+		--刷新界面
+		WindowMgr.Call("ULottery", "OnLotteryNumGet", info.actId, getNum, data.getRewards)
+	end
+	function _P.OnLotteryMessage(data)
+		-- print("----------OnLotteryMessage----------", data.actId)
+		table.insert(MActivity.LotteryMessage, {itemId = data.itemId, playerName = data.playerName})
+		WindowMgr.Call("ULottery", "OnLotteryMsg", data.actId)
+	end
+	function _P.OnLotteryMsgList(data)
+		-- print("----------OnLotteryMsgList----------", data.actId)
+		MActivity.LotteryMessage = {}
+		if data.list ~= nil then
+			for k,v in pairs(data.list) do
+				table.insert(MActivity.LotteryMessage, {itemId = v.itemId, playerName = v.playerName})
+			end
+		end
+		WindowMgr.Call("ULottery", "OnLotteryMsg", data.actId)
+	end
+	function _P.DoUpdateLottery(actType, data)
+		if data == nil then return end
+		-- print("----------DoUpdateLottery----------", data.actId)
+		local info = _P.StateInfo(data, actType)
+		info.todayNum = data.todayNum
+		info.isFree = data.isFree
+		info.numGets = {}
+		if data.numGets ~= nil then
+			for k,v in pairs(data.numGets) do
+				info.numGets[v] = true
+			end
+		end
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		--检查小红点
+		_P.CheckLotteryRepoint(info.actId)
+		--刷新界面
+		WindowMgr.Call("ULottery", "OnUpdateInfo", info.actId)
+	end
+
+	function _P.DoUpdateChatritable(actType, data)
+		if data == nil then return end
+
+		local info = _P.StateInfo(data, actType)
+		
+	end
+
+function _P.DoUpdate(data, isInit)
+	for key, value in pairs(data) do
+		local actType = DataNameToType[key]
+		if actType then
+			if not isInit then
+				MActivity.ClearForType(actType)
+				local sysID = DataNameToSysID[key]
+				if sysID then
+					CMain.UpdateRedpoint(false, sysID)
+				end
+			end
+			local typeModule = _P.GetActivityModuleForType(actType)
+			if typeModule then
+				typeModule.DoUpdate(actType, value)
+			end
+		end
+	end
+
+	if data.jianChen ~= nil then
+		--四大奸臣
+		_P.DoUpdateJianChen(Define.ActivityType.JianChen, _P.InitJianChengData(data.jianChen))
+	end
+	if data.jinGuo ~= nil then
+		--巾帼五虎
+		_P.DoUpdateJianChen(Define.ActivityType.JinGuo, _P.InitJianChengData(data.jinGuo))
+	end -- 超级员工
+	if data.superStaffs ~= nil then
+		for k,v in pairs(data.superStaffs) do
+			_P.DoUpdateJianChen(Define.ActivityType.JianChen, _P.InitJianChengData(v))
+		end
+	end
+	if data.xinguan1 ~= nil then
+		-- 新官上任活动1
+		_P.DoUpdateXinGuan(Define.ActivityType.XinGuan1, data.xinguan1)
+	end
+	if data.xinguan2 ~= nil then
+		-- 新官上任活动2
+		_P.DoUpdateXinGuan(Define.ActivityType.XinGuan2, data.xinguan2)
+	end
+	if data.rechargeReward_Day ~= nil then
+		--每日充值
+		_P.DoUpdateRechargeDay(Define.ActivityType.RechargeReward_Day, data.rechargeReward_Day)
+	end
+	if data.rechargeReward_Total ~= nil then
+		--累计充值
+		_P.DoUpdateRechargeTotal(Define.ActivityType.RechargeReward_Total, data.rechargeReward_Total)
+	end
+	if data.rechargeReward_TotalDay ~= nil then
+		--累天充值
+		_P.DoUpdateRechargeTotalDay(Define.ActivityType.RechargeReward_TotalDay, data.rechargeReward_TotalDay)
+	end
+	if data.rechargeReward_DailyGift ~= nil then
+		--1, 3, 6元礼包
+		_P.DoUpdateDailyGift(Define.ActivityType.RechargeReward_DailyGift, data.rechargeReward_DailyGift)
+	end
+	if data.shop_Package ~= nil then
+		--商城礼包
+		_P.DoUpdateShopPackage(Define.ActivityType.Shop_Package, data.shop_Package)
+	end
+	if data.commerce_Recharge ~= nil then
+		--商会充值
+		_P.DoUpdateCommerceRecharge(Define.ActivityType.Commerce_Recharge, data.commerce_Recharge)
+	end
+	if data.lottery ~= nil then
+		--抽奖活动
+		_P.DoUpdateLottery(Define.ActivityType.Lottery, data.lottery)
+	end
+	if data.vip_Discount ~= nil then
+		--vip 每日折扣礼包
+		MVipWelfare.SetVipDiscountGift(data.vip_Discount)
+	end
+	if data.charity ~= nil then
+		--慈善活动
+		_P.DoUpdateCharity(Define.ActivityType.Charitable, data.charity)
+	end
+	if data.headChange ~= nil then
+		local actType = Define.ActivityType.Head_Change
+		MActivity.ClearForType(actType)
+		local info = _P.StateInfo(data.headChange, actType)
+		MActivity.UpdateAct(info.actId, actType, info)
+	end
+	if data.adventure ~= nil then
+		--奇遇活动
+		_P.DoUpdateAdventure(Define.ActivityType.Adventure, data.adventure)
+	end
+	-- if data.limitbuy ~= nil then
+	-- 	_P.DoUpdateLimitBuy(Define.ActivityType.Shop_Limit,data.limitbuy)
+	-- else
+	-- 	MActivity.ClearForType(Define.ActivityType.Shop_Limit)
+	-- 	WindowMgr.Call("UShop", "OnRefreshLimit")
+	-- end
+end
+
+function _P.OnInit(data)
+	MActivity.ClearAll()
+	_P.DoUpdate(data, true)
+end
+
+function _P.OnUpdate(data)
+	_P.DoUpdate(data, false)
+	_P.RefreshMainBtn()
+end
+
+--领取奖励成功返回
+function _P.OnGetSuccess(data)
+	local actId = data.actId
+	local info = MActivity.GetFromId(actId)
+	if info ~= nil then
+		local typeModule = _P.GetActivityModuleForType(info.actType)
+		if typeModule then
+			typeModule.OnGetSuccess(data, info)
+		end
+
+		if info.actType == Define.ActivityType.JianChen or
+			info.actType == Define.ActivityType.JinGuo
+		then
+			--四大奸臣兑换返回
+			local one = info.list[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				-- 检查小红点
+				_P.CheckJianChenRepoint(actId, info.actType)
+				-- 界面表现(招募员工返回)
+				WindowMgr.Call("UFourTraitorsActivity", "OnRecuitCallBack", data)
+				WindowMgr.Call("USuperStaffPanel", "OnRecuitCallBack", data)
+			end
+		elseif info.actType == Define.ActivityType.RechargeReward_Day then
+			local one = info.list[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				--检查小红点
+				_P.CheckRechargeDayRepoint(actId,info.actType)
+				--界面表现
+				WindowMgr.Call("URechargeAward","RefreshItemGetState", data, info.actType)
+		end
+		elseif info.actType == Define.ActivityType.RechargeReward_Total then
+			local one = info.list[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				--检查小红点
+				_P.CheckRechargeTotalRepoint(actId,info.actType)
+				--界面表现
+				WindowMgr.Call("URechargeAward","RefreshItemGetState", data, info.actType)
+		end
+		elseif info.actType == Define.ActivityType.RechargeReward_TotalDay then
+			local one = info.list[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				--检查小红点
+				_P.CheckRechargeTotalDayRepoint(actId,info.actType)
+				--界面表现
+				WindowMgr.Call("URechargeAward","RefreshItemGetState", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.RechargeReward_DailyGift then
+			local one = info.list[data.index]
+			if data.isGeted and MActivity.RewardGetState.CanGet == one.getState then
+				--界面表现
+				WindowMgr.Call("URechargeAward", "RefreshItemGetState", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.XinGuan1 or
+				info.actType == Define.ActivityType.XinGuan2
+		then
+			--新官上任活动奖励返回(与后端约好，/10000得到的是真正排行，%10000得到的是1个人、2商会会员、3商会会长)
+			if data.isGeted then
+				local rankType = data.index % 10000
+				if rankType == 1 and info.selfGetState == MActivity.RewardGetState.CanGet then
+					info.selfGetState = MActivity.RewardGetState.Geted
+				elseif rankType >= 2 and info.gangGetState == MActivity.RewardGetState.CanGet then
+					info.gangGetState = MActivity.RewardGetState.Geted
+				end
+
+				_P.CheckXinGuanRedPoint(actId, info.actType)
+
+				--界面表现
+				WindowMgr.Call("UXinGuanRank", "OnGetRewardBack", data)
+			end
+			--慈善活动奖励返回
+		elseif info.actType == Define.ActivityType.Charitable then
+			if data.isGeted then
+				info.selfGetState = MActivity.CharityGetState.Geted
+				_P.CheckCharityRedPoint(actId, info.actType)
+
+				--界面表现
+				WindowMgr.Call("UCharitableRankPanel", "OnGetRewardBack", data)
+			end
+			--奇遇活动奖励返回
+		elseif info.actType == Define.ActivityType.Adventure then
+			if data.isGeted then
+				local rankType = data.index % 10000
+				if rankType == 1 and info.selfGetState == MActivity.RewardGetState.CanGet then
+					info.selfGetState = MActivity.RewardGetState.Geted
+				elseif rankType >= 2 and info.gangGetState == MActivity.RewardGetState.CanGet then
+					info.gangGetState = MActivity.RewardGetState.Geted
+				end
+
+				_P.CheckAdventureRedPoint(actId, info.actType)
+
+				--界面表现
+
+			end
+		elseif info.actType == Define.ActivityType.Shop_Package then
+			if data.isGeted then
+				local shop = MActivity.ActList[actId]
+				if shop ~= nil then
+					shop.times = data.index
+				end
+				local shopForType = MActivity.ActTypeCached[Define.ActivityType.Shop_Package]
+				if shopForType ~= nil then
+					local shop2 = shopForType[actId]
+					if shop2 ~= nil then
+						shop2.times = data.index
+					end
+				end
+				--界面表现
+				WindowMgr.Call("UShop", "ShopBuyPackage", data)
+			end
+		-- elseif info.actType == Define.ActivityType.Shop_Limit then
+		-- 	if data.isGeted then
+		-- 		local shop = MActivity.ActList[actId]
+		-- 		if shop ~= nil then
+		-- 			shop.times = data.index
+		-- 		end
+		-- 		local shopForType = MActivity.ActTypeCached[Define.ActivityType.Shop_Limit]
+		-- 		if shopForType ~= nil then
+		-- 			local shop2 = shopForType[actId]
+		-- 			if shop2 ~= nil then
+		-- 				shop2.times = data.index
+		-- 			end
+		-- 		end
+		-- 		--界面表现
+		-- 		WindowMgr.Call("UShop", "ShopBuyLimit", data)
+		-- 	end
+		elseif info.actType == Define.ActivityType.Commerce_Recharge then
+			local one = info.list[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				--检查小红点
+				_P.CheckCommerceRechargeRepoint(actId,info.actType)
+				--界面表现
+				WindowMgr.Call("UComRecharge","RefreshItemGetState", data)
+			end
+		end
+	end
+end
+
+function _P.RefreshMainBtn()
+	WindowMgr.Call("UMain","RefreshTopBtns")
+end
+
+--更新状态
+function _P.OnUpdateState(data)
+	local actId = data.actId
+	local info = MActivity.GetFromId(actId)
+	local isNeedUpdateMainBtn = false
+	if info ~= nil then
+		local typeModule = _P.GetActivityModuleForType(info.actType)
+		if typeModule then
+			typeModule.OnUpdateState(info, data)
+		end
+
+		if info.actType == Define.ActivityType.JianChen or
+			info.actType == Define.ActivityType.JinGuo
+		then
+			--四大奸臣状态更新
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(actId)
+				isNeedUpdateMainBtn = true
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			
+			-- 检查小红点
+			_P.CheckJianChenRepoint(actId, info.actType)
+			-- 界面刷新
+			WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", info.actType)
+			WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", info.actType, actId)
+		elseif info.actType == Define.ActivityType.RechargeReward_Day then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Day)
+				if MActivity.GetListFromType(info.actType) == nil then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+
+			--检查小红点
+			_P.CheckRechargeDayRepoint(actId, info.actType)
+			--界面刷新
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+			--慈善活动关闭入口
+		elseif info.actType == Define.ActivityType.Charitable then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				if nil == MActivity.GetListFromType(info.actType) then
+					isNeedUpdateMainBtn = true
+				end
+
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+					lefttime = newState.lefttime,
+				}
+			end
+			_P.CheckCharityRedPoint(actId, info.actType)
+		elseif info.actType == Define.ActivityType.Adventure then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				if nil == MActivity.GetListFromType(info.actType) then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+					lefttime = newState.lefttime,
+				}
+			end
+
+			_P.CheckAdventureRedPoint(actId, info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_Total then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Total)
+				if MActivity.GetListFromType(info.actType) == nil then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckRechargeTotalRepoint(actId, info.actType)
+			--界面刷新
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_TotalDay then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_TotalDay)
+				if MActivity.GetListFromType(info.actType) == nil then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckRechargeTotalDayRepoint(actId, info.actType)
+			--界面刷新
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_DailyGift then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_DailyGift)
+				if MActivity.GetListFromType(info.actType) == nil then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckDailyGiftRepoint(actId)
+			--界面刷新
+			WindowMgr.Call("URechargeAward", "OnRefreshView", info.actType)
+		elseif info.actType == Define.ActivityType.XinGuan1 or
+			info.actType == Define.ActivityType.XinGuan2
+		then
+			--新官上任活动更新
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				if nil == MActivity.GetListFromType(info.actType) then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+					lefttime = newState.lefttime,
+				}
+			end
+
+			if MActivity.IsUpdateTime1 then
+				MActivity.IsUpdateTime1 = false
+			end
+
+			if MActivity.IsUpdateTime2 then
+				MActivity.IsUpdateTime2 = false
+			end
+			
+			--界面刷新
+			WindowMgr.Call("UXinGuanRank", "OnUpdateData", data.actId)
+			WindowMgr.Call("UXinGuanMain", "UpdateTime", info.actType)
+		elseif info.actType == Define.ActivityType.Shop_Package then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--界面刷新
+			WindowMgr.Call("UShop", "OnRefreshPackage")
+		elseif info.actType == Define.ActivityType.Commerce_Recharge then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				MActivity.ClearForType(Define.ActivityType.Commerce_Recharge)
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckCommerceRechargeRepoint(actId, info.actType)
+			--界面刷新
+			WindowMgr.Call("UComRecharge", "OnRefreshView")
+			WindowMgr.Call("UCommerce","OnRefreshActivityBtn")
+		elseif info.actType == Define.ActivityType.Lottery then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				MActivity.ClearForType(Define.ActivityType.Lottery)
+				isNeedUpdateMainBtn = true
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckLotteryRepoint(data.actId)
+			--刷新界面
+			WindowMgr.Call("ULottery", "OnUpdateInfo", data.actId)
+		end
+	end
+
+	if isNeedUpdateMainBtn then
+		_P.RefreshMainBtn()
+	end
+end
+
+--更新进度
+function _P.OnUpdatePro(data)
+	local actId = data.actId
+	local info = MActivity.GetFromId(actId)
+	if info ~= nil then
+		local typeModule = _P.GetActivityModuleForType(info.actType)
+		if typeModule then
+			typeModule.OnUpdatePro(info, data)
+		end
+		
+		if info.actType == Define.ActivityType.JianChen or
+			info.actType == Define.ActivityType.JinGuo
+		then
+			--四大奸臣进度更新
+			if data.index then
+				local one = info.list[data.index]
+				if data.pro >= one.cost.num then
+					-- 检查小红点
+					_P.CheckJianChenRepoint(actId, info.actType)
+					-- 界面刷新
+					WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", info.actType)
+					WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", info.actType, actId)
+				end
+			end
+		elseif info.actType == Define.ActivityType.RechargeReward_Day then
+			info.num = data.pro
+			_P.CheckRechargeDayRepoint(actId,info.actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_Total then
+			info.num = data.pro
+			_P.CheckRechargeTotalRepoint(actId,info.actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_TotalDay then
+			info.num = data.pro
+			_P.CheckRechargeTotalDayRepoint(actId,info.actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.Charitable then
+			--判断结算时间
+			if HeartBeat.ServSecond()  > info.state.lefttime then
+				info.selfGetState = (data.index > 0 and MActivity.CharityGetState.CanGet) or MActivity.CharityGetState.CanNotGet
+
+				_P.CheckCharityRedPoint(actId, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.XinGuan1 or 
+				info.actType == Define.ActivityType.XinGuan2 
+		then
+			--新官上任活动进度更新(1是个人，2是联盟)
+			if data.index == 1 then
+				info.selfGetState = (data.pro > 0 and MActivity.RewardGetState.CanGet) or MActivity.RewardGetState.CanNotGet
+			elseif data.index == 2 then
+				info.gangGetState = (data.pro > 0 and MActivity.RewardGetState.CanGet) or MActivity.RewardGetState.CanNotGet
+			end
+
+			_P.CheckXinGuanRedPoint(actId, info.actType)
+
+			--界面刷新
+			WindowMgr.Call("UXinGuanRank", "OnUpdateData", data.actId)
+			WindowMgr.Call("UXinGuanMain", "UpdateTime", info.actType)
+		end
+	end
+end
+-----------------------------------------------------------------------------------------------------
+-- 四大奸臣、巾帼五虎
+function _P.InitJianChengData(data)
+	local activityConf = Csv.Activity[data.actId]
+	if activityConf == nil then return end
+
+	local traitorConf = Csv.ActivityJaonChen[activityConf.id]
+	if traitorConf == nil then return end
+
+	local activityData = data
+	activityData.actType = activityConf.type
+	activityData.mainPrefabName = traitorConf.mainPrefabName
+	activityData.itemPrefabName = traitorConf.itemPrefabName
+	activityData.title = traitorConf.title
+	activityData.list = {}
+
+	for i=1, #traitorConf.attrid do
+		local playerId = traitorConf.attrid[i]
+		local playerData = MStaff.GetStaffDataByID(playerId)
+		local isGet = (playerData ~= nil and true) or false
+		
+		local itemData = {
+			index = i,
+			attrid = playerId,
+			icon = traitorConf.icon[i],
+			tips = traitorConf.tips[i],
+			cost = {id = traitorConf.cost[i][1], num = traitorConf.cost[i][2]},
+			isGeted = isGet
+		}
+
+		table.insert(activityData.list, itemData)
+	end
+
+	return activityData
+end
+
+
+function _M.UpdateRecuitStaffRed(itemId)
+	for k,v in pairs(Csv.ActivityJaonChen) do
+		if _P.CheckItemIdInList(v.costItemId, itemId) then
+			local activityConf = Csv.Activity[v.id]
+			if activityConf then
+				_P.CheckJianChenRepoint(v.id, activityConf.type)
+			end
+		end
+	end
+end
+
+
+function _P.CheckItemIdInList(list, itemId)
+	if list == nil then return false end
+
+	for k,v in pairs(list) do
+		if v == itemId then
+			return true
+		end
+	end
+
+	return false
+end
+
+
+-----------------------------------------------------------------------------------------------------
+-- 新官上任活动，S2C
+-- (新官上任)进入战斗界面返回
+function _P.OnNewEnter(data)
+	WindowMgr.Call("UXinGuanBattle", "OnGetDataBack", data)
+end
+
+-- (新官上任)购买商城道具
+function _P.OnNewBuyGoods(data)
+	if data == nil then return end
+
+	local activityData = MActivity.GetFromId(data.actId)
+	local shopList = activityData.shopList[data.index]
+	if shopList then
+		shopList.buyCount = data.buyCount
+	end
+
+	WindowMgr.Call("UXinGuanShop", "OnBuyCallBack", data)
+
+	if WindowMgr.IsCreated("UXinGuanBattle") then
+		WindowMgr.Call("UXinGuanBattle", "UpdateItemData", nil)
+	end
+end
+
+-- (新官上任)兑换道具
+function _P.OnNewExchangeGoods(data)
+	if data == nil then return end
+
+	local activityData = MActivity.GetFromId(data.actId)
+	local info = activityData
+	if info then
+		local shopList = info.itemList[data.index]
+		info.point = data.point
+		shopList.buyCount = data.buyCount
+	end
+
+	WindowMgr.Call("UXinGuanExchange", "OnExchangeCallBack", data)
+end
+
+-- (新官上任)使用道具
+function _P.OnNewUseGoods(data)
+	local activityData = MActivity.GetFromId(data.actId)
+	local info = activityData
+	if info then
+		info.point = data.point
+	end
+
+	WindowMgr.Call("UXinGuanBattle", "OnUseItemBack", data)
+end
+
+-- (新官上任)送去休息
+function _P.OnNewToRest(data)
+	WindowMgr.Call("UXinGuanBattle", "OnNewToRestBack", data)
+end
+
+-- (新官上任)刷新最新10条公告
+function _P.OnNewRefreshInfo(data)
+	WindowMgr.Call("UXinGuanBattle", "OnGetNewInfo", data.noticeData)
+end
+
+-- (新官上任)活动当日开启、结束推送
+function _P.OnNewStatus(data)
+	if data == nil then return end
+
+	if data.isInTime and data.isInTime == true then
+		MActivity.XinGuanStatus[data.actId] = data.isInTime
+	else
+		MActivity.XinGuanStatus[data.actId] = nil
+	end
+
+	WindowMgr.Call("UXinGuanMain", "UpdateTime", data.actId, true)
+end
+
+--(商会充值)获取商会成员充值信息
+function _P.OnCommerceMember(data)
+	if data ~= nil then
+		if WindowMgr.IsCreated("UComRecharge") then
+			WindowMgr.Call("UComRecharge","RefreshMember",data)
+		end
+	end
+end
+
+--(商会充值)获取该等阶商会成员领取信息
+function _P.OnCommerceGeted(data)
+	if data ~= nil then
+		if WindowMgr.IsCreated("UComRechargePop") then
+			WindowMgr.Call("UComRechargePop","RefreshView",data)
+		end
+	end
+end
+
+function _P.OnVipDiscountGift(data)
+	MVipWelfare.SetVipDiscountGiftGot(data)
+end
+
+function _P.OnUpdateSevenRank(data)
+	local actId = data.actId
+	local info = MActivity.GetFromId(actId)
+	if info then
+		local typeModule = _P.GetActivityModuleForType(Define.ActivityType.SevenDayTarget)
+		typeModule.OnUpdateSevenRank(data, info)
+	end
+end
+
+--慈善活动购买返回
+function _P.OnChairtyBuy(data)
+	if data == nil then return end
+	WindowMgr.Call("UCharitableShopPanel", "OnBuyCallBack", data)
+
+	if WindowMgr.IsCreated("UCharitableActPanel") then
+		WindowMgr.Call("UCharitableActPanel", "UpdateItemData", nil)
+	end
+end
+--慈善活动捐赠返回
+function _P.OnChairtyDonate(data)
+	if WindowMgr.IsCreated("UCharitableActPanel") then
+		WindowMgr.Call("UCharitableActPanel", "OnDonateBack", data)
+	end
+end
+
+--慈善活动抽奖返回
+function _P.OnChairtyDrow(data)
+	if WindowMgr.IsCreated("UCharitableFruitPanel") then
+		WindowMgr.Call("UCharitableFruitPanel", "OnDrowCallBack", data)
+	end
+end
+
+--慈善活动打开界面请求数据返回
+function _P.OnChairtyOpen(data)
+	MActivity.CharitableMessage = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			table.insert(MActivity.CharitableMessage, {itemId = v.itemId, playerName = v.playerName})
+		end
+		if WindowMgr.IsCreated("UCharitableFruitPanel") then
+			WindowMgr.Call("UCharitableFruitPanel","OnFruitMsg",data.actId)
+		end
+	end
+end
+
+--慈善活动打开捐赠界面请求数据返回
+function _P.OnChairtyDonateOpen(data)
+	if WindowMgr.IsCreated("UCharitableActPanel") then
+		WindowMgr.Call("UCharitableActPanel", "OnGetDataBack", data)
+	end
+end
+
+--慈善活动打开老虎机界面数据推送返回（跑马灯）
+function _P.OnChairtyMsg(data)
+	table.insert(MActivity.CharitableMessage, {itemId = data.itemId, playerName = data.playerName})
+	if data ~= nil then
+		if WindowMgr.IsCreated("UCharitableFruitPanel") then
+			WindowMgr.Call("UCharitableFruitPanel","OnFruitMsg",data.actId)
+		end
+	end
+end
+
+--慈善活动积分推送
+function _P.OnChairtyScoreMsg(data)
+	if data ~= nil then
+		if WindowMgr.IsCreated("UCharitableActPanel") then
+			WindowMgr.Call("UCharitableActPanel","OnGetNewInfo",data)
+		end
+	end
+end
+
+--慈善活动获取个人排行数据返回
+function _P.OnChairtyRank(data)
+	--刷新界面内红点状态
+	if data.state == MActivity.CharityGetState.CanGet then
+		local activityData = MActivity.GetFromId(data.actId)
+		activityData.selfGetState = data.state
+		_P.CheckCharityRedPoint(data.actId,self)
+	end
+
+	if data ~= nil then
+		if WindowMgr.IsCreated("UCharitableMainPanel") then
+			WindowMgr.Call("UCharitableMainPanel","UpdateView",data)
+		end
+
+		if WindowMgr.IsCreated("UCharitableRankPanel") then
+			WindowMgr.Call("UCharitableRankPanel","OnSelfRankData",data)
+		end
+	end
+end
+
+--奇遇活动完成个人事件返回
+function _P.OnAdvPerson(data)
+	if WindowMgr.IsCreated("UAdventureStaff") then
+		WindowMgr.Call("UAdventureStaff","OnSelfRankData",data)
+	end
+end
+
+--奇遇活动完成商会事件返回
+function _P.OnAdvGang(data)
+
+end
+
+--奇遇领取后续事件奖励
+function _P.OnAdvGetGangReward(data)
+
+end
+
+--奇遇个人事件推送
+function _P.OnNewEvent(data)
+	local activityData = MActivity.GetFromId(data.actId)
+
+end
+
+--奇遇商会事件推送
+function _P.OnNewGangEvent(data)
+	--剔除旧事件或者增加新事件
+end
+
+--奇遇兑换商店刷新返回
+function _P.OnAdvShopRefrash(data)
+end
+
+--奇遇打开排行榜返回
+function _P.OnAdvRank(data)
+
+end
+
+--奇遇商城购买返回
+function _P.OnAdvShopBuy(data)
+end
+
+--奇遇员工加班返回
+function _P.OnAdvStaffOver(data)
+end
+
+-- 每日12点重置
+function _P.OnDayout()
+	-- 新官上任活动，当前打开战斗界面，需要重置boss血量
+	-- if WindowMgr.IsCreated("UXinGuanBattle") then
+	-- 	WindowMgr.Call("UXinGuanBattle", "ResetBoosBloodNum")
+	-- end
+
+	-- 重置活动次数
+	local actId1 = MActivity.ActIdForType[Define.ActivityType.XinGuan1]
+	local activityData1 = MActivity.GetFromId(actId1)
+	if activityData1 and activityData1.shopList then
+		for k,v in pairs(activityData1.shopList) do
+			v.buyCount = 0
+		end
+	end
+
+	if activityData1 and activityData1.state then
+		local time = activityData1.state.lefttime - HeartBeat.ServSecond()
+		if time <= 0 and activityData1.state.state == MActivity.ActivityState.Doing and not MActivity.IsUpdateTime1 then
+			_M.GetInfoReq(actId1)
+			MActivity.IsUpdateTime1 = true
+		end
+	end
+
+	local actId2 = MActivity.ActIdForType[Define.ActivityType.XinGuan2]
+	local activityData2 = MActivity.GetFromId(actId2)
+	if activityData2 and activityData2.shopList then
+		for k,v in pairs(activityData2.shopList) do
+			v.buyCount = 0
+		end
+	end
+
+	if activityData2 and activityData2.state then
+		local time = activityData2.state.lefttime - HeartBeat.ServSecond()
+		if time <= 0 and activityData2.state.state == MActivity.ActivityState.Doing and not MActivity.IsUpdateTime2 then
+			_M.GetInfoReq(actId2)
+			MActivity.IsUpdateTime2 = true
+		end
+	end
+
+	--抽奖12点重置
+	local actId3 = MActivity.ActIdForType[Define.ActivityType.Lottery]
+	local activityData3 = MActivity.GetFromId(actId3)
+	if activityData3 ~= nil then
+		activityData3.todayNum = 0
+		activityData3.isFree = true
+		activityData3.numGets = {}
+		--检查小红点
+		_P.CheckLotteryRepoint(actId3)
+		--刷新界面
+		WindowMgr.Call("ULottery", "OnUpdateInfo", actId3)
+	end
+
+	-- 打开商城界面重置
+	if WindowMgr.IsCreated("UXinGuanShop") then
+		WindowMgr.Call("UXinGuanShop", "UpdateBuyCountData")
+	end
+
+	CRankReward.OnDayout()
+	CSevenDayTarget.OnDayout()
+end
+
+-- 新官上任获取奖励红点
+function _P.CheckXinGuanRedPoint(actId, actType)
+	local isShowRed = false
+	local activityData = MActivity.GetFromId(actId)
+
+	if activityData.selfGetState == 0 or activityData.gangGetState == 0 then
+		isShowRed = true
+	end
+
+	if isShowRed ~= MActivity.XinGuanRed then
+		MActivity.XinGuanRed = isShowRed
+
+		local sysId = (actType == Define.ActivityType.XinGuan1 and Define.SysId.XinGuan1) or Define.SysId.XinGuan2
+		CMain.UpdateRedpoint(isShowRed, sysId)
+	end
+
+	if WindowMgr.IsCreated("UXinGuanMain") then
+		WindowMgr.Call("UXinGuanMain","UpdateRed")
+	end
+end
+
+-- 慈善活动获取奖励红点
+function  _P.CheckCharityRedPoint(actId, actType)
+	local isShowRed = false
+	local activityData = MActivity.GetFromId(actId)
+
+	if activityData == nil then return end
+	if activityData.selfGetState == MActivity.CharityGetState.CanGet then
+		isShowRed = true
+	end
+
+	MActivity.CharitableRed = isShowRed
+	local sysId = Define.SysId.Charitable
+	CMain.UpdateRedpoint(isShowRed, sysId)
+
+	if WindowMgr.IsCreated("UCharitableMainPanel") then
+		WindowMgr.Call("UCharitableMainPanel", "UpdateRed")
+	end
+
+	if WindowMgr.IsCreated("UCharitableRankPanel") then
+		WindowMgr.Call("UCharitableRankPanel","UpdateRed")
+	end
+end
+
+--奇遇获取红点检测
+function _P.CheckAdventureRedPoint(actId, actType)
+	local isShowMainBtnRed = false
+	local activityData = MActivity.GetFromId(actId)
+
+	if activityData.selfGetState == MActivity.RewardGetState.CanGet or 
+		activityData.gangGetState == MActivity.RewardGetState.CanGet or
+		activityData.isNew or activityData.hotval == 100  then--todo:maxval
+		isShowMainBtnRed = true
+	end
+
+	MActivity.AdventureMainRed = isShowMainBtnRed
+	MActivity.AdventureShopRed = #activityData.shopEventList > 0
+	MActivity.AdventureRankRed = activityData.selfGetState == MActivity.RewardGetState.CanGet or activityData.gangGetState == MActivity.RewardGetState.CanGet
+	local sysId = Define.SysId.Adventure
+	CMain.UpdateRedpoint(MActivity.AdventureMainRed, sysId)
+
+	--界面刷新
+end
+
+return _M

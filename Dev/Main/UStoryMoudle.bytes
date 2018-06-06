@@ -1,0 +1,583 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Girl.UGirlShowMoudle.bytes#_M]
+local UGirlShowMoudle = JRequire "Dev.Girl.UGirlShowMoudle"
+--@RefType [Dev.Staff.UStaffShowMoudle.bytes#_M]
+local UStaffShowMoudle = JRequire "Dev.Staff.UStaffShowMoudle"
+--@RefType [Dev.Car.UCarGetNew.bytes#_M]
+local UCarGetNew = JRequire "Dev.Car.UCarGetNew"
+--@RefType [Dev.Aircraft.UCarGetNew.bytes#_M]
+local UAircraftGetNew = JRequire "Dev.Aircraft.UAircraftGetNew"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+
+local UStaffFour = JRequire "Dev.Staff.UStaffFour"
+local UStaffFive = JRequire "Dev.Staff.UStaffFive"
+
+local UStoryPop = JRequire "Dev.Main.UStoryPop"
+local CMain = JRequire "Dev.Main.CMain"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local NO_WHO_POS = Vector2(17, -44)
+local HAVE_WHO_POS = Vector2(17, -85)
+local COLOR_BLACK = Color(84 / 255, 62 / 255, 62 / 255, 1)
+local SECOND_COUNT = 30
+
+local LeftHidePos = Vector2(-600, 0)
+local ShowPos = Vector2.zero
+local RightHidePos = Vector2(600, 0)
+
+function _M:Destroy( ... )
+	if self._Root ~= nil then
+
+		if self.ShowStaffFour ~= nil then
+			self.ShowStaffFour:delete()
+			self.ShowStaffFour = nil
+		end
+		if self.ShowStaffFive ~= nil then
+			self.ShowStaffFive:delete()
+			self.ShowStaffFive = nil
+		end
+		if self.ShowStoryPop ~= nil then
+			self.ShowStoryPop:delete()
+			self.ShowStoryPop = nil
+		end
+
+		if self.ShowGirlOrStaffMoudle ~= nil then
+			self.ShowGirlOrStaffMoudle:Destroy()
+			self.ShowGirlOrStaffMoudle:delete()
+			self.ShowGirlOrStaffMoudle = nil
+		end
+
+		self._Root:Destroy()
+		self._Root = nil
+
+		EventCenter.CallEventTrigger(Define.EventListenId.StoryDone, self.Id)
+
+		local info = self.ShowGirlOrStaff
+		if info ~= nil then
+			if info.callBack ~= nil then
+				info.callBack()
+			end
+			if info.storyType == 1 then
+				EventCenter.CallEventTrigger(Define.EventListenId.GetGirl, info.objId)
+			elseif info.storyType == 2 then
+				EventCenter.CallEventTrigger(Define.EventListenId.GetStaff, info.objId)
+			end
+		end
+		if self.DoneCall ~= nil then
+			self.DoneCall()
+		end
+	end
+end
+
+function _P.OnToDone(self)
+	if self.IsShowSpecial then
+		self:Destroy()
+	elseif self.IsShowInfo then
+		local info = self.ShowGirlOrStaff
+		if info ~= nil then
+			local id = info.objId
+			if id ~= nil then
+				local staff = Csv.Personnel[id]
+				if staff ~= nil then
+					if staff.special ~= nil then
+						if self.ShowGirlOrStaffMoudle ~= nil then
+							self.ShowGirlOrStaffMoudle:Destroy()
+							self.ShowGirlOrStaffMoudle = nil
+						end
+						
+						if staff.special == 1 then
+							self.IsShowSpecial = true
+							if self.ShowStaffFour ~= nil then
+								self.ShowStaffFour:delete()
+								self.ShowStaffFour = nil
+							end
+							self.ShowStaffFour = UStaffFour.new(self._Root)
+						elseif staff.special == 2 or staff.special == 5 then
+							self.IsShowSpecial = true
+							if self.ShowStaffFive ~= nil then
+								self.ShowStaffFive:delete()
+								self.ShowStaffFive = nil
+							end
+							self.ShowStaffFive = UStaffFive.new(self._Root, staff.special)
+						else
+							self:Destroy()
+						end
+					else
+						self:Destroy()
+					end
+				else
+					self:Destroy()
+				end
+			else
+				self:Destroy()
+			end
+		else
+			self:Destroy()
+		end
+	else
+		if self.OnTimeHandle ~= nil then
+			self.OnTimeHandle:Destroy()
+			self.OnTimeHandle = nil
+		end
+
+		local id = self.Id
+		local csvLine = Csv.Story[id]
+		if csvLine.next ~= nil and csvLine.next > 0 then
+			_P.doCreate(self, csvLine.next)
+		else
+			self:StoryDone()
+		end
+	end	
+end
+
+function _M:StoryDone()
+	if self.ShowGirlOrStaff ~= nil then
+		local info = self.ShowGirlOrStaff
+
+		if self.ShowGirlOrStaffMoudle ~= nil then
+			self.ShowGirlOrStaffMoudle:delete()
+			self.ShowGirlOrStaffMoudle = nil
+		end
+
+		if info.storyType == 1 or info.storyType == 6 then
+			self.Moudle:Destroy()
+			self.IsShowInfo = true
+			self.ShowGirlOrStaffMoudle = UGirlShowMoudle.new(self._Root, info.objId,info.storyType)
+		elseif info.storyType == 2 then
+			self.Moudle:Destroy()
+			self.IsShowInfo = true
+			self.ShowGirlOrStaffMoudle = UStaffShowMoudle.new(self._Root, info.objId)
+		elseif info.storyType == 7 then
+			self.Moudle:Destroy()
+			self.IsShowInfo = true
+			self.ShowGirlOrStaffMoudle = UCarGetNew.new(self._Root,self.objData)
+		elseif info.storyType == 8 then
+			self.Moudle:Destroy()
+			self.IsShowInfo = true
+			self.ShowGirlOrStaffMoudle = UAircraftGetNew.new(self._Root, info.objId)
+		else
+			self:Destroy()
+		end
+	else
+		self:Destroy()
+	end
+end
+
+function _P.doCreate(self, id)
+	self.Dialog.Activity = false
+	self.Id = id
+	local csvLine = Csv.Story[id]
+	local moudle = self.Moudle
+
+	if csvLine.isSpecialTalk ~= nil and csvLine.isSpecialTalk == 1 then
+		if self.ShowStoryPop ~= nil then
+			self.ShowStoryPop:delete()
+			self.ShowStoryPop = nil
+		end
+		self.ShowStoryPop = UStoryPop.new(self.CanvasPop,csvLine,function()_P.OnToDone(self)end)
+		return
+	end
+
+	local func = function()
+		--背景
+		local bg = moudle:Get("bg")
+		if csvLine.bg ~= nil then
+			bg.SpriteName = csvLine.bg
+		end
+		if csvLine.bgPos ~= nil then
+			bg.LocalPosition = Vector2(csvLine.bgPos[1], csvLine.bgPos[2])
+		end
+		if csvLine.fontSize ~= nil then
+			self.Text.FontSize = csvLine.fontSize
+		end
+		--对话框
+		local box = moudle:Get("dialog")
+		if csvLine.box ~= nil then
+			box.SpriteName = csvLine.box
+		end
+		if csvLine.boxPos ~= nil then
+			box.LocalPosition = Vector2(csvLine.boxPos[1], csvLine.boxPos[2])
+		end
+
+		--声音
+		if csvLine.sound ~= nil and csvLine.sound > 0 then
+			SoundMgr.PlaySystem(csvLine.sound)
+		end
+		--跳过
+		if csvLine.canSkip == 1 then
+			self.Pass.Activity = true
+		elseif csvLine.canSkip == 0 then
+			self.Pass.Activity = false
+		end
+		--有效时长
+		if csvLine.vaildTime ~= nil and csvLine.vaildTime > 0 then
+			self.OnTimeHandle = moudle.SelfRect:AddOnTime(function( ... )
+				self.OnTimeHandle = nil
+				_P.OnToDone(self)
+			end, nil, csvLine.vaildTime)
+		elseif self.OnTimeHandle ~= nil then
+			self.OnTimeHandle:Destroy()
+			self.OnTimeHandle = nil
+		end
+		local who = csvLine.who
+		if who == nil then
+			who = 0
+		end
+		
+		if csvLine.name ~= nil then
+			local _name = csvLine.name
+			--美女员工改名
+			if csvLine.whoType == 1 then
+				_name = MStaff.GetStaffName(csvLine.whoId)
+			elseif csvLine.whoType == 2 then
+				_name = MGirl.GetGirlName(csvLine.whoId)
+			end
+			
+			self.Name.Text = LuaUtil.Format(_name, {name = MPlayer.GetName()})
+			moudle:Get("NameBox").Activity = true
+			local nameSizeX = self.Name.PreferredWidth
+			self.NameBox.SizeDelta = Vector2(nameSizeX + 74,99)
+		else
+			self.Name.Text = ""
+			moudle:Get("NameBox").Activity = false
+		end
+
+		local leftHeadId = MPlayer.GetHeadID() 
+		local leftBodyId = MPlayer.GetBodyID()
+
+		if csvLine.myHeadId ~= nil and csvLine.myHeadId > 0 then
+			leftHeadId = csvLine.myHeadId
+		end
+		if csvLine.myBodyId ~= nil and csvLine.myBodyId > 0 then
+			leftBodyId = csvLine.myBodyId
+		end
+
+		if self.LastLeftHeadId ~= leftHeadId or self.LastLeftBodyId ~= leftBodyId then
+			if self.LeftHeadPrefab ~= nil then
+				self.LeftHeadPrefab:Destroy()
+				self.LeftHeadPrefab = nil
+			end
+			if self.LeftBodyPrefab ~= nil then
+				self.LeftBodyPrefab:Destroy()
+				self.LeftBodyPrefab = nil
+			end
+			self.LastLeftHeadId = leftHeadId
+			self.LastLeftBodyId = leftBodyId
+			local sex = MPlayer.GetSex()
+			local headPrefab = MPlayer.GetPrefabID(leftHeadId, sex)
+			local bodyPrefab = MPlayer.GetPrefabID(leftBodyId, sex)
+			if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+				self.LeftBodyPrefab,self.LeftHeadPrefab = CCommon.CreateRole(self.Left, bodyPrefab, headPrefab, CCommon.ActorFieldMap.story_left)
+				self.Head.SpriteName = ""
+				self.Left.SpriteName = ""
+			else
+				self.Head.SpriteNameAutoScale = MPlayer.GetSpFromSex(leftHeadId, MPlayer.GetSex())
+				self.Left.SpriteNameAutoScale = MPlayer.GetSpFromSex(leftBodyId, MPlayer.GetSex())
+			end
+		end
+
+		if who == self.LastWho then
+			--这里继续使用图片名来作为切换依据
+			if self.LastThatSp ~= csvLine.icon and csvLine.icon ~= nil then
+				if who == 2 then
+					if self.Tweener ~= nil then
+						self.Tweener:Restore()
+					end
+					self.LeftObj.LocalPosition = LeftHidePos
+					self.RightObj.LocalPosition = ShowPos
+					-- self.LeftAlpha.alpha = 0
+					-- self.RightAlpha.alpha = 1
+					self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right_Right")
+					self.Tweener:SetOnComplete(function()
+						if self.RightObj ~= nil then
+							if self.RightPrefab ~= nil then
+								self.RightPrefab:Destroy()
+								self.RightPrefab = nil
+							end
+							if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
+								self.RightPrefab = CCommon.CreateActor(self.Right, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
+								self.Right.SpriteName = ""
+							else
+								self.Right.SpriteNameAutoScale = csvLine.icon
+							end							
+							self.LastThatSp = csvLine.icon
+							self.Tweener:Play("Event_Next")
+						end
+					end)
+					self.Tweener:Play()
+				else
+					if self.RightPrefab ~= nil then
+						self.RightPrefab:Destroy()
+						self.RightPrefab = nil
+					end
+					if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
+						self.RightPrefab = CCommon.CreateActor(self.Right, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
+						self.Right.SpriteName = ""
+					else
+						self.Right.SpriteNameAutoScale = csvLine.icon
+					end
+					self.LastThatSp = csvLine.icon
+				end
+			end
+		else
+			--说话的人
+			if csvLine.icon ~= nil and self.LastThatSp ~= csvLine.icon then
+				if self.RightPrefab ~= nil then
+					self.RightPrefab:Destroy()
+					self.RightPrefab = nil
+				end
+				if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
+					self.RightPrefab = CCommon.CreateActor(self.Right, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
+					self.Right.SpriteName = ""
+				else
+					self.Right.SpriteNameAutoScale = csvLine.icon
+				end
+				self.LastThatSp = csvLine.icon
+			end
+			self.LastWho = who	
+			if self.Tweener ~= nil then
+				self.Tweener:Restore()
+			end	
+			if who == 1 then
+				self.LeftObj.Activity = true
+				self.RightObj.Activity = true
+				--自己
+				
+				if self.IsFirst then
+					self.IsFirst = false
+					self.RightObj.LocalPosition = RightHidePos
+					--self.RightAlpha.alpha = 0
+				else
+					self.LeftObj.LocalPosition = LeftHidePos
+					self.RightObj.LocalPosition = ShowPos
+					-- self.LeftAlpha.alpha = 0
+					-- self.RightAlpha.alpha = 1
+				end	
+				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Left")
+				self.Tweener:Play()		
+			elseif who == 2 then
+				self.LeftObj.Activity = true
+				self.RightObj.Activity = true
+				--对方
+				if self.IsFirst then
+					self.IsFirst = false
+					self.LeftObj.LocalPosition = LeftHidePos
+					-- self.LeftAlpha.alpha = 0
+				else
+					self.LeftObj.LocalPosition = ShowPos
+					self.RightObj.LocalPosition = RightHidePos
+					-- self.LeftAlpha.alpha = 1
+					-- self.RightAlpha.alpha = 0
+				end
+				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right")
+				self.Tweener:Play()
+			else
+				--没有	
+				self.LeftObj.Activity = false
+				self.RightObj.Activity = false
+				if self.RightPrefab ~= nil then
+					self.RightPrefab:Destroy()
+					self.RightPrefab = nil
+				end
+				self.Right.SpriteName = ""
+				self.LastThatSp = ""
+				self.IsFirst = true
+			end
+		end
+		--说话
+		if csvLine.tips ~= nil then
+			self.mIsTalkOver = false
+			self.Text.Text = ""
+			local talk = LuaUtil.Format(csvLine.tips, {name = MPlayer.GetName()})
+			self.mNowTalk = talk
+			self.mTweenText = self.Text:DOText(talk, _P.GetTimeForTalk(talk))
+			self.mTweenText:OnComplete(function()
+				self.mIsTalkOver = true
+			end)
+		else
+			self.Text.Text = ""
+			self.mIsTalkOver = true
+			self.mNowTalk = ""
+		end
+
+		if self.ActorEffect ~= nil then
+			if self.NowEffectID == nil or self.NowEffectID ~= csvLine.sceneEffect then
+				self.ActorEffect:DestroyChildren()
+				if csvLine.sceneEffect ~= nil then
+					CCommon.CreateEffect(self.ActorEffect,csvLine.sceneEffect)
+				end
+				self.NowEffectID = csvLine.sceneEffect
+			end
+		end
+
+		if csvLine.shakeType ~= nil and csvLine.shakeTime ~= nil then
+			if csvLine.shakeType == 1 then
+				if moudle ~= nil then
+					moudle.SelfRect:DOShakeAnchorPos(csvLine.shakeTime,20,10,10)
+				end
+			elseif csvLine.shakeType == 2 then
+				if self.Dialog ~= nil then
+					self.Dialog:DOShakeAnchorPos(csvLine.shakeTime,20,10,10)
+				end
+			end
+		end
+		self.Dialog.Activity = true
+	end
+	if csvLine.passAnimate ~= nil then
+		local csvEffect = Csv.Effect[csvLine.passAnimate]
+		if csvEffect ~= nil then
+			self.Lock.RaycastTarget = true
+			CCommon.CreateEffect(self.CanvasAnimate,csvLine.passAnimate,nil,function()
+				self.Lock.RaycastTarget = false
+			end)
+			self.CanvasAnimate:AddOnTime(function()
+				func()
+			end,nil,csvEffect.dura/2)
+		end
+	else
+		func()
+	end
+end
+
+function _P.GetTimeForTalk(str)
+	if str ~= nil then
+		local len = string.len(str)
+		local num1,num2 = math.modf(len/SECOND_COUNT)
+		local second = num1 + num2
+		return second
+	end
+	return 1
+end
+
+-- isBattle是否是在战斗界面播放剧情
+function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
+	self._Root = JGuiManager.CreateEmpty(parent, "storyRoot")
+	self._Root:SetFullSize()
+	--点击完成
+	self._Root:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		if self.mIsTalkOver then
+			_P.OnToDone(self)
+			if self.Id ~= nil then
+				CMain.OnStoryDone(self.Id)
+			else
+				CMain.OnStoryDone(id)
+			end
+		else
+			self.mIsTalkOver = true
+			if self.Text ~= nil then
+				if self.mTweenText ~= nil then
+					self.Text:DOKill()
+				end
+				self.Text.Text = self.mNowTalk
+			end
+		end
+	end, nil)
+
+	self.DoneCall = doneCall
+	self.ShowGirlOrStaff = showGirlOrStaff
+	self.IsShowInfo = false
+	self.IsShowSpecial = false
+	self.LastWho = 0
+	self.IsFirst = true
+	self.LastThatSp = nil
+	self.objData = objData
+
+	self.LastLeftHeadId = 0
+	self.LastLeftBodyId = 0
+	self.LeftHeadPrefab = nil
+	self.LeftBodyPrefab = nil
+	self.RightPrefab = nil
+
+	local moudle = JGuiManager.GetMoudle(self._Root, "M_Guidance_Story")
+	self.Moudle = moudle
+
+	--点击继续
+	self.Continue = moudle:Get("continue")
+	self.Continue.Text = Csv.Text("guide_continue")
+	local tween = moudle:Get("Next"):DOAnchorPosY(-107,0.5)
+	tween:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	--跳过剧情
+	self.Pass = moudle:Get("skip")
+	moudle:Get("text").Text = Csv.Text("guide_pass")
+	self.Pass:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if self.Id ~= nil then
+			CMain.OnStoryDone(self.Id)
+		else
+			CMain.OnStoryDone(id)
+		end
+		self:StoryDone()
+	end, nil, 0.9)
+
+	self.Name = moudle:Get("text1")
+	self.NameBox = moudle:Get("NameBox")
+	self.Text = moudle:Get("text2")
+	self.Left = moudle:Get("Left")
+	self.Head = moudle:Get("Head")
+	self.Right = moudle:Get("Right")
+	self.Lock = moudle:Get("Lock")
+	self.Dialog = moudle:Get("dialog")
+	self.Dialog.Activity = false
+	self.LeftObj = moudle:Get("LeftObj")
+	self.RightObj = moudle:Get("RightObj")
+	self.LeftAlpha = self.LeftObj:AddCanvasGroup()
+	self.RightAlpha = self.RightObj:AddCanvasGroup()
+	self.LeftObj.Activity = false
+	self.RightObj.Activity = false
+
+	local canvasActor = moudle:Get("EffectCanvas")
+	canvasActor.SortingLayerName = "Tips3"
+	canvasActor.SortingOrder = 8
+	self.CanvasActor = canvasActor
+
+	local canvasOther = moudle:Get("OtherCanvas")
+	canvasOther.SortingLayerName = "Tips3"
+	canvasOther.SortingOrder = 9
+	self.CanvasOther = canvasOther
+
+	local canvasPop = moudle:Get("PopCanvas")
+	canvasPop.SortingLayerName = "Tips3"
+	canvasPop.SortingOrder = 10
+	self.CanvasPop = canvasPop
+
+	local canvasAnimate = moudle:Get("AnimateCanvas")
+	canvasAnimate.SortingLayerName = "Tips3"
+	canvasAnimate.SortingOrder = 11
+	self.CanvasAnimate = canvasAnimate
+
+	local canvasName = moudle:Get("NameCanvas")
+	canvasName.SortingLayerName = "Tips3"
+	canvasName.SortingOrder = 12
+	self.CanvasName = canvasName
+
+	self.ActorEffect = moudle:Get("EffectActor")
+
+	--座驾，飞机可能存在无剧情id
+	if id ~= nil then
+		_P.doCreate(self, id)
+	else
+		self:StoryDone()
+	end
+end
+
+return _M

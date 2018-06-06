@@ -1,0 +1,820 @@
+
+--常量定义
+local _M = {}
+
+--文字提示类型
+_M.ShowStrType = 
+{
+	Error = 1,
+	Right = 2,
+	Power = 3,
+	BuyLandBattle = 4,
+}
+
+--不在提示枚举定义
+_M.NoTipsAgainType = 
+{
+	Test = 1,
+}
+
+--性别
+_M.Sex = 
+{
+	--女
+	Female = 1,
+	--男
+	Male = 2,
+}
+
+-- 系统类型
+_M.SysId = 
+{
+	--0 ~ 99
+	Main = 0,
+	--主界面下边入口 --> 从左往右
+	Bottom = 1,
+	--主界面上面入口 --> 从右往左
+	Top = 2,
+	--主界面左侧 --> 从下往上
+	Left = 3,
+	--主界面右侧 --> 从下往上
+	Right = 4,
+	--自由城入口(世界)
+	World = 5,
+	--公司(府宅)
+	Home = 6,
+
+	Login = 10,			--登陆系统
+	Player = 11,		--玩家系统(无实际系统模块)	
+	Abil = 12,			--属性系统
+	EventControl = 13,	--事件中心
+	Story = 14,			--剧情对话
+	Guide = 15,			--引导		
+	Activity = 16,		--活动（服务器占坑）
+
+--主界面入口 : 101 ~ 149
+	--员工
+	Staff = 101,
+	--美女
+	Girl = 102,
+	--经营
+	Operate = 103,
+	--道具
+	Bag = 104,
+	--成就
+	Achievement = 105,
+	--任务
+	Quest = 106,
+	--聊天
+	Talk = 107,
+	--充值VIP
+	Recharge = 108,		
+	--商城
+	Shop = 109,
+	--福利
+	Welfare = 110,
+	--限时奖励(主界面Top入口)
+	TimeLimit = 111,
+	--设置
+	Setting = 112,
+	--邮件
+	Mail = 113,
+	--好友
+	Friend = 114,
+	--座驾
+	Car = 115,
+	--系统开启
+	SysOpen = 116,
+
+	--充值奖励(主界面Top入口)
+	RechargeReward = 118,
+	--自动战斗
+	AutoFight = 119,
+	--冲榜活动(主界面Top入口)
+	RankReward = 120,
+	--四大奸臣(主界面Top入口)
+	JianChen = 121,
+	--VIP福利(主界面Top入口)
+	VIPWelfare = 122,
+	--月卡福利(主界面Top入口)
+	MonthWelfare = 123,
+	--年卡福利(主界面Top入口)
+	YearWelfare = 124,
+	--首冲福利(主界面Top入口)
+	FirstRecharge = 125,
+	--巾帼五虎(主界面Top入口)
+	JinGuo = 126,
+	--新官上任活动1
+	XinGuan1 = 127,
+	--新官上任活动2
+	XinGuan2 = 128,
+	--问卷调查
+	Questionnaire = 129,
+	--目标系统
+	Target = 130,
+	--手机
+	Phone = 131,
+	--签到
+	Sign = 132,
+	--抽奖
+	Lottery = 133,
+	--红包
+	Redpacket = 134,
+	-- 超级员工
+	SuperStaff = 135,
+	-- 慈善活动
+	Charitable = 136,
+	--围攻华尔街
+	SiegeWall = 174,
+	--奇遇活动
+	Adventure = 137,
+
+
+--自由城入口(世界) 150 ~ 199
+
+	--金融机构
+	Finance = 150,
+	--商场
+	Market = 151,
+	--商会
+	Commerce = 152,
+	--法院
+	Relations = 153,
+	--议会
+	Parliament = 154,
+	--公司
+	Company = 155,
+	--机场
+	Airport = 156,
+	--商学院
+	Aircraft = 157,
+	--市场调研
+	Research = 158,
+	--排行榜
+	Rank = 159,
+	--码头
+	Wharf = 160,
+	--游艇会
+	Club = 161,
+	--赛事
+	Match = 162,
+	--加工工厂
+	Factory = 163,
+	--销售中心
+	Train = 164,
+	--天堂岛
+	HeavenIsland = 165,
+	--装扮
+	DressUp = 166,
+	--游艇
+	Yacht = 167,
+	--七日目标
+	SevenDayTarget = 168,
+	--选举
+	Vote = 169,
+	--选举BOSS
+	VoteBoss = 170,
+	-- 经济讲座
+	Lecture = 171,
+	-- 竞标地皮
+	BuyLand = 172,
+	-- 化妆
+	MakeUp = 173,
+
+	--创建新角色
+	Login_NewPlayer = 1000,
+
+	--角色升官
+	Player_LevelUp = 1101,
+
+--员工系统
+	Staff_Staff = 10100,
+	--员工系统书籍
+	Staff_Book = 10101,
+	--员工系统技能
+	Staff_Skill = 10102,
+	--员工系统光环
+	Staff_Aureole = 10103,
+
+--美女系统
+	--美女系统已获得
+	Girl_Unlock = 10201,
+	--美女系统未获得
+	Girl_Lock = 10202,
+	--美女系统孩子
+	Girl_Baby = 10203,
+	--美女系统结婚
+	Girl_Marry = 10204,
+	--已认识
+	Girl_Known = 10205,
+	--朋友圈
+	Girl_FriendRound = 10206,
+
+--背包系统
+	--背包系统道具
+	Bag_Goods = 10401,
+	--背包系统合成,
+	Bag_Synthetic = 10402,
+	--背包系统时装
+	Bag_Fashion = 10403,
+
+--聊天系统
+	--聊天系统系统频道
+	Talk_Server = 10701,
+	--聊天系统商会频道
+	Talk_Unions = 10702,
+	--私聊
+	Talk_Private = 10703,
+	--系统频道
+	Talk_System = 10704,
+	--跨服频道
+	Talk_Cross = 10705,
+
+--商城系统
+	--商城系统单个商品切页
+	Shop_Single = 10901,
+	--商城系统礼包切页
+	Shop_Package = 10902,
+	--商城系统限时抢购切页
+	Shop_Limit = 10903,
+
+--福利Table页
+	--签到
+	Welfare_Sign = 11001,
+	--功能解锁
+	Welfare_Func = 11002,
+	--月卡
+	Welfare_Month = 11003,
+	--年卡
+	Welfare_Year = 11004,
+	--神迹
+	Welfare_God = 11005,
+	--首冲
+	Welfare_First = 11006,
+	--官群
+	Welfare_QQ = 11007,
+	--官微
+	Welfare_WeiXin = 11008,
+
+	--VIP福利(拆)
+	Welfare_Vip1 = 12201,
+	Welfare_Vip2 = 12202,
+	Welfare_Vip3 = 12203,
+	Welfare_Vip4 = 12204,
+	Welfare_Vip5 = 12205,
+	Welfare_Vip6 = 12206,
+	Welfare_Vip7 = 12207,
+	Welfare_Vip8 = 12208,
+	Welfare_Vip9 = 12209,
+	Welfare_Vip10 = 12210,
+	Welfare_Vip11 = 12211,
+	Welfare_Vip12 = 12212,
+	Welfare_Vip13 = 12213,
+	Welfare_Vip14 = 12214,
+	Welfare_Vip15 = 12215,
+	Welfare_Vip16 = 12216,
+	Welfare_Vip17 = 12217,
+	Welfare_Vip18 = 12218,
+	Welfare_Vip19 = 12219,
+	Welfare_Vip20 = 12220,
+	Welfare_Vip21 = 12221,
+	Welfare_Vip22 = 12222,
+	Welfare_Vip23 = 12223,
+	Welfare_Vip24 = 12224,
+	Welfare_Vip25 = 12225,
+	Welfare_Vip26 = 12226,
+	Welfare_Vip27 = 12227,
+	Welfare_Vip28 = 12228,
+	Welfare_Vip29 = 12229,
+	Welfare_Vip30 = 12230,
+
+--充值奖励
+	--每日充值
+	RechargeReward_Day = 11801,
+	--累计充值
+	RechargeReward_Total = 11802,
+	--累天充值
+	RechargeReward_TotalDay = 11803,
+	--1, 3, 6元礼包
+	RechargeReward_DailyGift = 11804,
+
+--好友界面
+	--好友
+	Friend_Friend = 11401,
+	--黑名单
+	Friend_Blacklist = 11402,
+	--亲家
+	Friend_Qinjia = 11403,
+	--最近联系人
+	Friend_Recent = 11404,
+
+--商会标签页
+	--商会管理
+	Commerce_Manager = 15201,
+	--商会建设
+	Commerce_Build = 15202,
+	--查看成员
+	Commerce_Members = 15203,
+	--物品兑换
+	Commerce_Exchange = 15204,
+	--商会副本
+	Commerce_Battle = 15205,
+	--排行榜
+	Commerce_Rank = 15206,
+	--商会充值
+	Commerce_Recharge = 15207,
+	--商会进修
+	Commerce_Study = 15208,
+
+	--联盟排行
+	Commerce_Rank_Power = 1520601,
+
+--法院
+	--上诉界面
+	RelationsTabAdver = 15301,
+	--上诉界面上诉切页
+	RelationsAdver = 1530101,
+	--上诉界面防守信息切页
+	RelationsDefense = 1530102,
+	--排行榜界面查找切页
+	RelationsFind = 1530103,
+	--排行榜界面
+	RelationsTabRank = 15302,
+	--排行榜界面排行榜切页
+	RelationsRank = 1530201,
+
+--公司系统
+	--任命
+	Appoint = 15501,
+	--巡视
+	Patrol = 15502,
+	--私人秘书
+	Manage = 15503,
+	--殊荣
+	Laurel = 15504,
+	--决策
+	Verdict = 15505,
+
+--排行榜系统
+	--排行榜财力榜
+	Rank_Wealth = 15901,
+	--排行榜关卡榜
+	Rank_CheckPoint = 15902,
+	--排行榜亲密榜
+	Rank_Close = 15903,
+
+--码头:
+	--公司
+	Wharf_Company = 16001,
+	--别墅
+	Wharf_Villa = 16002,
+	--MBA商学院
+	Wharf_MBA = 16003,
+	--EMBA商学院
+	Wharf_EMBA = 16004,
+	--商会
+	Wharf_Commerce = 16005,
+	--图鉴
+	Wharf_Pokedex = 16011,
+	--关系链
+	Wharf_Relation = 16012,
+--目标系统
+	-- 头衔提升
+	Target_CompanyUp = 13001,
+	-- 实力提升
+	Target_PowerUp = 13002,
+	-- 特权提升
+	Target_VipUp = 13003,
+
+--座驾：
+	-- 座驾升级
+	Car_LevelUp = 15401,
+	-- 座驾升星
+	Car_StarUp = 15402,
+	-- 座驾资质强化
+	Car_AptiUp = 15403,
+	-- 车库座驾
+	Car_Garage = 15404,
+	-- 车库材料
+	Car_Mat = 15405,
+
+	--界面中的解锁:
+	Girl_Unlock_Vip = 1020101,
+	Girl_Date = 1020102,
+	Girl_ChangeName = 1020103,
+
+	--员工中的功能
+	Staff_ChangeName = 1010001,
+
+
+--选举：
+	Vote_Town = 16901,
+	Vote_Town_Par = 1690101,
+	Vote_Member = 16902,
+	Vote_Member_Par = 1690201,
+
+--化妆：
+	MakeUp_Have = 17301,
+	MakeUp_Normal = 17302,
+	MakeUp_Activity = 17303,
+
+--围攻华尔街
+	Siege_UDisk = 17401,
+	Siege_UBoss = 17402,
+
+--围攻华尔街Boss列表下页签
+	Siege_Boss_Server = 174021,
+	Siege_Boss_Commerce = 174022,
+}
+
+--Const表的枚举
+_M.Const = 
+{
+--员工
+	StaffMax = 12,
+--公司
+	--决策CD
+	CompanyVerdictCD = 14,
+	--经营重置CD消耗物品ID
+	CompanyManageCostID = 15,
+	--决策重置CD消耗物品ID
+	CompanyVerdictCostID = 16,
+	--经营业务往来解锁一键经营的公司规模
+	CompanyManageOneKeyLevel = 17,
+	--巡视解锁一键训话需要对象个数
+	CompanyPatrolOneKeyNum = 18,
+	
+--关卡
+	--关卡恢复员工消耗物品[id,count]
+	BattleChooseStaffCost = 22,
+	--每天的恢复次数
+	BattleStaffLiftNum = 31,
+--美女禮物
+	GirlGiftIDs = 26,
+	GirlRefreshDateID = 27,
+--尋訪
+	WharfRefreshID = 28,
+
+
+	--商学院位置最大值
+	SchoolMaxSeat = 29,
+	--商学院开启位置所需钻石
+	SchoolOpenCosts = 30,
+	--每次加钟时间（秒）
+	SchoolAddOneTime = 33,
+	--商学院加钟上限次数
+	SchoolMaxAdd = 34,
+	--商学院单次加钟花费钻石
+	SchoolAddCost = 35,
+	--开启一键完成所需开启座位数
+	SchoolOneKeyNeed = 36,
+	--对白存在时间
+	SchoolAliveSecond = 57,
+	--对白随机时间
+	SchoolRandomSecond = 59,
+
+	--游说可参加员工等级（第二个数值）
+	RelationsNormal = 41,
+	--游说连胜奖励次数（第一个数值）
+	RelationsContiWin = 42,
+	--游说消耗物品（顺序为：游说券（用于增加额外次数），挑战券（用于普通挑战），追击券（用于特殊挑战））
+	RelationsCost = 44,
+	--游说用于购买战斗加成消耗物品id
+	RelationsBuyAddCost =  45,
+	--公司清CD消耗id
+	RelationsCDCost = 18008,
+
+	--商会: 创建商会消耗
+	CommerceCreateCost = 49,
+
+	-- 游艇会
+	-- 刷新商店列表，消耗元宝数量，公式：刷新价格=10元宝*元宝刷新次数(积分兑换商店)
+	RefreshShopGoldCost = 50,
+	-- 每日刷新列表上限次数（积分兑换商店）
+	RefreshShopMax = 51,
+	-- 今日参加宴会上限次数
+	JoinPartyMax = 52,
+
+	--背包
+	--批量使用临界值
+	BagUseParam = 53,
+	--改名卡ID
+	BagChangeNameID = 54,
+	--改形象卡ID
+	BagChangeAvatarID = 55,
+	--物品使用最大值
+	BagUseMax = 56,
+	--排行榜膜拜对白随机库
+	RankWorshipTalk = 60,
+	--关卡BOSS战回合数
+	BattleBossRound = 62,
+	--商会BOSS战回合数
+	CommerceBossRound = 63,
+	--四大奸臣
+	StaffFour = 64,
+	--巾帼五虎
+	StaffFive = 65,
+	--装扮对白
+	DressupTalk = 68,
+	--一键秒杀vip开启等级
+	OpenSeckillLv = 69,
+	--座驾等级公式：参数X、Y、Z
+	CarLevelParams = 70,
+	--座驾等级上限 
+	CarMaxLevel = 71,
+	--座驾星级上限
+	CarMaxStarLevel = 72,
+	--座驾评分公式：参数A、B、C、D、E、F、G
+	CarScoreParams = 73,
+	--座驾车库列表上限
+	CarShopListMax = 74,
+	--玩家车位开放个数
+	CarSeatOpenMax = 75,
+	--每日殿堂赠礼次数
+	ParliamentGiveTimes = 77,
+	-- 座驾属性条最大值
+	CarAttrMax = 78,
+
+	--不显示跳过按钮的服务器列表
+	ShowPassBtnServers = 81,
+
+	--首充语音列表
+	FirstRechargeSound = 84,
+
+	-- 娱乐大咖
+	RecreationMan = 99,
+
+	FriendQinJia = 10218,
+	--官群, 官微 兑换内容
+	QQWeiXinContent = 11003,
+
+	--开启选举BOSS奖励
+	VoteBossOpenCost = 15009,
+	--开启选举BOSS奖励
+	VoteBossOpenAward = 15010,
+
+	--商会学习邀请上限
+	VoteStudyMax = 19001,
+	--选举信息上限
+	VoteMessageMax = 95,
+	--奇遇事件上限间隔
+	AdventureEvent = 20101,
+}
+
+--自定义事件监听ID
+_M.EventListenId = 
+{
+	---------------Trigger表中用到的监听 1 ~ 100 ------------
+	--打开界面 (SysId)
+	CreateWindow = 1,
+	--关闭界面 (SysId)
+	DestroyWindow = 2,
+	--打开界面 (界面类型)
+	CreateWindowForType = 3,
+	--关闭界面 (界面类型)
+	DestroyWindowForType = 4,
+	--功能开放 (funcId)
+	FuncOpenEvent = 5,
+	--获得新美女 (grilId)
+	GetGirl = 6,
+	--获得新员工 (staffId)
+	GetStaff = 7,
+	--进入游戏
+	EnterGame = 8,
+	--第一次进入游戏
+	FirstEnterGame = 9,
+	--Story剧情播放结束 (story表的id)
+	StoryDone = 10,
+	--失去焦点
+	OnApplicationFocus = 11,
+	--暂停
+	OnApplicationPause = 12,
+	--主线任务打开
+	MainQuestOpen = 13,
+	--断线自动重连成功进入游戏
+	--注:需注意如果有锁屏的界面或系统需要监听该事件，如果有锁屏需要在接收到该事件后解锁
+	AutoReconnectEnterGame = 14,
+	--调用断线重连
+	ToReLogin = 15,
+	--错误提示监听
+	ServerError = 16,
+	--界面类型隐藏/显示
+	ActivityWindowForType = 17,
+	--收购成功界面触发 (视频会议id)
+	GetPatrol = 18,
+
+	--物品刷新 (itemid , itemcount , isAdd )
+	ItemUpdateEvent = 101,
+	--跨天事件
+	DailyReset = 104,	
+	--秒定时器
+	SecondUpdate = 106,
+	
+	--角色名变更
+	PlayerNameUpdate = 107,
+	--角色经验变更
+	PlayerExpUpdate = 108,
+	--角色VIP等级变更
+	PlayerVipUpdate = 109,
+	--角色外观变更
+	PlayerAvatarUpdate = 110,
+	--角色属性变更
+	PlayerAttrUpdate = 111,
+	--主动断网
+	DisconnectServer = 112,
+}
+
+--物品背包类型
+_M.BagType = 
+{
+	--资源
+	Assets = 1,
+	--道具
+	Prop = 3,
+	--装扮
+	Dress = 4,
+
+}
+
+--资源类型
+_M.AssetsType = 
+{
+	--元宝
+	Gold = 1,
+	--政绩
+	Record	= 2,
+	--银两
+	Coin = 3,
+	--粮食
+	Food = 4,
+	--士兵
+	Soldier = 5,
+	--门客技能经验
+	Skillexp = 6,
+	--门客书籍经验
+	Bookexp = 7,
+	--公章
+	Gongzhang = 14,
+	--钢材
+	Gangcai = 20,
+	--喇叭
+	Horn = 34101,
+}
+
+_M.SpecialItem = 
+{
+	Intimacy = 8,--亲密度道具
+	Meet = 13,--相遇度道具
+}
+
+--角色属性类型
+_M.AttrType = 
+{
+	Wuli = 1,--武力, 公关
+	Zhili = 2,--智力, 行政
+	Zhengzhi = 3,--政治, 技术
+	Meili = 4,--魅力, 营销
+}
+_M.AttrIndex = {}
+for k,v in pairs(_M.AttrType) do
+	_M.AttrIndex[k] = v
+	_M.AttrIndex[v] = k
+end
+
+--活动类型
+_M.ActivityType = 
+{
+	--冲榜活动
+	RankReward = 1,
+	--四大奸臣
+	JianChen = 2,
+	--限时奖励
+	TimeLimit = 3,
+	--每日充值
+	RechargeReward_Day = 4,
+	--累计充值
+	RechargeReward_Total = 5,
+	--累天充值
+	RechargeReward_TotalDay = 6,
+	--月卡
+	Welfare_Month = 7,
+	--年卡
+	Welfare_Year = 8,
+	--VIP福利
+	Welfare_Vip = 9,
+	--首冲
+	Welfare_First = 10,
+	--官群
+	Welfare_QQ = 11,
+	--官微
+	Welfare_WeiXin = 12,
+	--签到
+	Welfare_Sign = 13,
+	--公告
+	Notice = 14,
+	--巾帼五虎
+	JinGuo = 15,
+	--新官上任活动（大丰收）
+	XinGuan1 = 16,
+	--新官上任活动（剿土匪）
+	XinGuan2 = 17,
+	--商城礼包
+	Shop_Package = 18,
+	--商会充值
+	Commerce_Recharge = 19,
+	--抽奖活动
+	Lottery = 20,
+	--vip折扣礼包
+	VipDiscont = 21,
+	--1, 3, 6元礼包
+	RechargeReward_DailyGift = 22,
+	--七日目标
+	SevenDayTarget = 23,
+	--商城限购
+	Shop_Limit = 24,
+	--兑换头像
+	Head_Change = 25,
+	--慈善活動
+	Charitable = 26,
+	--奇遇活动
+	Adventure = 27,
+}
+
+--排行榜类型
+_M.RankType = 
+{
+	None = -1,
+	-- 财势（势力/战力）
+	Power = 0,
+	-- 关卡
+	Battle = 1,
+	-- 亲密度
+	Intimacy = 2,
+	-- 游艇会
+	Club = 3,
+	-- 法院（游说）
+	Relations = 4,
+	--金融机构
+	FinanceScore = 6,
+	-- 新官上任（活动1），个人
+	XinGuanPerson1 = 40,
+	-- 新官上任（活动1），商会
+	XinGuanGang1 = 41,
+	-- 新官上任（活动2），个人
+	XinGuanPerson2 = 42,
+	-- 新官上任（活动2），商会
+	XinGuanGang2 = 43,
+	-- 经济讲座周榜
+	LectureWeekRank = 54,
+	-- 经济讲座月榜
+	LectureMonthRank = 55,
+	-- 竞标 周榜
+	BuyLand1 = 56,
+	-- 竞标 总榜
+	BuyLand2 = 57,
+	-- 慈善排行榜
+	Charitable = 58,
+	-- 奇遇活动 个人
+	AdventurePerson = 59,
+	-- 奇遇活动 商会
+	AdventureGang = 60,
+}
+
+_M.CrossRankType = 
+{
+	Power = 1,		--势力榜
+	Commerce = 2,	--商会榜
+}
+
+--排行榜对应类型刷新模块界面方法
+_M.RankTypeFunc =
+{
+	[_M.RankType.Power] = {view = "URankTab", func = "ResetList"},
+	[_M.RankType.Battle] = {view = "URankTab", func = "ResetList"},
+	[_M.RankType.Intimacy] = {view = "URankTab", func = "ResetList"},
+	[_M.RankType.Club] = {view = "UClubRankPanel", func = "OnSetListData"},
+	[_M.RankType.Relations] = {view = "URelationsRankTab", func = "GetRankData"},
+	[_M.RankType.FinanceScore] = {view = "UFinanceRanking", func = "OnGetScoreRank"},
+	[_M.RankType.XinGuanPerson1] = {view = "UXinGuanRank", func = "OnGetSelfRankData"},
+	[_M.RankType.XinGuanPerson2] = {view = "UXinGuanRank", func = "OnGetSelfRankData"},	
+	[_M.RankType.XinGuanGang1] = {view = "UXinGuanRank", func = "OnGetGangRankData"},
+	[_M.RankType.XinGuanGang2] = {view = "UXinGuanRank", func = "OnGetGangRankData"},
+	[_M.RankType.LectureWeekRank] = {view = "ULecturesRankPanel", func = "OnGetWeekRankData"},
+	[_M.RankType.LectureMonthRank] = {view = "ULecturesRankPanel", func = "OnGetMonthRankData"},
+	[_M.RankType.Charitable] = {view = "UCharitableRankPanel", func = "OnGetSelfRankData"},
+	[_M.RankType.AdventurePerson] = {view = "UAdventureRank", func = "OnGetSelfRankData"},
+	[_M.RankType.AdventureGang] = {view = "UAdventureRank", func = "OnGetGangRankData"},
+	-- 竞标
+	[_M.RankType.BuyLand1] = {view = "UBuyLandRank", func = "ResetList"}, -- 周榜
+	[_M.RankType.BuyLand2] = {view = "UBuyLandRank", func = "ResetList"}, -- 总榜
+}
+
+_M.CrossRankTypeFunc =
+{
+	[_M.CrossRankType.Power] = {view = "URankCross", func = "ResetList"},
+	[_M.CrossRankType.Commerce] = {view = "URankCross", func = "ResetList"},
+}
+
+_M.PlatformType = JRequire "SDK.PlatformDefine"
+
+return _M

@@ -1,0 +1,51 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _R.ShowOpenUDisk(self,data)
+	
+end
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Upan_JM")
+	self.Moudle = moudle
+
+	local nums = {}
+	for i = 1,4,1 do
+		local num = moudle:Get("Num"..i)
+		if num ~= nil then
+			nums[i] = num
+		end
+	end
+
+	local index = 1
+	local isShowReward = false
+	moudle.SelfRect:AddOnUpdate(function()
+		if not isShowReward then
+			if index <= #nums then
+				nums[index].Text = math.random(0,9)..""
+				index = index+1
+			else
+				WindowMgr.Create("UGetItems",data,true)
+			end
+		end
+	end,nil,0.5)
+end
+
+return _M

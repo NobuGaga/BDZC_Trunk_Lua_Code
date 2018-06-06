@@ -1,0 +1,329 @@
+local _M = {}
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local CCompany = JRequire "Dev.Company.CCompany"
+local EventCenter = JRequire "Dev.EventCenter"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local VerdictRecovery = Csv.Const(Define.Const.CompanyVerdictCD)
+
+_M.LastChoose = 1
+_M.ManageTable = {}
+_M.Verdict = nil
+_M.IsUpdatingTime = false
+_M.Handle = nil
+_M.UpdatingTable = {}
+_M.UpdatingVerdict = false
+_M.PatrolData = nil
+_M.PatrolTable = {}
+_M.PrestigeData = nil
+
+_M.AllRedPoint = false
+_M.ManageRedPoint = false
+_M.FactoryRedPoint = false
+_M.TrainRedPoint = false
+_M.VerdictRedPoint = false
+_M.PatrolRedPoint = false
+
+_M.OneManage = false
+_M.OneFactory = false
+_M.OneTrain = false
+
+_M.PatrolAward = {}
+
+function _M.Clean( ... )
+	_M.LastChoose = 1
+	_M.ManageTable = {}
+	_M.Verdict = nil
+	if _M.IsUpdatingTime then
+		_M.UpdateTime(false)
+	end
+	_M.UpdatingTable = {}
+	_M.UpdatingVerdict = false
+	_M.PatrolData = nil
+	_M.PatrolTable = {}
+	_M.PrestigeData = nil
+	
+	_M.AllRedPoint = false
+	_M.ManageRedPoint = false
+	_M.FactoryRedPoint = false
+	_M.TrainRedPoint = false
+	_M.VerdictRedPoint = false
+	_M.PatrolRedPoint = false
+
+	_M.OneManage = false
+	_M.OneFactory = false
+	_M.OneTrain = false
+
+	_M.PatrolAward = {}
+end
+
+function _M.OnInitManage(data)
+	for k,v in pairs(data.managelist) do
+		_M.UpdateManage(v)
+	end 
+	_M.CheckTimes()
+end
+
+function _M.UpdateManage(data)
+	local manageTable = _M.ManageTable
+	local manage = manageTable[data.id]
+	if manage == nil then
+		local manageInfo = {id = data.id,times = data.times,time = data.time + HeartBeat.ServSecond(),isgod = data.isgod,recovery = data.recovery}
+		manageTable[data.id] = manageInfo
+	else
+		manage.times = data.times
+		manage.time = data.time + HeartBeat.ServSecond()
+		manage.isgod = data.isgod
+		if data.recovery ~= nil then
+			manage.recovery = data.recovery
+		end
+	end
+end
+
+function _M.CheckTimes()
+	local manageTable = _M.ManageTable
+	local updateTimes = 0
+	local maxTimes
+
+	for k,v in pairs(manageTable) do
+		maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[v.id]
+		if v.times < maxTimes then
+			updateTimes = updateTimes + 1
+			_M.UpdatingTable[v.id] = true
+		else
+			_M.UpdatingTable[v.id] = false
+		end
+	end
+
+	local verdict = _M.Verdict
+	if verdict ~= nil then
+		maxTimes =  Csv.Company[MPlayer.GetLevel()].harvest[4]
+		if verdict.times < maxTimes then
+			updateTimes = updateTimes + 1
+			_M.UpdatingVerdict = true
+		else
+			_M.UpdatingVerdict = false
+		end
+	end
+	
+	if updateTimes > 0 then
+		_M.UpdateTime(true)
+	else
+		_M.UpdateTime(false)
+	end
+end
+
+function _M.UpdateTime(state)
+	if state then
+		if not _M.IsUpdatingTime then
+			_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				_M.AddTimeUpdate()
+			end)
+			_M.IsUpdatingTime = true
+		end
+	else
+		if _M.IsUpdatingTime and _M.Handle ~= nil then
+			EventCenter.UnRegistCallEvent(_M.Handle)
+			_M.Handle = nil
+			_M.IsUpdatingTime = false
+		end
+	end
+end
+
+function _M.AddTimeUpdate()
+	local updateTimes = 0
+	local maxTimes = 0
+	local manageTable = _M.ManageTable
+	for k,v in pairs(manageTable) do
+		maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[v.id]
+		if v.times < maxTimes then
+			local lessTime = v.time - HeartBeat.ServSecond()
+			if lessTime < 0 then
+				v.times = v.times + 1
+				v.time = HeartBeat.ServSecond() + v.recovery
+				CCompany.CheckManageRedpoint()
+				CCompany.CompanyManageRefresh(v.id)
+				WindowMgr.Call("UCompanyManage","RefreshTimes")
+			end
+			if v.times < maxTimes then
+				updateTimes = updateTimes + 1
+				_M.UpdatingTable[v.id] = true
+			else
+				WindowMgr.Call("UCompany","OnManage",k)
+				_M.UpdatingTable[v.id] = false
+			end
+		end
+	end
+
+	local verdict = _M.Verdict
+	if verdict ~= nil then
+		maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[4]
+		if verdict.times < maxTimes then
+			local lessTime = verdict.time - HeartBeat.ServSecond()
+			if lessTime < 0 then
+				verdict.times = verdict.times + 1
+				verdict.time = HeartBeat.ServSecond() + verdict.recovery
+				CCompany.CheckVerdictRedpoint()
+				CCompany.CompanyRefreshVerdict()
+			end
+			if verdict.times < maxTimes then
+				updateTimes = updateTimes + 1
+				_M.UpdatingVerdict = true
+			else
+				WindowMgr.Call("UCompany","OnVerdict")
+				_M.UpdatingVerdict = false
+			end
+		end
+	end
+	
+	if updateTimes <= 0 then
+		_M.UpdateTime(false)
+	end
+end
+
+function _M.OnInitVerdict(data)
+	local verdict = {id = data.id,times = data.times,time = data.time + HeartBeat.ServSecond(),recovery = VerdictRecovery,count = data.count}
+	_M.Verdict = verdict
+	_M.CheckTimes()
+end
+
+function _M.OnInitPatrol(data)
+	_M.PatrolData = {id = data.id,times = data.times}
+	local patrolTable = {}
+	for k,v in pairs(Csv.Patrol) do
+		local csvPatrol = Csv.Patrol[k]
+		local patrolInfo
+		if k == data.id then
+			patrolInfo = {id = k,times = data.times}
+		elseif k < data.id then
+			patrolInfo = {id = k,times = csvPatrol.maxTimes}
+		else
+			patrolInfo = {id = k,times = 0}
+		end
+		patrolTable[k] = patrolInfo
+	end
+	_M.PatrolTable = patrolTable
+end
+
+function _M.OnManage(data)
+	_M.UpdateManage(data)
+	_M.CheckTimes()
+end
+
+function _M.OnVerdict(data)
+	local verdict = _M.Verdict
+	if verdict ~= nil then
+		if data.id ~= nil then
+			verdict.id = data.id
+		end
+		verdict.times = data.times
+		verdict.time = data.time + HeartBeat.ServSecond()
+		if data.count ~= nil then
+			verdict.count = data.count
+		end
+		_M.Verdict = verdict
+		_M.CheckTimes()
+	end
+end
+
+function _M.OnPatrol(data)
+	local patrolData = _M.PatrolData
+	if patrolData ~= nil then
+		local patrolTable = _M.PatrolTable
+		if patrolData.id == data.id then
+			local patrol = patrolTable[data.id]
+			if patrol ~= nil then
+				patrol.times = data.times
+			end
+		else
+			for k,v in pairs(patrolTable) do
+				local csvPatrol = Csv.Patrol[k]
+				if data.id > k then
+					patrolTable[k].times = csvPatrol.maxTimes
+				elseif data.id == k then
+					patrolTable[k].times = data.times
+				end
+			end
+		end
+		patrolData.id = data.id
+		patrolData.times = data.times
+	else
+		_M.OnInitPatrol(data)
+	end
+end
+
+function _M.GetSortPatrolTable()
+	local patrolTable = _M.PatrolTable
+	local sortTable = {}
+	for k,v in pairs(patrolTable) do
+		table.insert( sortTable, v)
+	end
+	table.sort( sortTable, function(a,b)return _M.SortID(a,b)end )
+	return sortTable
+end
+
+function _M.SortID(a,b)
+	return a.id < b.id
+end
+
+function _M.GetNowPatrolID()
+	return _M.PatrolData.id
+end
+
+function _M.GetPatrolByID(id)
+	return _M.PatrolTable[id]
+end
+
+function _M.GetPatrolNum()
+	local patrolNum = 0
+	local allNum = 0
+	local patrolTable = _M.PatrolTable
+	for k,v in pairs(patrolTable) do
+		local csvPatrol = Csv.Patrol[v.id]
+		if MBattle.CurId > csvPatrol.bossid then
+			allNum = allNum + 1
+		end
+		if v.times > 0 then
+			patrolNum = patrolNum + 1
+		end
+		local csvPatrol = Csv.Patrol[v.id]
+		if _M.GetNowPatrolID() == v.id and v.times == 0 and csvPatrol.bossid < MBattle.CurId  then
+			patrolNum = patrolNum + 1
+		end
+	end
+	return patrolNum,allNum
+end
+
+function _M.OnPrestige(data)
+	local prestige = _M.PrestigeData
+	if prestige ~= nil then
+		prestige.currpres = data.currpres
+		prestige.dailypres = data.dailypres
+		prestige.limitpres = data.limitpres
+	else
+		prestige = {currpres = data.currpres,dailypres = data.dailypres,limitpres = data.limitpres}
+	end
+	_M.PrestigeData = prestige
+end
+
+function _M.OnDayout()
+	local prestige = _M.PrestigeData
+	if prestige ~= nil then
+		prestige.currpres = math.min(prestige.currpres + prestige.dailypres,prestige.limitpres)
+	end
+	_M.PrestigeData = prestige
+	local data = {id = 1,times = 0}
+	_M.OnInitPatrol(data)
+end
+
+function _M.AddPatrolAward(itemid,itemcount)
+	local patrolAward = _M.PatrolAward
+	local award = patrolAward[itemid]
+	if award ~= nil then
+		patrolAward[itemid] = patrolAward[itemid] + itemcount
+	else
+		patrolAward[itemid] = itemcount
+	end
+end
+
+return _M

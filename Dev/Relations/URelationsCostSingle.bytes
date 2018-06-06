@@ -1,0 +1,54 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+local COST_SUPER = Csv.Const(Define.Const.RelationsCost)[3]
+
+--界面构建
+function _M:OnCreate(type)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_tips2")
+	self.mMoudle = moudle
+
+	moudle:Get("title").Text = Csv.Text("relations_costST")
+
+	local csvItemSuper = Csv.Item[COST_SUPER]
+	local iconBG = moudle:Get("IconBox")
+	iconBG.SpriteName = csvItemSuper.colorIcon
+	moudle:Get("Icon").SpriteName = csvItemSuper.icon
+	moudle:Get("IconName").Text = csvItemSuper.name
+	iconBG:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CCommon.ShowItemTips(COST_SUPER)
+	end)
+
+	moudle:Get("TipsText").Text = Csv.Text("relations_costTip")
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if not MBag.CheckItemEnough(COST_SUPER,1) then
+			return
+		end
+		local costTable = {COST_SUPER,1}
+		local state,str = MBag.GetCostState(costTable,true)
+		if state then
+			WindowMgr.Call("URelationsSelectStaff","CloseView")
+			CRelations.CFightSuper(MRelations.PlayerID,MRelations.SelectStaffID,MRelations.FightType)
+		else
+			CCommon.ShowError(str)
+		end
+		self:Destroy()
+	end,nil,0.9)
+
+	moudle:Get("C_text_0").Text = Csv.Text("common_cancel")
+	moudle:Get("C_Btn_e"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+end
+
+return _M

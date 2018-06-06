@@ -1,0 +1,149 @@
+-- 排行版界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CRank = JRequire "Dev.Rank.CRank"
+local MRank = JRequire "Dev.Rank.MRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+
+local RANKID = Define.RankType.Club
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local itemWidth = 635
+local itemHeight = 61
+local space = 12
+local pageNum = 11
+local pageHeight = 802
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Ranking")
+	self.mModule = module
+
+	CRank.GetRankList(RANKID, true)
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = Csv.Text("club_rank_title")
+	module:Get("ranking").Text = Csv.Text("club_rank_num")
+	module:Get("name").Text = Csv.Text("club_rank_name")
+	module:Get("Fraction").Text = Csv.Text("club_rank_score")
+	module:Get("OwnName").Text = Csv.Text("club_rank_ownName")
+	module:Get("OwnRanking").Text = Csv.Text("club_rank_num") .. '：'
+	module:Get("OwnFraction").Text = Csv.Text("club_rank_score") .. '：'
+
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("club_rank_none")
+	self.noneText.Activity = true
+end
+
+
+-- 设置列表数据
+function _P.SetListData(self)
+	local rankData = MRank.RankTable[RANKID]
+	if rankData == nil then
+		_P.SetOwnData(self)
+		return
+	end
+
+	_P.SetOwnData(self, {name = rankData.selfName, rank = rankData.selfrank, value = rankData.selfvalue})
+	if rankData.ranklist == nil then
+		self.noneText.Activity = true
+		return
+	end
+
+	self.noneText.Activity = false
+	local rankList = _P.GetSortList(self, rankData.ranklist)	
+	self.mList = rankList
+	if rankList == nil then return end
+
+	local itemContent = self.mModule:Get("content")
+	itemContent:DestroyChildren()
+
+	local scroll = self.mModule:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	self.scrollController = RankVertical.new(scroll,itemContent,"M_Club_Rankpoint",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	self.scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,rankList)
+end
+
+function _P.ScrollCallBack(self,index,v,itemModule)
+	if itemModule ~= nil then
+		local itemRank = (v.rank >= 4 and 4) or v.rank
+		if itemModule ~= nil then
+			-- 如果排名>3时，要显示排名num
+			if v.rank > 3 then
+				itemModule:Get("rank").Text = v.rank
+			end
+
+			itemModule:Get("name").Text = v.name
+			itemModule:Get("value").Text = (v.value < 0 and 0) or v.value
+		end
+
+		itemModule.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+
+-- 排序
+function _P.GetSortList(self, rankList)
+	local sortList = rankList
+	
+	table.sort(sortList, function (a, b)
+		return a.rank < b.rank
+	end)
+
+	return sortList
+end
+
+
+-- 设置玩家数据
+function _P.SetOwnData(self, data)
+	local playerName = MPlayer.GetName()
+	local nameText = self.mModule:Get("NameText")
+	local rankText = self.mModule:Get("RankingText")
+	local scoreText = self.mModule:Get("FractionText")
+
+	nameText.Text = playerName
+	rankText.Text = (data ~= nil and data.rank) or "10000+"
+	scoreText.Text = (data ~= nil and ((data.value < 0 and 0) or data.value)) or "0"
+end
+
+
+function _R.OnSetListData(self)
+	_P.SetListData(self)
+end
+
+
+return _M

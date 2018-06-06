@@ -1,0 +1,52 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+
+	self._EventNode:AddOnClick(function ()
+		--SoundMgr.Play(10001)
+		--self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Election_Red3")
+	self.mMoudle = moudle
+	local closeBtn = moudle:Get("closeBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local headIcon = moudle:Get("Head")
+	local nameText = moudle:Get("Name")
+	local tips1 = moudle:Get("Tips2")
+	local tips2 = moudle:Get("Tips")
+
+	local packetMsg = data.redPacket
+	local headMsg = data.redPacket.senderHead
+	headIcon.SpriteName = MPlayer.GetOtherHeadYuanIcon(headMsg.headid, headMsg.gender)
+	nameText.Text = packetMsg.senderName
+	tips1.Text = Csv.Text("redpacket_no_tips1")
+	tips2.Text = Csv.Text("redpacket_no_tips2")
+	
+	moudle:Get("lookBtn"):AddOnButton(function()
+		WindowMgr.Create("URedpacketLook",data)
+	end)
+end
+
+return _M

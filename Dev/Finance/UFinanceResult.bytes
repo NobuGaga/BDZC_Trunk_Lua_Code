@@ -1,0 +1,77 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MVote = JRequire "Dev.Vote.MVote"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local resultActorId = 10046
+
+function _M:OnCreate(data,isVote)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		if isVote then
+			WindowMgr.Call("UVoteBattlePop","RefreshFight")
+		else
+			WindowMgr.Call("UFinanceBattle","RefreshFight")
+		end
+		
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PKResult")
+	self.Moudle = moudle
+
+	local text1 = moudle:Get("text1")
+	local text2 = moudle:Get("text2")
+	local text3 = moudle:Get("text3")
+	local text4 = moudle:Get("text4")
+	local text5 = moudle:Get("text5")
+	local text6 = moudle:Get("text6")
+
+	if isVote then
+		text1.Text = Csv.Text("finance_resultTitle_fb3",{num = data.hurt})--"对【巴菲特】抵御了"
+		text2.Text = ""
+		text3.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--"副本积分："
+		text4.Text = ""
+		text5.Text = ""
+		text6.Text = ""
+	else
+		text1.Text = Csv.Text("finance_resultTitle_fb2",{num = data.hurt})--"对【索罗斯】抵御了"
+		text2.Text = ""
+		text3.Text = Csv.Text("finance_result_scoreFb2",{num = data.score})--"副本分数："
+		text4.Text = ""
+		text5.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--副本积分："
+		text6.Text = ""
+	end
+
+	-- 播放战斗失败特效
+
+
+	local _isWin
+	if isVote then
+		_isWin = MVote.BossPower.ncur <= data.hurt
+	else
+		_isWin = MFinance.BossPower.ncur <= data.hurt
+	end
+	if _isWin then
+		SoundMgr.Play(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
+	else
+		SoundMgr.Play(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
+	end
+end
+return _M

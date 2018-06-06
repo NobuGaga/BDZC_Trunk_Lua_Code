@@ -1,0 +1,364 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBag = JRequire "Dev.Bag.MBag"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local CWharf = JRequire "Dev.Wharf.CWharf"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local ASSET_LIST = 
+{
+	Define.AssetsType.Coin,
+	Define.AssetsType.Food,
+	Define.AssetsType.Gold,	
+}
+local ASSET_INDEX = {}
+for k,v in pairs(ASSET_LIST) do
+	ASSET_INDEX[v] = k
+end
+local XIAOZAI_COST = Csv.WharfConst[90].xiaozaiCost --消灾消耗基础值
+local XIAOZAI_COST_ADD = Csv.WharfConst[90].xiaozaiCostStep --消灾消耗递增值
+local ZHUANYUN_COST = Csv.WharfConst[90].zhuanyunCosts--{10,20,30,30,40,40,40,40,50,50}
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshXiaozai(self)
+	self.mProCost.Text = Csv.Text("Wharf_costPro",{value = MWharf.xiaozaiTimes*XIAOZAI_COST_ADD + XIAOZAI_COST})--"消耗业绩："..MWharf.xiaozaiTimes*2000
+	self.mGoodsCost.Text = Csv.Text("Wharf_costGoods",{value = MWharf.xiaozaiTimes*XIAOZAI_COST_ADD + XIAOZAI_COST})-- "消耗商品："..MWharf.xiaozaiTimes*2000
+
+end
+
+function _R.RefreshZhuanyun(self)
+	local cost = _P.GetGoldCost()
+	if cost > 0 then
+		self.mGoldCost.Text = Csv.Text("Wharf_costGold",{value = _P.GetGoldCost()})--"消耗元宝：".._P.GetGoldCost()
+	else
+		self.mGoldCost.Text = Csv.Text("Wharf_costGold",{value = Csv.Text("Wharf_forturn_free")})--"消耗元宝：免费"
+	end
+end
+
+function _R.RefreshFortuneValue(self)
+	local _fortuneTitle =  self.mFortuneValue
+	local fortuneImages = self.mFortuneImages
+	local fortune =  MWharf.fortuneValue  --拿数据
+
+	for k,v in pairs(fortuneImages) do
+		if k<=fortune/10 then
+			v.IsGray = false
+		else
+			v.IsGray = true
+		end
+	end
+	_fortuneTitle.Text = Csv.Text("Wharf_CurrentFortune",{value = MWharf.fortuneValue})--"当前运势："..MWharf.fortuneValue
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_Fortune")
+	self.Moudle = moudle
+	local back= moudle:Get("C_BackBtn")
+	back:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.LastAssetsNum = {}
+	_P.InitAssets(moudle, self.LastAssetsNum)
+	
+	--注册资源监听
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if ASSET_INDEX[itemId] ~= nil then
+			local moudle = self.Moudle
+			if moudle ~= nil then
+				_P.RefreshAsset(self, itemId)
+			end
+		end
+	end)
+
+	local fortuneTitle = moudle:Get("C_Text")
+	fortuneTitle.Text = Csv.Text("Wharf_fortuneTitle")
+	local currentfortune = moudle:Get("currentfortune")
+	currentfortune.Text = Csv.Text("Wharf_CurrentFortune",{value = MWharf.fortuneValue})--"当前运势："..MWharf.fortuneValue
+	local fortuneImages = {}
+	for i = 1,10,1 do
+		local Image = moudle:Get("image"..i)
+		table.insert(fortuneImages,Image)
+	end
+	self.mFortuneImages = fortuneImages
+	self.mFortuneValue = currentfortune
+	_R.RefreshFortuneValue(self)
+
+--------------------------------------------------------
+	local autoTitle = moudle:Get("autoText")
+	local setAuto = moudle:Get("Setting")
+	local productionText = moudle:Get("Production")
+	local goodsText = moudle:Get("Goods")
+	local addBtn = moudle:Get("add")
+	local minusBtn = moudle:Get("minus")
+	local CheckBox_1 = moudle:Get("check_1")
+	local CheckBox_2 = moudle:Get("check_2")
+	local gou_1 = moudle:Get("gou_1")
+	local gou_2 = moudle:Get("gou_2")
+
+	gou_1.Activity = MWharf.isSelectPro
+	gou_2.Activity = MWharf.isSelectGoods
+
+	autoTitle.Text = Csv.Text("Wharf_autoXiaozai")--"自动消灾"
+	productionText.Text = Csv.Text("Wharf_autoXiaozai_pro")--"自动业绩消灾"
+	goodsText.Text = Csv.Text("Wharf_autoXiaozai_goods")--"自动商品消灾"
+	setAuto.Text = Csv.Text("Wharf_setFortune",{value = MWharf.autoThreshold})--"运势设置："..MWharf.autoThreshold--默认
+
+	--self.mCheckBox = checkTable
+	self.mSetautoText = setAuto
+
+	local slider = moudle:Get("silderValue")
+	slider.Value = MWharf.autoThreshold/90 --默认
+
+	addBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		slider.Value = slider.Value+1/90
+	end,nil,1)
+
+	minusBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		slider.Value = slider.Value-1/90
+	end,nil,1)
+
+	slider.OnValueChanged:RemoveAllListeners()
+	slider.OnValueChanged:AddListener(function(value)_P.OnValueChanged(self,value)end)
+
+	CheckBox_1:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		MWharf.SetSelectPro()
+		gou_1.Activity = MWharf.isSelectPro
+	end,nil,1)
+	CheckBox_2:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		MWharf.SetSelectGoods()
+		gou_2.Activity = MWharf.isSelectGoods
+	end,nil,1)
+
+	
+----------------------------------------------------------
+	local manualTitle = moudle:Get("manualTitle")
+	
+	for i = 1,3,1 do
+		local itemBg = moudle:Get("itembg_"..i)
+		local itemIcon = moudle:Get("itemIcon_"..i)
+		local eleTitle = moudle:Get("eleTitle_"..i)
+		local eleCost = moudle:Get("eleCost_"..i)
+		local eleAdd = moudle:Get("eleAdd_"..i)
+		local eleBtn = moudle:Get("C_ele_btn"..i)
+
+		local itemData = {}
+		if i == 1 then
+			itemData = Csv.Item[Define.AssetsType.Coin]
+			eleTitle.Text = Csv.Text("Wharf_xiaozai_Pro")--"业绩消灾"
+			eleCost.Text = Csv.Text("Wharf_costPro",{value = (MWharf.xiaozaiTimes)*XIAOZAI_COST_ADD + XIAOZAI_COST})--"消耗业绩："..MWharf.xiaozaiTimes*2000
+			eleAdd.Text = Csv.Text("Wharf_xiaozai_result")--"消灾效果：运势+2"
+
+			self.mProCost = eleCost
+
+			local btnText_1 = moudle:Get("C_text")
+			btnText_1.Text = Csv.Text("Wharf_xiaozai")--"消灾"
+
+			eleBtn:AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				_P.ClickUseBtn(Define.AssetsType.Coin)
+			end)
+		elseif i == 2 then
+			itemData = Csv.Item[Define.AssetsType.Food]
+			eleTitle.Text = Csv.Text("Wharf_xiaozai_Goods")--"商品消灾"
+			eleCost.Text = Csv.Text("Wharf_costGoods",{value = (MWharf.xiaozaiTimes)*XIAOZAI_COST_ADD + XIAOZAI_COST})--"消耗商品："..MWharf.xiaozaiTimes*2000
+			eleAdd.Text = Csv.Text("Wharf_xiaozai_result")--"消灾效果：运势+2"
+
+			self.mGoodsCost = eleCost
+			
+			local btnText_2 = moudle:Get("C_text_0")
+			btnText_2.Text = Csv.Text("Wharf_xiaozai")--"消灾"
+
+			eleBtn:AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				_P.ClickUseBtn(Define.AssetsType.Food)
+			end)
+		elseif i == 3 then
+			itemData = Csv.Item[Define.AssetsType.Gold]
+			eleTitle.Text = Csv.Text("Wharf_zhuanyun_Gold")--"元宝转运"
+			local cost = _P.GetGoldCost()
+			if cost > 0 then
+				eleCost.Text = Csv.Text("Wharf_costGold",{value = _P.GetGoldCost()})--"消耗元宝：".._P.GetGoldCost()
+			else
+				eleCost.Text = Csv.Text("Wharf_costGold",{value = Csv.Text("Wharf_forturn_free")})--"消耗元宝：免费"
+			end
+			
+			eleAdd.Text = Csv.Text("Wharf_zhuanyun_result")--"转运效果：运势+10"
+
+			self.mGoldCost = eleCost
+
+			local btnText_3 = moudle:Get("C_text_1")
+			btnText_3.Text = Csv.Text("Wharf_zhuanyun")--"转运"
+
+			eleBtn:AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				_P.ClickUseBtn(Define.AssetsType.Gold)
+			end)
+		end
+		if itemData ~= nil then
+			itemBg.SpriteName = itemData.colorIcon
+			itemIcon.SpriteName = itemData.icon
+		end
+	end
+
+	local VipTips = moudle:Get("VipTips")
+	VipTips.Text = Csv.Text("Wharf_vipTips_fortune")--"VIP每日有免费转运次数"
+
+end
+
+function _P.ClickUseBtn(index)
+	if index == Define.AssetsType.Coin then
+		local itemNum = MBag.GetItemNum(Define.AssetsType.Coin)
+		local cost = (MWharf.xiaozaiTimes)*XIAOZAI_COST_ADD + XIAOZAI_COST
+
+		if cost > itemNum then
+			if not MBag.CheckItemEnough(Define.AssetsType.Coin,cost)then
+				
+			end
+			--CCommon.ShowError(Csv.Text("Wharf_Coin_noEnough"))
+		else
+			if MWharf.fortuneValue >= 90 then
+				CCommon.ShowError(Csv.Text("err_luck_full"))
+			else
+				CWharf.ReqXiaozai(1)
+			end
+		end
+	elseif index == Define.AssetsType.Food then
+		local itemNum = MBag.GetItemNum(Define.AssetsType.Food)
+		local cost = (MWharf.xiaozaiTimes)*XIAOZAI_COST_ADD + XIAOZAI_COST
+
+		if cost > itemNum then
+			if not MBag.CheckItemEnough(Define.AssetsType.Food,cost)then
+				
+			end
+			--CCommon.ShowError(Csv.Text("Wharf_Food_noEnough"))
+		else
+			if MWharf.fortuneValue >= 90 then
+				CCommon.ShowError(Csv.Text("err_luck_full"))
+			else
+				CWharf.ReqXiaozai(2)
+			end
+		end
+	elseif index == Define.AssetsType.Gold then
+		local itemNum = MBag.GetItemNum(Define.AssetsType.Gold)
+		local cost = _P.GetGoldCost()
+
+		if cost > itemNum then
+			if not MBag.CheckItemEnough(Define.AssetsType.Gold,cost)then
+				
+			end
+			--CCommon.ShowError(Csv.Text("Wharf_Gold_noEnough"))
+		else
+			if MWharf.fortuneValue >= 100 then
+				CCommon.ShowError(Csv.Text("err_luck_max"))
+			else
+				CWharf.ReqZhuanyun()
+			end
+		end
+	end
+end
+
+function _P.GetGoldCost()
+	local viplevel =  MPlayer.GetVip() 
+	if MWharf.zhuanyunTimes < Csv.Vip[viplevel].wharfFortune then
+		return 0
+	end
+
+	local fortune =  MWharf.fortuneValue  --拿数据
+	if fortune <= 0 then
+		return ZHUANYUN_COST[1]
+	end 
+	if fortune > 100 then
+		fortune = 100
+	end
+	return ZHUANYUN_COST[math.ceil(fortune/10)]
+end
+
+function _P.OnValueChanged(self,value)
+	local _setAuto = math.floor(value*90 +0.5)
+	if _setAuto < 1 then
+		_setAuto = 1
+	end
+	self.mSetautoText.Text = Csv.Text("Wharf_setFortune",{value = _setAuto})--"运势设置：".._setAuto
+	MWharf.SetAutoThreshold(_setAuto)
+end
+
+function _P.InitAssets(moudle, LastAssetsNum)
+	for index,assetId in pairs(ASSET_LIST) do
+		local csv = Csv.Item[assetId]
+		local assetNum = MBag.GetItemNum(assetId)
+		LastAssetsNum[assetId] = assetNum
+		moudle:Get('AssetIcon_' .. index).SpriteName = csv.miniIcon
+		moudle:Get('AssetNum_'..index).Text = LuaUtil.NumberFormat(assetNum)
+		if assetId == Define.AssetsType.Gold then
+			local btn = moudle:Get('AssetAdd_'..index)
+			if btn ~= nil then
+				btn:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					WindowOpen.Open(Define.SysId.Recharge)
+				end, nil, 1.3)
+			end
+		end
+	end
+end
+--刷新资源
+function _P.RefreshAsset(self, assetId)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		local index = ASSET_INDEX[assetId]
+		if index ~= nil then
+			local widget = moudle:Get('AssetNum_'..index)
+			widget:DOKill()
+			local lastNum = self.LastAssetsNum[assetId]
+			local nowNum = MBag.GetItemNum(assetId)
+			if lastNum ~= nowNum then
+				self.LastAssetsNum[assetId] = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(MBag.GetItemNum(assetId)) end
+					end)
+					t:SetTarget(widget.CachedTran)
+				else
+					widget.Text = LuaUtil.NumberFormat(nowNum)
+				end				
+			end
+		end
+	end
+end
+
+return _M

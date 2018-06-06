@@ -1,0 +1,358 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCompany = JRequire "Dev.Company.CCompany"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local TimesScale = 1
+
+local EFFECT_BG = 10044
+local EFFECT_BOB = 10045
+
+local ICON_WIDTH = 167
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_company_Tab3", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("textT").Text = Csv.Text("company_patT")
+	moudle:Get("prestige1").Text = Csv.Text("company_patWeiN")
+	moudle:Get("prestige2").Text = Csv.Text("company_patWeiO")
+	moudle:Get("zhiwei").Text = Csv.Text("company_ZJL")
+	moudle:Get("C_Text").Text = Csv.Text("company_SPHY")
+	moudle:Get("text").Text = Csv.Text("company_talk")
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	_P.PatrolPres(self)
+	_P.OnCreateList(self)
+
+	moudle:Get("BSX"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		local nowWeiwang = MCompany.PrestigeData.currpres
+		local costWeiwang = Csv.Patrol[MCompany.PatrolData.id].cost
+		if costWeiwang > nowWeiwang then
+			CCommon.ShowError(Csv.Text("company_parNOenough"))
+		else
+			CCompany.CompanyPatrol()
+			moudle:Get("BSX").RaycastTarget = false
+		end
+	end,nil,1)
+
+	moudle:Get("bookLight"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		moudle:Get("BlackEmpty").Activity = false
+		moudle:Get("bookLight").Activity = false
+		moudle:Get("blackbg2").Alpha = 0
+		moudle:Get("book").Alpha = 0
+		moudle:Get("dialog").Activity = true
+		if self.AwardID ~= nil then
+			WindowMgr.Create("UCompanyPatrolAward",self.AwardID)
+		end
+		_P.CreatePatrol(self,false)
+		local tableItems = self.mTableItems
+		for k,v in pairs(tableItems) do
+			if v.id < MCompany.GetNowPatrolID() then
+				v.moudle:Get("black").Activity = true
+			end
+		end
+	end,nil,1)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		_P.UpdateAsset(self,itemid,itemcount,isAdd)
+	end)
+
+	--注册12点重置监听
+	self:RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+		_P.OnDayout(self)
+	end)
+
+	local ImgKuang = moudle:Get("dialog")
+	local endPosY = ImgKuang.LocalPosition.y
+	local tween = ImgKuang:DOAnchorPosY(endPosY - 50,1)
+	tween:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	local ImgLight = moudle:Get("light")
+	local tween2 = ImgLight:DOFade(0,1)
+	tween2:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween2:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	local ActorBG = moudle:Get("ShipinActor")
+	CCommon.CreateEffect(ActorBG,EFFECT_BG)
+
+	local BookLight = moudle:Get("bookLight")
+	local tween3 = BookLight:DOFade(0,1)
+	tween3:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween3:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+end
+
+function _P.OnCreateList(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("Content")
+	local tableItems = {}
+	local nowID = MCompany.GetNowPatrolID()
+	local sortTable = MCompany.GetSortPatrolTable()
+	local showBobTable = {}
+	local index = 0
+	for k,v in ipairs(sortTable) do
+		local csvPatrol = Csv.Patrol[v.id]
+		if MBattle.CurId > csvPatrol.bossid then
+			local item = {}
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_Company_Tab3_Item",WindowType.UI, 0)
+			local icon = itemMoudle:Get("icon")
+			icon.SpriteName = csvPatrol.headIcon
+			local cross = itemMoudle:Get("black")
+			local btn = itemMoudle:Get("btn")
+			btn:AddOnButton(function()
+				SoundMgr.Play(10001)
+				WindowMgr.Create("UCompanyParPop",v.id)
+			end,nil,1)
+
+			itemMoudle:Get("lixiantext").Text = Csv.Text("company_lixian")
+			itemMoudle:Get("nametext").Text = csvPatrol.name
+			itemMoudle:Get("iconblack").Activity = false
+			
+			if v.times >= csvPatrol.maxTimes and csvPatrol.maxTimes > 0 then
+				cross.Activity = true
+				itemMoudle:Get("qipao").Activity = false
+				index = index + 1
+			else
+				cross.Activity = false
+				table.insert(showBobTable,v.id)
+			end
+			itemMoudle:Get("QipaoCanvas").SortingLayerName = "Tips1"
+			itemMoudle:Get("QipaoCanvas").SortingOrder = 1
+			local actor = itemMoudle:Get("QipaoActor")
+			CCommon.CreateEffect(actor,EFFECT_BOB)
+
+			item.moudle = itemMoudle
+			item.id = v.id
+			tableItems[v.id] = item
+		end
+	end
+	self.mTableItems = tableItems
+	self.mShowBobTable = showBobTable
+	_P.ShowBob(self)
+	for i=1,3 do
+		local itemMoudle = JGuiManager.GetMoudle(content,"M_Company_Tab3_Item",WindowType.UI, 0)
+		itemMoudle:Get("icon").Activity = false
+		itemMoudle:Get("qipao").Activity = false
+		itemMoudle:Get("namebg").Activity = false
+		itemMoudle:Get("cross").Activity = false
+	end
+	self.AwardID = MCompany.GetNowPatrolID()
+	_P.CreatePatrol(self,false)
+
+	content.LocalPosition = Vector2(-(index*ICON_WIDTH),0)
+end
+
+function _P.ShowBob(self)
+	local showBobTable = self.mShowBobTable
+	if showBobTable ~= nil and #showBobTable > 0 then
+		local lastBobMoudle = self.mLastBobMoudle
+		local content = self.mMoudle:Get("Content")
+		if lastBobMoudle ~= nil then
+			local qipao = lastBobMoudle:Get("qipao")
+			qipao.LocalScale = Vector3(0,0,0)
+		end
+		local shuff = LuaUtil.Shuffle(showBobTable)[1]
+		if shuff ~= nil then
+			if self.mTableItems[shuff] ~= nil then
+				local moudle = self.mTableItems[shuff].moudle
+				self.mLastBobMoudle = moudle
+				local bob = moudle:Get("qipao")
+				self.mTweenBob = bob:DOScale(1,0.5)
+				content:AddOnTime(function()
+					_P.ShowBob(self)
+				end,nil,2.5)
+			end
+		end
+	end
+end
+
+function _P.CreatePatrol(self,isAnimate)
+	local moudle = self.mMoudle
+	local nowID = MCompany.GetNowPatrolID()
+	local nowPatrol = MCompany.PatrolData
+	self.mNowPatrolID = nowPatrol.id
+	self.LastTimes = nowPatrol.times
+	local csvPatrol = Csv.Patrol[nowID]
+	local Center = moudle:Get("Center")
+	if MBattle.CurId <= csvPatrol.bossid then
+		Center.Activity = false
+		local patrolNum,allNum = MCompany.GetPatrolNum()
+		moudle:Get("textN").Text = Csv.Text("company_exp",{num = patrolNum,max = allNum})
+		return
+	else
+		Center.Activity = true
+	end
+	local patrolNum,allNum = MCompany.GetPatrolNum()
+	moudle:Get("textN").Text = Csv.Text("company_exp",{num = patrolNum,max = allNum})
+	local ImgPerson = moudle:Get("BSX")
+	local ImgLight = moudle:Get("light")
+	local GoName = moudle:Get("name")
+	local TextName = moudle:Get("textName")
+	local TextComName = moudle:Get("companyname")
+	ImgPerson.SpriteName = csvPatrol.personIcon
+	ImgLight.SpriteName = csvPatrol.lightIcon
+	if nowPatrol.times >= csvPatrol.maxTimes and csvPatrol.maxTimes > 0 then
+		ImgPerson.Activity = false
+		GoName.Activity = false
+	else
+		ImgPerson.Activity = true
+		GoName.Activity = true
+		TextName.Text = csvPatrol.name
+		TextComName.Text = csvPatrol.companyName
+	end
+	_P.SetSlider(self,nowID,nowPatrol,isAnimate)
+end
+
+function _P.SetSlider(self,id,nowPatrol,isAnimate)
+	local csvPatrol = Csv.Patrol[id]
+	local moudle = self.mMoudle
+	local slider = moudle:Get("haemal")
+	if csvPatrol.maxTimes <= 0 then
+		slider.Activity = false
+	else
+		slider.Activity = true
+		if isAnimate then
+			local tweenGod = moudle:Get("img"):DOFillAmount(nowPatrol.times/csvPatrol.maxTimes,0.3)
+		else
+			moudle:Get("img").FillAmount = nowPatrol.times/csvPatrol.maxTimes
+		end
+		local blood
+		if nowPatrol.times <= 0 then
+			blood = 0
+		else
+			blood = math.floor(100 * (nowPatrol.times/csvPatrol.maxTimes) + 0.5)
+		end
+		moudle:Get("textSlider").Text = Csv.Text("company_jindu",{num = blood})
+	end
+end
+
+function _R.OnPatrol(self,data)
+	_P.Lock(self,true)
+	local moudle = self.mMoudle
+	local csvPatrol = Csv.Patrol[data.id]
+	local nowPatrolID = self.mNowPatrolID
+	local bitTimes = 0
+	if data.id ~= nowPatrolID then
+		self.AwardID = nowPatrolID
+		local maxTimes = Csv.Patrol[nowPatrolID].maxTimes
+		bitTimes = maxTimes - self.LastTimes
+		_P.SetSlider(self,nowPatrolID,{times = maxTimes},true)
+
+		if self.mLastBobMoudle ~= nil then
+			local bob = self.mLastBobMoudle:Get("qipao")
+			bob.LocalScale = Vector3(0,0,0)
+		end
+		if self.mTweenBob ~= nil then
+			self.mTweenBob:Kill()
+		end
+		if self.mShowBobTable[1] ~= nil then
+			table.remove(self.mShowBobTable,1)
+		end
+	else
+		bitTimes = data.times - self.LastTimes
+		_P.SetSlider(self,nowPatrolID,{times = data.times},true)
+	end
+
+	local num,num1 = math.modf(bitTimes/TimesScale)
+	local showImgNum = math.min(5,num)
+
+	local shuffTable = LuaUtil.Shuffle({1,2,3,4,5})
+	local showIcon = {}
+	for i = 1,showImgNum do
+		table.insert(showIcon,shuffTable[i])
+	end
+	self.mShowIcon = showIcon
+	self.mTweenShow = moudle.SelfRect.CachedTran:GetJTweener("T_Effect_PatrolShow")
+	_P.ShowIcon(self)
+
+	local delayTime = 0.4 * showImgNum
+	moudle.SelfRect:AddOnTime(function()
+		self.mMoudle:Get("BSX").RaycastTarget = true
+		moudle:Get("book").Activity = true
+		_P.Lock(self,false)
+		if self.mTweenShow ~= nil then
+			self.mTweenShow:Restore()
+		end
+		local blackEmpty = moudle:Get("BlackEmpty")
+		blackEmpty.Activity = true
+		local blackBG = moudle:Get("blackbg2")
+		local book = moudle:Get("book")
+		blackBG:DOFade(0.35,1)
+		book:DOFade(1,1)
+		book:AddOnTime(function()
+			moudle:Get("bookLight").Activity = true
+		end,nil,0.25)
+	end,nil,delayTime + 0.37)
+
+	moudle:Get("dialog").Activity = false
+end
+
+function _P.ShowIcon(self)
+	local moudle = self.mMoudle
+	local showIndex = self.mShowIcon[1]
+	if showIndex ~= nil then
+		table.remove(self.mShowIcon,1)
+		self.mTweenShow:Play("show"..showIndex)
+		moudle:Get("BSX"):AddOnTime(function()
+			_P.ShowIcon(self)
+		end,nil,0.4)
+	end
+end
+
+function _P.Lock(self,state)
+	local lock = self.mMoudle:Get("lock")
+	lock.RaycastTarget = state
+end
+
+function _P.PatrolPres(self)
+	local moudle = self.mMoudle
+	local prestige = MCompany.PrestigeData
+	if prestige ~= nil then
+		moudle:Get("textHave").Text = Csv.Text("company_exp",{num = prestige.currpres,max = prestige.limitpres})
+		moudle:Get("textOut").Text = Csv.Text("company_patWeiWang",{num = prestige.dailypres})
+	end
+end
+
+function _R.PatrolPres(self)
+	_P.PatrolPres(self)
+end
+
+function _P.UpdateAsset(self,itemid,itemcount,isAdd)
+	-- SoundMgr.Play(11000)
+	if isAdd then
+		MCompany.AddPatrolAward(itemid,itemcount)
+	end
+end
+
+function _P.OnDayout(self)
+	local content = self.mMoudle:Get("Content")
+	content:DestroyChildren()
+	_P.OnCreateList(self)
+end
+
+return _M

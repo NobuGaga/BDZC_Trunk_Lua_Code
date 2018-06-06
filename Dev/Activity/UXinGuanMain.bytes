@@ -1,0 +1,209 @@
+-- 新官上任主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local SHOPTWEEN = "T_Activity_XinGuan_ShopScale"
+local BATTLETWEEN = "T_Activity_XinGuan_StartScale"
+
+local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
+local COLOR_RED = Color(255 / 255, 76 / 255, 76 / 255, 1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:BeforeDestroy( ... )
+	_P.DestroyBgMusic(self)
+end
+
+
+function _P.DestroyBgMusic(self)
+	if self.battleMusic and self.battleMusic > 0 then
+		SoundMgr.DestroyMusic(self.battleMusic, true)
+		self.battleMusic = nil
+	end
+end
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(typeId)
+	local data = MActivity.GetListFromType(typeId)
+	if not data then
+		CCommon.ShowError(Csv.Text("rankreward_finish"))
+		return 
+	end
+
+	local activityId = MActivity.ActIdForType[typeId]
+	self.mData = data[activityId]
+
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Join")
+	self.mModule = module
+
+	local xinGuanConf = Csv.ActivityNewTake[activityId]
+	if not xinGuanConf then return end
+	self.xinGuanConf = xinGuanConf
+	
+	_P.DestroyBgMusic(self)
+	self.battleMusic = xinGuanConf.battleMusic
+	if self.battleMusic and self.battleMusic > 0 then
+		SoundMgr.PlayMusic(self.battleMusic)
+	end
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local titleImg = module:Get("C_Full_TitleBg")
+	local bgImg = module:Get("bg")
+	local descImg = module:Get("infobg")
+	local timeImg = module:Get("timebg")
+	local shopImg = module:Get("ShopBtn")
+	titleImg.SpriteNameAutoScale = xinGuanConf.titleBg
+	bgImg.SpriteName = xinGuanConf.bg
+	descImg.SpriteName = xinGuanConf.descBg
+	timeImg.SpriteName = xinGuanConf.timeBg
+	shopImg.SpriteNameAutoScale = xinGuanConf.shopBg
+
+	module:Get("C_Text").Text = xinGuanConf.title
+	module:Get("title").Text = xinGuanConf.title
+	module:Get("info").Text = xinGuanConf.activityDesc
+	module:Get("C_text").Text = Csv.Text("xinguan_main_jifen")
+	module:Get("C_text_0").Text = Csv.Text("xinguan_main_rank")
+
+	_P.OnInitBtnData(self, xinGuanConf)
+
+	self.unOpenRect = module:Get("NoticeInfo")
+	self.unOpenText = module:Get("NoticeText")
+
+	local state = self.mData.state
+	module:Get("Date").Text = Csv.Text("xinguan_main_date")
+	module:Get("DateText").Text = Csv.Text("xinguan_main_dateInfo", {startTime = luaUtil.TransToYMD(state.startTime),
+																endTime = luaUtil.TransToYMD(state.startTime + xinGuanConf.settleTime)})
+	module:Get("Time").Text = Csv.Text("xinguan_main_duan")
+	module:Get("TimeText").Text = Csv.Text("xinguan_main_duanInfo", {startHour = xinGuanConf.startHour, endHour = xinGuanConf.endHour})
+
+	_P.SetJoinState(self)
+
+	local state = self.mData.state
+	local time = state.lefttime - HeartBeat.ServSecond()
+	local isUpdateTime = (typeId == Define.ActivityType.XinGuan1 and MActivity.IsUpdateTime1) or MActivity.IsUpdateTime2
+	if time <= 0 and state.state == MActivity.ActivityState.Doing and not isUpdateTime then
+		CActivity.GetInfoReq(self.mData.actId)
+		
+		if typeId == Define.ActivityType.XinGuan1 then
+			MActivity.IsUpdateTime1 = true
+		else
+			MActivity.IsUpdateTime2 = true
+		end
+	end
+
+	_R.UpdateRed(self)
+end
+
+
+function _P.OnInitBtnData(self, data)
+	self.mModule:Get("C_text_1").Text = Csv.Text("xinguan_battle_join")
+	self.joinBtn = self.mModule:Get("Battle")
+	self.joinBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入战斗界面
+		if self.mData.state.state == MActivity.ActivityState.Doing and MActivity.XinGuanStatus[data.id] then
+			local curHour = tonumber(os.date("%H", HeartBeat.ServSecond()))
+			local isOverHour = (curHour >= self.xinGuanConf.endHour or curHour < self.xinGuanConf.startHour)
+			if isOverHour then
+				CCommon.ShowRight(Csv.Text("xinguan_main_joinErr"))
+			else
+				WindowMgr.Create("UXinGuanBattle", self.mData.actId)
+			end
+		else
+			CCommon.ShowRight(Csv.Text("xinguan_main_joinErr"))
+		end
+	end, nil, 0.95)
+
+	local battleTween = self.joinBtn.CachedTran:GetJTweener(BATTLETWEEN)
+	battleTween:Play()
+
+	local exchangeBtn = self.mModule:Get("Exchange")
+	exchangeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入积分兑换
+		WindowMgr.Create("UXinGuanExchange", self.mData)
+	end, nil, 0.95)
+
+	local rankBtn = self.mModule:Get("Rank")
+	rankBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入排名奖励
+		WindowMgr.Create("UXinGuanRank", self.mData)
+	end, nil, 0.95)
+
+	local shopBtn = self.mModule:Get("ShopBtn")
+	shopBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 进入活动商铺
+		WindowMgr.Create("UXinGuanShop", self.mData, 1)
+	end, nil, 0.95)
+
+	local shopTween = shopBtn.CachedTran:GetJTweener(SHOPTWEEN)
+	shopTween:Play()
+end
+
+
+-- 设置进入状态
+function _P.SetJoinState(self)
+	local state = self.mData.state.state
+	local isInTime = MActivity.XinGuanStatus[self.mData.actId]
+	if state == MActivity.ActivityState.Waiting or (state == MActivity.ActivityState.Doing and (not isInTime)) then   -- 未开始
+		self.joinBtn.Activity = false
+		self.unOpenRect.Activity = true
+		self.unOpenText.Text = Csv.Text("xinguan_main_notInTime")
+		self.unOpenText.Color = COLOR_RED
+	elseif state == MActivity.ActivityState.Doing and isInTime then -- 进行中
+		self.joinBtn.Activity = true
+		self.unOpenRect.Activity = false
+	elseif state == MActivity.ActivityState.Finish then-- 已结束
+		self.joinBtn.Activity = false
+		self.unOpenRect.Activity = true
+		self.unOpenText.Text = Csv.Text("xinguan_main_get")
+		self.unOpenText.Color = COLOR_GREEN
+	end
+end
+
+
+function _R.UpdateTime(self, typeId, isPush)
+	if not isPush then
+		local data = MActivity.GetListFromType(typeId)
+		if data then
+			local activityId = MActivity.ActIdForType[typeId]
+			self.mData = data[activityId]
+		end
+	end
+
+	_P.SetJoinState(self)
+end
+
+
+function _R.UpdateRed(self)
+	local redRect = self.mModule:Get("redpoint")
+	redRect.Activity = MActivity.XinGuanRed
+end
+
+
+return _M

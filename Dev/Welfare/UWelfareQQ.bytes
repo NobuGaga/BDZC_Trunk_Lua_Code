@@ -1,0 +1,105 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local CNotice = JRequire "Dev.Notice.CNotice"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local NUMBER_QQ = Csv.Const(11001)--"111111"
+local REWARD_ID = Csv.Const(11003)[1]--
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_QQ", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local tips = moudle:Get("tips")
+	local QQText = moudle:Get("QQText")
+	local getText = moudle:Get("C_text")
+	local qualityTitle = moudle:Get("Quality")
+	local qualityNum = moudle:Get("QualityNum")
+	local ExpertiseTitle = moudle:Get("Expertise")
+	local ExpertiseText = moudle:Get("ExpertiseText")
+
+	if REWARD_ID<10000 then --美女
+		qualityTitle.Text = Csv.Text("welfare_qqQuality")--"初始魅力："
+		ExpertiseTitle.Text = Csv.Text("welfare_qqExpertise")--"技能加成："
+		local girlData = Csv.Girl[REWARD_ID]
+		if girlData ~= nil then
+			qualityNum.Text = girlData.charm
+			local skills = girlData.skills
+			if #skills > 0 then
+				local girlSkillData = Csv.GirlSkill[skills[1]]
+				local staffID = girlSkillData.employe
+				local staffData = Csv.Personnel[staffID]
+				if staffData ~= nil then
+					ExpertiseText.Text = staffData.name	
+				end
+			end
+		end
+	else	--员工
+		qualityTitle.Text = Csv.Text("welfare_qqAll")--"综合素质："
+		ExpertiseTitle.Text = Csv.Text("welfare_qqBest")--"专长："
+		local staffData = Csv.Personnel[REWARD_ID]
+		if staffData ~= nil then
+			qualityNum.Text = MWelfare.GetAllApitude(staffData.book)
+			ExpertiseText.Text = staffData.specialty
+
+			local startSps = {}
+			for i = 1,7,1 do
+				local startSp = moudle:Get("Star"..i)
+				if startSp then
+					if i <= staffData.star then
+						startSp.Activity = true
+					else
+						startSp.Activity = false
+					end
+				end
+			end
+
+		end
+	end
+
+	moudle:Get("ArtText1").Text = Csv.Text("welfare_qq_tip1")
+	moudle:Get("ArtText2").Text = Csv.Text("welfare_qq_tip2")
+	moudle:Get("ArtText3").Text = Csv.Text("welfare_qq_tip3")
+	moudle:Get("ArtText4").Text = Csv.Text("welfare_qq_tip4")
+
+	tips.Text = Csv.Text("welfare_qqTips")--"点击复制官方QQ群\n进群留意进群须知即可点击福利领取美女兑换码"
+	QQText.Text = Csv.Text("welfare_qqNum",{num = NUMBER_QQ})--"官方QQ群："..NUMBER_QQ
+	getText.Text = Csv.Text("welfare_exchange")--"兑换"
+
+	local input = moudle:Get("input")
+
+	local copyBtn = moudle:Get("QQNum")
+	copyBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CNotice.ShowNoticePopup(copyBtn, Csv.Text("notice_keyword_qq"))
+	end)
+
+	local getBtn = moudle:Get("getBtn")
+	getBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if input.Text == "" then
+			CCommon.ShowError(Csv.Text("welfare_emptyInput"))--"兑换码为空"
+		else
+			CWelfare.ReqExchange(input.Text,2)
+			input.Text = ""
+		end
+	end)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

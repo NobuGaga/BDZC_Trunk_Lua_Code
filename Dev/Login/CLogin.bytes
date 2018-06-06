@@ -1,0 +1,398 @@
+
+----------------------文件引用--------------------------
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local rapidjson = require("rapidjson")
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
+
+----------------------CS类引用--------------------------
+local LuaConnect = CS.Net.LuaConnect
+
+----------------------常量定义--------------------------
+local AccountSaveFilePath = "log/account_name.txt"
+local PasswordSaveFilePath = "log/account_password.txt"
+local LastLoginSrvFilePath = "log/last_login_server.txt"
+
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local IS_TEST = false
+
+-- 网络事件 C# <-> Lua 交互事件协议
+local ENetworkEventID = 
+{
+	SERVER_CONNECT = 1001,          --网关连接成功
+	SERVER_DISCONNECT = 1002,       --网关断开连接
+	SERVER_CONNECT_TIMEOUT = 1003,  --网关连接失败
+	GOT_PACKET_KEY = 1004,          --获得包秘钥
+	EVENT_DISPATCHER = 1005,        --网络消息返回事件派发
+	SERVER_RECONNECT = 1006,        --网络自动重连
+}
+
+local ECmdId = {
+	cRequestLogin	= 1, --请求登陆 PLogin.CLogin
+	cQueryCharList	= 2, --查询角色列表
+	cCreateChar		= 3, --创建新角色 PLogin.CCreateChar
+	cDeleteChar		= 4, --删除角色 PLogin.CDeleteChar
+	cEnterGame		= 5, --请求进入游戏 PLogin.CEnterGame
+	cGetCharName    = 6, --请求随机角色名
+
+	sLoginRet		= 1, --返回登陆请求 PLogin.SLoginRet
+	sSendCharList	= 2, --返回角色列表 PLogin.SQueryCharList
+	sCreateCharRet	= 3, --创建角色返回 PLogin.SCreateChar
+	sDeleteCharRet	= 4, --返回删除角色 PLogin.SDeleteChar
+	sEnterGameRet	= 5, --返回进入游戏请求 PLogin.SEnterGame
+	sGetCharNameRet = 6, --返回随机角色名 PLogin.SGetCharNameRet
+	sReadyForRun	= 7, --所有客户端关心的数据发送完毕，玩家进入游戏状态
+}
+
+--[[
+    @desc: 注册网络消息 (JRequire 此文件时会被调用)
+    author:{ShunFei}
+    time:2017-10-13 13:24:12
+    --@isReload: 是否是热更新调用
+    return
+  ]]
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local send = {
+		[ECmdId.cRequestLogin]	= "PLogin.CLogin",
+		[ECmdId.cCreateChar] = "PLogin.CCreateChar",
+		[ECmdId.cDeleteChar] = "PLogin.CDeleteChar",
+		[ECmdId.cEnterGame] = "PLogin.CEnterGame",
+		[ECmdId.cGetCharName] = "PLogin.CRandomName",
+	}
+
+	--接受消息协议注册
+	local recv = {
+		[ECmdId.sLoginRet] = 	{proto = "PLogin.SLoginRet", 				handle = _P.OnLoginRet},
+		[ECmdId.sSendCharList] = {proto = "PLogin.SQueryCharList", 			handle = _P.OnCharList},
+		[ECmdId.sCreateCharRet] = { proto = "PLogin.SCreateChar",			handle = _P.OnCreateCharRet}, --创建角色返回(int errorCode(0表示成功), stream charDesc)
+		[ECmdId.sDeleteCharRet] = { proto = "PLogin.SDeleteChar",			handle = _P.OnDeleteCharRet}, --返回删除角色(int errorCode(0表示成功))
+		[ECmdId.sEnterGameRet] = { proto = "PLogin.SEnterGame",				handle = _P.OnEnterGameRet}, --返回进入游戏请求(int errorCode(0表示成功))
+		[ECmdId.sGetCharNameRet] = { proto = "PLogin.SGetCharNameRet",		handle = _P.OnGetCharNameRet}, --返回随机角色名
+		[ECmdId.sReadyForRun] = { proto = "PLogin.SReadyForRun",			handle = _P.OnReadyForRun}, --所有客户端关心的数据发送完毕，玩家进入游戏状态
+	}
+
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Login, send, recv, isReload)
+	_M.isAutoReconnect = false
+
+	--初始化账号和密码
+	MLogin.Account = CS.Loader.LoadAccessor.ReadText(AccountSaveFilePath)
+	MLogin.Password = CS.Loader.LoadAccessor.ReadText(PasswordSaveFilePath)
+	if MLogin.Password == nil then
+		MLogin.Password = "123456"
+	end
+end
+
+--[[
+    @desc: 注册清理函数 (当重新登录时会被调用)
+    author:{ShunFei}
+    time:2017-10-13 13:27:24
+    return
+]]
+function _M.ModuleClean()
+	MLogin.Clean()
+end
+
+--私有函数, 验证消息回调函数
+function _P.OnLoginRet(data)
+	if data.errorCode == nil or data.errorCode == 0 then
+		CS.Utility.LogPoint.LogPost(7, 2)
+		_M.Send(ECmdId.cQueryCharList)
+	else
+		local switch = {
+			[-1] = Csv.Text('login_inn_error_1'),
+			[-2] = Csv.Text('login_inn_error_2'),
+			[-3] = Csv.Text('login_inn_error_3'),
+			[-4] = Csv.Text('login_user_not_exist'),
+			[-5] = Csv.Text('login_passwd_err'),
+			[-6] = Csv.Text('login_inn_error_6'),
+			[-100] = Csv.Text('login_version_low'),
+			[-101] = Csv.Text('login_srvid_err'),
+			[-102] = Csv.Text('login_account_forbid'),
+			[-103] = Csv.Text('login_srv_close'),
+			[-104] = Csv.Text('login_srvid_full'),
+		}
+		if switch[data.errorCode] ~= nil then
+			CCommon.ShowReloginBox(switch[data.errorCode], Csv.Text("common_sure"), function (isSure)
+				GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+			end)
+		else
+			GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+			CCommon.ShowError(Csv.Text('login_known_error'))
+		end
+	end
+end
+
+--私有函数, 登录消息回调函数
+function _P.OnCharList(data)
+	if data.charCount <= 0 then
+		WindowMgr.Call('ULogin', 'Close')
+		WindowMgr.Create('ULoginEstablish')
+	else
+		CS.Utility.LogPoint.LogPost(7, 4)
+		_M.Send(ECmdId.cEnterGame, {playerid = data.charList[1].id, playername = data.charList[1].name,
+		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
+		sbid = GameSetting.Sbid, appid = GameSetting.AppID, cdnVersion = GameSetting.CdnVersion})
+	end
+end
+
+function _P.OnCreateCharRet(data)
+	if data.errorCode == 0 then
+		CS.Utility.LogPoint.LogPost(7, 4)
+		SDKMgr.ReqCollectData(SDKCollectType.CreateRole, data.chardesc.id, data.chardesc.name, data.chardesc.level)
+		_M.Send(ECmdId.cEnterGame, {playerid = data.chardesc.id, playername = data.chardesc.name, 
+		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
+		sbid = GameSetting.Sbid, appid = GameSetting.AppID})
+	else
+		local switch = {
+			[-1] = Csv.Text('login_err_invalid'),
+			[-2] = Csv.Text('login_err_cant_char'),
+			[-3] = Csv.Text('login_err_name_invalid'),
+			[-4] = Csv.Text('login_err_nomore_char'),
+			[-5] = Csv.Text('login_err_name_inused'),
+			[-6] = Csv.Text('login_err_db_error'),
+			[-7] = Csv.Text('login_err_db_error'),
+		}
+		if switch[data.errorCode] ~= nil then
+			if data.errorCode == -3 or data.errorCode == -5 then
+				WindowMgr.Call("ULoginEstablish", "SetEnterBtnState", false)
+				CCommon.ShowError(switch[data.errorCode])
+			else
+				CCommon.ShowReloginBox(switch[data.errorCode], Csv.Text("common_sure"), function (isSure)
+					GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+				end)
+			end
+		else
+			GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+			CCommon.ShowError(Csv.Text('login_known_error'))
+		end
+	end
+end
+
+function _P.OnDeleteCharRet(data)
+	CS.Utility.LogPoint.LogPost(7, 6)
+	print("delete char")
+end
+
+function _P.OnEnterGameRet(data)
+	if data.errorCode == 0 then
+		HeartBeat.InitServTime(data.servTime, data.debugMode)
+		return
+	end
+	-- 输出错误信息
+	local switch = {
+		[-1001] = Csv.Text('login_inn_error_4'),
+		[-1002] = Csv.Text('login_inn_error_5'),
+	}
+	if switch[data.errorCode] ~= nil then
+		CCommon.ShowError(switch[data.errorCode])
+	else
+		CCommon.ShowError(Csv.Text('login_known_error'))
+	end
+	GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+end
+
+function _P.OnGetCharNameRet(data)
+	print("get char name")
+	if data.errorCode ~= 0 then
+		CCommon.ShowError(Csv.Text('err_rand_name', {errcode=data.errorCode}))
+	else
+		WindowMgr.Call('ULoginEstablish', 'SetCharName', data.name)
+	end
+end
+
+function _P.OnReadyForRun(data)
+	print("Clogin.OnReadyForRun", _M.isAutoReconnect)
+	GameSetting.IsOnGame = true
+	CS.Utility.LogPoint.LogPost(7, 7)
+	GameSetting.isFirst = data.isFirst
+	GameSetting.isFirstCopy = data.isFirst
+	HeartBeat.Start()
+	CCommon.HideLoading(10)
+	LuaConnect.AutoReconnect = true
+	if _M.isAutoReconnect and WindowMgr.IsCreated("UMain") then
+		EventCenter.CallEventTrigger(Define.EventListenId.AutoReconnectEnterGame)
+	else
+		WindowOpen.Open(Define.SysId.Main)
+		WindowOpen.Open(GameSetting.InitSceneType)
+
+		EventCenter.CallEventTrigger(Define.EventListenId.EnterGame)
+		if GameSetting.isFirst then
+			EventCenter.CallEventTrigger(Define.EventListenId.FirstEnterGame)
+		end
+	end
+end
+
+function _P.OnServerConnected(actionType, isAutoReconnect)
+	print("NET : server connected!" .. "(" .. isAutoReconnect .. ")")
+	if isAutoReconnect == 0 then
+		_M.isAutoReconnect = false
+	else
+		_M.isAutoReconnect = true
+	end
+	-- JGuiManager.EnableAllAction()
+
+	CCommon.HideLoading(10)
+end
+
+GameSetting.OnReLoginCall = function( ... )
+	HeartBeat.Stop()
+end
+
+function _P.OnServerDisconnected()
+	print("NET : server disconnected!")
+	HeartBeat.Stop()
+	GameSetting.IsOnGame = false
+	if not LuaConnect.AutoReconnect then
+		CCommon.ShowReloginBox(Csv.Text("disconn_tips"), Csv.Text("common_sure"), function (isSure)
+			GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+		end)
+	end
+end
+
+function _P.OnServerConnectTimeout(actionType, isAutoReconnect)
+	print("NET : server connect timeout" .. "(" .. isAutoReconnect .. ")")
+	HeartBeat.Stop()
+	GameSetting.IsOnGame = false
+	CCommon.HideLoading(10)
+	local tips = ""
+	-- local title = ""
+	if isAutoReconnect == 1 then
+		tips = Csv.Text("disconn_tips")
+		-- title = Csv.Text("disconn_title")
+	else
+		tips = Csv.Text("conn_timeout_tips")
+		-- title = Csv.Text("conn_timeout_title")
+	end
+
+	CCommon.ShowReloginBox(tips, Csv.Text("common_sure"), function (isSure)
+		GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+	end)
+end
+
+function _P.OnGotPacketKey()
+	_P.SendLogin()
+end
+
+--自动重连网络（需要锁屏）
+function _P.OnServerReconnect()
+	print("CLogin.OnServerReconnect")
+	-- JGuiManager.DisableAllAction()
+	GameSetting.IsOnGame = false
+	CCommon.ShowLoading(10)
+end
+
+function _P.SendLogin()
+	local account
+	if string.find(MLogin.Account, "&") then
+		account = MLogin.GetAccount()
+	else
+		MLogin.Account = MLogin.Account .. "&develop"
+		account = MLogin.GetAccount()
+	end
+
+	CS.Utility.LogPoint.LogPost(7, 1)
+	_M.Send(ECmdId.cRequestLogin, {account = account, password = MLogin.Password, serverid = MLogin.SelectServer.id, 
+								   clientVersion = GameSetting.ClientVersion, platform = GameSetting.Platform, 
+									sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID,
+									moblie = GameSetting.DeviceName, cdnVersion = GameSetting.CdnVersion})
+end
+
+function _M.Init( ... )
+	print("CLogin.Init!!")
+	LuaConnect.RegisterEventListener(ENetworkEventID.SERVER_CONNECT, _P.OnServerConnected)
+	LuaConnect.RegisterEventListener(ENetworkEventID.SERVER_DISCONNECT, _P.OnServerDisconnected)
+	LuaConnect.RegisterEventListener(ENetworkEventID.SERVER_CONNECT_TIMEOUT, _P.OnServerConnectTimeout)
+	LuaConnect.RegisterEventListener(ENetworkEventID.GOT_PACKET_KEY, _P.OnGotPacketKey)
+	LuaConnect.RegisterEventListener(ENetworkEventID.SERVER_RECONNECT, _P.OnServerReconnect)
+	LuaConnect.AutoReconnect = false
+	WindowMgr.Create("ULogin", GameSetting.ReLoginType.ToLogin)
+end
+
+function _M.DoEnterGame()
+
+end
+
+-- 通过组名查找服务器列表
+function _M.FindServerListByGroupName(groupName)
+	local list = {}
+	for k,v in ipairs(MLogin.ServerList) do
+		if (v.name == groupName) then
+			list = v.server
+			break;
+		end
+	end -- end for
+	return list
+end
+
+function _M.GetServerInfoByID(serverid)
+	for k,v in ipairs(MLogin.ServerList) do
+		if v.server then
+			for k1, v1 in ipairs(v.server) do
+				if v1.id == serverid then
+					return v1
+				end
+			end
+		end
+	end
+end
+
+function _M.SetSelectedServer(selectSrv)
+	MLogin.SelectServer = selectSrv
+end
+
+function _M.DoLogin(account, password)
+	if IS_TEST then
+		_P.OnReadyForRun()
+		return
+	end
+	MLogin.Account = account
+	MLogin.Password = password
+
+	if CS.Net.LuaConnect.IsConnect() then
+		if MLogin.SelectServer.host ~= MLogin.LastConnectHost or MLogin.SelectServer.port ~= MLogin.LastConnectPort then
+			CS.Net.LuaConnect.Disconnect()
+		end
+	end
+
+	CS.Loader.LoadAccessor.WriteText(AccountSaveFilePath, account)
+	CS.Loader.LoadAccessor.WriteText(PasswordSaveFilePath, MLogin.Password)
+	CS.Loader.LoadAccessor.WriteText(LastLoginSrvFilePath, rapidjson.encode(MLogin.SelectServer))
+	CS.Utility.LogPoint.AddSystemParam("serverid", MLogin.SelectServer.id)
+	if not CS.Net.LuaConnect.IsConnect() then
+		MLogin.LastConnectHost = MLogin.SelectServer.host
+		MLogin.LastConnectPort = MLogin.SelectServer.port
+		CS.Net.LuaConnect.Connect(MLogin.SelectServer.host, MLogin.SelectServer.port)
+	else
+		_P.SendLogin()
+	end
+end
+
+function _M.SendRandomName(gender)
+	CS.Utility.LogPoint.LogPost(7, 5)
+	_M.Send(ECmdId.cGetCharName, {gender=gender})
+end
+
+function _M.SendCreateChar(name, headid, genber)
+	CS.Utility.LogPoint.LogPost(7, 3)
+	_M.Send(ECmdId.cCreateChar, {playername = name, job = 1, genber = genber, headid = headid, 
+	sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName})
+end
+
+return _M

@@ -1,0 +1,145 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent,viplevel)
+	self._RootNode = parent
+	self:RefreshVipView(viplevel)
+end
+
+function _M:RefreshVipView(level)
+	local vipData = Csv.VipWelfare[level]
+	_P.ShowOnePeopleView(self,level)
+end
+
+function _P.ShowOnePeopleView(self,level)
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_Vip", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local tips = moudle:Get("tips")
+	local getBtn = moudle:Get("getBtn")
+	local getImg = moudle:Get("get")
+	local content = moudle:Get("content")
+	local bgSp = moudle:Get("bg")
+
+	local vipData = Csv.VipWelfare[level]
+	bgSp.SpriteName = vipData.bg
+	local curExp = MRecharge.VipData.exp
+	local maxExp = 0
+	local csvDate = Csv.Vip[level-1]
+	if csvDate ~= nil then
+		maxExp = Csv.Vip[level-1].upExp
+	end
+	tips.Text = Csv.Text("welfare_paymore",{vip = level,num = (maxExp - curExp)})--vipData.tips
+
+
+	local itemLights = {}
+	if vipData.rewards ~= nil then
+		for k,v in pairs(vipData.rewards) do
+			local item, light = CCommon.CreateItem(content, v[1], function()
+				CCommon.ShowItemTips(v[1])
+			end, {num = v[2]}, Define.SysId.Welfare)
+
+			if light then
+				table.insert(itemLights,light)
+			end
+		end
+	end
+	self.mItemLights = itemLights
+
+	getImg.Activity = false
+	getBtn.IsGray = false
+	getBtn.RaycastTarget = true
+
+	local vipLv =  MPlayer.GetVip()
+	local vipText = moudle:Get("C_text")
+	
+	getBtn:AddOnButton(function(...)
+		local _vipLv =  MPlayer.GetVip()
+		if _vipLv < level then
+			--前往充值
+			WindowMgr.Create("URecharge")
+		else
+			if MWelfare.CheckVipReward(level) == false then
+				_P.SendVipReward(level)
+			end
+		end
+	end)
+
+	if vipLv < level then
+		vipText.Text = Csv.Text("welfare_gopay")
+	else 
+		tips.Activity = false
+		if MWelfare.CheckVipReward(level) == false then
+			vipText.Text = Csv.Text("welfare_vipget")
+		else
+			vipText.Text = Csv.Text("welfare_vipget")
+
+			getImg.Activity = true
+			--getBtn.IsGray = true
+			getBtn.Activity = false
+			getBtn.RaycastTarget = false
+			_P.DestroyLights(self)
+		end
+	end
+
+	self.mGetImg = getImg
+	self.mGetBtn = getBtn
+	self.mGetText = vipText
+end
+
+function _P.DestroyLights(self)
+	local lights = self.mItemLights
+
+	if lights ~= nil then
+		for k,v in pairs(lights)do
+			v:Destroy()
+		end
+	end
+end
+
+function _P.SendVipReward(level)
+	CWelfare.ReqGetVipReward(level)
+end
+
+function _M:RefreshVipRewardState(level)
+	local getImg = self.mGetImg
+	local btn = self.mGetBtn
+	local btnText = self.mGetText
+
+	getImg.Activity = true
+	--btn.IsGray = true
+	btn.Activity = false
+	btn.RaycastTarget = false
+	btnText.Text = Csv.Text("welfare_vipget")
+
+	local delay = 0
+	local vipData = Csv.VipWelfare[level]
+	if vipData.rewards ~= nil then
+		for k,v in pairs(vipData.rewards) do
+			delay = delay +0.2
+			CCommon.ShowFlyItemAtMessage(v[1], v[2],delay, btn.RootCanvasPos)
+		end
+	end
+
+	_P.DestroyLights(self)
+
+	--20180211策划要求调整为兑换成功关闭福利界面
+	WindowMgr.Call("UWelfare","CloseUWelfare")
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

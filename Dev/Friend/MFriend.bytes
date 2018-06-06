@@ -1,0 +1,393 @@
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local rapidjson = require "rapidjson"
+
+local _M = {}
+
+--常量
+_M.PRIVATE_TALK_COUNT = 30
+
+--玩家关系类型
+_M.RelationType =
+{
+	--没有关系
+	None = 0,
+	--好友关系
+	Friend = 1,
+	--黑名单中
+	BlackList = 2,
+	--亲家关系
+	QinJia = 3,
+	--最近联系人
+	Recent = 4
+}
+
+_M.RelationToFunc = 
+{
+	[_M.RelationType.Friend] = Define.SysId.Friend_Friend,
+	[_M.RelationType.BlackList] = Define.SysId.Friend_Blacklist,
+	[_M.RelationType.QinJia] = Define.SysId.Friend_Qinjia,
+	[_M.RelationType.Recent] = Define.SysId.Friend_Recent
+} 
+
+_M.FuncToRelation = 
+{
+	[Define.SysId.Friend_Friend] = _M.RelationType.Friend,
+	[Define.SysId.Friend_Blacklist] = _M.RelationType.BlackList,
+	[Define.SysId.Friend_Qinjia] = _M.RelationType.QinJia,
+	[Define.SysId.Friend_Recent] = _M.RelationType.Recent,
+}
+
+--点击玩家出现的下拉列表
+_M.PlayerMenu = 
+{
+	--查看
+	Look = 1,
+	--私聊	
+	Talk = 2,
+	--复制ID
+	Copy = 3,
+	--添加好友
+	AddFriend = 4,
+	--删除好友
+	DelFriend = 5,
+	--添加黑名单
+	AddBlacklist = 6,
+	--移除黑名单
+	DelBlacklist = 7,
+}
+
+--关系id列表
+_M.RelationCached = {}
+--收到的好友请求的数量
+_M.RecvAddFriendNum = 0
+--玩家信息缓存
+_M.PlayerInfoCached = {}
+--前端保存的私聊信息
+_M.RecentMessagesCached = {}
+--是否有新的好友请求, 用来小红点处理
+_M.IsHaveNewReq = false
+
+function _M.Clean( ... )
+	_M.RelationCached = {}
+	_M.RecvAddFriendNum = 0
+	_M.PlayerInfoCached = {}
+	_M.RecentMessagesCached = {}
+	_M.IsHaveNewReq = false
+end
+
+--判断某个玩家是否在该关系中
+function _M.CheckRelation(playerId, relationType)
+	local cachedTab = _M.RelationCached[relationType]
+	return cachedTab ~= nil and cachedTab[playerId] ~= nil
+end
+
+--获得关系中人数
+function _M.GetRelationCurNum(relationType)
+	local cachedTab = _M.RelationCached[relationType]
+	local ret = 0
+	if cachedTab ~= nil then
+		for _,_ in pairs(cachedTab) do
+			ret = ret + 1
+		end
+	end
+	return ret
+end
+
+function _M.GetRelationMaxNum(relationType)
+	if relationType == _M.RelationType.Friend then
+		return Csv.Vip[MPlayer.GetVip()].friendNum
+	elseif relationType == _M.RelationType.BlackList then
+		return Csv.Vip[MPlayer.GetVip()].blacklistNum
+	elseif relationType == _M.RelationType.Recent then
+		return Csv.Vip[MPlayer.GetVip()].recentNum
+	else
+		return 999
+	end
+end
+
+--获得好友请求数
+function _M.GetRecvFriendAddNum()
+	return _M.RecvAddFriendNum
+end
+
+--获取玩家信息
+function _M.GetPlayerInfo(playerId)
+	return _M.PlayerInfoCached[playerId]
+end
+
+--私聊消息初始化
+--[[
+{
+	{
+		"id":10002,		--编号
+		"name":"刘德华",--名称
+		"headId":1001,	--头像ID
+		"sex":1,		--性别
+		"vip":10,		--VIP等级
+		"titleId":0,	--称号ID
+		"lastTime":1289754382,	--最后一条消息的时间
+		"noReadNum":10	--没有读取的数量
+		"msg":
+		{
+			{
+				"time":1289754382,	--消息时间
+				"value":"kfjadkf",	--消息内容
+				"from": 1/2			--1自己 2对方
+				"voiceIndex": 1002,	--语音索引
+				"voiceTime": 3		--语音时长
+			}
+		}
+	}
+}
+]]
+
+local PRIVATE_TALK_FILE_NAME = "privateTalk/privateMessage_%d.txt"
+local VOICE_FILE_PATH = "privateTalk/%d/%d.bytes"
+
+--读取语音
+function _M.GetVoice(playerId, voiceIndex)
+	return CS.Loader.LoadAccessor.ReadBytes(string.format(VOICE_FILE_PATH, playerId, voiceIndex))
+end
+--缓存语音
+function _M.SaveVioce(playerId, voiceIndex, bytes)
+	CS.Loader.LoadAccessor.WriteBytes(string.format(VOICE_FILE_PATH, playerId, voiceIndex), bytes)
+end
+--初始化私聊信息
+function _M.InitRecentMessages()
+	_M.RecentMessagesCached = {}
+	local messageText = CS.Loader.LoadAccessor.ReadText(string.format(PRIVATE_TALK_FILE_NAME, MPlayer.GetId()))
+	if messageText ~= nil and messageText ~= "" then
+		local retTable = rapidjson.decode(messageText)
+		if retTable ~= nil then
+			for _,info in pairs(retTable) do
+				if info.id ~= MPlayer.GetId() then
+					local roleInfo = {
+						id = info.id,
+						name = info.name,
+						headId = info.headId,
+						sex = info.sex,
+						vip = info.vip,
+						titleId = info.titleId,
+						lastTime = info.lastTime,
+						noReadNum = info.noReadNum,
+						msg = {}
+					}
+					if info.msg ~= nil then
+						for k,v in pairs(info.msg) do
+							table.insert(roleInfo.msg, {
+								time = v.time,
+								value = v.value,
+								from = v.from,
+								voiceIndex = v.voiceIndex,
+								voiceTime = v.voiceTime
+							})
+						end
+					end
+					_M.RecentMessagesCached[info.id] = roleInfo
+				end
+			end
+		end
+	end
+end
+--保存聊天信息
+function _M.SaveRecentMessages()
+	local tab = {}
+	for _,info in pairs(_M.RecentMessagesCached) do
+		table.insert(tab, info)
+	end
+	CS.Loader.LoadAccessor.WriteText(string.format(PRIVATE_TALK_FILE_NAME, MPlayer.GetId()), rapidjson.encode(tab))
+end
+
+function _M.UpdateRecent()
+	local needRemoved = {}
+	local isNeed = false
+	for playerId,info in pairs(_M.RecentMessagesCached) do
+		if _M.CheckRelation(playerId, _M.RelationType.BlackList) then
+			isNeed = true
+			table.insert(needRemoved, playerId)
+		end
+	end
+
+	if isNeed then
+		for k,v in pairs(needRemoved) do
+			_M.RecentMessagesCached[v] = nil
+		end
+	end
+	return isNeed
+end
+
+--增加一条消息
+function _M.AddPrivateTalk(msg, isRead)
+	local playerId = msg.sender
+	local info = _M.RecentMessagesCached[playerId]
+	local isNew = false
+	if info == nil then
+		info = {}
+		_M.RecentMessagesCached[playerId] = info
+		isNew = true
+	end
+	info.id = playerId
+	info.name = msg.sendername
+	info.headId = msg.headid
+	info.sex = msg.gender
+	info.vip = msg.viplv
+	info.titleId = msg.titleid
+	info.lastTime = msg.time
+	info.noReadNum = (info.noReadNum or 0) + 1
+	if info.msg == nil then
+		info.msg = {}
+	end
+	local newMsg = {
+		time = msg.time,
+		value = msg.value,
+		from = msg.from,
+		voiceIndex = msg.voiceIndex,
+		voiceTime = msg.voiceTime
+	}
+	table.insert(info.msg, newMsg)
+	--聊天上限
+	if #info.msg > _M.PRIVATE_TALK_COUNT then
+		table.remove(info.msg, 1)
+	end
+	--上限处理
+	if isNew then
+		local tmp = {}
+		for k,v in pairs(_M.RecentMessagesCached) do
+			table.insert(tmp, {id = v.id, lastTime = v.lastTime})
+		end
+		local count = #tmp
+		if count > 0 and count > _M.GetRelationMaxNum(_M.RelationType.Recent) then
+			table.sort(tmp, function(a, b)
+				if a.lastTime ~= b.lastTime then
+					return a.lastTime < b.lastTime
+				end
+				return a.id > b.id
+			end)
+			_M.RecentMessagesCached[tmp[1].id] = nil
+		end
+	end
+	return newMsg, isNew
+end
+--检查私聊是否有未读的
+function _M.CheckPrivateTalkNoRead()
+	for k,v in pairs(_M.RecentMessagesCached) do
+		if v.noReadNum > 0 then
+			return true
+		end
+	end
+	return false
+end
+--获取某个玩家的聊天信息
+function _M.GetPrivateTalkInfo(playerId)
+	return _M.RecentMessagesCached[playerId]
+end
+--获取最近联系人中玩家的未读聊天数
+function _M.GetRecentTalkNum(playerId)
+	local info = _M.RecentMessagesCached[playerId]
+	if info ~= nil then
+		return info.noReadNum
+	end
+	return 0
+end
+--获取最近联系人中玩家的最近一次聊天时间
+function _M.GetRecentTalkTime(playerId)
+	local info = _M.RecentMessagesCached[playerId]
+	if info ~= nil then
+		return info.lastTime
+	end
+	return 0
+end
+--设置聊天已读取
+function _M.PrivateTalkSetRead( playerId )
+	local info = _M.RecentMessagesCached[playerId]
+	if info ~= nil then
+		info.noReadNum = 0
+	end
+end
+--获取聊天信息
+function _M.GetPrivateTalkMsg( playerId )
+	local info = _M.RecentMessagesCached[playerId]
+	if info ~= nil then
+		return info.msg
+	end
+	return nil
+end
+
+--玩家列表排序
+function _M.PlayerSort(a, b)
+	--战力
+	local doSortPower = function(a, b)
+		if a.power == b.power then
+			return a.id < b.id
+		end
+		return a.power > b.power
+	end
+	--商会
+	local doSortCommerce = function(a, b)
+		if MCommerce.IsMyCommerce(a.commerceId) then
+			if MCommerce.IsMyCommerce(b.commerceId) then
+				return doSortPower(a, b)
+			else
+				return true
+			end
+		else
+			if MCommerce.IsMyCommerce(b.commerceId) then
+				return false
+			else
+				return doSortPower(a, b)
+			end
+		end
+	end
+	--在线
+	if a.leaveTime == 0 then
+		if b.leaveTime == 0 then
+			return doSortCommerce(a, b)
+		else
+			return true
+		end
+	else
+		if b.leaveTime == 0 then
+			return false
+		else
+			return doSortCommerce(a, b)
+		end
+	end
+end
+
+function _M.GetRelationIds( relationType )
+	local ret = {}
+	if relationType == _M.RelationType.Recent then
+		for playerId,_ in pairs(_M.RecentMessagesCached) do
+			table.insert(ret, playerId)
+		end
+	else
+		local cachedTab = _M.RelationCached[relationType]
+		if cachedTab ~= nil then
+			for playerId,_ in pairs(cachedTab) do
+				table.insert(ret, playerId)
+			end
+		end
+	end
+	
+	return ret
+end
+
+function _M.GetRelationPlayers(relationType, isSort)
+	local ret = {}
+	local playerIds = _M.GetRelationIds( relationType )
+	if #playerIds > 0 then
+		for _,playerId in pairs(playerIds) do
+			local info = _M.GetPlayerInfo(playerId)
+			if info ~= nil then
+				table.insert(ret, info)
+			end
+		end
+		if isSort and #ret > 0 then
+			table.sort(ret, _M.PlayerSort)
+		end
+	end	
+	return ret
+end
+
+return _M

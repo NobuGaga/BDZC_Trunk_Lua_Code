@@ -1,0 +1,107 @@
+local _M = Class()
+local JGuiManager = CS.JGui.JGuiManager
+
+--界面构建
+function _M:ctor(scroll,content,prefabName,callBack)
+    self.mScroll = scroll
+	self.mContent = content
+	self.mPrefabName = prefabName
+    self.mCallBack = callBack
+end
+
+function _M:CreateScroll(pageNum,pageWidth,itemWidth,itemHeight,space,tableData)
+    if tableData == nil then return end
+    local content = self.mContent
+    local allNum = #tableData
+    local width = allNum * (itemWidth + space) - space
+    self.mPageWidth = pageWidth
+    self.mItemAndSpaceSize = itemWidth + space
+    self.mPageNum = pageNum
+    content.SizeDelta = Vector2(width,itemHeight)
+
+    self.mTableIndexData = tableData
+	self.mTableShowData = {}
+	self.mTableFreeMoudle = {}
+	self.mTableIndexMoudle = {}
+
+	if allNum > pageNum * 3 then
+		for i=1,pageNum + 3 do
+			local moudle = JGuiManager.GetMoudle(content,self.mPrefabName)
+			table.insert(self.mTableFreeMoudle,moudle)
+		end
+        self:SetLoopScroll()
+    else
+        self:SetNormalScroll(tableData)
+    end
+end
+
+function _M:SetLoopScroll()
+    self:OnScrollValueChange()
+    self.mScroll.OnValueChanged:RemoveAllListeners()
+    self.mScroll.OnValueChanged:AddListener(function(...)self:OnScrollValueChange()end)
+end
+
+function _M:OnScrollValueChange()
+    local callBack = self.mCallBack
+    if callBack == nil then
+        return
+    end
+    local content = self.mContent
+    local tableIndexData = self.mTableIndexData
+	local tableShowData = self.mTableShowData
+	local tableFreeMoudle = self.mTableFreeMoudle
+	local tableIndexMoudle = self.mTableIndexMoudle
+    local nowIndex = 0
+    local posX = content.LocalPosition.x
+    local sizeX = content.SizeDelta.x
+    if posX > 0 or posX < -(sizeX - self.mPageWidth) then
+        if posX > 0 then
+			nowIndex = 1
+		else
+			nowIndex = #tableIndexData - self.mPageNum
+		end
+    else
+        nowIndex = math.floor(-posX/self.mItemAndSpaceSize)
+    end
+    for i = #tableIndexData,1,-1 do
+        if i < nowIndex or i > nowIndex +self.mPageNum then
+			tableShowData[i] = nil
+			if tableIndexMoudle[i] ~= nil then
+				table.insert(tableFreeMoudle,tableIndexMoudle[i])
+				tableIndexMoudle[i] = nil
+			end
+        end
+    end
+    for j = nowIndex,nowIndex + self.mPageNum + 1 do
+        local isCreated = false
+        if j > 0 and j <= #tableIndexData then
+            for k,v in pairs(tableShowData) do
+                if j == k and v ~= nil then
+                    isCreated = true
+                end
+            end
+			if not isCreated then
+				local moudle = tableFreeMoudle[1]
+				if moudle ~= nil then
+					tableIndexMoudle[j] = moudle
+					table.remove(tableFreeMoudle,1)
+					tableShowData[j] = tableIndexData[j]
+                	callBack(j,tableIndexData[j],moudle)
+				end
+            end
+        end
+    end
+end
+
+function _M:SetNormalScroll(tableData)
+	local callBack = self.mCallBack
+	local content = self.mContent
+	for k,v in ipairs(tableData) do
+		local moudle = JGuiManager.GetMoudle(content,self.mPrefabName)
+        if callBack ~= nil then
+            callBack(k,v,moudle)
+        end
+    end
+end
+
+return _M

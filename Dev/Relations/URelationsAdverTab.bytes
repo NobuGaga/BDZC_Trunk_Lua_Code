@@ -1,0 +1,112 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local URelationsAdver = JRequire "Dev.Relations.URelationsAdver"
+local URelationsDefense = JRequire "Dev.Relations.URelationsDefense"
+local MMain = JRequire "Dev.Main.MMain"
+local URelationsFind = JRequire "Dev.Relations.URelationsFind"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end 
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.RelationsAdver then
+		self.ChooseMoudle = URelationsAdver.new(self.PageNode)
+		CRelations.CAdver()
+	elseif funcId == Define.SysId.RelationsDefense then
+		self.ChooseMoudle = URelationsDefense.new(self.PageNode)
+		CRelations.CDefense()
+	elseif funcId == Define.SysId.RelationsFind then
+		self.ChooseMoudle = URelationsFind.new(self.PageNode)
+		CRelations.CLog()
+	end
+	MRelations.LastChooseAdver = funcId
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Appeal")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("relations_shangsu")
+
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.RelationsTabAdver, true)
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023", nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 3 then
+				tabHandle:Add(v.id, moudle:Get("C_Btn_"..index), moudle:Get("C_text_"..index), v.name)
+			end
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+end
+
+function _R.GetAdverData(self)
+	if MRelations.LastChooseAdver == Define.SysId.RelationsAdver then
+		self.ChooseMoudle:Refresh()
+	end
+end
+
+function _R.GetDefenseData(self)
+	if MRelations.LastChooseAdver == Define.SysId.RelationsDefense then
+		self.ChooseMoudle:Refresh()
+	end
+end
+
+function _R.GetLogData(self)
+	if MRelations.LastChooseAdver == Define.SysId.RelationsFind then
+		self.ChooseMoudle:Refresh()
+	end
+end
+
+function _R.GetFindData(self,data)
+	if MRelations.LastChooseAdver == Define.SysId.RelationsFind then
+		self.ChooseMoudle:FindSuccess(data)
+	end
+end
+
+return _M

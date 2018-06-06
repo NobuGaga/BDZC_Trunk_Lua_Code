@@ -1,0 +1,266 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshTalk(self,data)
+	local talkData = Csv.GirlTalk[data.dialogueId]
+	if talkData.nextTalk[1] ~= nil then
+		_P.CreateTalk(self,talkData.nextTalk[1])
+	end
+end
+
+function _R.UpdateData(self)
+	local girlID = self.mData.girlid
+	local data = MGirl.GetGirlData(girlID)
+end
+
+function _M:OnCreate(data)
+
+	local data = MGirl.GetGirlData(data.id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Last_Talk")
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.mMoudle = moudle
+	self.mContent = moudle:Get("content")
+
+	moudle:Get("C_Text").Text = Csv.Text("lastgirl_talktitle")
+	moudle:Get("detailText").Text = Csv.Text("lastgirl_hudong")
+
+	local detailBtn = moudle:Get("detailBtn")
+	detailBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UGirlDetail",data)
+	end)
+
+
+	local chooseInput = moudle:Get("ChooseInput")
+	local bottombg2Btn = moudle:Get("bottombg2")
+	local bottomBtn = moudle:Get("bottombg")
+	local bottomImg2 = moudle:Get("Img2")
+	local bottomText = moudle:Get("BottomText")
+
+	
+	bottomBtn:AddOnClick(function(...)
+		SoundMgr.Play(10001)
+
+		if MGirl.isCanTalk == true then
+			_P.ShowInput(self,data)
+		else
+			CCommon.ShowError(Csv.Text("lastgirl_notalk"))
+		end
+	end)
+	bottombg2Btn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		chooseInput.Activity = false
+		bottomBtn.Activity = true
+	end)
+
+	self.mBottomText = bottomText
+	self.mBottomImg2 = bottomImg2
+	self.mChooseInput = chooseInput
+	self.mBottomBtn = bottomBtn
+	self.mData = data
+
+	-----------------------
+	_P.InitTalk(self,data)
+end 
+
+function _P.InitTalk(self,data)
+	local content = self.mContent
+	if data.chat ~= nil then
+		if data.chat.dialogues ~= nil then
+			for k,v in pairs(data.chat.dialogues)do
+				_P.CreateTalk(self,v)
+			end
+		end
+	end
+end
+
+function _P.CreateTalk(self,id)
+	local content = self.mContent
+	local talkData = Csv.GirlTalk[id]
+	local index = #talkData.value
+	for k,v in pairs(talkData.value)do
+		if index <= 1 then
+			local nexts = talkData.nextTalk
+			if nexts == nil or #nexts <= 0 then
+				if talkData.mapid ~= nil then
+					_P.CreateTalkItem(id,v,content,self)
+					_P.CreateTalkItem(id,v,content,self,true,true)
+				else
+					_P.CreateTalkItem(id,v,content,self,true)
+				end
+			else
+				_P.CreateTalkItem(id,v,content,self)
+			end
+		else
+			_P.CreateTalkItem(id,v,content,self)
+		end
+		index = index -1
+	end
+
+	local content = self.mContent
+	if content.SizeDelta.y >950 then
+		content.Pivot = Vector2(0.5,0)
+	end
+	self.mContent = content
+
+	--非玩家回复自我推送下一条
+	--talkData.people ~= 0 是美女
+	if talkData.people ~= 0 then
+		--检测是否最后一句
+		local nexts = talkData.nextTalk
+		
+		if nexts ~= nil and #nexts>0 then
+			MGirl.isCanTalk = true
+		else
+			MGirl.isCanTalk = false
+
+			if self.mData.state == 1 then
+				self.mBottomText.Text = Csv.Text("last_girl_clicktogame")
+				self.mBottomImg2.SpriteName = "mn_029"
+			end
+		end
+	else
+		MGirl.isCanTalk = false
+	end
+end
+
+function _P.CreateTalkItem(id,str,parent,self,isEnd,isMap)
+	local talkData = Csv.GirlTalk[id]
+	local _moudle
+	if talkData.people == 0 then
+		_moudle = JGuiManager.GetMoudle(parent,"M_Girl_Last_Talk_Item2", WindowType.UI, 10)
+	else
+		_moudle = JGuiManager.GetMoudle(parent,"M_Girl_Last_Talk_Item", WindowType.UI, 10)
+	end
+
+	local headSp = _moudle:Get("Head")
+	local value = _moudle:Get("value")
+	local talk = _moudle:Get("talk")
+	local line = _moudle:Get("line")
+	local mapSp = _moudle:Get("mapSp")
+	local map = _moudle:Get("map")
+
+	if talkData.people == 0 then 
+		headSp.SpriteNameAutoScale =  MPlayer.GetSHeadIcon()
+		headSp.SizeDelta = Vector2(107,107)
+		--headSp:SetNativeSize()
+	else
+		local girlsData = Csv.Girl[talkData.people]
+		headSp.SpriteName = girlsData.icon
+		headSp:AddOnButton(function()
+			WindowMgr.Create("UGirlDetail",self.mData)
+		end)
+	end
+	value.Text = str
+
+	local HIG = 0
+	local WID = 0
+	if isEnd then
+		line.Activity = true
+		HIG = HIG +20
+	end
+
+	if isMap then
+		talk.Activity = false
+		map.Activity = true
+		map.SpriteName = talkData.mapid
+		_moudle.SelfRect.SizeDelta = Vector2(730,HIG+200)
+	else
+		local valueHig = value.PreferredHeight
+		local valueWid = value.PreferredWidth
+		if valueWid > 410 then
+			valueWid = 410
+		end
+		talk.SizeDelta = Vector2(valueWid + 60,valueHig+60)
+		_moudle.SelfRect.SizeDelta = Vector2(730,HIG+valueHig+60)
+	end
+
+	return _moudle
+end
+
+function _P.ShowInput(self,data)
+	local _moudle = self.mMoudle
+	local inputContent = _moudle:Get("InputContent")
+	inputContent:DestroyChildren()
+
+	self.mBottomBtn.Activity = false
+	local chooseInput = self.mChooseInput
+	chooseInput.Activity = true
+
+	local lastTalkID = _P.GetLastTalk(data)
+	local talkCount = 0
+	local talkData = Csv.GirlTalk[lastTalkID]
+	if talkData ~= nil then
+		local nextTalk = talkData.nextTalk
+		if nextTalk ~= nil then
+			for k,v in pairs(nextTalk)do
+				talkCount = talkCount +1
+				_P.CreateInputItem(self,v,inputContent)
+			end
+		else
+			print("对话结束！！！")
+		end
+	end
+
+	local size = chooseInput.SizeDelta
+	local contentY = talkCount*66 +(talkCount-1)*15 + 60
+	chooseInput.SizeDelta = Vector2(size.x,contentY)
+end
+
+--输入选项
+function _P.CreateInputItem(self,id,parent)
+	local talkData = Csv.GirlTalk[id]
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Last_Talk_Input", WindowType.UI, 10)
+
+	_moudle.SelfRect:AddOnButton(function(...)
+		_P.CreateTalk(self,id)
+
+		self.mChooseInput.Activity = false
+		self.mBottomBtn.Activity = true
+
+		--消息
+		CGirl.ReqChatGirl(2,self.mData.id,id)
+	end)
+
+	local value = _moudle:Get("value")
+	value.Text = talkData.desc
+
+	return _moudle
+end
+
+---
+function _P.GetLastTalk(data)
+	local talkid = 0
+	if data.chat ~= nil and #data.chat.dialogues >0 then
+		local index = #data.chat.dialogues
+		lastid = data.chat.dialogues[index]
+		local talkData = Csv.GirlTalk[lastid]
+		if talkData.people ~= 0 then
+			talkid = lastid
+		end
+	end
+	return talkid
+end
+
+return _M

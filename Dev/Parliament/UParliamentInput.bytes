@@ -1,0 +1,73 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Parliament.CParliament.bytes#_M]
+local CParliament = JRequire "Dev.Parliament.CParliament"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Parliament_Input"
+local BtnClose = "BtnBack"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(titleID)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		 _R.OnClose(self)
+		 end)
+	self.titleID = titleID
+
+	_P.InitText(self)
+	_P.InitButton(self)
+end
+
+--初始化文本
+function _P.InitText(self)
+	self.moudle:Get("TitleText").Text = Csv.Text("parliament_input_title")
+	self.moudle:Get("PlaceholderText").Text = Csv.Text("parliament_input_tips")
+	self.InputText = self.moudle:Get("InputText")
+end
+
+--初始化按钮
+function _P.InitButton(self)
+	local btnConfirm = self.moudle:Get("BtnConfirm")
+	btnConfirm:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CParliament.SetMessage(self.titleID, self.InputText.Text)
+	end)
+	self.moudle:Get("ConfirmText").Text = Csv.Text("common_sure")
+
+	local btnCancel = self.moudle:Get("BtnCancel")
+	btnCancel:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_R.OnClose(self)
+	end)
+	self.moudle:Get("CancelText").Text = Csv.Text("common_cancel")
+end
+
+--关闭界面
+function _R.OnClose(self)
+	self:Destroy()
+end
+
+return _M

@@ -1,0 +1,362 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowType.bytes#_M]
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.PayCallbackStateCode.bytes#_M]
+local PayCallbackStateCode = JRequire "SDK.PayCallbackStateCode"
+
+----------------------CS类引用--------------------------
+local JGuiManager = CS.JGui.JGuiManager
+
+----------------------常量定义--------------------------
+local MoudleName = "M_DailyRecharge_1Yuan"
+local ItemName = "M_DailyRecharge_Gift_Item"
+
+local GTE_EFFECT_ID = 5
+--列表移动动画时间
+local PosListMoveTime = 0.3
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyHeight = 69
+--默认无奖励底图
+local DefaultNoReward = "ty_023"
+--默认无奖励物品ID
+local DefaultItemId = 1
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	self.moudle = JGuiManager.GetMoudle(self._RootNode, MoudleName, WindowType.UI, 0)
+	self.moudle:Get("textTips").Text = Csv.Text("chargeaward_gift_buy_tips")
+	_P.InitItemList(self)
+	self:RefreshView()
+end
+
+--初始化Item列表
+function _P.InitItemList(self)
+	self.scrollView = self.moudle:Get("scrollView")
+	self.content = self.moudle:Get("content")
+	self.boxBg = self.moudle:Get("BoxBg")
+	self.btnBox = self.moudle:Get("btnBox")
+	self.btnBox:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URechargeRewardDailyFreeGift", self.actId, self.freePackge.index, self.freePackge.award)
+	end)
+	self.listCache = {}
+end
+
+--刷新Item列表
+function _P.RefreshItemList(self)
+	local typeData = MActivity.GetListFromType(Define.ActivityType.RechargeReward_DailyGift) 
+	self.actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_DailyGift]
+	if nil ~= typeData and nil ~= self.actId then
+		local actData = typeData[self.actId]
+		if nil ~= actData and nil ~= actData.list then
+			for _, item in pairs(self.listCache) do
+				item.item.Activity = false
+			end
+			self.firstNotGetIndex = nil
+			self.firstGetIndex = nil
+			for index, data in ipairs(actData.list) do
+				if nil == data.productID or 0 == data.productID then
+					self.freePackge = data
+				elseif nil ~= self.listCache[index] then
+					_P.RefreshItem(self, index, data)
+				else
+					_P.CreateItem(self, index, data)
+					_P.RefreshItem(self, index, data)
+				end
+			end
+			_P.RefreshFreeBox(self)
+			_P.CalculateMaxMoveIndex(self)
+			_P.MoveItemList(self)
+		end
+	else
+		for _, item in pairs(self.listCache) do
+			item.item.Activity = false
+		end
+	end
+end
+
+--刷新免费礼包
+function _P.RefreshFreeBox(self)
+	if nil ~= self.freePackge then
+		local csvMissionValue
+		for _, value in pairs(Csv.ActiveAward) do
+			csvMissionValue = value
+			break
+		end
+		if nil ~= csvMissionValue then
+			local isCanGet = MActivity.RewardGetState.CanGet == self.freePackge.getState
+			local isGeted = MActivity.RewardGetState.Geted == self.freePackge.getState
+			self.btnBox.RaycastTarget = isCanGet
+			if nil ~= self.freeEffect then
+				self.freeEffect:Destroy()
+				--指针置空, 防止下次刷新时错误
+				self.freeEffect = nil
+			end
+			if isCanGet then
+				self.btnBox.SpriteName = ""
+				self.freeEffect = CCommon.CreateEffect(self.boxBg, csvMissionValue.canGetEffect, self.btnBox.LocalPosition, nil, csvMissionValue.effectParam)
+				self.freeEffect:Get("Box").SizeDelta = self.btnBox.SizeDelta
+			elseif isGeted then
+				self.btnBox.SpriteName = csvMissionValue.getedIcon
+				self.btnBox.IsGray = true
+			else
+				self.boxBg.Activity = false
+				error("Daily Gift Free Box GetState error!!! state:" .. self.freePackge.getState or "nil")
+			end
+		end
+	else
+		self.boxBg.Activity = false
+	end
+end
+
+--创建Item
+function _P.CreateItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName, WindowType.UI, 0)
+	itemMoudle:Get("textTips").Text = Csv.Text("chargeaward_gift_limit_tips")
+
+	local item = {}
+	item.item = itemMoudle.SelfRect
+	item.titleBg = itemMoudle:Get("titleBg")
+	item.textTitle = itemMoudle:Get("textTitle")
+	item.textWorth = itemMoudle:Get("textWorth")
+	item.content = itemMoudle:Get("content")
+	_P.InitMoveListData(self, itemMoudle, item.content)
+
+	item.getFlag = itemMoudle:Get("getFlag")
+	item.btnGet = itemMoudle:Get("btnGet")
+	item.textBtnGet = itemMoudle:Get("textBtnGet")
+	item.data = data
+	item.btnGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		local rechargeData = Csv.Recharge[item.data.productID]
+		if MActivity.RewardGetState.CanNotGet == item.data.getState then
+			self.selectBuyIndex = index
+			SDKMgr.ReqPay(rechargeData.id, rechargeData.cost, rechargeData.diamond, item.data.productName, self.actId, function(jsonStr)
+				local jsonTab = rapidjson.decode(jsonStr)
+				if nil ~= jsonTab and nil ~= jsonTab.stateCode then
+					_P.OnPayCallback(self, jsonTab.stateCode)
+				end
+			end)
+		elseif MActivity.RewardGetState.CanGet == item.data.getState then
+			CActivity.GetRewardReq(self.actId, index)
+		else
+			CCommon.ShowError(Csv.Text("chargeaward_gift_buying"))
+		end
+	end)
+
+	self.listCache[index] = item
+end
+
+--初始化移动列表需要的数据
+function _P.InitMoveListData(self, itemMoudle, content)
+	if nil == self.ItemDefaultHeight then
+		local itemHeight = itemMoudle.SelfRect.SizeDelta.y
+		local layout = self.content:AddVerticalLayoutGroup()
+		self.ItemSpace = layout.spacing
+		self.ItemDefaultHeight = itemHeight + self.ItemSpace
+		self.DefaultTop = layout.padding.top
+	end
+	
+	if nil == self.MaxRewardCol and nil ~= content then
+		local layout = content:AddGridLayoutGroup()
+		if nil ~= layout then
+			self.rewardColumnCount = layout.constraintCount
+			self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
+		end
+	end
+end
+
+--刷新Item
+function _P.RefreshItem(self, index, data)
+	local item = self.listCache[index]
+	if nil ~= item then
+		item.item.Activity = true
+		_P.RefreshItemReward(self, index, item, data)
+		if nil ~= data.titleBg then
+			item.titleBg.SpriteName = data.titleBg
+		end
+		item.textTitle.Text = data.desc
+		item.textWorth.Text = data.worthText
+		local isCanGet = MActivity.RewardGetState.CanGet == data.getState
+		local isGeted = MActivity.RewardGetState.Geted == data.getState
+		item.btnGet.Activity = not isGeted
+		item.getFlag.Activity = isGeted
+		if isCanGet then
+			item.textBtnGet.Text = Csv.Text("quest_get")
+		elseif not isGeted then
+			item.textBtnGet.Text = Csv.Text("shop_buy")
+		end
+		if nil == self.firstNotGetIndex and MActivity.RewardGetState.CanNotGet == data.getState then
+			self.firstNotGetIndex = index
+		end
+		if nil == self.firstGetIndex and isCanGet then
+			self.firstGetIndex = index
+		end
+		item.data = data
+	end
+end
+
+--刷新Item奖励
+function _P.RefreshItemReward(self, index, item, data)
+	if nil ~= data.award then
+		_P.RestoreItemReward(self, index)
+		local num = 0
+		item.rewards = {}		
+		for _, reward in pairs(data.award) do
+			local rewardItem = CCommon.CreateItem(item.content, reward[1], CCommon.ShowItemTips, 
+												  {num = reward[2]}, Define.SysId.RechargeReward_DailyGift)
+			num = num + 1
+			self.listRewardCache[index][num] = rewardItem
+			item.rewards[num] = reward
+		end
+		local row, rest = math.modf(num / self.rewardColumnCount)
+		if rest > 0 then
+			row = row + 1
+		end
+		for i = 1, row * self.rewardColumnCount - num do
+			local rewardItem = CCommon.CreateItem(item.content, DefaultItemId)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num = num + 1
+			self.listRewardCache[index][num] = rewardItem
+		end
+		local width = item.item.SizeDelta.x
+		item.item.SizeDelta = Vector2(width, self.ItemDefaultHeight + (row - 1) * self.rewardRowHeight)
+		item.height = item.item.SizeDelta.y
+	end
+end
+
+--重置Item奖励列表
+function _P.RestoreItemReward(self, index)
+	if nil == self.listRewardCache then
+		self.listRewardCache = {}
+	end
+	if self.listRewardCache[index] then
+		for num, rewardItem in ipairs(self.listRewardCache[index]) do
+			rewardItem:Destroy()
+			rewardItem = nil
+		end
+	end
+	self.listRewardCache[index] = {}
+end
+
+--计算最大移动索引
+function _P.CalculateMaxMoveIndex(self)
+	if nil ~= self.listPosCache then
+		for key, _ in pairs(self.listPosCache) do
+			self.listPosCache[key] = nil
+		end
+	end
+	self.listPosCache = {}
+	if nil ~= self.listCache and nil ~= self.ItemSpace then
+		local height = self.DefaultTop
+		for index, item in pairs(self.listCache) do
+			self.listPosCache[index] = height
+			height = height + item.height + self.ItemSpace
+		end
+		self.MaxMoveHegith = height - self.scrollView.SizeDelta.y
+	end
+end
+
+--移动列表
+function _P.MoveItemList(self)
+	local moveIndex
+	if nil ~= self.firstGetIndex then
+		moveIndex = self.firstGetIndex
+	elseif nil ~= self.firstNotGetIndex then
+		moveIndex = self.firstNotGetIndex
+	end
+	if nil ~= moveIndex and nil ~= self.MaxMoveHegith and nil ~= self.listPosCache then
+		local height = self.listPosCache[moveIndex]
+		if nil ~= height and 0 ~= height then
+			if height > self.MaxMoveHegith then
+				height = self.MaxMoveHegith
+			end
+			self.content:DOAnchorPosY(height, PosListMoveTime)
+		end
+	end
+end
+
+--支付回调处理
+function _P.OnPayCallback(self, stateCode)
+	if nil ~= self.selectBuyIndex then
+		local item = self.listCache[self.selectBuyIndex]
+		if nil ~= item then
+			if PayCallbackStateCode.Success == stateCode and MActivity.RewardGetState.CanNotGet == item.data.getState then
+				-- item.data.getState = MActivity.RewardGetState.Buying
+			end
+		end
+	end
+end
+
+--刷新界面
+function _M:RefreshView()
+	_P.RefreshItemList(self)
+end
+
+--刷新Item状态
+function _M:RefreshItemState(data)
+	if nil ~= data and nil ~= data.index then
+		local item = self.listCache[data.index]
+		if nil ~= item then
+			item.data.getState = data.state
+			item.data.time = data.time
+			_P.RefreshItem(self, data.index, item.data)
+		end
+	end
+end
+
+--刷新Item获取状态
+function _M:RefreshItemGetState(data)
+	if self.actId == data.actId then
+		local item = self.listCache[data.index]
+		if nil ~= item then
+			if data.isGeted then
+				item.btnGet.Activity = false
+				item.getFlag.Activity = true
+				item.getFlag.Alpha = 0
+				SoundMgr.Play(10004)
+				CCommon.CreateEffect(item.getFlag, GTE_EFFECT_ID, nil, function( ... ) 
+					item.getFlag.Alpha = 1
+				end)
+
+				if nil ~= item.rewards then
+					for index, reward in ipairs(item.rewards) do 
+						CCommon.ShowFlyItem(item.getFlag, reward[1], reward[2], index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
+					end
+				end
+			end
+		elseif nil ~= self.freePackge and nil ~= self.freePackge.index and self.freePackge.index == data.index then
+			self.freePackge.getState = MActivity.RewardGetState.Geted
+			_P.RefreshFreeBox(self)
+			WindowMgr.Call("URechargeRewardDailyFreeGift", "RefreshGetState")
+		end
+	end
+end
+
+--销毁界面
+function _M:Destroy()
+	if nil ~= self.moudle then
+		self.moudle:Destroy()
+	end
+end
+
+return _M

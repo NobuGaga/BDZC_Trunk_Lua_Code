@@ -1,0 +1,893 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local CRITACTORID = 10025
+local EFFECT_ID = 18
+local REFRESH_ENERGY_ITEM = Csv.Const(20)[8] --清CD
+local BOY_ICON_ID = 10202
+local GIRL_ICON_ID = 10203
+local babyUpActorId = 10010
+
+local _M = Class(WindowBase)
+--local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:UpdateBabyVitas()
+	local data = MGirl.GetBabyDataByID(MGirl.selectBaby)
+	if data ~= nil then
+		if data.energy.ncur <= 0 then
+			self.mVitalityTime.Text =  luaUtil.GetTimeHMS(data.energyRecoverCD - HeartBeat.ServSecond())
+		end
+	end
+end
+
+function _M:OnCreate(parent)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Tab3_Ukid")
+	self.mMoudle = moudle
+	self.mBabyData = nil
+	self.mIsBiye = false
+
+	local titleText = moudle:Get("C_Text")
+	titleText.Text = Csv.Func[Define.SysId.Girl_Baby].name
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		SoundMgr.DestroySystem()
+
+		if self.mLastBabySound ~= nil then
+			--SoundMgr.Destroy(self.mLastBabySound)
+		end
+
+		self:Destroy()
+		--WindowMgr.Call("UGirl","SelectUnlockTag")
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Girl_Baby)
+	end, nil, 1.2)
+
+	local scrollView = moudle:Get("scrollView")
+	local content = moudle:Get("content")
+	self.mScrollView = scrollView
+	self.mContent = content
+
+	local vipTips = moudle:Get("Unlock")
+	local SeatText = moudle:Get("Seat")
+	local SeatNum = moudle:Get("SeatNum")
+	local oneKeyTeachBtn = moudle:Get("onekeyTeachBtn")
+	local oneKeyText = moudle:Get("C_text_1_0")
+	local oneKeyRecoverBtn = moudle:Get("onekeyRecoverBtn")
+	local oneKeyRecoverText = moudle:Get("C_text_0_0")
+
+	oneKeyText.Text = Csv.Text("Girl_baby_onekeyTeach")--"一键教育"
+	oneKeyRecoverText.Text = Csv.Text("Girl_baby_onekeyRecove")--"一键恢复"
+
+	self.mVipTips = vipTips
+	self.mSeatNum = SeatNum
+	self.mOneKeyText = oneKeyText
+	self.mOneKeyBtn = oneKeyTeachBtn
+	self.mOneKeyRecoverBtn = oneKeyRecoverBtn
+	self.mOneKeyRecoverText = oneKeyRecoverText
+
+	local babyDatas = _P.BabySort(self,MGirl.babyTab) 
+	SeatText.Text = Csv.Text("Girl_baby_Seat")--"当前席位："
+	SeatNum.Text = #babyDatas.."/"..MGirl.babyMaxSeats
+	if MGirl.babyMaxSeats < 5 then
+		vipTips.Text = Csv.Text("Girl_baby_vipLock")--"VIP5解锁一键教育"
+		oneKeyTeachBtn.Activity = false
+		oneKeyRecoverBtn.Activity = false
+	else
+		_P.RefreshOneKeyName(self)
+		--oneKeyTeachBtn.Activity = true
+	end
+	
+	oneKeyTeachBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if MGirl.CheckOnekeyTeach() == true then
+			CGirl.ReqBabyTeachOneKey()
+		else
+			CCommon.ShowError(Csv.Text("Girl_baby_noteach"))--"当前宝宝不需要教育"
+		end
+	end)
+
+	oneKeyRecoverBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		--_P.OneKeyTeach()
+		if MGirl.CheckOneKeyRecover() == true then
+			_P.ClickRefreshAllCD(id)
+		end
+	end)
+
+	local teachBtn = moudle:Get("teachBtn")
+	self.mTeachType = 0 --0教育，1毕业，2改名
+	teachBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		local selectId = MGirl.selectBaby
+		local teachType = self.mTeachType
+		if teachType == 0 then
+			_P.ClickTeach(selectId)
+		elseif teachType == 1 then
+			_P.Graduation(selectId)
+		elseif teachType == 2 then
+			_P.SetBabyName(self,selectId,"",false)
+		end
+		teachBtn.RaycastTarget = false
+		teachBtn:AddOnTime(function(...)
+			teachBtn.RaycastTarget = true
+		end,nil,0.3)
+	end)
+---------------------------------------
+	local matherText = moudle:Get("mather")
+	local intimacyText = moudle:Get("Intimacy")
+	local ExplainText = moudle:Get("Explain")
+	local levelTitle = moudle:Get("levelTitle")
+	local attrTitle = moudle:Get("AttrTitle")
+	local danshiTitle = moudle:Get("danshiTitle")
+	local xueshiTitle = moudle:Get("xueshiTitle")
+	local meiliTitle = moudle:Get("meiliTitle")
+	local poliTitle = moudle:Get("poliTitle")
+	local vitalityText = moudle:Get("vitalityText")
+	local vitalityTime = moudle:Get("vitalityTime")
+
+	self.mVitalityTime = vitalityTime
+
+	matherText.Text = Csv.Text("Girl_baby_parent")--"母亲："
+	intimacyText.Text = Csv.Text("Girl_initimacy")--"亲密度："
+	ExplainText.Text = Csv.Text("Girl_baby_Explain")--"（亲密度影响孩子属性）"
+	levelTitle.Text = Csv.Text("Girl_baby_level")--"等级"
+	attrTitle.Text = Csv.Text("Girl_baby_allAttribute")--"总属性"
+	danshiTitle.Text = Csv.Text("Girl_skill_type1")--"胆识"
+	xueshiTitle.Text = Csv.Text("Girl_skill_type2")--"学识"
+	meiliTitle.Text = Csv.Text("Girl_skill_type3")--"魅力"
+	poliTitle.Text = Csv.Text("Girl_skill_type4")--"魄力"
+	vitalityText.Text = Csv.Text("Girl_baby_vitality")--"活力："
+
+-------------------------------------
+	local vitaTab = {}
+	for i = 1,5,1 do 
+		local vita = moudle:Get("Vita"..i)
+		vitaTab[i] = vita
+	end 
+	self.mVitaTab = vitaTab
+	
+	local babyItems = {}
+
+	local babySeatsCount = MGirl.babyMaxSeats
+	if Csv.BabySeats[MGirl.babyMaxSeats+1] ~= nil then
+		babySeatsCount = babySeatsCount+1
+	end
+	for i = 1,babySeatsCount,1 do
+		local sitem = {}
+		local sdata = {}
+		if babyDatas[i] ~= nil then
+			sitem = _P.CreatBabyItem(self,babyDatas[i],i)
+			sdata = babyDatas[i]
+		else
+			sitem = _P.CreatBabyItem(self,nil,i)
+			sdata = nil
+		end
+		babyItems[i] = {item = sitem,data = sdata}
+	end
+	self.mBabyItems = babyItems
+
+	_P.SelectBaby(self,1)--默认选择第一个
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		self:UpdateBabyVitas()
+	end)
+end
+
+function _P.RefreshInfo(self,data)
+	local moudle = self.mMoudle
+	local babyInfo = moudle:Get("babyValue")
+
+	local sceneBg = moudle:Get("scene")
+	
+	if data == nil then
+		babyInfo.Activity = false
+		sceneBg.SpriteName = Csv.Const(10214)
+
+		
+		if self.mLastBabySound ~= nil then
+			--SoundMgr.Destroy(self.mLastBabySound)
+		end
+
+		self.mBabyData = nil
+		return
+	else
+		babyInfo.Activity = true
+		sceneBg.SpriteName = Csv.BabyLevel[data.level.ncur].room
+	end
+
+	local babyIcon = moudle:Get("girl")
+	babyIcon.SpriteName = _P.GetBabyIcon(data.level.ncur,data.gender,data.IQ)
+	babyIcon:SetNativeSize()
+
+	local matherName = moudle:Get("matherName")
+	local intimacyNum = moudle:Get("IntimacyNum")
+	local babyName = moudle:Get("name")
+	local levelValue = moudle:Get("levelValue")
+	local attrValue = moudle:Get("AttrValue")
+	local danshiValue = moudle:Get("danshiValue")
+	local xueshiValue = moudle:Get("xueshiValue")
+	local meiliValue = moudle:Get("meiliValue")
+	local poliValue = moudle:Get("poliValue")
+	local results = moudle:Get("BARtext")
+
+	self.mResults = results
+
+	local teachBtn = moudle:Get("teachBtn")
+	local teachText = moudle:Get("C_text_0")
+	local recoverBtn = moudle:Get("recoverBtn")
+	local recoverText = moudle:Get("C_text")
+	recoverText.Text = Csv.Text("Girl_baby_recove")
+	recoverBtn:AddOnButton(function(...)
+		--SoundMgr.Play(10001)
+		_P.ClickRefreshCD(data.babyid)
+	end)
+	
+	_P.SetTeachBtn(self,teachBtn,teachText,recoverBtn,data)--"教育"--根据情况区分：赐名，教育，恢复，毕业
+
+	local unlockGirlData = MGirl.GetGirlData(data.girlid)
+	matherName.Text = MGirl.GetGirlName(data.girlid)----Csv.Girl[data.girlid].name
+	intimacyNum.Text = unlockGirlData.intimacy
+	if data.name ~= "" then
+		babyName.Text = data.name
+	else
+		babyName.Text = Csv.Text("Girl_baby_infoNoname")
+	end
+	
+	levelValue.Text = data.level.ncur.."/"..data.level.nmax
+
+	attrValue.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	danshiValue.Text = data.attribute.Wuli
+	xueshiValue.Text = data.attribute.Zhili
+	meiliValue.Text = data.attribute.Zhengzhi
+	poliValue.Text = data.attribute.Meili
+	--results.Text = Csv.Text("Girl_baby_results",{cur = data.score.ncur,max = data.score.nmax})--"成绩："..data.score.ncur.."/"..data.score.nmax--"60/100"
+
+	local babyVitaInfo = moudle:Get("info")
+	if data.level.ncur >= data.level.nmax then
+		babyVitaInfo.Activity = false
+	else
+		babyVitaInfo.Activity = true
+	end
+
+	_P.RefreshVita(self,data)
+
+	local slider = moudle:Get("slider")
+	slider:DOKill()
+
+	local beforeData = self.mBabyData
+	if beforeData ~= nil then
+		if beforeData.level.ncur < data.level.ncur and beforeData.babyid == data.babyid then
+			-- 播放宝宝升级特效
+			CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), babyUpActorId)
+			SoundMgr.PlayNonStopUI(10018)
+		end
+		
+		if beforeData.babyid == data.babyid then
+			slider.FillAmount = beforeData.score.ncur/beforeData.score.nmax
+			local times = data.level.ncur - beforeData.level.ncur
+			results.Text = Csv.Text("Girl_baby_results",{cur = beforeData.score.ncur,max = beforeData.score.nmax})--"成绩："..data.score.ncur.."/"..data.score.nmax--"60/100"
+			
+			_P.SliderTween(self,data.score,times,beforeData.level.ncur,data.level.ncur,data)
+		else
+			slider.FillAmount = data.score.ncur/data.score.nmax
+			results.Text = Csv.Text("Girl_baby_results",{cur = data.score.ncur,max = data.score.nmax})--"成绩："..data.score.ncur.."/"..data.score.nmax--"60/100"
+			
+			_P.PlayBabySound(self,data)
+		end
+	else
+		slider.FillAmount = data.score.ncur/data.score.nmax
+		results.Text = Csv.Text("Girl_baby_results",{cur = data.score.ncur,max = data.score.nmax})--"成绩："..data.score.ncur.."/"..data.score.nmax--"60/100"
+		
+		_P.PlayBabySound(self,data)
+	end
+	self.mBabyData = data --记录之前等级经验
+	
+	self.mSlider = slider
+
+	babyName:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if data.name ~= "" then
+			_P.SetBabyName(self,data.babyid,data.name,true)
+		else
+			_P.SetBabyName(self,data.babyid,data.name,false)
+		end
+	end)
+end
+
+function _P.PlayBabySound(self,data)
+
+	if self.mLastBabySound ~= nil then
+		--SoundMgr.Destroy(self.mLastBabySound)
+	end
+
+	local babysound = _P.GetBabySound(data.level.ncur,data.gender)
+
+	if self.mIsBiye == false then
+		if babysound ~= nil then
+			SoundMgr.PlaySystem(babysound)
+			self.mLastBabySound = babysound
+		end
+	else
+		self.mIsBiye = false
+	end
+end
+
+function _P.SliderTween(self,score,times,nowLv,targetLv,data)
+	local moudle = self.mMoudle
+	local slider = moudle:Get("slider")
+	local teachBtn = moudle:Get("teachBtn")
+
+	local value = score.ncur/score.nmax
+	
+	--teachBtn.RaycastTarget = false
+	local sliderTween
+	if nowLv < targetLv then
+		if times > 0 then
+			sliderTween = slider:DOFillAmount(1,1/times)
+			sliderTween:OnComplete(function(...)
+				slider.FillAmount = 0
+				_P.SliderTween(self,score,times,nowLv+1,targetLv,data)
+
+				-- 播放宝宝升级特效
+				--CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), babyUpActorId)
+				--SoundMgr.PlayNonStopUI(10018)
+				--_P.PlayBabySound(self,data)
+			end)
+		end
+	else
+		sliderTween = slider:DOFillAmount(value,0.5)
+		self.mResults.Text = Csv.Text("Girl_baby_results",{cur = score.ncur,max = score.nmax})--"成绩："..data.score.ncur.."/"..data.score.nmax--"60/100"
+	end
+end
+
+function _P.RefreshVita(self,data)
+	local vitaTab = self.mVitaTab
+	local maxVita = data.energy.nmax
+	local curVita = data.energy.ncur
+
+	for k,v in pairs(vitaTab) do
+		if k<=maxVita then
+			v.Activity = true
+			if k<=curVita then
+				v.IsGray = false
+			else
+				v.IsGray = true
+			end
+		else
+			v.Activity = false
+		end
+	end
+
+	if curVita <= 0 then
+		self.mVitalityTime.Text =  luaUtil.GetTimeHMS(data.energyRecoverCD - HeartBeat.ServSecond())
+	else
+		self.mVitalityTime.Text = ""
+	end
+end
+
+function _P.CreatBabyItem(self,data,index)
+	local parent = self.mContent
+	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_BabyItem", WindowType.UI, 10)
+
+	_P.RefreshBabyItem(self,moudle,data,index)
+    return moudle
+end
+
+function _P.RefreshBabyItem(self,moudle,data,index)
+	local value = moudle:Get("Value")
+	local free = moudle:Get("FreeText")
+	local Selected  = moudle:Get("Selected")
+	local eleExtend = moudle:Get("eleExtend")
+	local gender = moudle:Get("Gender")
+
+	value.Activity = false
+	free.Activity = false
+	Selected.Activity = false
+	eleExtend.Activity = false
+	gender.Activity = false
+
+	if data ~= nil then
+		value.Activity = true
+
+		moudle.SelfRect:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.SelectBaby(self,index)
+		end)
+		local name = moudle:Get("name")
+		local level = moudle:Get("level")
+		local vitality = moudle:Get("vitality")
+
+		name.Color = _P.GetColor(data.IQ)
+		level.Color = _P.GetColor(data.IQ)
+		vitality.Color = _P.GetColor(data.IQ)
+	
+		if data.name ~= "" then
+			name.Text = data.name
+		else
+			name.Text = Csv.Text("Girl_baby_noname")--"未命名"
+		end
+		
+		level.Text = Csv.Text("Girl_baby_itemlevel",{cur = data.level.ncur,max = data.level.nmax})--"等级："..data.level.ncur.."/"..data.level.nmax
+		
+		if data.level.ncur >= data.level.nmax then
+			vitality.Text = Csv.Text("Girl_baby_waitGraduation")--"等待毕业"
+		else
+			vitality.Text = Csv.Text("Girl_baby_itemvitality",{cur = data.energy.ncur,max = data.energy.nmax })--"活力："..data.energy.ncur.."/"..data.energy.nmax
+		end
+
+		gender.Activity = true
+		if data.gender == 1 then
+			gender.SpriteName = "mn_080"
+		else
+			gender.SpriteName = "mn_081"
+		end
+	else
+		if index > MGirl.babyMaxSeats then
+			--扩建席位
+			eleExtend.Activity = true
+			local extendText = moudle:Get("ExtendText")
+			extendText.Text = Csv.Text("Girl_baby_addSeats")--"点击扩充席位"
+			moudle.SelfRect:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				--_P.AddSeats(index)
+				_P.OnClickAddSeats()
+			end)
+		else
+			free.Text = Csv.Text("Girl_baby_free")--"空闲中"
+			free.Activity = true
+			moudle.SelfRect:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				_P.SelectBaby(self,index)
+			end)
+		end
+	end
+end
+
+function _P.SelectBaby(self,index)
+	local items = self.mBabyItems
+
+	for k,v in pairs(items) do
+		local Selected  = v.item:Get("Selected")
+		if k == index then
+			Selected.Activity = true
+			if v.data ~= nil then
+				MGirl.selectBaby = v.data.babyid
+			end
+			_P.RefreshInfo(self,v.data)
+		else
+			Selected.Activity = false
+		end
+	end
+end
+
+function _P.OnClickAddSeats()
+	local itemNum =MBag.GetItemNum(Define.AssetsType.Gold)
+	local cost = Csv.BabySeats[MGirl.babyMaxSeats+1].goldCost
+
+	local contentTips = ""
+	if itemNum >= cost then
+		contentTips = Csv.Text("Girl_baby_costToseats2",{num = cost})
+	else
+		contentTips = Csv.Text("Girl_baby_costToseats1",{num = cost})
+	end
+
+	CCommon.CheckTips(function(isSure,rg)_P.AddSeats(isSure, arg)
+	end,{items = {[Define.AssetsType.Gold] = itemNum},content = contentTips})--"是否消耗钻石x"..cost.."开启席位"})
+end
+
+function _P.AddSeats(isSure, arg)
+	if isSure == true then
+		local count = MBag.GetItemNum(Define.AssetsType.Gold)
+		local itemDate = Csv.Item[Define.AssetsType.Gold]
+
+		local cost = Csv.BabySeats[MGirl.babyMaxSeats+1].goldCost
+		if count <= cost then
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		else
+			CGirl.ReqAddSeats()
+		end
+	end
+end
+
+function _P.ClickTeach(id)
+	CGirl.ReqBabyTeach(id)
+end
+
+function _P.ClickRefreshCD(id)
+	local itemNum =MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+
+	local msg = Csv.Text("Girl_baby_refreshVita1")
+	if itemNum < 1 then
+		msg = Csv.Text("Girl_baby_refreshVita2")
+	end
+	local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+	CCommon.CheckTips(function(isSure,rg)_P.OnClickRefreshCD(isSure, arg)
+	end,{items = {[REFRESH_ENERGY_ITEM] = itemNum},content = Csv.Text(msg,{name = itemData.name,num = 1})})
+end
+
+function _P.OnClickRefreshCD(isSure, arg)
+	if isSure == true then
+		local count = MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+		local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+
+		if count <= 0 then
+			if not MBag.CheckItemEnough(REFRESH_ENERGY_ITEM,1) then
+			end
+		else
+			CBag.OnUseItem(REFRESH_ENERGY_ITEM,1,{MGirl.selectBaby})
+		end
+	end
+end
+
+function _P.ClickRefreshAllCD(id)
+	local itemNum =MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+	local cost = MGirl.BabyRecoverCount()
+
+	local msg = Csv.Text("Girl_baby_refreshAllvita1")
+	if itemNum < cost then
+		msg = Csv.Text("Girl_baby_refreshAllvita2")
+	end
+
+	local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+	CCommon.CheckTips(function(isSure,rg)_P.OnClickRefreshAllCD(isSure, arg)
+	end,{items = {[REFRESH_ENERGY_ITEM] = itemNum},content = Csv.Text(msg,{name = itemData.name,num = cost})})
+end
+
+function _P.OnClickRefreshAllCD(isSure, arg)
+	if isSure == true then
+		local count = MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+		local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+		local cost = MGirl.BabyRecoverCount()
+		if count < cost then
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))
+		else
+			MGirl.babyTeachList = {}
+			for k,v in pairs(MGirl.babyTab) do
+				if v.level.ncur < v.level.nmax then
+					if v.energy.ncur <= 0 then
+						CBag.OnUseItem(REFRESH_ENERGY_ITEM,1,{v.babyid})
+						table.insert(MGirl.babyTeachList,v.babyid)
+					end
+				end
+			end 
+		end
+	end
+end
+
+function _P.OneKeyTeach()
+	if MGirl.CheckOneKeyRecover() == true then
+		_P.ClickRefreshAllCD(id)
+	else
+		if MGirl.CheckOnekeyTeach() == true then
+			CGirl.ReqBabyTeachOneKey()
+		else
+			CCommon.ShowError(Csv.Text("Girl_baby_noteach"))--"当前宝宝不需要教育"
+		end
+	end
+end
+
+function _P.Graduation(id)
+	CGirl.ReqBabyGraduate(id)
+end
+
+function _P.RefreshOneKeyName(self)
+	if MGirl.babyMaxSeats < 5 then
+		return
+	end
+
+	if MGirl.CheckOneKeyRecover() == true then
+		self.mOneKeyRecoverBtn.Activity = true
+		self.mOneKeyBtn.Activity = false
+	else
+		self.mOneKeyRecoverBtn.Activity = false
+		self.mOneKeyBtn.Activity = true
+	end
+end
+
+function _P.SetBabyName(self,id,name,isChange)
+	--UBabyChangeName
+	WindowMgr.Create("UBabyChangeName",id,name,isChange,self.mBabyData.gender)
+end
+
+function _P.SetTeachBtn(self,btn,text,recoverBtn,data)
+	recoverBtn.Activity = false
+	btn.Activity = true
+
+	if data ~= nil then
+		if data.level.ncur >= data.level.nmax then
+			text.Text = Csv.Text("Girl_baby_graduation")--"毕业"
+			self.mTeachType = 1
+			return
+		end
+		if data.energy.ncur <= 0 then
+			recoverBtn.Activity = true
+			btn.Activity = false
+			return
+		end
+		if data.name ~= "" then
+			text.Text = Csv.Text("Girl_baby_teach")--"教育"
+			self.mTeachType = 0
+		else
+			text.Text = Csv.Text("Girl_baby_giveName")--"赐名"
+			self.mTeachType = 2
+		end
+	end
+end
+
+--[[
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+--]]
+
+-------------------
+----s刷新----
+-----------------
+--教育
+function _R.UpdateBabyData(self,sdata)
+	if #MGirl.babyTeachList <= 1 then
+		_P.RefreshBabyItems(self)
+		local index = _P.GetBabyIndex(self,sdata.babyid)
+		_P.SelectBaby(self,index)
+		_P.RefreshOneKeyName(self)
+	else
+		table.remove(MGirl.babyTeachList,1)
+	end
+	--local items = self.mBabyItems
+	--local index = _P.GetBabyIndex(self,sdata.babyid)
+	--if items[index] ~= nil then
+		--items[index].data = sdata
+		--self.mBabyItems = items
+		--_P.RefreshBabyItem(self,items[index].item,sdata,index)
+		--_P.SelectBaby(self,index)
+	--end
+	--_P.RefreshOneKeyName(self)
+end
+
+--随机名，自己取名
+function _R.UpdateBabyName(self,isSuccess)
+	_P.RefreshBabyItems(self)
+
+	local index = _P.GetBabyIndex(self,MGirl.selectBaby)
+	_P.SelectBaby(self,index)
+	if not isSuccess then
+		CCommon.ShowError(Csv.Text("Girl_baby_changeNameSuccess"))--"命名不成功！"
+	end
+	_P.RefreshOneKeyName(self)
+	--[[
+	local items = self.mBabyItems
+	local index = _P.GetBabyIndex(self,MGirl.selectBaby)
+
+	if isSuccess == true then
+		items[index].data.name = MGirl.babyName
+		--_P.RefreshBabyItem(self,items[index].item,items[index].data,index)
+	else
+		CCommon.ShowError(Csv.Text("Girl_baby_changeNameSuccess"))--"命名不成功！"
+	end
+	self.mBabyItems = items
+	_P.SelectBaby(self,index)
+
+	_P.RefreshOneKeyName(self)
+	--]]
+end
+
+--宝宝毕业
+function _R.BabyGraduate(self,id)
+	local items = self.mBabyItems
+	local index = _P.GetBabyIndex(self,id)
+	--空位重置
+	self.mIsBiye = true
+	_R.UpdateSeats(self)
+end
+
+function _R.BabyTeachOptional(self,data)
+	if data.crits ~= nil then
+		SoundMgr.PlaySystem(10003)
+
+		--暴击
+		--CCommon.CreateEffect(self.mMoudle:Get("CritActorPanel"), CRITACTORID)
+
+		local nodeTrans = self.mMoudle:Get("EffectNode")
+		CCommon.PlayEffectGod(nodeTrans,Define.SysId.Girl_Baby)
+	end
+end
+
+--
+function _R.UpdateSeats(self)
+	local items = self.mBabyItems
+	local parent = self.mContent
+	parent:DestroyChildren()
+
+	local babyItems = {}
+	local babyDatas = _P.BabySort(self,MGirl.babyTab) 
+	local babySeatsCount = MGirl.babyMaxSeats
+	if Csv.BabySeats[MGirl.babyMaxSeats+1] ~= nil then
+		babySeatsCount = babySeatsCount+1
+	end
+	for i = 1,babySeatsCount,1 do
+		local sitem = {}
+		local sdata = {}
+		if babyDatas[i] ~= nil then
+			sitem = _P.CreatBabyItem(self,babyDatas[i],i)
+			sdata = babyDatas[i]
+		else
+			sitem = _P.CreatBabyItem(self,nil,i)
+			sdata = nil
+		end
+		babyItems[i] = {item = sitem,data = sdata}
+	end
+	self.mSeatNum.Text = #babyDatas.."/"..MGirl.babyMaxSeats
+	self.mBabyItems = babyItems
+	_P.SelectBaby(self,1)--默认选择第一个
+
+	local oneKeyBtn =  self.mOneKeyBtn
+	local oneKeyTips = self.mVipTips
+	if MGirl.babyMaxSeats>=5 then
+		oneKeyBtn.Activity = true
+		oneKeyTips.Activity = false
+	end
+	_P.RefreshOneKeyName(self)
+end
+
+----------------------
+function _P.GetBabyIndex(self,babyid)
+	local items = self.mBabyItems
+	local index = 0
+	for k,v in pairs(items) do
+		if v.data ~= nil then
+			if v.data.babyid == babyid then
+				index = k
+			end
+		end
+	end
+	return index
+end
+
+function _P.GetBabyIcon(level,gender,IQ)
+	local icons
+	if gender == 1 then --女
+		icons = Csv.BabyLevel[level].girlIcons
+	else
+		icons = Csv.BabyLevel[level].boyIcons
+	end
+	
+	if icons ~= nil then
+		if #icons >= 5 then
+			return icons[IQ+1]
+		else
+			print("配置表icon错误_",level)
+		end
+	end
+end
+
+function _P.GetBabySound(level,gender)
+	local data = Csv.BabyLevel[level]
+	if data ~= nil then
+		if gender == 1 then --女
+			return data.girlSound
+		else
+			return data.boySound
+		end
+	end
+	return nil
+end
+
+function _P.GetColor(iq)
+	local _color = Csv.Const(10205)[iq+1]
+	if _color ~= nil then
+		if #_color >= 3 then
+			return Color(_color[1]/255,_color[2]/255,_color[3]/255)
+		end
+	end
+	return Color(0,0,0)
+end
+
+function _P.BabySort(self,babyTab)
+	
+	local sortTable = {}
+	for k,v in pairs(babyTab) do
+		table.insert(sortTable,v)
+	end
+
+	--按照 未命名>已毕业>可培养>id 排序
+	table.sort(sortTable,function(a,b)
+		local aName = 0
+		if a.name ~= nil and a.name ~= "" then
+			aName = 1
+		end
+		local bName = 0
+		if b.name ~= nil and b.name ~= "" then
+			bName = 1
+		end
+
+		if aName == bName then
+			local aBiye = 0
+			if a.level.ncur >= a.level.nmax then
+				aBiye = 1
+			end
+			local bBiye = 0
+			if b.level.ncur >= b.level.nmax then
+				bBiye = 1
+			end
+
+			if aBiye == bBiye then
+				local aPeiyang = 0
+				if a.energy.ncur > 0 then
+					aPeiyang = 1
+				end
+				local bPeiyang = 0
+				if b.energy.ncur > 0 then
+					bPeiyang = 1
+				end
+
+				if aPeiyang == bPeiyang then
+					return a.babyid > b.babyid
+				else
+					return aPeiyang > bPeiyang
+				end
+			else
+				return aBiye > bBiye
+			end
+		else
+			return aName < bName
+		end
+	end)
+
+	return sortTable
+end
+
+--由于宝宝刷新排序重置
+function _P.RefreshBabyItems(self)
+	local items = self.mBabyItems
+	local parent = self.mContent
+	parent:DestroyChildren()
+
+	local babyItems = {}
+	local babyDatas = _P.BabySort(self,MGirl.babyTab) 
+	local babySeatsCount = MGirl.babyMaxSeats
+	if Csv.BabySeats[MGirl.babyMaxSeats+1] ~= nil then
+		babySeatsCount = babySeatsCount+1
+	end
+	for i = 1,babySeatsCount,1 do
+		local sitem = {}
+		local sdata = {}
+		if babyDatas[i] ~= nil then
+			sitem = _P.CreatBabyItem(self,babyDatas[i],i)
+			sdata = babyDatas[i]
+		else
+			sitem = _P.CreatBabyItem(self,nil,i)
+			sdata = nil
+		end
+		babyItems[i] = {item = sitem,data = sdata}
+	end
+	self.mSeatNum.Text = #babyDatas.."/"..MGirl.babyMaxSeats
+	self.mBabyItems = babyItems
+end
+
+return _M

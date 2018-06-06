@@ -1,0 +1,494 @@
+-- party里面界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MClub = JRequire "Dev.Club.MClub"
+local CClub = JRequire"Dev.Club.CClub"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local ItemHeight = 250
+local StretchOffsets = 120
+local ContentOffsets = 15
+local ITEMTOPOFFSETS = 490
+local MoveOffsets = 200  -- 移动偏移值
+
+local BgNameArr = {[1] = "uibg_10003", [2] = "uibg_10003_1"}
+local StretchBgNameArr = {[1] = "yth_017", [2] = "yth_017_1"}
+local LeftSeatPrefab = {[1] = "M_Club_Ing_Item_Left", [2] = "M_Club_Ing_Item_GjLeft"}
+local RightSeatPrefab = {[1] = "M_Club_Ing_Item_Right", [2] = "M_Club_Ing_Item_GjRight"}
+local DaolunSeatNameArr = {[1] = "yth_016_1", [2] = "yth_016_3"} -- 捣乱者图片
+local SeatTableArr = {[1] = "yth_016", [2] = "yth_016_2"}
+local GoodFoodArr = {[1] = "yth_011_5", [2] = "yth_011_4", [3] = "yth_011_3", [4] = ""} -- 豪华食物图片
+local SimpleFoodArr = {[1] = "yth_011", [2] = "yth_011_1", [3] = "yth_011_2", [4] = ""} -- 一般食物图片
+
+local SEAT_ITEM_TWEENS = "T_Club_Seat_Scale"
+local ARROW_SACLE_TWEEN = "T_Club_Arrow_PosY"
+local ICON_POSY_TWEEN_LEFT = "T_Club_LeftIcon_Scale"
+local ICON_POSY_TWEEN_RIGHT = "T_Club_rightIcon_Scale"
+local PARTYACTORID = 10061
+local CANDLEACTORID = 10062
+local WUTAIACTORID = 10063
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	if data == nil then return end
+
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Ing")
+	self.mModule = module
+	self.partyData = data
+	self.mSeatItems = {}
+
+	MClub.curPartyName = data.name
+	self.isMyParty = CClub.IsOwnParty(data)
+	self.isInThisParty = CClub.IsInThisParty(data.msgList)
+	if MClub.isShowGoPanel then
+		WindowMgr.Create("UClubGoPanel", data)
+	end
+
+	local clubConf = Csv.Club[data.clubtype]
+	module:Get("C_TltleText").Text = clubConf.name
+	module:Get("Seat").Text = Csv.Text("club_ing_seatInfo")
+	module:Get("Fraction").Text = Csv.Text("club_ing_scoreInfo")
+	module:Get("number").Text = Csv.Text("club_ing_playerId")
+	module:Get("time").Text = Csv.Text("club_ing_time")
+	module:Get("InfoText").Text = Csv.Text("club_ing_info")
+
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("club_ing_nonePeople")
+	
+	self.maxNum = clubConf.maxJoin
+	self.totalScore = data.totalScore
+	module:Get("name").Text = data.name
+	module:Get("SeatNum").Text = ((data.msgList == nil and 0) or #data.msgList) .. '/' .. self.maxNum
+	module:Get("FractionNum").Text = (data.totalScore < 0 and 0) or data.totalScore
+	module:Get("NumberNum").Text = data.playerid
+
+	_P.OnSetPartyBg(self, data.clubtype)
+	-- 倒计时
+	local timeRect = module:Get("TimeNum")
+	timeRect.Text = LuaUtil.GetTimeHMS(data.leftTime)
+	if data.leftTime > 0 then
+		_P.OnClearTimer(self)
+		self.partyData.leftTime = data.leftTime + HeartBeat.ServSecond()
+		self.UpdateComp = module.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self, timeRect)
+		end, nil, 1)
+	end
+
+	-- 播放舞台特效
+	local actorPanel = module:Get("ActorPanel")
+	CCommon.CreateEffect(actorPanel, WUTAIACTORID)
+	CCommon.CreateEffect(actorPanel, PARTYACTORID)
+
+	_P.SetMsgListData(self, data.msgList)
+	_P.SetSeatListData(self, data.msgList, self.maxNum, data.clubtype)
+	_P.SetImageData(self, self.maxNum / 2)
+
+	-- 如果是自己的宴会，检测一下是否有新信息，若有需要弹新信息界面
+	if CClub.IsOwnParty(self.partyData) then
+		_P.GetNewMsgData(self, data.msgList)
+	end
+
+	local playerid = MPlayer.GetId()
+	if MClub.isShowSuccessPanel and data.playerid == playerid then
+		WindowMgr.Create("UClubSuccessPanel", data.playerid)
+		MClub.isShowSuccessPanel = false
+	end
+
+	if MClub.rewardPanelData ~= nil and data.playerid == playerid then
+		WindowMgr.Create("UClubRewardPanel", MClub.rewardPanelData)
+		MClub.rewardPanelData = nil
+	end
+
+	local closeBtn = module:Get("C_BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+
+-- 根据宴会类型，设置背景图片
+function _P.OnSetPartyBg(self, clubtype)
+	self.mModule:Get("Bg").SpriteName = BgNameArr[clubtype]
+	self.mModule:Get("stretchBg").SpriteName = StretchBgNameArr[clubtype]
+end
+
+
+--播完弹出动画之后回调
+function _M:OnCreateTweenDone( ... )
+	if MClub.isShowGoPanel or ((not self.isInThisParty) and (not self.isMyParty)) then
+		MClub.isShowGoPanel = false
+		_P.MoveToFixedPos(self, nil, false)
+	elseif (self.isInThisParty) then
+		local ownData = _P.GetOwnListData(self.partyData.msgList)
+		_P.MoveToFixedPos(self, ownData, true)
+	end
+end
+
+
+-- 得到当前自己的列表数据
+function _P.GetOwnListData(list)
+	local playerid = MPlayer.GetId()
+	for k,v in pairs(list) do
+		if v.playerid == playerid then
+			return v
+		end
+	end
+end
+
+
+function _P.OnUpdateTime(self, timeRect)
+	local time = self.partyData.leftTime - HeartBeat.ServSecond()
+	timeRect.Text = LuaUtil.GetTimeHMS(time)
+
+	if time <= 0 then
+		_P.OnClearTimer(self)
+
+		-- 倒计时结束，弹提示框(不是自己宴会才弹提示)
+		if not self.isMyParty then
+			CCommon.CheckTips(function(isSure,rg)
+				self:Destroy()
+			end, {content = Csv.Text("club_ing_tip"), isNoCancel = true})
+		end
+	end
+end
+
+
+function _P.OnClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+function _P.SetMsgListData(self, list)
+	local isNoneList = (list == nil or #list == 0)
+	self.noneText.Activity = isNoneList
+
+	local itemGrid = self.mModule:Get("content2")
+	if itemGrid == nil or isNoneList then return end
+
+	local infoList = _P.GetSortListByTime(list)
+	for k,v in ipairs(infoList) do
+		 _P.OnCreateInfoItem(v, itemGrid, k)
+	end
+end
+
+
+-- 信息排序（根据玩家进入时间）
+function _P.GetSortListByTime(list)
+	if list == nil then return {} end
+	
+	local sortList = {}
+	for k, v in pairs(list) do
+		table.insert(sortList, v)
+	end
+
+	table.sort(sortList, function (a, b)
+		return a.enterTime < b.enterTime
+	end)
+
+	return sortList
+end
+
+
+-- 位置信息
+function _P.GetSeatData(list)
+	local sortList = {}
+
+	if list ~= nil then
+		for k, v in pairs(list) do
+			sortList[v.index] = v
+		end
+	end
+
+	return sortList
+end
+
+
+function _P.OnCreateInfoItem(data, itemGrid, index)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Club_Ing_MsgItem", WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	local clubConf = Csv.JoinClub[data.joinType]
+
+	itemModule:Get("Num").Text = index .. '.'
+	itemModule:Get("name").Text = data.name
+
+	if clubConf.costItem ~= nil then
+		local infoStr = ""
+		local itemData= clubConf.costItem[1]
+		if itemData[1] == Define.AssetsType.Gold then
+			infoStr = Csv.Text("club_ing_xianshang", {
+				num = math.abs(clubConf.gainPoint), 
+				score = ((data.joinType == 4 and '') or '+') .. data.score
+			})
+		else
+			local itemConf = Csv.Item[itemData[1]]
+			infoStr = Csv.Text("club_ing_item_xianshang", {
+				itemName = itemConf.name,
+				itemNum = itemData[2],
+				score = ((data.joinType == 4 and '') or '+') .. data.score	
+			})
+		end
+
+		itemModule:Get("Info").Text = infoStr
+	end
+end
+
+
+function _P.SetSeatListData(self, seatData, maxNum, clubtype)
+	local itemGrid = self.mModule:Get("content")
+	if itemGrid == nil then return end
+
+	self.mSeatDatas = {}
+	local seatList = _P.GetSeatData(seatData)
+	for i=1, maxNum do
+		local isRight = i % 2 == 0
+		local itemName = (isRight and RightSeatPrefab[clubtype]) or LeftSeatPrefab[clubtype]
+		
+		self.mSeatItems[i] = _P.OnCreateSeatItem(self, seatList[i], itemGrid, itemName, isRight, i)
+		self.mSeatDatas[i] = (seatList[i] == nil and {}) or seatList[i]
+	end
+end
+
+
+function _P.OnCreateSeatItem(self, data, itemGrid, itemName, isRight, index)
+	local seatItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if itemModule == nil then return end
+	
+	_P.SetSeatData(self, itemModule, data)
+	
+	local arrowRect = itemModule:Get("none")
+	local arrowTween = arrowRect.CachedTran:GetJTweener(ARROW_SACLE_TWEEN)
+	arrowTween:Play()
+
+	itemModule.SelfRect:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local time = self.partyData.leftTime - HeartBeat.ServSecond()
+		if data == nil and time > 0 and (not self.isInThisParty) and (not self.isMyParty) then
+			WindowMgr.Create("UClubJoinPanel", {index = index, partyId = self.partyData.playerid, leaveTime = time})
+		end
+	end, nil, 0.9)
+
+	local countTime = self.partyData.leftTime - HeartBeat.ServSecond()
+	itemModule.SelfRect.RaycastTarget = (data == nil and countTime > 0 and (not self.isInThisParty) and (not self.isMyParty))
+
+	local headIconImg = itemModule:Get("headBox")
+	local iconTween = headIconImg.CachedTran:GetJTweener((isRight and ICON_POSY_TWEEN_RIGHT) or ICON_POSY_TWEEN_LEFT)
+	iconTween:Play()
+
+	seatItem.module = itemModule
+	return seatItem
+end
+
+
+function _P.SetSeatData(self, itemModule, data)
+	local noneRect = itemModule:Get("none")
+	local hasRect = itemModule:Get("has")
+	local isNil = (data == nil)
+	local countTime = self.partyData.leftTime - HeartBeat.ServSecond()
+	noneRect.Activity = (isNil and countTime > 0 and (not self.isInThisParty) and (not self.isMyParty))
+	hasRect.Activity = not isNil
+
+	if not isNil then
+		itemModule:Get("head").SpriteName = _P.GetHeadIcon(data)
+		itemModule:Get("name").Text = data.name
+
+		-- 食物要根据宴会进入方式来（joinType）
+		local foodIconImg = itemModule:Get("food")
+		local clubtype = self.partyData.clubtype
+		local foodName = (clubtype == 1 and SimpleFoodArr[data.joinType]) or GoodFoodArr[data.joinType]
+		foodIconImg.Activity = (foodName ~= nil and foodName ~= "")
+		foodIconImg.SpriteName = foodName
+		itemModule.SelfRect.SpriteName = (data.joinType ~= 4 and SeatTableArr[clubtype]) or DaolunSeatNameArr[clubtype]
+
+		-- 播放蜡烛特效(捣乱者不需要)
+		if data.joinType ~= 4 then
+			local candelActorPanel = itemModule:Get("foodAnim")
+			candelActorPanel:DestroyChildren()
+			CCommon.CreateEffect(candelActorPanel, CANDLEACTORID)
+		end
+	end
+end
+
+
+-- 宴会返回后，更新位置信息
+function _P.SetAllSeatArrow(self)
+	local allSeatData = self.mSeatItems
+	if allSeatData == nil or #allSeatData <= 0 then return end
+
+	for k,v in pairs(allSeatData) do
+		local noneRect = v.module:Get("none")
+		if noneRect ~= nil then
+			noneRect.Activity = false
+		end
+		v.module.SelfRect.RaycastTarget = false -- 位置设置为不可点
+	end
+end
+
+
+--获取头图标
+function _P.GetHeadIcon(data)
+	local avatarCsv = Csv.Avatar[data.headid]
+	return avatarCsv["icon_" .. data.sex]
+end
+
+
+-- 设置拉伸图片信息
+function _P.SetImageData(self, itemNum)
+	local contentHeight = itemNum * ItemHeight + ITEMTOPOFFSETS
+	local mapHeight = self.mModule:Get("Bg").SizeDelta.y
+	local stretchImg = self.mModule:Get("stretchBg")
+	local contentRect = self.mModule:Get("drawRect")
+
+	stretchImg.SizeDelta = Vector2(stretchImg.SizeDelta.x, contentHeight - mapHeight + StretchOffsets)
+	contentRect.SizeDelta = Vector2(contentRect.SizeDelta.x, contentHeight + ContentOffsets)
+end
+
+
+function _P.MoveToFixedPos(self, data, isMine)
+	self:Lock()
+	
+	local moveToY = 0
+	local lowNum = 0
+	if isMine then
+		lowNum = _P.GetRowBySeatId(data.index)
+	else
+		lowNum = _P.OnFindEmptySeat(self)
+	end
+
+	if lowNum == nil or lowNum <= 2 then 
+		_P.PlayTween(self, data, isMine)
+		return
+	end
+
+	local maxPosY = (self.maxNum / 2 - 3) * ItemHeight + MoveOffsets -- 移动上限
+	moveToY = (lowNum - 2) * ItemHeight + MoveOffsets
+	local contentRect = self.mModule:Get("drawRect")
+	local moveTween = contentRect:DOAnchorPosY(((moveToY > maxPosY and maxPosY) or moveToY), 1)
+	moveTween:OnComplete(function()
+		-- 如果是自己的item，需要播放动画
+		_P.PlayTween(self, data, isMine)
+	end)
+end
+
+
+function _P.PlayTween(self, data, isMine)
+	if isMine then
+		_P.PlaySeatTween(self, data)
+	else
+		self:Unlock()
+	end
+end
+
+
+function _P.PlaySeatTween(self, data)
+	local item = self.mSeatItems[data.index]
+	if item == nil then return end
+
+	local itemRect = item.module.SelfRect
+	if itemRect == nil then return end
+
+	itemRect.LocalScale = Vector3(0.95, 0.95, 0.95)
+	local scaleTween = itemRect.CachedTran:GetJTweener(SEAT_ITEM_TWEENS)
+	scaleTween:SetOnComplete(function()
+		self:Unlock()
+	end)
+	scaleTween:Play()
+end
+
+
+-- 查找空闲位置(返回位置编号)
+function _P.OnFindEmptySeat(self)
+	for k,v in pairs(self.mSeatDatas) do
+		if v.index == nil then
+			local lowNum = _P.GetRowBySeatId(k)
+			return lowNum
+		end
+	end
+end
+
+
+-- 根据位置编号等到行数
+function _P.GetRowBySeatId(seatId)
+	if seatId % 2 == 0 then
+		return math.floor(seatId / 2)
+	else
+		return math.floor(seatId / 2) + 1
+	end
+end
+
+
+-- 进入自己的宴会，若有新消息，需要打开新消息面板
+function _P.GetNewMsgData(self, list)
+	if list == nil then return end
+
+	local newMsgData = {}
+	for k,v in ipairs(list) do
+		if v.newFlag then
+		 	table.insert(newMsgData, v)
+		end
+	end
+
+	if newMsgData ~= nil and #newMsgData > 0 then
+		WindowMgr.Create("UClubNewsPanel", newMsgData)
+	end
+end
+
+
+-- 赴宴返回
+function _R.OnJoinCallBack(self, data)
+	local seatItem = self.mSeatItems[data.seatIndex]
+	if seatItem == nil then return end
+
+	-- 多添加一条宴会信息
+	local newMsgData = {}
+	newMsgData.index = data.seatIndex
+	newMsgData.enterTime = os.time()
+	newMsgData.playerid = data.playerid
+	newMsgData.name = MPlayer.GetName()
+	newMsgData.score = data.gainScore
+	newMsgData.headid = MPlayer.GetAvatar().head
+	newMsgData.joinType = data.joinType
+	newMsgData.sex = MPlayer.GetSex()
+	if self.partyData.msgList == nil then
+		self.partyData.msgList = {}
+	end
+	table.insert(self.partyData.msgList, newMsgData)
+
+	self.mSeatDatas[data.seatIndex] = newMsgData
+	self.isInThisParty = true
+	_P.SetSeatData(self, seatItem.module, newMsgData)
+	_P.SetAllSeatArrow(self)
+
+	local listNum = (self.partyData.msgList == nil and 1) or #self.partyData.msgList
+	self.mModule:Get("SeatNum").Text = listNum .. '/' .. self.maxNum
+
+	self.totalScore = self.totalScore + data.gainScore
+	self.mModule:Get("FractionNum").Text = (self.totalScore < 0 and 0) or self.totalScore
+
+	local itemGrid = self.mModule:Get("content2")
+	self.noneText.Activity = false
+	_P.OnCreateInfoItem(newMsgData, itemGrid, listNum)
+end
+
+
+return _M

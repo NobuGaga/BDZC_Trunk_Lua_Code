@@ -1,0 +1,78 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:OnCreate()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Role_Scale")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("palyer_levelup")
+	moudle:Get("condTitle").Text = Csv.Text("palyer_upTitle")
+	moudle:Get("C_text").Text = Csv.Text("common_levelUp")
+	-- moudle:Get("LeftInfoTitle").Text = Csv.Text("palyer_infoTitle")
+	-- moudle:Get("RightInfoTitle").Text = Csv.Text("palyer_infoTitle")
+	moudle:Get("Title").Text = Csv.Text("player_quanxian")
+	local nowLevel = MPlayer.GetLevel()
+	local nowCsv = Csv.Company[nowLevel]
+	local nextCsv = Csv.Company[nowLevel + 1]
+	local nowExp = MPlayer.GetExp()
+	local headPrefab = MPlayer.GetHeadPrefabID()
+	local bodyPrefab = MPlayer.GetPrefabID(nowCsv.body, MPlayer.GetSex())
+	if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        CCommon.CreateRole(moudle:Get("LeftBody"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.playerLevelUp_left)
+    else
+        moudle:Get("LeftBody").SpriteName = MPlayer.GetSpFromSex(nowCsv.body, MPlayer.GetSex())
+		moudle:Get("LeftHead").SpriteName = MPlayer.GetHeadSp()
+	end
+	moudle:Get("LeftLevel").Text = nowCsv.name
+	moudle:Get("LeftInfoText").Text = nowCsv.showText
+	if nextCsv ~= nil then
+		local nextBodyPrefab = MPlayer.GetPrefabID(nextCsv.body, MPlayer.GetSex())
+		if headPrefab ~= nil and nextBodyPrefab ~= nil and headPrefab > 0 and nextBodyPrefab > 0 then
+			CCommon.CreateRole(moudle:Get("RightBody"), nextBodyPrefab, headPrefab, CCommon.ActorFieldMap.playerLevelUp_right)
+		else
+			moudle:Get("RightBody").SpriteName = MPlayer.GetSpFromSex(nextCsv.body, MPlayer.GetSex())
+			moudle:Get("RightHead").SpriteName = MPlayer.GetHeadSp()
+		end
+		moudle:Get("RightLevel").Text = nextCsv.name
+		moudle:Get("RightInfoText").Text = nextCsv.showText		
+		moudle:Get("progress").FillAmount = nowExp / nowCsv.cost
+		moudle:Get("proText").Text = Csv.Text("player_levelUpExp",{num = nowExp, max = nowCsv.cost})
+		if nowExp >= nowCsv.cost then
+			local btn = moudle:Get("C_Btn_b")
+			btn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				CPlayer.LevelUpReq()
+				if btn ~= nil then
+					btn.RaycastTarget = false
+					btn.IsGray = true
+				end
+			end, nil, 0.9)
+		else
+			moudle:Get("C_Btn_b").IsGray = true
+		end
+	else		
+		moudle:Get("RightLevel").Text = Csv.Text("palyer_max")
+		moudle:Get("progress").FillAmount = 1
+		moudle:Get("proText").Text = Csv.Text("player_levelUpExp",{num = nowExp, max = "MAX"})
+		moudle:Get("C_Btn_b").IsGray = true
+	end
+end
+
+return _M

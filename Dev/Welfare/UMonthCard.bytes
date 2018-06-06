@@ -1,0 +1,101 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+local MONTHCARD_ID = 1
+local CARD_ACTORID = 10066
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_MonthCard", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local titleText = moudle:Get("title")
+	local chixuText = moudle:Get("timetext")
+	local getFirst1 = moudle:Get("text1")
+	local getFirst2 = moudle:Get("text2")
+	local getFirst3 = moudle:Get("text3")
+	local getDay1 = moudle:Get("text4")
+	local getDay2 = moudle:Get("text5")
+	local getDay3 = moudle:Get("text6")
+	local leftTime1 = moudle:Get("text8")
+	local leftTime2 = moudle:Get("text9")
+	local leftTime3 = moudle:Get("text10")
+	local costNum = moudle:Get("money")
+	local buyText = moudle:Get("buy")
+	local tipsText = moudle:Get("text7")
+
+	titleText.Text = Csv.Text("welfare_monthCard_title")
+	chixuText.Text = Csv.Text("welfare_monthCard_chixu")
+	getFirst1.Text = Csv.Text("welfare_monthCard_getfirst1")
+	getFirst2.Text = Csv.Const(11006)[2]
+	getFirst3.Text = Csv.Text("welfare_monthCard_getfirst3")
+ 	getDay1.Text = Csv.Text("welfare_monthCard_getday1")
+	getDay2.Text = Csv.Const(11006)[3]
+ 	getDay3.Text = Csv.Text("welfare_monthCard_getday3")
+	leftTime1.Text = Csv.Text("welfare_monthCard_leftTime1")
+	leftTime2.Text = 30
+	leftTime3.Text = Csv.Text("welfare_monthCard_leftTime3")
+	costNum.Text = "¥"..Csv.Const(11006)[1]
+	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
+	tipsText.Text =Csv.Text("welfare_monthCard_tips")
+
+	leftTime1.Activity = false
+
+	self.mBuyText = buyText
+	self.mLeftTime2 = leftTime2
+	self.mLeftTime1 = leftTime1
+
+	local buyBtn = moudle:Get("Btn")
+	buyBtn:AddOnButton(function(...)
+		local monthData = Csv.Recharge[MONTHCARD_ID]
+		local cardName = Csv.Text("welfare_monthCard")
+		SDKMgr.ReqPay(monthData.id,monthData.cost,monthData.diamond,cardName) 
+	end)
+
+	if MWelfare.monthCardData ~= nil then
+		if MWelfare.monthCardData.leftDays ~= nil and MWelfare.monthCardData.leftDays > 0 then
+			buyText.Text = Csv.Text("welfare_buymore")--welfare_buymore
+			leftTime2.Text = MWelfare.monthCardData.leftDays
+			leftTime1.Activity = true
+		end
+	end
+
+	--年卡特效
+	local actorPanel = moudle:Get("ActorPanel")
+	CCommon.CreateEffect(actorPanel, CARD_ACTORID)
+end
+
+function _M:RefreshState()
+	local buyText =  self.mBuyText
+	local leftTime2 = self.mLeftTime2
+	local leftTime1 =  self.mLeftTime1
+
+	buyText.Text = Csv.Text("welfare_buy")
+	leftTime1.Activity = false
+
+	if MWelfare.monthCardData ~= nil then
+		if MWelfare.monthCardData.leftDays ~= nil and MWelfare.monthCardData.leftDays > 0 then
+			buyText.Text = Csv.Text("welfare_buymore")--welfare_buymore
+			leftTime2.Text = MWelfare.monthCardData.leftDays
+			leftTime1.Activity = true
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

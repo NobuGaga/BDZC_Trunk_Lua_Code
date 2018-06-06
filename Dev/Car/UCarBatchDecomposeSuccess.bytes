@@ -1,0 +1,115 @@
+-- 一键分解成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(getList, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_BatchDecompose_Success")
+	self.mModule = module
+	self.OnCloseCall = onClose
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local confirmBtn = module:Get("C_Btn_b")
+	confirmBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil, 0.9)
+
+	module:Get("Title").Text = Csv.Text("car_decompose_success")
+	module:Get("C_text").Text = Csv.Text("common_sure")
+	module:Get("Get").Text = Csv.Text("car_decompose_tip3")
+
+	if getList then
+		_P.SetCarData(self, _P.GetSortData(getList))
+	end
+end
+
+
+function _P.SetCarData(self, getList)
+	local itemContent = self.mModule:Get("Content")
+	itemContent:DestroyChildren()
+
+	if getList then
+		for k,v in pairs(getList) do
+			CCommon.CreateItem(itemContent, v.key, nil, {num = v.value})
+		end
+	end
+end
+
+
+-- 排序：钢材>橙色>紫色>蓝色>绿色>白色
+function _P.GetSortData(getList)
+	local sortList = {}
+	for k, v in pairs(getList) do
+		table.insert(sortList, v)
+	end
+
+	table.sort(sortList, function (a, b)
+		if a.key <= 100 then
+			if b.key <= 100 then
+				return _P.SortByQuality(a, b)
+			end
+			return true
+		else
+			if b.key > 100 then
+				return _P.SortByQuality(a, b)
+			end
+			return false
+		end
+	end)
+
+	return sortList
+end
+
+
+function _P.SortByQuality(a, b)
+	local itemConfA = Csv.Item[a.key]
+	local itemConfB = Csv.Item[b.key]
+
+	if itemConfA.color == itemConfB.color then
+		if a.key == b.key then
+			return false
+		end
+
+		return a.key < b.key
+	end
+
+	return itemConfA.color > itemConfB.color
+end
+
+
+return _M

@@ -1,0 +1,209 @@
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cBattle = 1,
+	cUnlock = 2,
+	cSeckillBattle = 3,
+
+	sInit = 1,
+	sResult = 2,
+	sUnlock = 3,
+	sSeckillBattle = 4,
+}
+
+function _M.ModuleClean()
+	MBattle.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local send = {
+		[CMD_ID.cBattle] = "PBattle.CBattle",
+		[CMD_ID.cUnlock] = "PBattle.CUnlock",
+		[CMD_ID.cSeckillBattle] = "PBattle.CSeckillBattle",
+	}
+	--接收消息协议注册
+	local recv = {
+		[CMD_ID.sInit] = {		proto = "PBattle.SInit", 				handle = _P.OnInit},
+		[CMD_ID.sResult] = {	proto = "PBattle.SResult", 				handle = _P.OnResult},
+		[CMD_ID.sUnlock] = {	proto = "PBattle.SUnlock", 				handle = _P.OnUnlock},
+		[CMD_ID.sSeckillBattle] = {	proto = "PBattle.SSeckillBattle", 	handle = _P.OnSeckillResult},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Airport, send, recv, isReload)	
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+EventCenter.RegistCallEvent(Define.EventListenId.FirstEnterGame,function( ... )
+	MBattle.IsFirstCreateBattle = true
+end, true)
+
+-----------------------Client -- Server-----------------
+
+function _M.BattleReq(battleId, staffId)
+	_M.Send(CMD_ID.cBattle, {id = battleId, staffId = staffId})
+end
+
+function _M.UnlockReq(staffId)
+	_M.Send(CMD_ID.cUnlock, {staffId = staffId})
+end
+
+-- 一键秒杀请求
+function _M.SeckillBattleReq(battleId)
+	_M.Send(CMD_ID.cSeckillBattle, {id = battleId})
+end
+
+-----------------------Server -- Client-----------------
+
+function _P.OnDayout()
+	--12点重置
+	local tmp = MBattle.LockedStaffs
+	MBattle.LockedStaffs = {}
+	MBattle.StaffLifeNum = {}
+	WindowMgr.Call("UBattleStaffChoose","RefreshAll")
+end
+
+function _P.OnInit(data)
+	MBattle.CurId = data.id
+	MBattle.CurBlood = data.blood
+
+	MBattle.LockedStaffs = {}
+	MBattle.StaffLifeNum = {}
+	if data.lockStaffs ~= nil then
+		for _,v in pairs(data.lockStaffs) do
+			MBattle.LockedStaffs[v] = true
+		end
+	end
+	if data.staffLifeNum ~= nil then
+		for _,v in pairs(data.staffLifeNum) do
+			MBattle.StaffLifeNum[v.id] = v.count
+		end
+	end
+end
+
+function _P.OnResult(data)
+	if data.state == MBattle.ResultState.Win then
+		if data.nextId ~= nil and data.nextId > 0 then
+			local csv = Csv.Battle[data.nextId]
+			--胜利了, 进行下一关
+			MBattle.CurId = data.nextId
+			MBattle.CurBlood = csv.gold	
+		end		
+	else
+		MBattle.CurId = data.id
+		MBattle.CurBlood = data.blood
+	end
+	
+	--锁定的员工
+	if data.lockStaff ~= nil then
+		MBattle.LockedStaffs[data.lockStaff] = true
+	end
+
+	if data.staffLifeNum ~= nil then
+		MBattle.StaffLifeNum[data.staffLifeNum.id] = data.staffLifeNum.count
+	end
+
+	--调用播放
+	if WindowMgr.IsCreated("UBattleFight") then
+		WindowMgr.Call("UBattleFight","OnResult", data, function ()
+			WindowMgr.Call("UBattle","OnResult", data)
+		end)
+	elseif WindowMgr.IsCreated("UBattleBoss") then
+		WindowMgr.Call("UBattleBoss","OnResult", data, function ()
+			WindowMgr.Call("UBattle","OnResult", data)
+		end)
+	else
+		WindowMgr.Call("UBattle","OnResult", data)
+	end
+end
+
+-- 一键秒杀返回
+function _P.OnSeckillResult(data)
+	if MBattle.SeckillBattleData.list then
+		MBattle.SeckillBattleData.list = {}
+	end
+	
+	MBattle.SeckillBattleData = data
+	local lastData = MBattle.GetCurData(data.list, data.lastId)
+	if lastData then
+		if lastData.state == MBattle.ResultState.Win then
+			if lastData.nextId ~= nil and lastData.nextId > 0 then
+				local csv = Csv.Battle[lastData.nextId]
+				--胜利了, 进行下一关
+				MBattle.CurId = lastData.nextId
+				MBattle.CurBlood = csv.gold
+			end		
+		else
+			MBattle.CurId = lastData.id
+			MBattle.CurBlood = lastData.blood
+		end
+
+		--调用播放
+		if WindowMgr.IsCreated("UBattleFight") then
+			WindowMgr.Call("UBattleFight", "OnSeckillResult", lastData, function ()
+				WindowMgr.Call("UBattle", "OnResult", lastData)
+			end)
+		end
+	end
+end
+
+
+
+
+
+function _P.OnUnlock(data)
+	MBattle.LockedStaffs[data.staffId] = nil
+	if data.staffLifeNum ~= nil then
+		MBattle.StaffLifeNum[data.staffLifeNum.id] = data.staffLifeNum.count
+	end
+	WindowMgr.Call("UBattleStaffChoose","OnUnlock",data.staffId)
+end
+
+function _M.EnterBattle()
+	local curID = MBattle.CurId
+	if curID ~= nil and curID > 0 then
+		local csvBattle = Csv.Battle[curID]
+		if csvBattle ~= nil then
+			local csvChapter = Csv.Chapter[csvBattle.chapter]
+			if csvChapter ~= nil and csvBattle.next ~= nil and csvBattle.next > 0 then
+				if MBattle.IsFirstBattle() then
+					if MBattle.IsFirstCreateBattle then
+						--MBattle.IsFirstCreateBattle = nil
+						--WindowMgr.Create("UBattleBigMap",true)
+						WindowMgr.Create("UBattle")
+					else
+						--WindowMgr.Create("UBattleBigMap",false)
+						WindowMgr.Create("UBattle")
+					end
+				else
+					WindowMgr.Create("UBattle")
+				end
+			else
+				--WindowMgr.Create("UBattleBigMap",false)
+				WindowMgr.Create("UBattle")
+			end
+		else
+			--WindowMgr.Create("UBattleBigMap",false)
+			WindowMgr.Create("UBattle")
+		end
+	else
+		--WindowMgr.Create("UBattleBigMap",false)
+		WindowMgr.Create("UBattle")
+	end
+end 
+
+return _M

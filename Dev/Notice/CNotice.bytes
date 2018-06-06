@@ -1,0 +1,77 @@
+--@RefType [Dev.Notice.MNotice.bytes#_M]
+local MNotice = JRequire "Dev.Notice.MNotice"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local rapidjson = require "rapidjson"
+
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+function _M.ModuleClean()
+	MNotice.Clean()
+end
+
+--主界面打开公告
+function _M.HomeOpenNotice()
+	if MNotice.IsOpened or GameSetting.isFirstCopy then return end
+	_M.HttpShowNotice()
+end
+
+--非主界面弹出公告内容
+--keyWord 关键词, 传入后默认显示关键词那一栏
+function _M.ShowNoticePopup(retryHttpNode, keyWord)
+	if nil ~= MNotice.Data then
+		WindowMgr.Create("UNotice", keyWord)
+	else
+		if not _M.isNotReceive then
+			if not _M.isHttpRequest then
+				_M.isHttpRequest = true
+				_M.HttpShowNotice(keyWord)
+				retryHttpNode:AddOnUpdate(function ()
+					_M.isNotReceive = true
+				end, nil, 5)					--5秒后没有返回修改
+			end
+		else
+			CCommon.ShowRight(Csv.Text("notice_no"))
+		end
+	end
+end
+
+------------------Client -- Server----------------
+--获取公告信息
+function _M.HttpShowNotice(keyWord)
+	local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.NoticeUrl)
+	session:AppendParam("spid", GameSetting.Spid)
+	session:AppendParam("sbid", GameSetting.Sbid)
+	session:SetCallBack(function (isOk, param1, param2)
+		if isOk then
+			local retTable = rapidjson.decode(param1)
+			if retTable ~= nil then
+				if 0 == retTable.errorno then
+					MNotice.SetData(retTable.data)
+					if nil ~= MNotice.Data then
+						WindowMgr.Create("UNotice", keyWord)
+						MNotice.IsOpened = true	
+					end
+				else
+					error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. retTable.errormsg)
+				end
+			else
+				error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
+			end
+		else
+			error("SendNotice --> HttpSession error!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
+		end
+	end)
+	HttpHelper.Request(session)
+end
+
+------------------Server -- Client----------------
+
+return _M

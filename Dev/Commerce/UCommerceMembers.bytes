@@ -1,0 +1,155 @@
+--商会成员列表
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+function _R.OnMemberList(self, data)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local count = 0
+	self.JobCount = {}
+	if data ~= nil and data.list ~= nil then
+		for _,player in pairs(data.list) do
+			local job = player.job
+			self.JobCount[job] = (self.JobCount[job] or 0) + 1
+			count = count + 1
+			local playerId = player.id
+			local name = player.name
+			local oneMoudle = self:CreateMoudle(content, "M_Gang_member_Item")
+			oneMoudle:Get("ShName").Text = name
+			oneMoudle:Get("position").Text = Csv.Text("commerce_op14",{name = MCommerce.GetJobStr(job)})
+			if player.buildId ~= nil and player.buildId > 0 then
+				local buildCsv = Csv.CommerceBuild[player.buildId]
+				oneMoudle:Get("build").Text = buildCsv.name
+			end
+			if playerId ~= MPlayer.GetId() then
+				oneMoudle:Get("HeadBox"):AddOnButton(function()
+					SoundMgr.Play(10001)
+					CPlayer.LookPlayerReq(playerId)
+				end)
+			end			
+			oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
+			local csvVip = Csv.Vip[player.vip]
+			if csvVip.imgBord ~= nil then
+				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+				oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..player.vip
+			else
+				oneMoudle:Get("OutBox").Activity = false
+			end
+			oneMoudle:Get("SLText").Text = Csv.Text("club_info_force")
+			oneMoudle:Get("SLNum").Text = tostring(player.power)
+			oneMoudle:Get("Company").Text = Csv.Text("club_info_company")
+			local companyCsv = Csv.Company[player.level]
+			oneMoudle:Get("NameText").Text = companyCsv.name
+			oneMoudle:Get("contribution").Text = Csv.Text("commerce_op11")
+			oneMoudle:Get("contributionText").Text = player.contribution.ncur .. "/" .. player.contribution.nmax
+			oneMoudle:Get("Time").Text = Csv.Text("commerce_op4")
+			oneMoudle:Get("PeopleNum").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - player.lastTime)
+
+			local info = MCommerce.MyCommerceInfo
+			if info ~= nil then
+				local myInfo = info.myInfo
+				if myInfo ~= nil and myInfo.job == MCommerce.JobType.HuiZhang and playerId ~= MPlayer.GetId() then
+					oneMoudle:Get("C_text").Text = Csv.Text("commerce_member6")
+					local btn = oneMoudle:Get("C_Btn_b")
+					btn.Activity = true
+					btn:AddOnButton(function()
+						SoundMgr.Play(10001)
+						WindowMgr.Create("UCommerceAppoint", info.level, playerId, job, name, self.JobCount, myInfo.job)
+						-- if btn ~= nil then
+						-- 	btn.IsGray = true
+						-- 	btn.RaycastTarget = false
+						-- end
+					end)
+				elseif myInfo ~= nil and myInfo.job == MCommerce.JobType.FuHuiZhang and player.job ~= MCommerce.JobType.FuHuiZhang and player.job ~= MCommerce.JobType.HuiZhang then
+					oneMoudle:Get("C_text").Text = Csv.Text("commerce_member6")
+					local btn = oneMoudle:Get("C_Btn_b")
+					btn.Activity = true
+					btn:AddOnButton(function()
+						SoundMgr.Play(10001)
+						WindowMgr.Create("UCommerceAppoint", info.level, playerId, job, name, self.JobCount, myInfo.job)
+					end)
+				end
+			end
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	CCommerce.MembersReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_member")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_member1")
+	moudle:Get("WealthText").Text = Csv.Text("commerce_detail9")
+	moudle:Get("Tips").Text = Csv.Text("commerce_member3")
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		local csv = Csv.Commerce[info.level]
+		moudle:Get("WealthNum").Text = info.memberNum .. "/" .. csv.count
+		if myInfo.job == MCommerce.JobType.HuiZhang then
+			moudle:Get("C_Btn_e").Activity = false
+			local bg = moudle:Get("RankingBg")
+			local size = bg.SizeDelta
+			size.y = 880
+			bg.SizeDelta = size
+		else
+			moudle:Get("C_text_0").Text = Csv.Text("commerce_member2")
+			local btn = moudle:Get("C_Btn_e")
+			btn:AddOnButton(function()
+				SoundMgr.Play(10001)
+				CCommon.CheckTips(function(isSure)
+					if isSure then
+						CCommerce.QuitReq()
+						-- if btn ~= nil then
+						-- 	btn.IsGray = true
+						-- 	btn.RaycastTarget = false
+						-- end
+					end
+				end,{content = Csv.Text("commerce_member5", {per = csv.leavePer})})
+			end)
+		end
+	end
+end
+
+return _M

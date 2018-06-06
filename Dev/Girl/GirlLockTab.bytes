@@ -1,0 +1,68 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MGirl = JRequire "Dev.Girl.MGirl"
+
+local _M = Class()
+local _P = {}
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Tab2", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local content = moudle:Get("Content")
+	
+	_P.CreateItems(self,content)
+end
+
+function _P.CreateItems(self,content)
+	local girlsTable = MGirl.lockGirls
+	local itemTab = {}
+	for key,value in pairs(girlsTable) do
+		local item = _P.SetLockGirlItem(girlsTable[key].id,content)
+		table.insert(itemTab,item)
+	end
+	self.mItemTab = itemTab
+end
+
+function _P.SetLockGirlItem(id,parent)
+	local girlsData = Csv.Girl[id]
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Tab2_ele", WindowType.UI, 10)
+
+	local icon = _moudle:Get("bsx")
+	local bg = _moudle:Get("Tab2_ele")
+	local name = _moudle:Get("Name")
+	local lockText = _moudle:Get("lockText")
+	local tips = _moudle:Get("Text")
+
+	local data = Csv.Girl[id]
+	icon.SpriteName = data.lockicon
+	bg.SpriteName = data.lockbg
+	name.Text = data.name
+	tips.Text = Csv.Text("Girl_unlockTerm",{way = _P.GetwayToString(data.getwayStr)})
+	--lockText.Text = Csv.Text("Girl_unlockTerm",{way = _P.GetwayToString(data.getwayStr)})--"解锁条件：".._P.GetwayToString(data.getwayStr)
+
+	return _moudle
+end
+
+function _P.GetwayToString(getway)
+	local way = ""
+	local count = 0
+	for key,var in ipairs(getway) do
+		way = way..var
+		count = count +1
+		if count<#getway then
+			way = way..","
+		end
+	end
+	return way
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

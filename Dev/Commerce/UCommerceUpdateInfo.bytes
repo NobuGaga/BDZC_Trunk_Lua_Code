@@ -1,0 +1,101 @@
+--商会信息更新界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main_Info")
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_detail1")
+	moudle:Get("GangName").Text = Csv.Text("commerce_detail2")
+	moudle:Get("President").Text = Csv.Text("commerce_create18")
+	moudle:Get("GangLevel").Text = Csv.Text("commerce_detail25")
+	moudle:Get("PeopleNum").Text = Csv.Text("commerce_detail9")
+	moudle:Get("GangMoney").Text = Csv.Text("commerce_detail5")
+	moudle:Get("BossWechat").Text = Csv.Text("commerce_create2")
+	moudle:Get("QQqun").Text = Csv.Text("commerce_create3")
+	moudle:Get("Notice1").Text = Csv.Text("commerce_main6")
+	moudle:Get("Notice2").Text = Csv.Text("commerce_create5")
+
+	local inputWeixin = moudle:Get("input")
+	inputWeixin.PlaceholderWidget.Text = Csv.Text("commerce_create8")
+	local inputQQ = moudle:Get("input_0")
+	inputQQ.PlaceholderWidget.Text = Csv.Text("commerce_create9")
+	local inputNotice1 = moudle:Get("input_1")
+	inputNotice1.PlaceholderWidget.Text = Csv.Text("commerce_create11")
+	local inputNotice2 = moudle:Get("input_2")
+	inputNotice2.PlaceholderWidget.Text = Csv.Text("commerce_create11")
+	moudle:Get("C_text").Text = Csv.Text("commerce_create17")
+	
+	self.Moudle = moudle
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then	
+		local csv = Csv.Commerce[info.level]
+		local name = moudle:Get("GangNameText")
+		name.Text = info.name
+		moudle:Get("modify"):AddOnButton(function()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceNameInput",function(inputName)
+				if name ~= nil then
+					local tmpName = LuaUtil.Trim(inputName)
+					if tmpName ~= nil and tmpName ~= "" then
+						name.Text = tmpName
+					end
+				end
+			end)
+		end)
+
+		moudle:Get("PresidentNameText").Text = info.leader
+		moudle:Get("GangLevelText").Text = Csv.Text("commerce_detail23", 
+			{level = info.level, exp = info.exp, expMax = csv.exp})
+		moudle:Get("PeopleNumText").Text = info.memberNum .. "/" .. csv.count
+		moudle:Get("GangMoneyText").Text = tostring(info.money)
+		inputWeixin.Text = info.weixin or ""
+		inputQQ.Text = info.qq or ""
+		inputNotice1.Text = info.notice or Csv.Text("commerce_create15")
+		inputNotice2.Text = info.declaration or Csv.Text("commerce_create16")
+
+		moudle:Get("C_Btn_b"):AddOnButton(function()
+			SoundMgr.Play(10001)
+			CCommerce.UpdateReq(name.Text,
+				LuaUtil.Trim(inputWeixin.Text),
+				LuaUtil.Trim(inputQQ.Text),
+				LuaUtil.Trim(inputNotice2.Text),
+				LuaUtil.Trim(inputNotice1.Text))
+			self:Destroy()
+		end)
+	end
+end
+
+return _M

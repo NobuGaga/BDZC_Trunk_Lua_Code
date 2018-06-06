@@ -1,0 +1,214 @@
+--商会排行榜界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Common.TabGroup.bytes#_M]
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+
+local itemWidth = 600
+local itemHeight = 158
+local space = 12
+local pageNum = 5
+local pageHeight = 783
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+function _R.OnPowerRank(self)
+	if self.ChooseId == Define.SysId.Commerce_Rank_Power then
+		_P.DoRefreshPowerRank(self)
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end
+
+function _P.DoRefreshPowerRank(self)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+
+	local data = MCommerce.PowerRankData
+	if data ~= nil then
+		if MCommerce.IsJoinCommerce() then
+			if data.myRank > 0 then
+				if data.myRank >= 1000 then
+					moudle:Get("RankingText").Text = "1000+"
+				elseif data.myRank >= 100 then
+					moudle:Get("RankingText").Text = "100+"
+				else
+					moudle:Get("RankingText").Text = tostring(data.myRank)
+				end
+			else
+				moudle:Get("RankingText").Text = Csv.Text("commerce_rank4")
+			end
+			if data.myName == nil or data.myName == "" then 
+				moudle:Get("NameText_0").Text = Csv.Text("staff_none")
+			else
+				moudle:Get("NameText_0").Text = data.myName
+			end
+		else
+			moudle:Get("RankingText").Text = Csv.Text("staff_none")
+			moudle:Get("NameText_0").Text = Csv.Text("staff_none")
+		end			
+		if data.list ~= nil then
+			self.mList = data.list
+			local scroll = self.Moudle:Get("scrollView")
+			if self.scrollController ~= nil then
+				self.scrollController:delete()
+				self.scrollController = nil
+			end
+			local scrollController = RankVertical.new(scroll,content,"M_Gang_Ranking_Item",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+			scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,data.list)
+			self.scrollController = scrollController
+		end
+	else
+		moudle:Get("RankingText").Text = Csv.Text("staff_none")
+		moudle:Get("NameText_0").Text = Csv.Text("staff_none")
+	end
+end
+
+function _P.ScrollCallBack(self,index,info,childMoudle)
+	if childMoudle ~= nil then
+		local tmpId = info.id
+		local ShName = childMoudle:Get("ShName")
+		ShName.Text = info.name .. Csv.Text("commerce_detail3", {level = info.level})
+		ShName:AddOnButton(function()
+			SoundMgr.Play(10001)
+			CCommerce.QueryReq(tmpId)
+		end)
+		childMoudle:Get("bossName").Text = Csv.Text("commerce_rank5")
+		childMoudle:Get("SLText").Text = Csv.Text("commerce_rank6")
+		childMoudle:Get("NameText").Text = info.leader
+		childMoudle:Get("SLNum").Text = LuaUtil.NumberFormat(info.power)
+		childMoudle:Get("people").Text = Csv.Text("commerce_rank7")
+		local csv = Csv.Commerce[info.level]
+		childMoudle:Get("PeopleNum").Text = tostring(info.memberNum) .. "/" .. csv.count
+		if index > 3 then
+			childMoudle:Get("Num").Text = index
+		end
+
+		if MCommerce.IsJoinCommerce() then
+			childMoudle:Get("Btn_b").Activity = false
+		else
+			childMoudle:Get("C_text_0").Text = Csv.Text("commerce_rank8")
+			local joinBtn = childMoudle:Get("Btn_b")
+			joinBtn:AddOnButton(function ()
+				SoundMgr.Play(10001)
+				if MCommerce.IsJoinCommerce() then
+					CCommon.ShowError(Csv.Text("commerce_error1"))
+				else
+					if info.memberNum >= csv.count then
+						CCommon.ShowError(Csv.Text("commerce_error2"))
+					else
+						CCommerce.ApplyJoinReq(tmpId)
+						joinBtn.IsGray = true
+						joinBtn.RaycastTarget = false
+					end
+				end
+			end)
+		end
+
+		childMoudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _P.OnChoose(self, funcId)
+	self.ChooseId = funcId
+	if funcId == Define.SysId.Commerce_Rank_Power then
+		CCommerce.RankReq()
+		local moudle = self.Moudle
+		local content = moudle:Get("content")
+		content:DestroyChildren()
+	end
+end
+
+--界面构建
+function _M:OnCreate(funcId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_QueryRanking")
+	self.Moudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("commerce_rank1")
+	moudle:Get("OwnName").Text = Csv.Text("commerce_rank2")
+	moudle:Get("OwnRanking").Text = Csv.Text("commerce_rank3")
+
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Commerce_Rank,true)
+	local count = #funcs
+	if count > 0 then
+		local lastChoose = funcId or Define.SysId.Commerce_Rank_Power
+		
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+
+		local isHave = false
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("tab"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.tabHandle = tabHandle
+	end
+	if count < 2 then
+		for i=count + 1,2 do
+			moudle:Get("tab"..i).Activity = false
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,437 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local SELECT_TWEENS_NAME = "T_SelectGirl"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(parent)
+	--self._RootNode = parent
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Tab1")
+	self.mMoudle = moudle
+	local content = moudle:Get("Content")
+	local scrollView = moudle:Get("new_scrollView")
+	local rect = moudle:Get("rect")
+	rect.Activity = false
+
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Girl)
+	end, nil, 1.2)
+
+	self.mRect = rect
+	self.mContent = content
+	self.mScrollView =  scrollView
+	self.girl_prefab = nil
+
+	local onkeyText = moudle:Get("C_text_0")
+	local randomText = moudle:Get("C_text")
+	local energyTitle = moudle:Get("energy_text")
+	local energyText = moudle:Get("energy")
+	local Viptips = moudle:Get("VIPtext")
+	local VipValue = moudle:Get("VipValue")
+	local redPoint = moudle:Get("redPoint_1") 
+	self.mEnergyText = energyText
+	self.mEnergyTitle = energyTitle
+	self.mRedPoint = redPoint
+
+	onkeyText.Text = Csv.Text("Girl_oneKey")
+	Viptips.Text = Csv.Text("Girl_VipTips")
+	VipValue.Text = Csv.Text("Girl_VipValue")
+
+	VipValue.Activity = MPlayer.GetVip() < 3
+
+	
+	self.mRandomText = randomText
+	local randomBtn = moudle:Get("C_Btn_a")--随机约会
+	self.mRandomBtn = randomBtn
+
+	if MGirl.energy > 0 then 
+		randomText.Text = Csv.Text("Girl_random")
+	else
+		randomText.Text = Csv.Text("Girl_refreshEnergy")
+	end
+
+	local isOneKey = false
+	local randomClickTime = 0
+	randomBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		isOneKey = _P.CheckBtnIsClick(1)
+		if not isOneKey then return end
+		if MGirl.energy > 0 then 
+			self:OnRandomBtn()
+		else
+			local itemNum =MBag.GetItemNum(MGirl.GIRL_REFRESH_DATE_ID)
+			local itemData = Csv.Item[MGirl.GIRL_REFRESH_DATE_ID]
+			CCommon.CheckTips(function(isSure,rg)self:OnClickRefreshCD(isSure, arg)
+			end,{items = {[MGirl.GIRL_REFRESH_DATE_ID] = itemNum},content = Csv.Text("Girl_refresh_energy",{name =itemData.name })})
+		end
+	end)
+
+	--条件解锁
+	local onkeyBtn = moudle:Get("C_Btn_b") -- 一建约会
+	onkeyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		isOneKey = _P.CheckBtnIsClick(1)
+		if not isOneKey then return end
+		self:OnOneKeyBtn()
+	end)
+	onkeyBtn.Activity = MPlayer.GetVip() >= 3
+
+	_P.GetEnergy(self)
+	_P.CreateItems(self,content)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		if MGirl.energy <= 0 then
+			self:UpdateEnergyTick()
+		end
+	end)
+end
+
+function _P.CreateItems(self,content)
+	local girlsTable = MGirl.UnlockGirls
+	local itemTab = {}
+	for key,value in pairs(girlsTable) do
+		local item = _P.SetUnlockGirlItem(girlsTable[key],content)
+		itemTab[value.id] = item
+	end
+	self.mItemTab = itemTab
+end
+
+function _P.SetUnlockGirlItem(data,parent)
+	local girlsData = Csv.Girl[data.id]
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Tab1_ele", WindowType.UI, 10)
+	
+	local icon = _moudle:Get("bsx")
+	local bg = _moudle:Get("bg")
+	local name = _moudle:Get("Name")
+	local qinmiduImg = _moudle:Get("qinmidu")
+	local meilizhiImg = _moudle:Get("meilizhi")
+	local qinmiduText = _moudle:Get("qinmidu_text")
+	local meilizhiText = _moudle:Get("meilizhi_text")
+	local blackImg = _moudle:Get("black")
+	local redPoint = _moudle:Get("redPoint")
+	local talkText = _moudle:Get("tips")
+	blackImg.Activity = false
+	qinmiduImg.Activity = true
+	meilizhiImg.Activity = true
+
+	redPoint.Activity = MGirl.CheckSkillByGirl(data.id)
+
+	icon.SpriteName = girlsData.icon
+	bg.SpriteName = girlsData.bg
+	name.Text = MGirl.GetGirlName(data.id)--girlsData.name
+	talkText.Text = girlsData.unlockTalk
+
+	qinmiduText.Text = data.intimacy
+	meilizhiText.Text = data.charm
+
+	--icon:AddOnButton(function()
+	--	SoundMgr.Play(10001)
+		--WindowMgr.Create("UGirlDetail",data)
+	--end)
+
+	_moudle.SelfRect:AddOnClick(function(...)
+		SoundMgr.Play(10001)
+		--WindowMgr.Create("UGirlUnlockTalk",data)
+		WindowMgr.Create("UGirlDetail",data)
+	end)
+
+	return _moudle
+end
+
+function _M:OnClickRefreshCD(isSure, arg)
+	local _randomText =	self.mRandomText
+
+	if isSure == true then
+		local count = MBag.GetItemNum(MGirl.GIRL_REFRESH_DATE_ID)
+		local itemDate = Csv.Item[MGirl.GIRL_REFRESH_DATE_ID]
+
+		if count <= 0 then
+			if not MBag.CheckItemEnough(MGirl.GIRL_REFRESH_DATE_ID,1) then
+			end
+			--CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		else
+			CBag.OnUseItem(MGirl.GIRL_REFRESH_DATE_ID,1,nil)
+		end
+	end
+end
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+function _M:OnRandomBtn()
+	
+	if MGirl.energy > 0 then 
+		MGirl.isRandomDate = true
+		CGirl.ReqRandomDate()
+		self:Lock()
+	end
+end
+
+function _M:OnOneKeyBtn()
+	if MGirl.energy > 0 then 
+		CGirl.ReqOneKeyDate()
+		WindowMgr.Create("UOnekeyDate")
+	else
+		CCommon.ShowError(Csv.Text("Girl_noEnoughEnergy"))
+	end
+end
+
+-- function _M:Destroy()
+-- 	local moudle = self.mMoudle
+-- 	if moudle ~= nil then
+-- 		moudle:Destroy()
+-- 	end
+-- end
+
+function _P.GetEnergy(self)
+	local _energyText = self.mEnergyText
+	local _energyTitle =  self.mEnergyTitle 
+	local _randomText =	self.mRandomText
+	
+
+	local num = MGirl.energy
+	if num > 0 then 
+		_energyText.Text = num.."/"..MGirl.MaxEnergy
+		_energyTitle.Text = Csv.Text("Girl_energyTitle")
+
+		_randomText.Text = Csv.Text("Girl_random")
+		self.mRedPoint.Activity = true
+	else
+		local leftTime = MGirl.gainEnergyLeftTick - HeartBeat.ServSecond()
+		_energyText.Text =  luaUtil.GetTimeHMS(leftTime)
+		_energyTitle.Text = Csv.Text("Girl_energyTitle")
+
+		_randomText.Text = Csv.Text("Girl_refreshEnergy")
+
+		self.mRedPoint.Activity = false
+	end
+end
+
+--更新
+function _M:UpdateEnergyTick()
+	local _energyText = self.mEnergyText
+	local _energyTitle =  self.mEnergyTitle 
+	local _randomText =	self.mRandomText
+
+	local tick = MGirl.gainEnergyLeftTick
+	local energy = MGirl.energy
+
+	if energy<=0 then
+		local leftTime = MGirl.gainEnergyLeftTick - HeartBeat.ServSecond()
+		_energyText.Text =  luaUtil.GetTimeHMS(leftTime)
+		_randomText.Text = Csv.Text("Girl_refreshEnergy")
+
+		self.mRedPoint.Activity = false
+	else
+		_energyText.Text = energy.."/"..MGirl.MaxEnergy
+		_randomText.Text = Csv.Text("Girl_random")
+
+		self.mRedPoint.Activity = true
+	end
+end
+
+function _M:UpdateEnergy()
+	local _energyText = self.mEnergyText
+	local _energyTitle =  self.mEnergyTitle 
+	local _randomText =	self.mRandomText
+
+	local energy = MGirl.energy
+	--_energyText.Text = energy.."/"..MGirl.MaxEnergy
+
+	if energy<=0 then
+		local leftTime = MGirl.gainEnergyLeftTick - HeartBeat.ServSecond()
+		_energyText.Text =  luaUtil.GetTimeHMS(leftTime)
+		_randomText.Text = Csv.Text("Girl_refreshEnergy")
+
+		self.mRedPoint.Activity = false
+	else
+		_energyText.Text = energy.."/"..MGirl.MaxEnergy
+		_randomText.Text = Csv.Text("Girl_random")
+
+		self.mRedPoint.Activity = true
+	end
+end
+
+--更新美女状态
+function _M:UpdateItemIntimacy(id,intimacy)
+	local itemsTab = self.mItemTab
+	
+	for k,v in pairs(itemsTab) do
+		if k == id then
+			local moudle = v
+			local qinmiduText = moudle:Get("qinmidu_text")
+			qinmiduText.Text = intimacy
+		end
+	end
+end
+
+function _M:UpdateItemCharm(id,charm)
+	local itemsTab = self.mItemTab
+	
+	for k,v in pairs(itemsTab) do
+		if k == id then
+			local moudle = v
+			local meilizhiText = moudle:Get("meilizhi_text")
+			meilizhiText.Text = charm
+		end
+	end
+end
+
+
+function _M:CheckItemRedPoint(id)
+	local itemsTab = self.mItemTab
+	for k,v in pairs(itemsTab) do
+		if k == id then
+			local moudle = v
+			local redPoint = moudle:Get("redPoint")
+			redPoint.Activity = MGirl.CheckSkillByGirl(id)
+		end
+	end
+end
+
+function _M:RefreshDate(girlID,energy,energyLeftTick)
+	_P.GetEnergy(self)
+	--------------
+	--20180106翔云说随机约会不要拖动
+	--改为直接出全身像半透明渐变
+	-------------
+	
+	_P.RandomSelectGirl(self,girlID)
+	--self:MoveToSelectItem(girlID)
+end
+
+function _M:ShowDate(girlID)
+	self:Unlock()
+	WindowMgr.Create("UGirlNewDate",girlID)
+end
+
+function _M:MoveToSelectItem(itemID)
+	local itemsTab = self.mItemTab
+	local content = self.mContent
+	local scrollView =  self.mScrollView
+
+	local Sheight = scrollView.SizeDelta.y --视图高度
+	local contentPOSY = content.LocalPosition.y 
+
+	for k,v in pairs(itemsTab) do
+		if k == itemID then
+			local moudleRect = v.SelfRect
+			local itemPosY = moudleRect.LocalPosition.y
+			local itemSizeY = moudleRect.SizeDelta.y
+
+			local moveTo = itemPosY+Sheight/2
+			local tween = content:DOAnchorPosY(-moveTo,1)
+			tween:OnComplete(function()
+				self:ShowDate(itemID)
+			end)
+		end
+	end
+end
+
+function _P.RandomSelectGirl(self,girlID)
+	local _moudle = self.mMoudle
+	local selectRect = _moudle:Get("selectGirl")
+	local girlBody = _moudle:Get("girlBody")
+	
+	local girlData = Csv.Girl[girlID]
+
+	if self.girl_prefab ~= nil then
+		self.girl_prefab:Destroy()
+		self.girl_prefab = nil
+	end
+	if girlData.prefab ~= nil and girlData.prefab > 0 then
+		selectRect.Activity = true
+		selectRect:AddCanvasGroup().alpha = 1
+		self.girl_prefab = CCommon.CreateActor(girlBody, girlData.prefab, CCommon.ActorFieldMap.girl_date_choose)
+		girlBody.SpriteName = ""
+		self.girl_prefab:AddOnTime(function( ... )
+			self:ShowDate(girlID)
+			selectRect.Activity = false
+		end, nil, 1.6)
+	else
+		girlBody.SpriteName = girlData.homeicon
+		local maskTween = selectRect.CachedTran:GetJTweener(SELECT_TWEENS_NAME)	
+		maskTween:SetOnComplete(function()
+			self:ShowDate(girlID)
+			selectRect.Activity = false
+		end)
+		selectRect.Activity = true
+		selectRect:AddCanvasGroup().alpha = 0.1
+		if maskTween ~= nil then
+			maskTween:Play()
+		end
+	end	
+end
+
+--------------------------------------
+function _R.RefreshIntimacy(self,_girlid,_intimacy,_intimacyChange)
+	self:UpdateItemIntimacy(_girlid,_intimacy)
+end
+
+function _R.RefreshCharm(self,_girlid,_charm,_charmChange)
+	self:UpdateItemCharm(_girlid,_charm)
+end
+
+function _R.CheckItemRed(self,_girlid)
+	self:CheckItemRedPoint(_girlid)
+end
+
+function _R.DateEvent(self,girlid,energy,gainEnergyLeftTick)
+	if MGirl.isRandomDate == true then
+		self:RefreshDate(girlid,energy,gainEnergyLeftTick)
+	else
+		WindowMgr.Create("UGirlNewDate",girlid)
+	end
+end
+function _R.ResetEnergy(self,_energy)
+	self:UpdateEnergy()
+end
+function _R.OnRandomDateError(self)
+	self:Unlock()
+end
+function _R.OnRefreshName(self,id)
+	local itemsTab = self.mItemTab
+	local moudle = itemsTab[id]
+	if moudle ~= nil then
+		local name = moudle:Get("Name")
+		name.Text = MGirl.GetGirlName(id)
+	end
+end
+
+return _M

@@ -1,0 +1,134 @@
+-- 获取座驾展示界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5"}
+local PointerRotateActs = {0, -53, -110, -178, -232}
+local getActorId = 10123
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(carData)
+	local module = self:CreateMoudle(self._RootNode, "M_Grt_New_Car")
+	self.mModule = module
+
+	module.SelfRect.RaycastTarget = true
+	module.SelfRect:AddOnTime(function( ... )
+		module.SelfRect.RaycastTarget = false
+		_P.ShowTips(self)
+	end, nil, 1.2)
+
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.PlayUI(10001)
+		self:Destroy()
+	end, nil)
+
+	local carConf = Csv.Car[carData.carid]
+	if carData and carConf then
+		module:Get("Icon").SpriteName = carConf.body
+		_P.SetCarAttrData(self, carData)
+		_P.SetCarGraphData(self, carConf, carData)
+	end
+
+	CCommon.CreateEffect(module:Get("ActorPanel"), getActorId)
+end
+
+
+-- 设置资质值
+function _P.SetCarAttrData(self, data)
+	local attrData = data.Attr
+	local totalAttr = MCar.GetTotalAttrs(attrData)
+	local scoreNum = MCar.GetCarScore(data.color, data.level, data.star, totalAttr, attrData.Wuli, attrData.Zhili, attrData.Zhengzhi, attrData.Meili)
+	self.mModule:Get("Aptitude").Text = Csv.Text("Target_company_zizhi")
+	self.mModule:Get("AptitudeNum").Text = totalAttr
+	self.mModule:Get("Grade").Text = Csv.Text("car_main_pinfeng")
+	self.mModule:Get("GradeNum").Text = scoreNum
+
+	local attrLightList = {}
+	attrLightList[1] = MCar.GetAttrLightNum(attrData.Wuli, 1, data.carid)
+	attrLightList[2] = MCar.GetAttrLightNum(attrData.Zhili, 2, data.carid)
+	attrLightList[3] = MCar.GetAttrLightNum(attrData.Zhengzhi, 3, data.carid)
+	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, data.carid)
+	
+	for i=1, 4 do
+		local lightNum = attrLightList[i]
+		local nameStr = "Attr" .. i .. "Value"
+		for j=1, MCar.CarSeatOpenMax do
+			local valueImg = self.mModule:Get(nameStr .. j)
+			if valueImg then
+				valueImg.Activity = j <= lightNum
+			end
+		end
+
+		self.mModule:Get("AttrText" .. i).Text = Csv.Text("car_main_attri" .. i)
+		
+		local numText = self.mModule:Get("AttrNum" .. i)
+		if i == 1 then
+			numText.Text = attrData.Wuli
+		elseif i == 2 then
+			numText.Text = attrData.Zhili
+		elseif i == 3 then
+			numText.Text = attrData.Zhengzhi
+		else
+			numText.Text = attrData.Meili
+		end
+	end
+end
+
+
+-- 设置座驾评分数据
+function _P.SetCarGraphData(self, carConf, carData)
+	self.mModule:Get("Name").Text = carConf.name .. ' ' .. carConf.model
+	self.mModule:Get("CarName").Text = carConf.name
+	self.mModule:Get("CarModel").Text = carConf.model
+	self.mModule:Get("CarLevel").Text = Csv.Text("car_main_level") .. carData.level
+	self.mModule:Get("Num").Text = carData.star
+
+	local qualityData = MCar.GetCarStarIcon(carData.star)
+	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[carData.color]
+	self.mModule:Get("Circular").SpriteName = qualityData.name
+
+	for i=1, MCar.CarSeatOpenMax do
+		local arcRect = self.mModule:Get("Arc" .. i)
+		if arcRect then
+			arcRect.Activity = i <= qualityData.num
+		end
+	end
+
+	self.mModule:Get("PointerRect").LocalEulerAngles = Vector3(0, 0, PointerRotateActs[qualityData.index])
+end
+
+
+function _P.ShowTips(self)
+	local tipsText = self.mModule:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+
+return _M

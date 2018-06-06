@@ -1,0 +1,121 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local JGuiManager = CS.JGui.JGuiManager
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_News")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.mNewsItemTab = {}
+
+	_P.RefreshView(self)
+	moudle:Get("C_Text").Text = Csv.Text("relations_newsT")
+	moudle:Get("LastText").Text = Csv.Text("relations_lastT")
+	moudle:Get("C_text").Text = Csv.Text("relations_zaici")
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if self.mPlayerID ~= nil then
+			if self.mPlayerID == MPlayer.GetId() then
+				CCommon.ShowError(Csv.Text("err_relarions_self"))
+			else
+				MRelations.FightType = 3
+				MRelations.PlayerID = self.mPlayerID
+				WindowMgr.Create("URelationsSelectStaff")
+			end
+		end
+	end,nil,0.9)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local newsData = MRelations.NewsData
+	if newsData ~= nil then
+		--content:DestroyChildren()
+		_P.CleanNewsItems(self)
+		local newsTable = newsData.list
+		local newsItemTal = {}
+		if newsTable ~= nil then
+			for k,v in pairs(newsTable) do
+				local newsMoudle = JGuiManager.GetMoudle(content, "M_Lobby_News_Item")
+				newsMoudle:Get("name").Text = v.name
+				newsMoudle:Get("C_text").Text = Csv.Text("relations_shangsu")
+				newsMoudle:Get("C_Btn_b"):AddOnButton(function()
+					SoundMgr.Play(10001)
+					MRelations.FightType = 3
+					MRelations.PlayerID = v.playerid
+					WindowMgr.Create("URelationsSelectStaff")
+				end,nil,0.9)
+				local news = Csv.RelationsNews[v.type].tips
+				local staffName = Csv.Personnel[v.staffid].name
+				local strTable = {staffname = staffName,playername = v.failname,num = v.num,kill = v.times,name = v.name}
+				local strNews = LuaUtil.Format(news,strTable)
+				newsMoudle:Get("dengji").Text = strNews
+
+				local timeStr = LuaUtil.TransToYearMonthDayHMS(v.time)
+				newsMoudle:Get("SlText").Text = timeStr
+				newsMoudle:Get("shili").Text = Csv.Text("relations_timeT")
+
+				table.insert(newsItemTal,newsMoudle)
+				if v.playerid == MPlayer.GetId() then
+					newsMoudle:Get("C_Btn_b").Activity = false
+				end
+			end
+			self.mNewsItemTab = newsItemTal
+		end
+
+
+		local state = (newsData.attackname ~= nil and newsData.failname ~= nil and newsData.times ~= nil)
+		if state then
+			moudle:Get("NewsBg").Activity = true
+			moudle:Get("newstext").Text = Csv.Text("relations_haowai",{name1 = newsData.attackname,name2 = newsData.failname,num = newsData.times})
+		else
+			moudle:Get("NewsBg").Activity = false
+		end
+
+		local PanelAgain = moudle:Get("LastBg")
+		if newsData.lastname ~= nil and newsData.lastid ~= nil then
+			PanelAgain.Activity = true
+			self.mPlayerID = newsData.lastid
+			moudle:Get("LastName").Text = newsData.lastname
+		else
+			PanelAgain.Activity = false
+		end
+	end
+end
+
+function _R.GetNewsData(self)
+	_P.RefreshView(self)
+end
+
+function _P.CleanNewsItems(self)
+	local tabItems = self.mNewsItemTab
+	if tabItems ~= nil then
+		for k,v in pairs(tabItems)do
+			v.SelfRect:Destroy()
+		end
+	end
+end
+
+return _M

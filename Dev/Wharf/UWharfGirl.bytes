@@ -1,0 +1,59 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_building")
+	local closeBtn = moudle:Get("backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+	end, nil, 1.2)
+
+	self.selectGirl = 0
+	moudle:Get("title").Text = Csv.Text("Wharf_Girllist_title")
+	
+	local leftBtn = moudle:Get("LeftBtn")
+	local rightBtn = moudle:Get("RightBtn")
+
+	local nameLab = moudle:Get("name")
+	local iconSp = moudle:Get("iconSp")
+	local descBtn = moudle:Get("descBtn")
+	descBtn:AddOnButton(function()
+		--展示美女详情
+	end)
+
+	self.mIconSp = iconSp
+	self.mNameLab = nameLab
+
+end
+
+function _P.SelectGirl(self,id)
+	self.selectGirl = id
+	
+	local girlData = Csv.Girl[id]
+	self.mIconSp.SpriteName = girlData.homeicon
+	self.mNameLab.Text = girlData.name
+end
+
+return _M

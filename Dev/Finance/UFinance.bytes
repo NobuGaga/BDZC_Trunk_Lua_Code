@@ -1,0 +1,284 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Finance.UFinanceExchange.bytes#_M]
+local UFinanceExchange = JRequire "Dev.Finance.UFinanceExchange"
+--@RefType [Dev.Finance.UFinanceRanking.bytes#_M]
+local UFinanceRanking = JRequire "Dev.Finance.UFinanceRanking"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local INVADE_TIME = Csv.Const(15003)
+local RESIST_TIME = Csv.Const(15004)
+local Effect_1 = 10125
+local Effect_2 = 10126
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--副本信息
+function _R.GetInvade(self,data)
+	local type = MFinance.FinaceType.FinaceRank_1
+	WindowMgr.Create("UFinanceBattle",data,type)
+end
+
+function _R.GetResist(self,data)
+	local type = MFinance.FinaceType.FinaceRank_2
+	WindowMgr.Create("UFinanceBattle",data,type)
+end
+
+function _R.RefreshFinance(self,data)
+	if data.state == 1 then
+		_P.RefreshFinanceState(self)
+	else
+		_P.CheckFinance(self)
+	end
+end
+
+function _M:OnCreate()
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_FB_Opened")
+	self.mMoudle = moudle
+	MFinance.isBattle = false
+
+	local closeBtn = moudle:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local title = moudle:Get("Title")
+	title.Text=Csv.Text("finance_title")
+
+	local fbName1 = moudle:Get("FBname1")
+	local fbName2 = moudle:Get("FBname2")
+	local timeText = moudle:Get("time")
+	local fightBtn = moudle:Get("diyu")
+
+	self.mActor = moudle:Get("ActorPanel")
+	CCommon.CreateEffect(self.mActor,Effect_1)
+	self.mFightEffectPanel = moudle:Get("FightEffectPanel")
+	CCommon.CreateEffect(self.mFightEffectPanel,Effect_2)
+	self.mFightEffectPanel.Activity = false
+
+	local t = fightBtn.CachedTran:GetJTweener("T_Finance_Button")--动画
+	t:Play()
+
+	fightBtn.Activity = false
+	fbName1.Activity = false
+	fbName2.Activity = false
+
+	self.mTimeText = timeText
+	self.mFightBtn = fightBtn
+	self.mFbName1 = fbName1
+	self.mFbName2 = fbName2
+
+	self.reduceTime = 0
+
+	--后端控制开启
+	if MFinance.GetFinanceState() then
+		fightType = _P.RefreshFinanceState(self)
+	else
+		fightType =  _P.CheckFinance(self)
+	end
+
+	MFinance.fightType = fightType
+
+	fightBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		--请求副本信息
+		if fightType == MFinance.FinaceType.FinaceRank_1 then
+			CFinance.ReqInvade()
+		elseif fightType == MFinance.FinaceType.FinaceRank_2 then
+			CFinance.ReqResist()
+		end
+	end)
+
+	--下方简介
+	moudle:Get("FB1").Text=Csv.Text("finance_FB1")
+	moudle:Get("time1").Text=Csv.Text("finance_FBtime1")
+	moudle:Get("FB2").Text=Csv.Text("finance_FB2")
+	moudle:Get("time2").Text=Csv.Text("finance_Fbtime2")
+
+	--两个按钮
+	moudle:Get("C_text").Text=Csv.Text("finance_list")
+	moudle:Get("C_text_0").Text=Csv.Text("finance_exchange")
+
+	local rankBtn = moudle:Get("C_Btn_b")
+	rankBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UFinanceRanking")
+	end, nil, 0.9)
+	rankBtn.Activity = not GameSetting.IsiOSCommit
+	moudle:Get("C_Btn_d"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UFinanceExchange")
+	end, nil, 0.9)	
+
+-----------------------------------------------------------------------
+	local _reduceTime = self.reduceTime
+	if _reduceTime > 0 then
+		local reduceTimeStr = LuaUtil.GetTimeHMS(_reduceTime)
+		if fightType == MFinance.FinaceType.FinaceRank_1 then
+			timeText.Text = Csv.Text("finance_FB1_reduceTime",{time = reduceTimeStr})
+		elseif fightType == MFinance.FinaceType.FinaceRank_2 then
+			timeText.Text = Csv.Text("finance_FB2_reduceTime",{time = reduceTimeStr})
+		end
+		_reduceTime = _reduceTime -1
+	end
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.CheckReduceTime(self,MFinance.fightType)
+	end)
+
+	_P.CheckResistReward()
+end
+
+function _P.CheckReduceTime(self,fightType)
+	local _reduceTime = self.reduceTime
+	local timeText =  self.mTimeText
+
+	if _reduceTime > 0 then
+		local reduceTimeStr = LuaUtil.GetTimeHMS(_reduceTime)
+		if fightType == MFinance.FinaceType.FinaceRank_1 then
+			timeText.Text = Csv.Text("finance_FB1_reduceTime",{time = reduceTimeStr})
+		elseif fightType == MFinance.FinaceType.FinaceRank_2 then
+			timeText.Text = Csv.Text("finance_FB2_reduceTime",{time = reduceTimeStr})
+		end
+		_reduceTime = _reduceTime -1
+	end
+	self.reduceTime = _reduceTime
+end
+
+function _P.CheckResistReward()
+	if MFinance.isReward == true then
+		local data = MFinance.RewardData
+		WindowMgr.Create("UFinanceReward",data)
+	end
+end
+
+function _P.GetTargetTime(hour)
+	local cur_time = os.time()
+	local temp_date = os.date("*t", cur_time)
+	local targetTime =  os.time({year=temp_date.year, month=temp_date.month, day=temp_date.day, hour=hour})
+
+	return targetTime-cur_time
+end
+
+function _P.CheckFinance(self)
+	local timeText =  self.mTimeText
+	local fbName1 =  self.mFbName1
+	local fbName2 =  self.mFbName2 
+	local _reduceTime = self.reduceTime
+	local fightBtn =  self.mFightBtn
+
+	if self.mEvent ~= nil then
+		self.mEvent:Destroy()
+	end
+	_reduceTime = 0
+	fightBtn.Activity = false
+	fbName1.Activity = false
+	fbName2.Activity = false
+	self.mFightEffectPanel.Activity = false
+
+	local invadeTime = {open = INVADE_TIME[1]/3600,close = INVADE_TIME[2]/3600}
+	local resistTime = {open = RESIST_TIME[1]/3600,close = RESIST_TIME[2]/3600}
+
+	local nowTime =tonumber(os.date("%H"))
+
+	local fightType = 0
+	if nowTime < invadeTime.close then
+		fightType = MFinance.FinaceType.FinaceRank_1
+		fbName1.Activity = true
+		if nowTime >= invadeTime.open then
+			_reduceTime = 0
+			self.mEvent = LuaUtil.TextAddThreePoint(timeText, Csv.Text("finance_FB1open"))
+		else
+			_reduceTime = _P.GetTargetTime(invadeTime.open)
+			timeText.Text = ""
+		end
+	elseif nowTime <  resistTime.close then
+		fbName2.Activity = true
+		fightType = MFinance.FinaceType.FinaceRank_2
+		if nowTime >= resistTime.open then
+			_reduceTime = 0
+			self.mEvent = LuaUtil.TextAddThreePoint(timeText, Csv.Text("finance_FB2open"))
+		else
+			_reduceTime = _P.GetTargetTime(resistTime.open)
+			timeText.Text = ""
+		end
+	else
+		timeText.Text=Csv.Text("finance_close")
+		_reduceTime = 0
+	end
+	self.reduceTime = _reduceTime
+	MFinance.fightType = fightType
+
+	_P.CheckReduceTime(self,fightType)
+	return fightType
+end
+
+function _P.RefreshFinanceState(self)
+	local timeText =  self.mTimeText
+	local fbName1 =  self.mFbName1
+	local fbName2 =  self.mFbName2 
+	local fightBtn =  self.mFightBtn
+	local _reduceTime = self.reduceTime
+
+	_reduceTime = 0
+	fightBtn.Activity = false
+	fbName1.Activity = false
+	fbName2.Activity = false
+	self.mFightEffectPanel.Activity = false
+	
+	if MFinance.FinanceState.type == MFinance.FinaceType.FinaceRank_1 then
+		if MFinance.FinanceState.state == 1 then
+			fbName1.Activity = true
+			fightBtn.Activity = true
+			fightType = MFinance.FinanceState.type
+			self.mEvent = LuaUtil.TextAddThreePoint(timeText, Csv.Text("finance_FB1open"))
+			_reduceTime = 0
+
+			--特效
+			self.mFightEffectPanel.Activity = true
+		else
+			fightType = _P.CheckFinance(self)
+		end
+	elseif MFinance.FinanceState.type == MFinance.FinaceType.FinaceRank_2 then
+		if MFinance.FinanceState.state == 1 then
+			fbName2.Activity = true
+			fightBtn.Activity = true
+			fightType = MFinance.FinanceState.type
+			self.mEvent = LuaUtil.TextAddThreePoint(timeText, Csv.Text("finance_FB2open"))
+			_reduceTime = 0
+
+			--特效
+			self.mFightEffectPanel.Activity = true
+		else
+			fightType = _P.CheckFinance(self)
+		end
+	else
+		fightType = _P.CheckFinance(self)
+	end
+	MFinance.fightType = fightType
+	self.reduceTime = _reduceTime
+	return fightType
+end
+
+return _M

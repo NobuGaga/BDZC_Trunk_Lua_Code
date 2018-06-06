@@ -1,0 +1,291 @@
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local EventCenter = JRequire "Dev.EventCenter"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cCompanyUseItem					    =	1,--使用道具 PCompany.CUseItem
+	cCompanyManage						=	2,--经营 PCompany.CManage
+	cCompanyVerdict						=	3,--决策 PCompany.CVerdict
+	cCompanyPatrol						=	4,--巡视 PCompany.CPatrol
+	cCompanyVerdictReq					=	5,--决策请求数据 PCompany.CVerdictReq
+	cCompanyManageRefresh				=	6,--经营刷新 PCompany.CManageRefresh
+	
+	sCompanyInitManage					=	1,--初始化 PCompany.SInitManage
+	sCompanyInitVerdict				    =	2,--初始化 PCompany.SInitVerdict
+	sCompanyInitPatrol					=	3,--初始化 PCompany.SInitPatrol
+	sCompanyManage						=	4,--经营结果 PCompany.SManage
+	sCompanyVerdict						=	5,--经营结果 PCompany.SVerdict
+	sCompanyPatrol						=	6,--经营结果 PCompany.SPatrol
+	sCompanyPrestige					= 	7,--威望 PCompany.SPrestige
+	sVerdictRefresh						= 	8,--决策刷新 PCompany.SVerdictRefresh
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cCompanyUseItem] = "PCompany.CUseItem",
+		[ECmdId.cCompanyManage] = "PCompany.CManage",
+		[ECmdId.cCompanyVerdict] = "PCompany.CVerdict",
+		[ECmdId.cCompanyPatrol] = "PCompany.CPatrol",
+		[ECmdId.cCompanyVerdictReq] = "PCompany.CVerdictReq",
+		[ECmdId.cCompanyManageRefresh] = "PCompany.CManageRefresh",
+	}
+	local recv = {
+		[ECmdId.sCompanyInitManage]		=		{proto = "PCompany.SInitManage",		handle = _P.OnInitManage},
+		[ECmdId.sCompanyInitVerdict]	=		{proto = "PCompany.SInitVerdict",		handle = _P.OnInitVerdict},
+		[ECmdId.sCompanyInitPatrol]		=		{proto = "PCompany.SPatrol",			handle = _P.OnInitPatrol},
+		[ECmdId.sCompanyManage]			=		{proto = "PCompany.SManage",			handle = _P.OnManage},
+		[ECmdId.sCompanyVerdict]		=		{proto = "PCompany.SVerdict",			handle = _P.OnVerdict},
+		[ECmdId.sCompanyPatrol]			=		{proto = "PCompany.SPatrol",			handle = _P.OnPatrol},
+		[ECmdId.sCompanyPrestige]		=		{proto = "PCompany.SPrestige",			handle = _P.OnPrestige},
+		[ECmdId.sVerdictRefresh]		=		{proto = "PCompany.SVerdictRefresh",	handle = _P.OnRefreshVerdict},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Company, send, recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+function _P.OnDayout()
+	MCompany.OnDayout()
+	_P.CheckPatrolRedpoint()
+end
+
+--清空模块
+function _M.ModuleClean()
+	MCompany.Clean()
+end
+
+--C
+function _M.CompanyManage(ID,ISONE)
+	if not ISONE then
+		_M.Send(ECmdId.cCompanyManage,{id = ID,isOne = false})
+	else
+		local manageTable = MCompany.ManageTable
+		local num = 0
+		for k, v in pairs(manageTable) do
+			if v.id == ID then
+				num = num + v.times
+			end
+		end
+		if num > 0 then
+			_M.Send(ECmdId.cCompanyManage,{id = ID,isOne = true})
+		else
+			CCommon.ShowError(Csv.Text("company_errNoOne"))
+		end
+	end
+end
+
+function _M.CompanyVerdict(TYPE)
+	_M.Send(ECmdId.cCompanyVerdict,{type = TYPE})
+end
+
+function _M.CompanyPatrol()
+	_M.Send(ECmdId.cCompanyPatrol,{onekey = true})
+end
+
+function _M.UseItem(ID,ITEMID,ITEMCOUNT)
+	local maxCount
+	local count
+	if ID ~= nil then
+		maxCount = Csv.Company[MPlayer.GetLevel()].harvest[ID] - MCompany.ManageTable[ID].times
+		count = math.min(ITEMCOUNT,maxCount)
+		if count > 0 then
+			_M.Send(ECmdId.cCompanyUseItem,{id = ID,itemid = ITEMID,itemcount = count})
+		end
+	else
+		maxCount = Csv.Company[MPlayer.GetLevel()].harvest[4] - MCompany.PatrolData.times
+		count = math.min(ITEMCOUNT,maxCount)
+		if count > 0 then
+			_M.Send(ECmdId.cCompanyUseItem,{itemid = ITEMID,itemcount = count})
+		end
+	end
+end
+
+function _M.CompanyRefreshVerdict()
+	_M.Send(ECmdId.cCompanyVerdictReq)
+end
+
+function _M.CompanyManageRefresh(ID)
+	_M.Send(ECmdId.cCompanyManageRefresh,{id = ID})
+end
+
+--S
+function _P.OnInitManage(data)
+	MCompany.OnInitManage(data)
+	_M.CheckManageRedpoint()
+
+	WindowMgr.Call("UCompanyManagePop","RefreshTimes")
+	WindowMgr.Call("UCompanyFactoryPop","RefreshTimes")
+	WindowMgr.Call("UCompanyTrainPop","RefreshTimes")
+
+	if data.managelist ~= nil then
+		for k,v in pairs(data.managelist) do
+			if v.isgod then
+				WindowMgr.Call("UCompanyManage","ShowGod")
+			end
+		end
+	end
+end
+
+function _P.OnInitVerdict(data)
+	MCompany.OnInitVerdict(data.result)
+	_M.CheckVerdictRedpoint()
+	if WindowMgr.IsCreated("UCompanyVerdict") then
+		WindowMgr.Call("UCompanyVerdict","Reset")
+	end
+end
+
+function _P.OnInitPatrol(data)
+	MCompany.OnInitPatrol(data)
+	_P.CheckPatrolRedpoint()
+end
+
+function _P.OnManage(data)
+	MCompany.OnManage(data.result)
+	WindowMgr.Call("UCompany","OnManage",data.result)
+	if WindowMgr.IsCreated("UCompanyManage") then
+		if data.result.isgod then
+			WindowMgr.Call("UCompanyManage","ShowGod")
+		end
+		WindowMgr.Call("UCompanyManage","RefreshTimes")
+	-- elseif WindowMgr.IsCreated("UCompanyFactoryPop") then
+	-- 	if data.result.isgod then
+	-- 		WindowMgr.Call("UCompanyFactoryPop","ShowGod")
+	-- 	end
+	-- 	WindowMgr.Call("UCompanyFactoryPop","RefreshTimes")
+	-- elseif WindowMgr.IsCreated("UCompanyTrainPop") then
+	-- 	if data.result.isgod then
+	-- 		WindowMgr.Call("UCompanyTrainPop","ShowGod")
+	-- 	end
+	-- 	WindowMgr.Call("UCompanyTrainPop","RefreshTimes")
+	end
+	_M.CheckManageRedpoint()
+end
+
+function _P.OnVerdict(data)
+	MCompany.OnVerdict(data.result)
+	WindowMgr.Call("UCompanyVerdict","UpdateUI")
+	_M.CheckVerdictRedpoint()
+end
+
+function _P.OnPatrol(data)
+	MCompany.OnPatrol(data)
+	WindowMgr.Call("UCompanyPatrol","OnPatrol",data)
+	_P.CheckPatrolRedpoint()
+end
+
+function _P.OnPrestige(data)
+	MCompany.OnPrestige(data)
+	WindowMgr.Call("UCompanyPatrol","PatrolPres")
+	_P.CheckPatrolRedpoint()
+end
+
+function _P.OnRefreshVerdict(data)
+	MCompany.OnVerdict(data.result)
+	WindowMgr.Call("UCompanyVerdict","UpdateCount",data.result.count)
+end
+
+function _M.CheckManageRedpoint()
+	local isAllRedPoint = false
+	local isManageRedpoint = false
+	local isFactoryRedpoint = false
+	local isTrainRedpoint = false
+	local manageTable = MCompany.ManageTable
+	for k,v in pairs(manageTable) do
+		if v.times > 0 then
+			if v.id == 1 then
+				isManageRedpoint = true
+			elseif v.id == 2 then
+				isFactoryRedpoint = true
+			elseif v.id == 3 then
+				isTrainRedpoint = true
+			end
+		end
+	end
+	isAllRedPoint = isManageRedpoint or isFactoryRedpoint or isTrainRedpoint
+	if isAllRedPoint ~= MCompany.AllRedPoint then
+		MCompany.AllRedPoint = isAllRedPoint
+		CMain.UpdateRedpoint(isAllRedPoint,Define.SysId.Manage)
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+	end
+	-- if isManageRedpoint ~= MCompany.ManageRedPoint then
+	-- 	MCompany.ManageRedPoint = isManageRedpoint
+	-- 	CMain.UpdateRedpoint(isManageRedpoint,Define.SysId.Manage)
+	-- 	if WindowMgr.IsCreated("UWorldMap") then
+	-- 		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	-- 	end
+	-- end
+
+	-- if isFactoryRedpoint ~= MCompany.FactoryRedPoint then
+	-- 	MCompany.FactoryRedPoint = isFactoryRedpoint
+	-- 	CMain.UpdateRedpoint(isFactoryRedpoint,Define.SysId.Factory)
+	-- end
+
+	-- if isTrainRedpoint ~= MCompany.TrainRedPoint then
+	-- 	MCompany.TrainRedPoint = isTrainRedpoint
+	-- 	CMain.UpdateRedpoint(isTrainRedpoint,Define.SysId.Train)
+	-- end
+end
+
+function _M.CheckVerdictRedpoint()
+	local isRedpoint = false
+	local verdict = MCompany.Verdict
+	if verdict.times > 0 then
+		isRedpoint = true
+	end
+	if isRedpoint ~= MCompany.VerdictRedPoint then
+		MCompany.VerdictRedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Verdict)
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+
+		if WindowMgr.IsCreated("UHomeMap") then
+			WindowMgr.Call("UHomeMap", "RefreshVerdictRed")
+		end
+	end
+end
+
+function _P.CheckPatrolRedpoint()
+	if MCompany.PatrolData == nil then
+		return
+	end
+	local isRedpoint = false
+	local csvPatrol = Csv.Patrol[MCompany.PatrolData.id]
+	if MCompany.PrestigeData ~= nil then
+		if csvPatrol.maxTimes <= 0 then
+			if MCompany.PrestigeData.currpres >= csvPatrol.cost then
+				isRedpoint = true
+			end
+		else
+			local lesstimes = csvPatrol.maxTimes - MCompany.PatrolData.times
+			if MCompany.PrestigeData.currpres >= csvPatrol.cost and lesstimes > 0 then
+				isRedpoint = true
+			end
+		end
+		if MBattle.CurId < csvPatrol.bossid then
+			isRedpoint = false
+		end
+	else
+		isRedpoint = false
+	end
+	if isRedpoint ~= MCompany.PatrolRedPoint then
+		MCompany.PatrolRedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Patrol)
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+	end
+end
+
+return _M

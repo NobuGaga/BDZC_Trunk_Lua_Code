@@ -1,0 +1,190 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MVote = JRequire "Dev.Vote.MVote"
+local CVote = JRequire "Dev.Vote.CVote"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local LuaUtil = JRequire"Libs.LuaUtil"
+local _M = Class()
+local _P = {}
+
+local Reduction = 16300
+local Type = MVote.TypeEnum.Town
+
+local ColorBlack = Color(139/255,139/255,139/255,1)
+local ColorWhite = Color(1,1,1,1)
+local NoHead = "xj_007"
+
+--界面构建
+function _M:ctor(parent, pointFunc)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Election_Tab", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("OurText").Text = Csv.Text("vote_3")
+	moudle:Get("BtnIconText").Text = Csv.Text("vote_4")
+
+	moudle:Get("BtnIcon"):AddOnButton(function()
+		MVote.NowParType = Type
+		CVote.ReqVoteParInit(Type)
+	end,nil,0.9)
+
+	self:RefreshView()
+	pointFunc(moudle:Get("RedPoint"), Define.SysId.Vote_Town_Par)
+end
+
+function _M:RefreshView()
+	local moudle = self.mMoudle
+	for i = 1,10 do
+		local id = Reduction + i
+		local data = MVote.GetVoteSingle(Type,id)
+		local csvVote = Csv.Vote[id]
+		if csvVote ~= nil then
+			local head = moudle:Get("Head"..i)
+			local posText = moudle:Get("SecretaryText"..i)
+			local nameText = moudle:Get("NameText"..i)
+			local tipText1 = moudle:Get("Ing2_"..i)
+			local tipText2 = moudle:Get("Ing_"..i)
+			local tipText3 = moudle:Get("Ing3_"..i)
+			local tipText4 = moudle:Get("Ing4_"..i)
+			if data ~= nil then
+				head.SpriteName = MPlayer.GetOtherHeadYuanIcon(data.avatar.head,data.sex)
+				if data.playerid == MPlayer.GetId() then
+					nameText.Text = Csv.Text("vote_68",{name = data.playername})
+				else
+					nameText.Text = data.playername
+				end
+			else
+				head.SpriteName = NoHead
+				nameText.Text = Csv.Text("vote_36")
+			end
+			moudle:Get("SecretaryText"..i).Text = csvVote.name
+			tipText1.Text = Csv.Text("vote_1")
+			tipText2.Text = Csv.Text("vote_2")
+			tipText3.Text = Csv.Text("vote_26")
+			tipText4.Text = Csv.Text("vote_39")
+			if MVote.Status ~= nil then
+				if MVote.Status == MVote.StatusEnum.Join then
+					tipText1.Activity = true
+					tipText2.Activity = false
+					tipText3.Activity = false
+					tipText4.Activity = false
+					if data ~= nil then
+						head.Color = ColorBlack
+					else
+						head.Color = ColorWhite
+					end
+				elseif MVote.Status == MVote.StatusEnum.Ticket then
+					tipText1.Activity = false
+					tipText2.Activity = true
+					tipText3.Activity = false
+					tipText4.Activity = false
+					if data ~= nil then
+						head.Color = ColorBlack
+					else
+						head.Color = ColorWhite
+					end
+				else
+					tipText1.Activity = false
+					tipText2.Activity = false
+					tipText4.Activity = false
+					if data ~= nil then
+						tipText3.Activity = false
+					else
+						tipText3.Activity = true
+					end
+					head.Color = ColorWhite
+				end
+			end
+
+			if _P.CheckIsJoin(id) then
+				tipText1.Activity = false
+				tipText2.Activity = false
+				tipText3.Activity = false
+				tipText4.Activity = true
+			end
+
+			moudle:Get("SecretaryBG"..i):AddOnButton(function()
+				if MVote.Status == MVote.StatusEnum.Join then
+					WindowMgr.Create("UVoteJoin",id)
+				elseif MVote.Status == MVote.StatusEnum.Ticket then
+					WindowMgr.Create("UVoteTicket",id)
+				else
+					CVote.ReqVoteParInit(Type,id)
+				end
+			end,nil,1)
+		end
+	end
+	if MVote.Status ~= nil then
+		moudle:Get("TimeText").Text = Csv.Text("vote_status"..MVote.Status)
+	end
+
+	if MVote.Time ~= nil then
+		moudle.SelfRect:AddOnUpdate(function()
+			_P.RefreshTime(self)
+		end,nil,1)
+		_P.RefreshTime(self)
+	end
+
+	self:RefreshMyVoting()
+end
+
+function _P.CheckIsJoin(voteid)
+	local myVoteids = MVote.MyVoteids
+	if myVoteids ~= nil then
+		for k,v in pairs(myVoteids) do
+			if voteid == v then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _P.RefreshTime(self)
+	local moudle = self.mMoudle
+	local timeText = moudle:Get("TimeText1")
+	if MVote.Time - HeartBeat.ServSecond() <= 0 then
+		timeText.Text = LuaUtil.GetTimeHMS(0)
+		CVote.ReqInit()
+	else
+		timeText.Text = LuaUtil.GetTimeHMS(MVote.Time - HeartBeat.ServSecond())
+	end
+end
+
+function _M:RefreshMyVoting()
+	local myVoteText = self.mMoudle:Get("OurText1")
+	local idsTable = MVote.GetMyVoteByType(Type)
+	if idsTable ~= nil and #idsTable > 0 then
+		myVoteText.Text = _P.GetVoteStr(idsTable)
+	else
+		myVoteText.Text = Csv.Text("staff_none")
+	end
+end
+
+function _P.GetVoteStr(idsTable)
+	local str = ""
+	for k,v in pairs(idsTable) do
+		local csvVote = Csv.Vote[v]
+		if csvVote ~= nil then
+			if k == 1 then
+				str = str..csvVote.name
+			else
+				str = str..","..csvVote.name
+			end
+		end
+	end
+	return str
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

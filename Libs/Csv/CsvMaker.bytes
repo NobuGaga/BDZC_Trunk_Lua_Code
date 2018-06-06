@@ -1,0 +1,32 @@
+local _M = {}
+local _CsvMap = {}
+
+_CsvMap.FuncMap = "Func"
+function _M.Func(data)
+	local tbl = {}
+	for id,line in pairs(data) do
+		if tbl[line.fid] == nil then
+			tbl[line.fid] = {}
+		end
+		table.insert(tbl[line.fid], line)
+	end
+	return {"Func",data},{"FuncMap",tbl}
+end
+
+_CsvMap.TriggerMap = "Trigger"
+function _M.Trigger(data)
+	local tbl = {}
+	for id,line in pairs(data) do
+		if line.listen ~= nil then
+			if tbl[line.listen] == nil then
+				tbl[line.listen] = {}
+			end
+			table.insert(tbl[line.listen], line)
+		end
+	end
+	return {"Trigger",data},{"TriggerMap",tbl}
+end
+
+
+
+return {CsvMaker = _M, CsvMap = _CsvMap}

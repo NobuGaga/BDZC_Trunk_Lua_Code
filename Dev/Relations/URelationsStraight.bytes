@@ -1,0 +1,147 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local _M = Class(WindowBase)
+local _P = {}
+
+--翻牌动画时间
+local doScaleTime = 0.3
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Straight")
+	self.mMoudle = moudle
+
+	local data = MRelations.ReportData
+	if data.exaward ~= nil then
+		self.Award = data.exaward
+
+	end
+	moudle:Get("new_text").Text = Csv.Text("relations_tip11")
+
+	for i = 1,6 do
+		local wenhao =  moudle:Get("wenhao"..i)
+		wenhao:AddOnButton(function()
+			_P.OnClickWenhao(self,i)
+		end,nil,1)
+	end
+
+	self.Light = moudle:Get("light")
+end
+
+function _P.GetAward(data)
+	for k,v in pairs(data.award) do
+		if v.key ~= Define.AssetsType.Bookexp and v.key ~= Define.AssetsType.Gongzhang then
+			return v
+		end
+	end
+	return nil
+end
+
+function _P.OnClickWenhao(self,index)
+	self.Index = index
+	self:Lock()
+	local moudle = self.mMoudle
+	if self.Award ~= nil then
+		local csvItem = Csv.Item[self.Award.key]
+		local colorIcon = moudle:Get("Color"..index)
+		local icon = moudle:Get("Icon"..index)
+		local textNum = moudle:Get("textNum"..index)
+		if csvItem ~= nil then
+			colorIcon.SpriteName = csvItem.colorIcon
+			icon.SpriteName = csvItem.icon
+			textNum.Text = self.Award.value
+		end
+		local awardTable = _P.GetAwardTable(self)
+		local j = 1
+		for i =  1,6 do
+			if i ~= index then
+				local award = awardTable[j]
+				if award ~= nil then
+					local csvItem = Csv.Item[award[1]]
+					if award[4] and Csv.ItemColor[award[4]] then
+						moudle:Get("Color"..i).SpriteName = Csv.ItemColor[award[4]].icon
+					else
+						moudle:Get("Color"..i).SpriteName = csvItem.colorIcon
+					end
+					moudle:Get("Icon"..i).SpriteName = csvItem.icon
+					moudle:Get("textNum"..i).Text = award[2]
+				end
+				j = j + 1
+			end
+		end
+
+		local imgWenhao = moudle:Get("wenhao"..index)
+		local tween1 = imgWenhao:DOScaleX(0,doScaleTime)
+		tween1:OnComplete(function()
+			local tween2 = colorIcon:DOScaleX(1,doScaleTime)
+			tween2:OnComplete(function()
+				moudle:Get("new_text").Text = Csv.Text("relations_tip15",{name = csvItem.name,num = self.Award.value})
+			end)
+		end)
+
+		moudle.SelfRect:AddOnTime(function()
+			_P.ShowOtherItem(self,index)
+		end,nil,2 * doScaleTime + 0.1)
+
+		self.Light:SetParent(moudle:Get("Color"..index).CachedTran)
+		self.Light.CachedTran:SetSiblingIndex(1)
+		self.Light.LocalPosition = Vector2(0,0)
+		self.Light.Activity = true
+	end
+end
+
+function _P.ShowOtherItem(self,index)
+	local moudle = self.mMoudle
+	local j = 1
+	for i=1,6 do
+		if i ~= index then
+			local imgWenhao = moudle:Get("wenhao"..i)
+			local imgColor = moudle:Get("Color"..i)
+			local tween1 = imgWenhao:DOScaleX(0,doScaleTime)
+			tween1:OnComplete(function()
+				local tween2 = imgColor:DOScaleX(1,doScaleTime)
+			end)
+		end
+	end
+	moudle.SelfRect:AddOnTime(function()
+		-- self:Destroy()
+		self:Unlock()
+		self._EventNode:AddOnClick(function()
+			SoundMgr.Play(10001)
+			self:Destroy()
+		end)
+	end,nil,2 * doScaleTime + 0.1)
+end
+
+function _P.GetAwardTable(self)
+	local data = MRelations.ReportData
+	local csvRelaBox = Csv.RelationsBox[data.liansheng]
+	if csvRelaBox ~= nil and csvRelaBox.type == 2 then
+		local award = csvRelaBox.Award
+		local awardTable = {}
+		local dueAward = LuaUtil.Shuffle(award)
+		for k,v in ipairs(dueAward) do
+			if not (v[1] == self.Award.key and v[2] == self.Award.value) then
+				table.insert(awardTable,v)
+			end
+		end
+		return awardTable
+	end
+	return {{1,1},{1,1},{1,1},{1,1},{1,1}}
+end
+
+function _M:BeforeDestroy(...)
+	local data = MRelations.ReportData
+	if data.allpoint ~= nil then
+		WindowMgr.Call("URelations","OnFightEnd")
+		WindowMgr.Destroy("URelationsFight")
+	else
+		CRelations.CFightRefresh()
+	end
+	WindowMgr.Destroy("URelationsReport")
+end
+
+return _M

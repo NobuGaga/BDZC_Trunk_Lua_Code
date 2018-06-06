@@ -1,0 +1,112 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+
+local CHANGENAME_COST_ITEM = Csv.Const(102)[1]
+local CHANGENAME_COST_GOLD= Csv.Const(102)[2]
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseView(self)
+	self:Destroy()
+end
+
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Staff_ModifyName")
+	local backBtn = moudle:Get("Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local data = Csv.Personnel[id]
+
+	local headSp = moudle:Get("BSX")
+	local talk = moudle:Get("Text")
+	local input = moudle:Get("input")
+	local placeholder = moudle:Get("Placeholder")
+
+	headSp.SpriteName = data.asset
+	talk.Text = Csv.Text("staff_changename_talk")
+	placeholder.Text = Csv.Text("staff_changename_input")
+
+	local freeText = moudle:Get("Tips")
+	local itemSp = moudle:Get("Icon")
+	local itemCost = moudle:Get("IconNum")
+	freeText.Text = Csv.Text("girl_changename_free")
+
+	local isEnough = false
+
+	local costItemID = 0
+	local costItemNum = 0
+	local costItemData = nil 
+	if MStaff.CheckStaffFirstName(id) then
+		freeText.Activity = true
+		itemSp.Activity = false
+		
+	else
+		freeText.Activity = false
+		itemSp.Activity = true
+
+		local hasItemNum = MBag.GetItemNum(CHANGENAME_COST_ITEM[1])
+		if hasItemNum >= CHANGENAME_COST_ITEM[2] then
+			costItemID = CHANGENAME_COST_ITEM[1]
+			costItemNum = CHANGENAME_COST_ITEM[2]
+
+			isEnough = true
+		else
+			costItemID = CHANGENAME_COST_GOLD[1]
+			costItemNum = CHANGENAME_COST_GOLD[2]
+
+			local hasItemNum = MBag.GetItemNum(CHANGENAME_COST_GOLD[1])
+			if costItemNum >= CHANGENAME_COST_GOLD[2] then
+				itemCost.Color = Color(0, 1, 0, 1)
+				isEnough = true
+			else
+				itemCost.Color = Color(1, 0, 0, 1)
+				isEnough = false
+			end
+		end
+
+		costItemData = Csv.Item[costItemID]
+		itemSp.SpriteName = costItemData.icon
+		itemCost.Text = costItemNum
+	end
+	
+	moudle:Get("C_text").Text = Csv.Text("staff_changename_change")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		local inputLength = luaUtil.StringLenght(input.Text)
+		if inputLength > 10 then
+			CCommon.ShowError(Csv.Text("staff_changename_length"))--"名称不能超过10个字符！"
+		else
+			if not isEnough and costItemID ~= 0 then
+				CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = costItemData.name}))
+			else
+				CStaff.ReqStaffRename(id,input.Text,costItemID)
+			end
+		end
+	end)
+end
+
+return _M

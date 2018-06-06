@@ -1,0 +1,339 @@
+-- 目标系统主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local UnityTime = CS.UnityEngine.Time
+local Linear = CS.DG.Tweening.Ease.Linear
+local BOBYMOVETWEEN = "T_Activity_XinGuan_BodyMove"
+local HIT_ANIM = "T_Activity_XinGuan_Battle1"
+
+local lastTime = 0
+local MAX_MSG = 10
+local ACTPOINT_ID = 28 --慈善分数ID
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy( ... )
+	CActivity.ReqCharitableDonateClose()
+	_P.DestroyBgMusic(self)
+end
+
+--背景音
+function _P.DestroyBgMusic(self)
+	if self.battleMusic and self.battleMusic > 0 then
+		SoundMgr.DestroyMusic(self.battleMusic, true)
+		self.battleMusic = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.SetBg(self)
+	local point = self.mData.rankData.pro
+	local Bgtarget = {}
+	local charitableConf = self.charitableconf
+	for k,v in pairs(charitableConf.bg) do
+		table.insert(Bgtarget,{key = k, value = v})
+	end
+	table.sort(Bgtarget, function(a,b)
+		return a.value > b.value
+	end)
+	for index=1,#Bgtarget do
+		if point >= Bgtarget[index].value then
+			self.bgImg.SpriteName = Bgtarget[index].key
+			break
+		end
+	end
+end
+
+--捐献
+function _P.UseItem(self)
+	if self.selectData then
+		CActivity.ReqCharitableDonate(self.selectData.itemId,1)
+	else
+		CCommon.ShowError(Csv.Text("xinguan_battle_useErr"))
+	end
+end
+
+function _P.SetCenterData(self)
+	self.useBtn.Activity = true
+	self.iconImg.Alpha = 1
+	self.qualityImg.Alpha = 1
+	self.qualityImg.LocalPosition = self.iconPos
+	self.numText.Alpha = 1
+
+	if not self.selectData then
+		self.selectData = _P.GetHouseItemData(self)
+	end
+	local itemData = self.selectData
+	if not itemData then
+		self.qualityImg.SpriteName = "ty_018"
+		self.useBtn.IsGray = true
+		self.iconImg.SpriteName = ""
+		self.numText.Text = ""
+		self.clickText.Activity = true
+	else
+		self.clickText.Activity = false
+		local itemConf = Csv.Item[itemData.itemId]
+		if not itemConf then 
+			print("itemData",itemData.itemId)
+		return end
+
+		-- 设置item数据
+		self.numText.Text = itemData.count
+		self.iconImg.SpriteName = itemConf.icon
+		self.qualityImg.SpriteName = itemConf.colorIcon
+
+		self.useBtn.IsGray = false
+	end
+
+	self.isHasIconData = itemData ~= nil
+	_P.SetDialogData(self)
+	_P.SetBg(self)
+end
+
+-- 获取背包道具（按仓库顺序）
+function _P.GetHouseItemData(self)
+	for i=1, #self.charitableconf.shopItem do
+		local itemId = self.charitableconf.shopItem[i][1]
+		local itemNum = MBag.GetItemNum(itemId)
+		if itemNum > 0 then
+			return {itemId = itemId, count = itemNum, shopPoint = self.charitableconf.rewardItems[i][2][2]}
+		end
+	end
+end
+
+function _P.SetViewData(self)
+	_P.OnSetListData(self)
+	_P.SetCenterData(self)
+	_P.SetBg(self)
+end
+
+--TODO:设置排名消息数据列表
+function _P.OnSetListData(self)
+	_P.SetOwnRankData(self)
+
+	local list = {}
+	list = self.mData.selfrecordlist
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+	if not list then return end
+	
+	self.noneText.Activity = (not list or next(list) == nil)
+	for i = #self.mData.selfrecordlist, 1, -1 do
+		_P.OnCreateRecordItem(self.mData.selfrecordlist[i], itemGrid)
+	end
+
+	
+end
+
+-- 设置自己排名信息
+function _P.SetOwnRankData(self)
+	self.curNameText.Text = MPlayer.GetName()
+	self.curPointText.Text = Csv.Text("charitable_total_point",{score = self.mData.rankData.pro})
+end
+
+function _P.OnCreateRecordItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Charitable_Pk_Item", WindowType.UI, 0)
+	local itemCsv = Csv.Item[data.itemId]
+	itemModule:Get("name").Text = Csv.Text("charitable_donate",{item = itemCsv.name,name = data.playerName,num = data.score})
+end
+
+--界面构造
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Charitable_Pk")
+	self.mModule = module
+
+	self.ActId = data.actId
+	self.mData = data
+	self.mData.selfrecordlist = {}
+
+	-- 播放背景人物动画
+	self.bobyRect = module:Get("Bxs")
+	self.fadeImg = module:Get("fadeImg")
+	local bobyTweener = self.bobyRect.CachedTran:GetJTweener(BOBYMOVETWEEN)
+		bobyTweener:Play()
+
+	self.charitableconf = Csv.Charity[self.ActId]
+	local charitableconf = self.charitableconf
+	module:Get("C_Text").Text = charitableconf.title
+	module:Get("PersonText").Text = Csv.Text("charitable_self_rank")
+	module:Get("UseText").Text = Csv.Text("charitable_use")
+
+	self.clickText = module:Get("clickText")
+	self.bgImg = module:Get("ditu")
+	self.clickText.Text = Csv.Text("charitable_buy")
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.curNameText = module:Get("Num")
+	self.curPointText = module:Get("Fraction")
+	self.noneText = module:Get("none")
+	self.scoreText = module:Get("AddScore")
+	self.qualityImg = module:Get("IconBox")
+	self.iconPos = self.qualityImg.LocalPosition
+	self.numText = module:Get("iconNum")
+	self.useBtn = module:Get("Use")
+	self.iconImg = module:Get("icon")
+	self.bossTalkText = module:Get("BossTalk")
+	self.useBtn:AddOnButton(function ( ... )
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+		_P.UseItem(self)
+	end, nil, 0.95)
+
+	self.mData.selfRankScore = 0
+
+	CActivity.ReqCharitableDonateOpen()
+	_P.SetBg(self)
+	_P.SetDialogData(self)
+	
+	self.iconImg:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 打开商城界面
+		WindowMgr.Create("UCharitableShopPanel", self.mData, (self.isHasIconData and 2) or 1)
+	end, nil, 0.95)
+end
+
+-- 商城界面选中后更新活动界面信息
+function _R.UpdateItemData(self, data)
+	self.selectData = data
+	_P.SetCenterData(self)
+end
+
+--捐赠返回
+function _R.OnDonateBack(self, data)
+	-- 播放特效
+	if self.battleTweener then
+		self.battleTweener:Restore()
+	end
+
+	self.mData.rankData.pro = data.params
+	--默认第二个奖励是活动奖励分数
+	local point = data.item[2].count
+	local index = 1
+	for k,v in pairs(data.item) do
+		if v.id == ACTPOINT_ID then
+			break
+		end
+		index = index + 1
+	end
+
+	--移除活动积分
+	table.remove(data.item,index)
+	self.scoreText.Text = tostring("+"..point)
+	local tweenRect = self.mModule:Get("AnimRect")
+	local battleTweener = tweenRect.CachedTran:GetJTweener(HIT_ANIM)
+	self.battleTweener = battleTweener
+	self.useBtn.Activity = false
+
+	battleTweener:SetOnComplete(function()
+		if not self.battleTweener then 
+			error("anim lost")
+			return
+		end
+		WindowMgr.Create("UCharitableDonateResult", {point = point, rewards = data.item}, function( ... )
+			_P.SetCenterData(self)
+		end)
+		local index = _P.GetConfigIndexByPoint(self,point)
+		local itemId = self.charitableconf.shopItem[index][1]
+		local itemNum = MBag.GetItemNum(itemId)
+		if itemNum > 0 then
+			self.selectData = {itemId = itemId, count = itemNum, shopPoint = self.charitableconf.rewardItems[index][2][2]}
+		else
+			self.selectData = _P.GetHouseItemData(self)
+		end
+		_P.OnSetListData(self)
+	end)
+	battleTweener:Play()
+
+	-- self.mModule.SelfRect:AddOnTime(function()
+		-- 播放攻击特效
+		-- local attackSoundId = self.xinGuanConf.battleVoice
+		-- SoundMgr.Play(attackSoundId)
+	-- end, nil, 0.6)
+end
+
+function _P.SetDialogData(self)
+	if self.charitableconf.popDesc == nil then
+		error("charitableconf.popDesc is nil")
+		return
+	end
+	local randomSeed = math.random(1,#self.charitableconf.popDesc)
+	self.bossTalkText.Text = self.charitableconf.popDesc[randomSeed]
+end
+
+function _P.GetConfigIndexByPoint(self,point)
+	local index = 1
+	for i=1,#self.charitableconf.rewardItems do
+		if point == self.charitableconf.rewardItems[index][2][2] then
+			break
+		end
+		index = index + 1
+	end
+	return index
+end
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+function _P.AddMsgInfo(self,data)
+	if self.mData.selfrecordlist == nil then
+		self.mData.selfrecordlist = {}
+	elseif #self.mData.selfrecordlist == MAX_MSG then
+		for i=1,#self.mData.selfrecordlist do
+			if i == #self.mData.selfrecordlist then
+				break
+			else
+				local temp = self.mData.selfrecordlist[i+1]
+				self.mData.selfrecordlist[i] = temp
+			end
+		end
+		table.remove(self.mData.selfrecordlist, #self.mData.selfrecordlist)
+	end
+	table.insert(self.mData.selfrecordlist,data)
+end
+
+function _R.OnGetDataBack(self,data)
+	self.mData.selfRankScore = data.params
+	self.mData.selfrecordlist = data.list
+	_P.SetViewData(self)
+end
+
+-- 最新一条信息返回
+function _R.OnGetNewInfo(self, data)
+	local one = {
+		itemId = data.itemId,
+		playerName = data.playerName,
+		score = data.score,
+	}
+	_P.AddMsgInfo(self,one)
+end
+
+return _M

@@ -1,0 +1,1202 @@
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Talk.MTalk.bytes#_M]
+local MTalk = JRequire "Dev.Talk.MTalk"
+--@RefType [Dev.Talk.CTalk.bytes#_M]
+local CTalk = JRequire "Dev.Talk.CTalk"
+--@RefType [xluaApi.bytes#CS.JGui.JGuiRect]
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+local MBag = JRequire "Dev.Bag.MBag"
+local UPlayerMenuPop = JRequire "Dev.Friend.UPlayerMenuPop"
+
+----------------------CS类引用--------------------------
+local VoiceChat = CS.Speaker.VoiceChat
+local Linear = CS.DG.Tweening.Ease.Linear
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local Redpacket_Light = Color(1, 1, 1, 1)
+local Redpacket_Got = Color(1, 1, 1, 150/255)
+local Redpacket_Pass = Color(1, 1, 1, 150/255)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy( ... )
+	SoundMgr.DestroyVoice()
+	SoundMgr.EndVoiceRecord()
+
+	if self.MenuPopObj ~= nil then
+		self.MenuPopObj:Destroy()
+		self.MenuPopObj:delete()
+		self.MenuPopObj = nil
+	end
+
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:delete()
+		self.mTabHandle = nil
+	end
+end
+
+function _R.RefreshMsg(self,_data)
+	--单条数据
+	local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+	if _data.channel == channel then
+		local itemsTable = self.mTableItems
+
+		local _isShowTime =  MTalk.CheckShowTime(_data)
+		local _item =   _P.CreatTalkItem(self,_data,_isShowTime) --self:CreatTalkItem(_data)
+		local itemSizeY = _item.SelfRect.SizeDelta.y
+		_item:Destroy()
+		table.insert(itemsTable,1,{posY = itemSizeY,item = _item,data = _data,isShow = false,isShowTime = _isShowTime})
+		self.mTableItems = itemsTable
+		_P.ResetItemsPosByOne(self,itemSizeY,1,_isShowTime)
+		_P.CheckItemsShow(self)
+
+		--
+		if _data.sender == MPlayer.GetId() then
+			local content = self.mToggelContent
+			if content.SizeDelta.y >1000 then
+				content:DOAnchorPosY(-1055,0.1)
+			end
+		end
+	end
+end
+
+--单挑系统消息
+function _R.RefreshSysMsg(self,_data)
+	--单挑数据
+	--系统消息--
+	local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+	local itemsTable = self.mTableItems
+	if _data.channel == MTalk.Channel.SystemMsg and _data.channel == channel then
+		local _isShowTime =  MTalk.CheckShowTime(_data)
+		local _item =   _P.CreatSysMsgItem(self,_data,_isShowTime) --self:CreatTalkItem(_data)
+		local itemSizeY = _item.SelfRect.SizeDelta.y
+		_item:Destroy()
+		table.insert(itemsTable,1,{posY = itemSizeY,item = _item,data = _data,isShow = false,isShowTime = _isShowTime})
+		self.mTableItems = itemsTable
+		_P.ResetItemsPosByOne(self,itemSizeY,1,_isShowTime)
+		_P.CheckItemsShow(self)
+
+		local content = self.mToggelContent
+		if content.SizeDelta.y >1000 then
+			content:DOAnchorPosY(-1055,0.1)
+		end
+	end
+
+	if _data.channel == MTalk.Channel.SystemMsg and  channel == MTalk.Channel.ServerMsg then
+		_P.OnSystemMsg(self,_data)
+	end
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+function _M:OnCreate(chooseFuncId)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		--self:Destroy()
+	end)
+
+	self.TalkType = 1--1文字输入，2语音输入
+	self.isDown = false
+	self.mTableItems = {}--{posY,item,data,isShow}
+	self.SendHistoryTime = os.time() --记录上一次调用请求时间
+	MTalk.isSending = false
+	self.clickRedpacket = nil --选中红包
+
+	--设置录音的最短和最大长度
+	VoiceChat.Inst:SetRecordLen(2, 15)
+	--设置采样率
+	VoiceChat.Inst:SetRecordFrequency(8000)
+	--设置音量缩放值
+	VoiceChat.Inst:SetRecordGain(6)
+
+--------------------------------------------------------------------------
+	local moudle = self:CreateMoudle(self._RootNode,"M_Talk_UTalk")
+	local titleText = moudle:Get("C_Text")
+	local loading = moudle:Get("loading")
+	local textInput = moudle:Get("C_Input_a")
+	local voiceInput = moudle:Get("VoiceInput")
+	local inputPlaceholder = moudle:Get("Placeholder")
+	local voiceInputText = moudle:Get("VoiceInputText")
+	local img1 = moudle:Get("Img1")
+	local img2 = moudle:Get("Img2")
+	local voiceRoot = moudle:Get("Voice")
+	local record = moudle:Get("Record")
+	local cancel = moudle:Get("Cancel")
+	cancel.Activity = false 
+
+	self.CrossHorn = moudle:Get("horn")
+	self.hornNum = moudle:Get("hornNum")
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if self.hornNum ~= nil and itemId == Define.AssetsType.Horn then
+			_P.RefreshHorn(self)
+		end
+	end)
+
+	CCommon.CreateEffect(loading, 2, Vector2.zero)
+
+	titleText.Text = Csv.Text("talk_title")
+	moudle:Get("sendText").Text = Csv.Text("talk_sendText")
+	moudle:Get("Text1_0").Text = Csv.Text("talk_cancelSend")
+	moudle:Get("Text2_0").Text = Csv.Text("talk_cancelSend")
+	inputPlaceholder.Text = Csv.Text("talk_inputText")
+	voiceInputText.Text = Csv.Text("talk_inputVoice")
+
+	local scrollView = moudle:Get("new_scrollView")
+	scrollView.OnValueChanged:RemoveAllListeners()
+	scrollView.OnValueChanged:AddListener(function(value)_P.OnValueChanged(self,value)end)
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local sendBtn = moudle:Get("sendBtn")
+	sendBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+        _P.SendMessage(self,textInput)
+	end)
+
+	local toggleContent = moudle:Get("Content")
+	self.mToggelContent = toggleContent
+	self.mLoading = loading
+	self.SendBtn = sendBtn
+	self.PlayPopCanvas = moudle:Get("PlayPopCanvas")
+	self.Img1 = img1
+	self.Img2 = img2
+	self.TextInput = textInput
+	self.VoiceInput = voiceInput
+	self.VoiceRoot = voiceRoot
+	self.Record = record
+	self.Cancel = cancel
+	self.VoiceInputText = voiceInputText
+
+	self.Img1:AddOnButton(function( ... )
+		self.TalkType = 2
+		_P.RefreshTalkType(self)
+	end)
+	self.Img2:AddOnButton(function( ... )
+		self.TalkType = 1
+		_P.RefreshTalkType(self)
+	end)
+	_P.RefreshTalkType(self)
+
+-------------------------------------------------------------------
+	self.VoiceFill = moudle:Get("Img2_0")
+	self.VoiceFill.FillAmount = 0.1
+	self.DragDeltaY = 0
+	self.ClipData = nil
+	self.ClipLen = 0
+	self.IsRecordingFull = false
+	--音量/长度变更刷新
+	VoiceChat.Inst:SetVolumeShow(function(volume, len)
+		if moudle ~= nil then
+			self.VoiceFill.FillAmount = math.max(0.1,volume)
+			if len >= 15 and not self.IsRecordingFull then
+				self.IsRecordingFull = true
+				CCommon.ShowError(Csv.Text("Friend_40"))
+			end
+		end
+	end)
+	--录音结束回调
+	VoiceChat.Inst:SetRecordStopCall(function(len, data)
+		if moudle ~= nil then
+			self.ClipData = data
+			self.ClipLen = len
+		end
+	end)
+
+	local noAudioClip = CS.UnityEngine.AudioClip()
+
+	self.VoiceInput:AddOnPress(function (obj, arg, data)
+		if data.isPress then
+			SoundMgr.StartVoiceRecord()
+			self.DragDeltaY = 0
+			self.VoiceInputText.Text = Csv.Text("Friend_35")
+			self.VoiceRoot.Activity = true
+			self.Record.Activity = true
+			self.Cancel.Activity = false
+			self.ClipData = nil
+			self.ClipLen = 0
+			VoiceChat.Inst:StartRecord()
+			self.IsRecordingFull = false			
+		else
+			self.VoiceInputText.Text = Csv.Text("Friend_34")
+			self.VoiceRoot.Activity = false
+			self.Record.Activity = false
+			self.Cancel.Activity = true
+			VoiceChat.Inst:StopRecord()
+			self.IsRecordingFull = false
+			SoundMgr.EndVoiceRecord()
+
+			if self.DragDeltaY <= 200 then
+				--发送消息
+				if self.ClipData ~= nil then
+					--发送消息
+					local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+					if channel == MTalk.Channel.UnionsMsg then
+						if MCommerce.IsJoinCommerce() then
+							CFriend.SendVoiceChat(channel, self.ClipData, self.ClipLen)
+							self.ClipData  = nil
+							self.ClipLen = -1
+						else
+							CCommon.ShowError(Csv.Text("talk_noCommerce"))
+						end
+					else
+						CFriend.SendVoiceChat(channel, self.ClipData, self.ClipLen)
+						self.ClipData  = nil
+						self.ClipLen = -1
+					end
+				elseif self.ClipLen == -1 then
+
+				elseif self.ClipLen <= 2 then
+					CCommon.ShowError(Csv.Text("Friend_38"))
+					--已经发送
+				else
+					CCommon.ShowError(Csv.Text("Friend_39"))
+				end
+
+			end
+		end
+		self.VoiceFill.FillAmount = 0.1
+	end)
+	self.VoiceInput:AddOnDrag(function (obj, arg, data)
+		self.DragDeltaY = self.DragDeltaY + data.delta.y
+		if self.DragDeltaY > 200 then
+			self.Record.Activity = false
+			self.Cancel.Activity = true
+		else
+			self.Record.Activity = true
+			self.Cancel.Activity = false
+		end
+	end)
+---------------------------------------------------------------------
+
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+
+	--新版toggle
+	MTalk.selectToggle = -1
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Talk, true)
+	local countToggle = #funcs
+	if countToggle > 0 then
+		local lastChoose = chooseFuncId or MTalk.selectToggle
+		local isHave = false
+
+		--Table标签控制
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("Text"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end
+
+----------------------------------------------
+	self.SystemBg = moudle:Get("System")
+	self.MsgText = moudle:Get("SystemText")
+	self.MsgIndex =  #MTalk.SysMessageTab
+	self.MsgStop = true
+end
+
+function _P.RefreshTalkType(self)
+	if self.TalkType == 1 then
+		self.Img1.Activity = true
+		self.Img2.Activity = false
+		self.TextInput.Activity = true
+		self.VoiceInput.Activity = false
+		self.VoiceRoot.Activity = false
+		self.SendBtn.Activity = true
+	else
+		self.Img1.Activity = false
+		self.Img2.Activity = true
+		self.TextInput.Activity = false
+		self.VoiceInput.Activity = true
+		self.VoiceRoot.Activity = false
+		self.SendBtn.Activity = false
+	end
+
+	self.CrossHorn.Activity = false
+	local _channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+	if _channel == MTalk.Channel.CrossMsg then
+		self.CrossHorn.Activity = true
+		self.Img1.Activity = false
+		self.Img2.Activity = false
+		_P.RefreshHorn(self)
+		
+		self.Img1.Activity = false
+		self.Img2.Activity = false
+		self.TextInput.Activity = true
+		self.VoiceInput.Activity = false
+		self.VoiceRoot.Activity = false
+		self.SendBtn.Activity = true
+	end
+end
+
+--切换页签刷新
+function _P.OnChoose(self, funcId)
+	if MTalk.selectToggle == funcId then
+		 return
+	end
+	MTalk.selectToggle = funcId
+
+	_P.CleanTalkItem(self)
+	_P.InitItems(self,funcId)
+end
+
+function _P.InitItems(self,toggleIndex)
+	SoundMgr.DestroyVoice()
+
+	local index = 0
+	local _channel = MTalk.GetChannelbyTogID(toggleIndex)
+	local talkMsg = {}
+	if _channel == MTalk.Channel.ServerMsg then
+		talkMsg = MTalk.MsgTab
+	elseif _channel == MTalk.Channel.UnionsMsg then
+		talkMsg = MTalk.UnionsMsgTab
+	elseif _channel == MTalk.Channel.SystemMsg then
+		talkMsg = MTalk.SysMessageTab
+	elseif _channel == MTalk.Channel.CrossMsg then
+		talkMsg = MTalk.CrossMsgTab
+	end
+	_P.RefreshTalkType(self)
+	index = MTalk.GetDatasMaxIndex(talkMsg)
+
+	local itemDatas = MTalk.GetDatas(MTalk.GetDatasMaxIndex(talkMsg),10,1)
+	local itemsTable = self.mTableItems
+	local content = self.mToggelContent
+
+	content.SizeDelta = Vector2(640,0) --重置
+
+	--系统信息--
+	if _channel == MTalk.Channel.SystemMsg then
+		if itemDatas ~= nil then
+			for k,v in pairs(itemDatas) do
+				local _isShowTime =  MTalk.CheckShowTime(v)
+				local _item =  _P.CreatSysMsgItem(self,v,_isShowTime)
+				_P.SetItemPos(self,_item,_isShowTime)
+				table.insert(itemsTable,{posY = _item.SelfRect.LocalPosition.y,item = _item,data = v,isShow = true,isShowTime = _isShowTime})
+			end
+		end
+	else
+		if itemDatas ~= nil then
+			for k,v in pairs(itemDatas) do
+				--检测是否显示时间
+				if not MFriend.CheckRelation(v.sender, MFriend.RelationType.BlackList) then
+					local _isShowTime =  MTalk.CheckShowTime(v)
+					local _item =  _P.CreatTalkItem(self,v,_isShowTime)
+					_P.SetItemPos(self,_item,_isShowTime)
+					table.insert(itemsTable,{posY = _item.SelfRect.LocalPosition.y,item = _item,data = v,isShow = true,isShowTime = _isShowTime})
+				end
+			end
+		end
+	end
+	
+	--加入顶部空余
+	content.SizeDelta = Vector2(640,(content.SizeDelta.y + MTalk.ContentTop))
+	self.mTableItems = itemsTable
+	self.mToggelContent = content
+end
+
+function _P.RefreshHorn(self)
+	self.hornNum.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Horn))
+end
+
+function _P.CreatTalkItem(self,_data,_isShowTime)
+	local content = self.mToggelContent
+	local itemsTable = self.mTableItems
+	local itemMoudle
+	if _data.sender == MPlayer.GetId() then
+		itemMoudle = JGuiManager.GetMoudle(content, "M_Talk_Item_2", WindowType.UI, 10)
+	else
+		itemMoudle = JGuiManager.GetMoudle(content, "M_Talk_Item", WindowType.UI, 10)
+	end
+	
+	local info = itemMoudle:Get("Info")
+	local timeText = itemMoudle:Get("time")
+	local timeImg = itemMoudle:Get("timeImg")
+	local headIcon = itemMoudle:Get("Head")
+	local nameText = itemMoudle:Get("sender")
+	local titleText = itemMoudle:Get("title")
+	local titleImg = itemMoudle:Get("titleImg")
+	local talkValue = itemMoudle:Get("value")
+	local talkBg = itemMoudle:Get("talk")
+	local vipText = itemMoudle:Get("Num")
+	local JobImg = itemMoudle:Get("Icon")
+	local HeadBox = itemMoudle:Get("HeadBox")
+	---------------语音-------------------------------
+	local voiceValue = itemMoudle:Get("voice")
+	local voiceTime = itemMoudle:Get("Time2")
+	local voiceSp = itemMoudle:Get("voice_0")
+	---------------红包-------------------------
+	local redPacket = itemMoudle:Get("redPacket")
+	local packName = itemMoudle:Get("packName")
+	local packGet = itemMoudle:Get("packGet")
+	local packTitle = itemMoudle:Get("packTitle")
+	local redImg = itemMoudle:Get("Red")
+	--------------领取红包信息----------------------------
+	local packGot = itemMoudle:Get("packGot")
+	local gotMsg = itemMoudle:Get("gotMsg")
+
+	voiceSp.SpriteName = "friend_020_2"
+	JobImg.Activity = false
+
+	vipText.SpriteNameAutoScale = "friend_num_".._data.viplv
+
+	local csvVip = Csv.Vip[_data.viplv]
+	if csvVip.imgBord ~= nil then
+		itemMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+	else
+		itemMoudle:Get("OutBox").Activity = false
+	end
+
+	if csvVip.imgTalk ~= nil then
+		itemMoudle:Get("talk").SpriteName = csvVip.imgTalk
+	end
+
+	if _isShowTime then
+		timeImg.Activity = true
+		timeText.Text = LuaUtil.GetTimeText(_data.time)
+	else
+		timeImg.Activity = false
+	end
+	
+	nameText.Text = _data.sendername
+	talkValue.Text = _data.value
+
+	--显示称号
+	if _data.titleid ~= nil and _data.titleid > 0 and _data.channel ~= 2 then
+		local fashionData = Csv.Title[_data.titleid]
+		--兼容没有配置称号图标, 使用文本称号显示
+		if fashionData.chatIcon then
+			local pos = nameText.LocalPosition
+			nameText.LocalPosition = Vector2(pos.x - titleText.LocalPosition.x, pos.y)
+			titleImg.SpriteName = fashionData.chatIcon
+			titleImg:SetNativeSize()
+		elseif fashionData.name then
+			titleText.Text = fashionData.name
+		end
+	end
+
+	--显示头像
+	if _data.headid ~= nil and _data.gender ~= nil then
+		headIcon.SpriteName = _P.GetHeadSp(_data.headid,_data.gender)
+		if not GameSetting.IsiOSCommit then
+			HeadBox:AddOnButton(function()
+				local targetPox = headIcon.RootCanvasPos + Vector2(100, -20)
+				if targetPox.y < -350 then 
+					targetPox = targetPox + Vector2(0, 320) --位置太低转向上显示
+				end
+				if _data.channel == MTalk.Channel.CrossMsg then
+					if sender ~= MPlayer.GetId() then
+						SoundMgr.Play(10001)
+						CPlayer.LookPlayerByServerID(_data.sender, _data.serverId)
+					end
+				else
+					_P.OnClickTlakSender(self,_data.sender, targetPox, _data.sendername)
+				end
+			end)
+		end
+	end
+	--显示商会职位
+	if _data.commerceJob ~= nil and _data.commerceJob > 0 then
+		JobImg.Activity = true
+		if _data.sender == MPlayer.GetId() then
+			--直接显示
+			JobImg.SpriteName = _P.GetJobSp(_data.commerceJob)
+		else
+			local namePos = nameText.LocalPosition
+			nameText.LocalPosition = Vector2(namePos.x + 80,namePos.y)
+			JobImg.SpriteName = _P.GetJobSp(_data.commerceJob)
+		end
+	end
+	
+	--------------------------------------------------------------------------------------------
+	if _data.value ~= nil and _data.value ~= "" then
+		talkBg.Activity = true
+		voiceValue.Activity = false
+		redPacket.Activity = false
+		packGot.Activity = false
+
+		local width = talkValue.PreferredWidth
+		local BgH = talkValue.PreferredHeight + 40
+
+		local BgW = width 
+		if BgW > 400 then
+			BgW = 400
+		end
+		if width/400 >= 1 then
+			BgW = BgW +30
+		end
+		talkValue.SizeDelta = Vector2(BgW,BgH - 40)
+		talkBg.SizeDelta = Vector2(BgW + 80,BgH)
+		local valueHeight = 0
+		if BgH  >= 90 then
+			valueHeight = BgH - 100
+		end
+		itemMoudle.SelfRect.SizeDelta = Vector2(730,260 +valueHeight)
+	elseif _data.voiceIndex ~= nil then			
+		talkBg.Activity = false
+		voiceValue.Activity = true
+		redPacket.Activity = false
+		packGot.Activity = false
+
+		voiceTime.Text = _data.voiceTime.."''"
+
+		local BgW = _data.voiceTime * 30 + 100
+		local BgH = 62
+		if BgW > 450 then
+			BgW = 450
+		end
+		voiceValue.SizeDelta = Vector2(BgW,BgH)
+		voiceValue:AddOnButton(function()
+			if self.LastVoiceInfo ~= nil and self.LastVoiceInfo.Sprite ~= nil then
+				self.LastVoiceInfo.Event:Destroy()
+				self.LastVoiceInfo.TimeEvent:Destroy()
+				self.LastVoiceInfo.Sprite.SpriteName = "friend_020_2"
+				self.LastVoiceInfo = nil
+			end
+
+			CFriend.PlayVoiceChat(_data.sender, _data.voiceIndex)
+
+			local event = LuaUtil.VoicePlayThreePoint(voiceSp)
+			local ontime = voiceSp:AddOnTime(function()
+				voiceSp.SpriteName = "friend_020_2"
+				event:Destroy()
+				self.LastVoiceInfo = nil
+			end,nil,_data.voiceTime)
+			self.LastVoiceInfo = 
+			{
+				Event = event,
+				Sprite = voiceSp,
+				TimeEvent = ontime
+			}			
+		end)
+		itemMoudle.SelfRect.SizeDelta = Vector2(730,260)
+	elseif _data.redPacket ~= nil and _data.redPacket.type == 1 then
+
+		talkBg.Activity = false
+		voiceValue.Activity = false
+		redPacket.Activity = true
+		packGot.Activity = false
+
+		packTitle.Text = Csv.Text("talk_redpacket_title")
+		packGet.Text = Csv.Text("talk_redpacket_get")
+		packName.Text = Csv.Text("talk_redpacket_name")
+
+		--state 1,未拆开，2已拆开，3已过期
+		if _data.redPacket.state == 2 then
+			redPacket.Color = Redpacket_Got
+			packGet.Text = Csv.Text("talk_redpacket_beSplite")
+			redImg.SpriteName = "xj_020"
+		elseif _data.redPacket.state == 3 then
+			redPacket.Color = Redpacket_Pass
+			packGet.Text = Csv.Text("talk_redpacket_pass")
+		end
+
+		redPacket:AddOnButton(function()
+			if _data.redPacket.packetId ~= nil then
+				_P.OpenRedPacket(self,_data)
+				--CPlayer.ReqOpenRedPacket(_data.redPacket.packetId)
+			end
+		end)
+	
+		itemMoudle.SelfRect.SizeDelta = Vector2(730,260)
+	elseif _data.redPacket ~= nil and _data.redPacket.type == 2 then
+		info.Activity = false
+		packGot.Activity = true
+
+		gotMsg.Text = Csv.Text("talk_redpacket_got",{name1 = _data.sendername,name2 = _data.redPacket.senderName})
+
+		itemMoudle.SelfRect.SizeDelta = Vector2(730,200)
+	end
+	
+	itemMoudle.SelfRect:SetAnchor(CS.JGui.JGuiManager.AnchorType.Bottom)
+	return itemMoudle
+end
+
+function _P.CheckItemsShow(self)
+	local itemsTable = self.mTableItems
+	local content = self.mToggelContent
+
+	for k,v in pairs(itemsTable) do
+		--item在-1000~1000之间的可显示，其余删除
+		if content.LocalPosition.y + v.posY >=-1500 
+		and content.LocalPosition.y + v.posY <1500 then
+			--弱已删除，则创建
+			if v.isShow == false then
+				--系统消息--
+				if v.data.channel == MTalk.Channel.SystemMsg then
+					local _item =  _P.CreatSysMsgItem(self,v.data,v.isShowTime)--self:CreatTalkItem(v.data)
+					_item.SelfRect.LocalPosition = Vector2(0,v.posY)
+					v.item = _item
+					v.isShow = true
+				else
+					if not MFriend.CheckRelation(v.sender, MFriend.RelationType.BlackList) then
+						local _item =  _P.CreatTalkItem(self,v.data,v.isShowTime)--self:CreatTalkItem(v.data)
+						_item.SelfRect.LocalPosition = Vector2(0,v.posY)
+						v.item = _item
+						v.isShow = true
+					end
+				end
+			end
+		else
+			if v.isShow == true then
+				local _item =  v.item
+				_item:Destroy()
+				v.isShow = false
+			end
+		end
+	end
+end
+
+--单条新数据--重置
+--将新来的消息插入到队列中
+--其他消息重新计算位置
+function _P.ResetItemsPosByOne(self,SizeY,index,isShowTime)
+	local items = self.mTableItems
+	local content = self.mToggelContent
+
+	content.SizeDelta = Vector2(640,0) --重置
+	
+	local itemPosY = 0
+
+	for i=1,#items,1 do
+		if i == index then
+			itemPosY = content.SizeDelta.y+SizeY
+			if isShowTime ~= nil then
+				if isShowTime then
+					SizeY = SizeY + 100
+				end
+			end
+		else
+			if i> index then
+				if items[i].isShow == false then
+					itemPosY =SizeY+items[i].posY-105
+				else
+					local rect = items[i].item
+					itemPosY =SizeY+items[i].posY-105
+					rect.SelfRect.LocalPosition = Vector2(0,itemPosY)
+				end
+			elseif i<index then
+				itemPosY = items[i].posY
+			end
+		end
+		items[i].posY = itemPosY
+		content.SizeDelta = Vector2(640,itemPosY+15)
+	end
+
+	if content.SizeDelta.y >1100 then
+		content.Pivot = Vector2(0.5,0)
+	end
+
+	--加入顶部空余
+	_P.CheckContentTop(self)
+	--content.SizeDelta = Vector2(640,content.SizeDelta.y+MTalk.ContentTop) 
+	self.mToggelContent = content
+	self.mTableItems = items
+end
+
+function _P.OnValueChanged(self,value)
+	local centerTime = os.time()
+	local changedTime = centerTime - self.SendHistoryTime
+	local content = self.mToggelContent
+
+	if changedTime > 0.5 then
+		local content = self.mToggelContent
+
+		if content.SizeDelta.y < 1100 then
+			if content.LocalPosition.y <-100 then
+				_P.IsShowLoading(self,true)
+				self.mLoading.Activity = true
+			elseif content.LocalPosition.y <-10 then
+				--下拉
+				--先从M拿数据，返回空才请求
+				self.mLoading.Activity = false
+				if self.isDown == true then
+					self.SendHistoryTime = centerTime
+					local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+					_P.GetTalkData(self,1)
+					_P.IsShowLoading(self,false)
+				end
+			end
+		else
+			if content.LocalPosition.y+content.SizeDelta.y <-100 then
+				_P.IsShowLoading(self,true)
+				self.mLoading.Activity = true
+			elseif content.LocalPosition.y + content.SizeDelta.y <-10 then
+				--下拉
+				--先从M拿数据，返回空才请求
+				self.mLoading.Activity = false
+				if self.isDown == true then
+					self.SendHistoryTime = centerTime
+					local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+					_P.GetTalkData(self,1)
+					_P.IsShowLoading(self,false)
+				end
+			end
+		end
+	end
+	_P.CheckItemsShow(self)
+end
+
+--从M拿数据
+--type1 = 下拉）
+function _P.GetTalkData(self,type)
+	local itemsTable = self.mTableItems
+	local content = self.mToggelContent
+	local itemDatas = {}
+	if type == 1 then
+		itemDatas = MTalk.GetDatas(self.GetMinIndex(itemsTable)-1,10,type)
+	elseif type == -1 then
+		itemDatas = MTalk.GetDatas(self.GetMaxIndex(itemsTable),10,type)
+	end
+	if #itemDatas >0 then
+		--移除顶部空余
+		content.SizeDelta = Vector2(640,(content.SizeDelta.y - MTalk.ContentTop))
+		for k,v in ipairs(itemDatas) do
+
+			--系统消息--_P.CreatSysMsgItem(
+			if v.channel == MTalk.Channel.SystemMsg then
+				local _isShowTime =  MTalk.CheckShowTime(v)
+				local _item =  _P.CreatSysMsgItem(self,v,_isShowTime)
+				_P.SetItemPos(self,_item,_isShowTime)
+				table.insert(itemsTable,{posY = _item.SelfRect.LocalPosition.y,item = _item,data = v,isShow = true,isShowTime = _isShowTime})
+			else
+				if not MFriend.CheckRelation(v.sender, MFriend.RelationType.BlackList) then
+					local _isShowTime =  MTalk.CheckShowTime(v)
+					local _item =  _P.CreatTalkItem(self,v,_isShowTime)
+					_P.SetItemPos(self,_item,_isShowTime)
+					table.insert(itemsTable,{posY = _item.SelfRect.LocalPosition.y,item = _item,data = v,isShow = true,isShowTime = _isShowTime})
+				end
+			end
+
+			
+		end
+		content.SizeDelta = Vector2(640,(content.SizeDelta.y + MTalk.ContentTop))
+	else
+		local _channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+		local _minIndex = self.GetMinIndex(itemsTable)-1
+		if _minIndex>0 then
+			CTalk:SendTalkHistoryReq(_channel,_minIndex)
+		end
+	end
+	self.mTableItems = itemsTable
+end
+
+function _P.SendMessage(self,GText)
+	local channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
+
+	if channel == MTalk.Channel.SystemMsg then
+		CCommon.ShowError(Csv.Text("talk_no_send_sys"))
+		return
+	end
+
+    local textlen = string.len(GText.Text)
+	if textlen <= 0 then
+		--空
+		CCommon.ShowError(Csv.Text("talk_empty"))
+	elseif textlen > 120 then
+		--超字数
+		CCommon.ShowError(Csv.Text("talk_full"))
+	else		
+		local str = GText.Text
+		GText.Text = ""
+		if channel == MTalk.Channel.ServerMsg then
+			CTalk.SendNewTalk(channel,str)
+		elseif channel == MTalk.Channel.UnionsMsg then
+			if MCommerce.IsJoinCommerce() then
+				CTalk.SendNewTalk(channel,str)
+			else
+				CCommon.ShowError(Csv.Text("talk_noCommerce"))
+			end
+		elseif channel == MTalk.Channel.CrossMsg then
+			CTalk.SendNewTalk(channel,str)
+		end
+	end
+end
+
+function _P.IsShowLoading(self,isShow)
+	self.isDown = isShow
+end
+
+function _P.OnClickTlakSender(self,sender,objPos, name)
+	if sender ~= MPlayer.GetId() then
+		local menus = {
+			MFriend.PlayerMenu.Look,
+			MFriend.PlayerMenu.Talk,
+			MFriend.PlayerMenu.Copy,
+			MFriend.PlayerMenu.AddFriend,
+			MFriend.PlayerMenu.AddBlacklist}
+
+		if self.MenuPopObj ~= nil then
+			self.MenuPopObj:Destroy()
+			self.MenuPopObj:delete()
+			self.MenuPopObj = nil
+		end
+		self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, sender, menus, objPos, name)
+	end
+end
+
+--清除聊天信息
+function _P.CleanTalkItem(self)
+	local items = self.mTableItems
+	local content = self.mToggelContent
+
+	if items == nil then
+		return
+	end
+	
+	content:DestroyChildren()
+	content.SizeDelta = Vector2(640,0) --重置
+	content.Pivot = Vector2(0.5,1)
+
+	self.mTableItems = {}
+	self.mMaxIndex = -1
+end
+
+
+function _P.GetHeadSp(headId,sex)
+	return MPlayer.HeadIconFromSex(headId, sex, true)
+end
+
+function _P.GetJobSp(job)
+	if job == 1 then
+		return "dj_00142"
+	elseif job == 2 then
+		return "dj_00141"
+	elseif job == 3 then
+		return "dj_00140"
+	else
+		return "dj_00139"
+	end
+end
+
+
+--多条
+function _R.ReHistroyMsg(datas)
+	--历史数据加入就行
+	--目前流程为服务器消息派发到M，U层由OnValueChange自行从M层拿数据
+	--所以不需要M层拿到服务器数据后不需要通知U
+	print("=================Histroy=================")
+end
+
+--不重置
+function _P.SetItemPos(self,item,_isShowTime)
+	local content = self.mToggelContent
+
+	local itemPosY = content.SizeDelta.y+item.SelfRect.SizeDelta.y
+	item.SelfRect.LocalPosition = Vector2(0,itemPosY)
+
+	if _isShowTime then
+		content.SizeDelta = Vector2(640,itemPosY-5)
+	else
+		content.SizeDelta = Vector2(640,itemPosY-105)
+	end
+	
+	if content.SizeDelta.y >1100 then
+		content.Pivot = Vector2(0.5,0)
+	end
+
+	self.mToggelContent = content
+end
+
+
+--------------全服频道系统消息通知------------------------
+function _P.CreatSysMsgItem(self,_data,_isShowTime)
+	local content = self.mToggelContent
+	local itemsTable = self.mTableItems
+	local itemMoudle = JGuiManager.GetMoudle(content, "M_Talk_Item_3", WindowType.UI, 10)
+	
+	local timeImg = itemMoudle:Get("timeImg")
+	local timeText = itemMoudle:Get("time")
+	local Bg = itemMoudle:Get("BG")
+	local value = itemMoudle:Get("text")
+
+	if _data.noticeType ~= nil then
+		if _data.noticeType == 1 then
+			value.Text = _data.value
+		else
+			value.Text = _P.GetSystemStr(_data.notice.id,_data.notice.params)
+		end
+	end
+
+	if _isShowTime then
+		timeImg.Activity = true
+		timeText.Text = LuaUtil.GetTimeText(_data.time)
+	else
+		timeImg.Activity = false
+	end
+
+	local BgH = value.PreferredHeight + 25
+	Bg.SizeDelta = Vector2(707,BgH)
+
+	itemMoudle.SelfRect.SizeDelta = Vector2(730,140 + BgH - 40)
+
+	itemMoudle.SelfRect:SetAnchor(CS.JGui.JGuiManager.AnchorType.Bottom)
+	return itemMoudle
+end
+
+function _P.GetSystemStr(id,_params)
+	local csv = Csv.Notice[id]
+	assert(csv ~= nil, id)
+
+	local str = csv.str
+	if _params ~= nil then
+		local params = {}
+		for _,kv in pairs(_params) do
+			params[kv.key] = kv.value
+		end
+		str = LuaUtil.Format(str, params)
+	end
+	return str
+end
+---------------------跑马灯-----------
+function _P.OnSystemMsg(self,data)
+	local msgs = MTalk.SysMessageTab
+	if msgs == nil or #msgs < 1 then
+		if self.MsgText ~= nil and self.MsgStop then
+			self.MsgText:DOKill()
+			self.MsgIndex = 0
+			self.MsgText.Text = ""
+		end
+	elseif #msgs > self.MsgIndex then
+		if self.MsgText ~= nil and (self.MsgIndex == 0 or self.MsgStop) then
+			_P.DoMessage(self)
+		end
+	end	
+end
+function _P.DoMessage(self)
+	local msgs = MTalk.SysMessageTab
+	if msgs == nil or #msgs < 1 then
+		self.MsgIndex = 0
+		if self.MsgText ~= nil then
+			self.MsgText.Text = ""
+			self.MsgText:DOKill()
+		end
+		return
+	end
+	if msgs ~= nil and #msgs > self.MsgIndex and self.MsgText ~= nil then
+		self.MsgText:DOKill()
+		if self.MsgStop then
+			self.MsgStop = false
+			self.SystemBg.Activity = true
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth, 0)
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth, 3)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				_P.DoMessage(self)
+			end)
+		else
+			self.MsgText.LocalPosition = Vector2(750,0)
+			self.MsgIndex = self.MsgIndex + 1
+			local msgInfo = msgs[self.MsgIndex]
+			if msgInfo.noticeType ~= nil then
+				if msgInfo.noticeType == 1 then
+					self.MsgText.Text = msgInfo.value
+				else
+					self.MsgText.Text = _P.GetSystemStr(msgInfo.notice.id,msgInfo.notice.params)
+				end
+			end
+			if self.MsgIndex == #msgs then
+				self.SystemBg.Activity = true
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth, 6)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					self.MsgStop = true
+					self.SystemBg.Activity = false
+					_P.DoMessage(self)
+				end)
+			else
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth, 6)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					_P.DoMessage(self)
+				end)
+			end
+		end		
+	elseif self.MsgText ~= nil then
+		self.MsgStop = true
+		self.SystemBg.Activity = false
+		self.MsgText:DOKill()
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth, 0)
+	end
+end
+
+
+-----------------------------------------------------------------------------------------------
+---------------红包------------------------------------------------------
+
+function _P.OpenRedPacket(self,data)
+	self.clickRedpacket = data
+
+	if data.redPacket.expireTime ~= nil then
+		if HeartBeat.ServSecond() - data.redPacket.expireTime >= 0 then
+			--过期
+			WindowMgr.Create("URedpacketPass",data)
+			_P.SetRedpacketState(self,3)
+			return
+		end
+	end
+	if data.redPacket.state == 1 then --未拆开
+		WindowMgr.Create("URedpacketSplit",data)
+	else
+		CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
+	end
+end
+
+function _R.ShowRedpacket(self,data)
+	_P.SetRedpacketState(self,2) --1未拆开，2已拆开
+
+	if WindowMgr.IsCreated("URedpacketSplit") then
+		return
+	end
+	
+	if data.result == 2 then 
+		WindowMgr.Create("URedpacketLook",data)
+	elseif data.result == 3 then
+		WindowMgr.Create("URedpacketNo",data)
+	else
+		WindowMgr.Create("URedpacketNo",data)
+	end
+end
+
+function _P.SetRedpacketState(self,state)
+	local data = self.clickRedpacket
+	if data ~= nil then
+		local itemsTable = self.mTableItems
+		for k,v in pairs(itemsTable)do
+			if v.data.index == data.index then
+				if v.data.redPacket ~= nil then
+					if v.data.redPacket.state ~= nil then
+						v.data.redPacket.state = state
+						
+						if v.isShow then
+							local redBg = v.item:Get("redPacket")
+							local getText = v.item:Get("packGet")
+							local redImg = v.item:Get("Red")
+							if state == 3 then
+								redBg.Color = Redpacket_Got
+								getText.Text = Csv.Text("talk_redpacket_pass")
+							else
+								redBg.Color = Redpacket_Got
+								getText.Text = Csv.Text("talk_redpacket_beSplite")
+								redImg.SpriteName = "xj_020"
+							end
+						end
+						--更新M层数据
+						MRedpacket.RemoveRedPacket(v.data.redPacket.packetId)
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+----------------------------------------------------------------------------
+
+function _M.GetMaxIndex(_itemDatas)
+	local itemDatas = _itemDatas
+
+	local max = -1
+	if _itemDatas ~= nil then
+		for k,v in pairs(_itemDatas) do
+			if v.data.index > max then
+				max = v.data.index
+			end
+		end
+		return max
+	end
+end
+
+function _M.GetMinIndex(_itemDatas)
+	local itemDatas = _itemDatas
+	local min = -1
+	if _itemDatas ~= nil then
+		for k,v in pairs(_itemDatas) do
+			if min <= -1 then
+				min = v.data.index
+			end
+
+			if v.data.index < min then
+				min = v.data.index
+			end
+		end
+		return min
+	end
+	return -1
+end
+
+
+function _P.GetMinItem(_itemDatas)
+	local itemDatas = _itemDatas
+	local min = -1
+	local item
+	if _itemDatas ~= nil then
+		for k,v in pairs(_itemDatas) do
+			if min <= -1 then
+				min = v.data.index
+				item = v
+			end
+			
+			if v.data.index < min then
+				min = v.data.index
+				item = v
+			end
+		end
+		return item
+	else
+		return nil
+	end
+end
+
+function _P.CheckContentTop(self)
+	local itemsTable = self.mTableItems
+	local content = self.mToggelContent
+	local lastItem = _P.GetMinItem(itemsTable)
+
+	if lastItem ~= nil then
+		if not lastItem.isShowTime then
+			content.SizeDelta = Vector2(640,content.SizeDelta.y+MTalk.ContentTop - 100) 
+		end
+	end
+end
+
+
+return _M

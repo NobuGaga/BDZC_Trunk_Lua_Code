@@ -1,0 +1,325 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local UStaffAptitude = JRequire "Dev.Staff.UStaffAptitude"
+local UStaffSkill = JRequire "Dev.Staff.UStaffSkill"
+local UStaffHalo = JRequire "Dev.Staff.UStaffHalo"
+local UStaffAttrPage = JRequire "Dev.Staff.UStaffAttrPage"
+local UStaffAttributePop = JRequire "Dev.Staff.UStaffAttributePop"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+-- local HEIGHT = 25
+-- local WIDTH = 570
+local levelUpAttrActorId = 10001
+local bobyUpActorId = 10113
+local Staff_Attr = 10104
+-- local EFFECT_ID = 18
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end 
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.Staff_Book then
+		self.ChooseMoudle = UStaffAptitude.new(self.PageNode,self.mID)
+	elseif funcId == Define.SysId.Staff_Skill then
+		self.ChooseMoudle = UStaffSkill.new(self.PageNode,self.mID)
+	elseif funcId == Define.SysId.Staff_Aureole then
+		self.ChooseMoudle = UStaffHalo.new(self.PageNode,self.mID)
+	elseif funcId == Staff_Attr then
+		self.ChooseMoudle = UStaffAttrPage.new(self.PageNode, self.mID)
+	end
+
+	MStaff.LastChoose = funcId
+end
+
+function _R.StaffLvUp(self,data)
+	if MStaff.LastChoose == Staff_Attr then
+		self.ChooseMoudle:SetExpSlider(data.staffid,data.levelexp,data.level,true,data.success,data.isgod)
+	end
+
+	if data.isgod ~= nil then
+		if data.isgod == true then
+			SoundMgr.PlaySystem(10003)
+		end
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(id,chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_UDetails")
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+	local person = Csv.Personnel[id]
+	self.mID = id
+
+	SoundMgr.PlaySystem(person.sound)
+	for i = 1,7 do
+		moudle:Get("Star"..i).Activity = false
+	end
+	for i = 1,person.star do
+		moudle:Get("Star"..i).Activity = true
+	end
+
+	moudle:Get("C_Text").Text = Csv.Text("staff_details")
+	local TextCost = moudle:Get("CostText")
+	TextCost.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+	self.mCoin = MBag.GetItemNum(Define.AssetsType.Coin)
+	self.mTextName = moudle:Get("StaffName")
+	self.mTextName.Text = MStaff.GetStaffName(id)--person.name
+
+	moudle:Get("ty_145").SpriteName = "ty_145"
+	moudle:Get("Speciality").Text = Csv.Text("staff_speciality")..person.specialty
+	local width = moudle:Get("Speciality").PreferredWidth
+	moudle:Get("ty_145").SizeDelta = Vector2(width+50,moudle:Get("ty_145").PreferredWidth)
+
+	if person.prefab ~= nil and person.prefab > 0 then
+		CCommon.CreateActor(moudle:Get("StaffIcon"), person.prefab, CCommon.ActorFieldMap.staff_info)
+	else
+		moudle:Get("StaffIcon").SpriteName = person.asset
+	end	
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		WindowMgr.Call("UStaff","ResetPoint")
+		-- SoundMgr.DestroySystem()
+		self:Destroy()
+		end, nil, 1.2)
+
+	local BtnRule = moudle:Get("BtnRule")
+	BtnRule:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Staff)
+		end, nil, 1.2)
+		
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff, true))
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023_2",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		--员工属性
+		index = index + 1
+		tabHandle:Add(Staff_Attr, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), Csv.Text("staff_Attr"))
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
+
+			--注册小红点
+			self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		tabHandle:Choose(Staff_Attr)
+		self.tabHandle = tabHandle
+	end
+	if count < 3 then
+		for i=count + 2,4 do
+			moudle:Get("Toggle"..i).Activity = false
+		end
+	end
+
+	CStaff.CheckBookRedPoint(MStaff.LastChooseStaff)
+	CStaff.CheckSkillRedPoint(MStaff.LastChooseStaff)
+	CStaff.CheckAureoleRedPoint(MStaff.LastChooseStaff)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Coin then
+			TextCost:DOKill()
+			local lastNum = self.mCoin
+			local nowNum = MBag.GetItemNum(itemid)
+			self.mCoin = nowNum
+			if lastNum ~= nowNum then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextCost ~= nil then TextCost.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if TextCost ~= nil then TextCost.Text = LuaUtil.NumberFormat(MBag.GetItemNum(itemid)) end
+				end)
+				t:SetTarget(TextCost.CachedTran)
+			end
+		end
+	end)
+
+	--改名
+	-- local changeNameBtn = moudle:Get("ModifyIcon")
+	-- changeNameBtn:AddOnButton(function()
+	-- 	WindowMgr.Create("UStaffChaneName",id)
+	-- end)
+	-- if MMain.FuncIsOpen(Define.SysId.Staff_ChangeName) then
+	-- 	changeNameBtn.Activity = true
+	-- else
+	-- 	changeNameBtn.Activity = false
+	-- end
+
+	local sexIcon = moudle:Get("ModifyIcon")
+	if person.sex == Define.Sex.Female then
+		sexIcon.SpriteName = "dl_007"
+	else
+		sexIcon.SpriteName = "dl_006"
+	end
+	_P.RefreshHuiZhang(self)
+end
+
+-- 播放升级特效
+function _R.OnPlayLevelUpAnim(self)
+	CCommon.CreateEffect(self.mMoudle:Get("AttiActorPanel"), levelUpAttrActorId)
+	CCommon.CreateEffect(self.mMoudle:Get("BobyActorPanel"), bobyUpActorId)
+end
+
+
+function _P.GetDetailFuncs(self,funcs)
+	local tableFuncs = {}
+	-- local data = MStaff.GetStaffDataByID(self.mID)
+	if funcs ~= nil then
+		for k,v in pairs(funcs) do
+			if v.id ~= Define.SysId.Staff_Staff then
+				if v.id ~= Define.SysId.Staff_Aureole or Csv.Personnel[self.mID].aureole ~= nil then
+					table.insert(tableFuncs,v)
+				end
+			end
+		end
+	end
+	return tableFuncs
+end
+
+function _R.StaffColorUp(self,data)
+	WindowMgr.Create("UStaffPromoteSucPop",data.staffid)
+	_P.RefreshHuiZhang(self)
+	if MStaff.LastChoose == Staff_Attr then
+		self.ChooseMoudle:OnCreateData(data.staffid)
+	end
+	if MStaff.LastChoose == Define.SysId.Staff_Skill then
+		self.ChooseMoudle:ResetAllSkill(data.staffid)
+	elseif MStaff.LastChoose == Define.SysId.Staff_Book then
+		self.ChooseMoudle:ResetAllBookPoint(data.staffid)
+	end
+end
+
+function _P.RefreshHuiZhang(self)
+	local moudle = self.mMoudle
+	local iconHuiZhang = moudle:Get("HuiZhang")
+	local data = MStaff.StaffTable[self.mID]
+	if iconHuiZhang ~= nil and data ~= nil then
+		local csvColor = Csv.ColorUp[data.color]
+		if csvColor ~= nil and csvColor.posIcon ~= nil then
+			iconHuiZhang.Activity = true
+			iconHuiZhang.SpriteName = csvColor.posIcon
+		else
+			iconHuiZhang.Activity = false
+		end
+	end
+end
+
+function _R.StaffBookUp(self,data)
+	if data.success then
+		if MStaff.LastChoose == Staff_Attr then
+			self.ChooseMoudle:OnCreateData(data.staffid)
+		end
+		if MStaff.LastChoose == Define.SysId.Staff_Book then
+			self.ChooseMoudle:ChangeBookLv(data.staffid,data.bookid,data.booklv)
+		end
+	end
+end
+
+function _R.StaffSkillUp(self,data)
+	if MStaff.LastChoose == Define.SysId.Staff_Skill then
+		self.ChooseMoudle:ChangeSkillLv(data.staffid,data.skillid,data.skilllv, true)
+		SoundMgr.PlayNonStopUI(10019)
+		CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), bobyUpActorId)
+	end
+end
+
+function _R.StaffAureoleUp(self,data)
+	if MStaff.LastChoose == Staff_Attr then
+		self.ChooseMoudle:OnCreateData(data.staffid)
+	end
+	if MStaff.LastChoose == Define.SysId.Staff_Aureole then
+		self.ChooseMoudle:ChangeAureoleLv(data.staffid,data.aureoleid,data.aureolelv,true)
+		SoundMgr.PlayNonStopUI(10019)
+		CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), bobyUpActorId)
+	end
+end
+
+function _R.ResetView(self)
+	self.mMoudle:Get("BtnUp").RaycastTarget = true
+end
+
+
+function _R.UpdateStaffAttr(self)
+	if MStaff.LastChoose == Staff_Attr then
+		self.ChooseMoudle:OnCreateData(self.mID)
+	end
+end
+
+function _R.RefreshName(self)
+	self.mTextName.Text = MStaff.GetStaffName(self.mID)--person.name
+end
+
+-- 点击了详情
+function _R.OnClickDesc(self)
+	if MStaff.LastChoose == Staff_Attr then
+		if self.ChooseMoudle ~= nil then
+			self.ChooseMoudle:Destroy()
+			self.ChooseMoudle:delete()
+			self.ChooseMoudle = nil
+		end
+
+		self.ChooseMoudle = UStaffAttributePop.new(self.PageNode, self.mID)
+	end
+end
+
+function _R.OnClickBackFromDesc(self)
+	if MStaff.LastChoose == Staff_Attr then
+		if self.ChooseMoudle ~= nil then
+			self.ChooseMoudle:Destroy()
+			self.ChooseMoudle:delete()
+			self.ChooseMoudle = nil
+		end
+
+		self.ChooseMoudle = UStaffAttrPage.new(self.PageNode, self.mID)
+	end
+end
+
+return _M

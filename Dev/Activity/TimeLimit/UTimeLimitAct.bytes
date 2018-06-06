@@ -1,0 +1,319 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_LimitReward_Type"
+local BtnClose = "C_Back_Btn"
+local ItemName = "M_LimitReward_Reward_Item"
+
+local GTE_EFFECT_ID = 5
+--列表移动动画时间
+local PosListMoveTime = 0.3
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyHeight = 69
+--默认无奖励底图
+local DefaultNoReward = "ty_023"
+--默认无奖励物品ID
+local DefaultItemId = 1
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(actId, rankType)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	_P.InitRewardView(self, actId, rankType)
+end
+
+--初始化档位奖励界面
+function _P.InitRewardView(self, actId, rankType)
+	self.actId = actId
+	self.content = self.moudle:Get("content")
+	self.scrollView = self.moudle:Get("scrollView")
+	self.listCache = {}
+
+	self.titleText = self.moudle:Get("C_Text")
+
+	_P.RefreshItemList(self)
+
+	local isDisRank = false
+	if actId ~= nil then
+		local csvLine = Csv.ActivityTimeLimit[actId]
+		if csvLine ~= nil then
+			isDisRank = csvLine.disRank == 1
+		end
+	end
+	if isDisRank then
+		self.moudle:Get("btnCheck").Activity = false
+	else
+		self.moudle:Get("btnCheck"):AddOnButton(function()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UTimeLimitActRank", rankType, Csv.Text("timelimit_rank_tips", 
+							{text = self.proTextTips}), Csv.Text("timelimit_rank"), Csv.Text("rank_name"))
+		end)
+		self.moudle:Get("textBtnCheck").Text = Csv.Text("timelimit_rank")
+	end	
+end
+
+--刷新档位奖励列表
+function _P.RefreshItemList(self)
+	local listData = MActivity.GetFromId(self.actId)
+	if nil ~= listData and listData.rewards then
+		if "" == self.titleText.Text then
+			self.titleText.Text = listData.title2
+		end
+		if nil == self.proTextTips then
+			self.proTextTips = listData.proText
+		end
+		self.curPro = listData.pro
+		local firstNotGetIndex
+		local firstGetIndex
+		for index, data in pairs(listData.rewards) do
+			local isCanGet = _P.CreateItem(self, index, data)
+			if nil == firstNotGetIndex and nil ~= isCanGet and not isCanGet then
+				firstNotGetIndex = index
+			end
+			if nil == firstGetIndex and nil ~= isCanGet and isCanGet then
+				firstGetIndex = index
+			end
+		end
+		_P.CalculateMaxMoveIndex(self)
+		_P.MoveItemList(self, firstNotGetIndex, firstGetIndex)
+	else
+		self:Destroy()
+	end
+end
+
+--计算最大移动索引
+function _P.CalculateMaxMoveIndex(self)
+	if nil ~= self.listPosCache then
+		for k, v in pairs(self.listPosCache) do
+			self.listPosCache[k] = nil
+		end
+	end
+	self.listPosCache = {}
+	if nil ~= self.listCache and nil ~= self.ItemSpace then
+		local height = 0
+		for index, item in pairs(self.listCache) do
+			self.listPosCache[index] = height
+			height = height + item.height + self.ItemSpace
+		end
+		self.MaxMoveHegith = height - self.scrollView.SizeDelta.y
+	end
+end
+
+--移动列表
+function _P.MoveItemList(self, firstNotGetIndex, firstGetIndex)
+	local moveIndex
+	if nil ~= firstGetIndex then
+		moveIndex = firstGetIndex
+	elseif nil ~= firstNotGetIndex then
+		moveIndex = firstNotGetIndex
+	end
+	if nil ~= moveIndex and nil ~= self.MaxMoveHegith and nil ~= self.listPosCache then
+		local height = self.listPosCache[moveIndex]
+		if nil ~= height and 0 ~= height then
+			if height > self.MaxMoveHegith then
+				height = self.MaxMoveHegith
+			end
+			self.content:DOAnchorPosY(height, PosListMoveTime)
+		end
+	end
+end
+
+--创建档位项
+function _P.CreateItem(self, index, data)
+	local item
+	if nil == self.listCache[index] then
+		_P.InitItem(self, index, data)
+	end
+
+	_P.RefreshItemReward(self, index, self.listCache[index], data)
+	return _P.RefreshItem(self, index, data.isGeted)
+end
+
+--获取档位项引用
+function _P.InitItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	if nil == self.ItemDefaultHeight then
+		local itemHeight = itemMoudle.SelfRect.SizeDelta.y
+		self.ItemSpace = self.content:AddVerticalLayoutGroup().spacing
+		self.ItemDefaultHeight = itemHeight + self.ItemSpace
+		itemHeight = itemMoudle:Get("bg").SizeDelta.y
+		self.ItemBgDefaultHeight = itemHeight + self.ItemSpace
+	end
+
+	local item = {}
+	item.item = itemMoudle.SelfRect
+	item.Background = itemMoudle:Get("bg")
+	item.textTitle = itemMoudle:Get("textTitle")
+	itemMoudle:Get("textLimitTips").Text = Csv.Text("timelimit_get_limit")
+	item.content = itemMoudle:Get("content")
+	if nil == self.MaxRewardCol and nil ~= item.content then
+		local layout = item.content:AddGridLayoutGroup()
+		if nil ~= layout then
+			self.rewardColumnCount = layout.constraintCount
+			self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
+		end
+	end
+
+	item.proText = itemMoudle:Get("textLimit")
+	item.maxPro = data.maxVal
+	item.getedPos = itemMoudle:Get("GetPos")
+	item.btnGet = itemMoudle:Get("btnGet")
+	itemMoudle:Get("textBtnGet").Text = Csv.Text("quest_get")
+	item.btnGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CActivity.GetRewardReq(self.actId, index)
+	end)
+
+	self.listCache[index] = item
+end
+
+--刷新Item奖励
+function _P.RefreshItemReward(self, index, item, data)
+	if nil ~= data.rewards then
+		if nil == self.listRewardCache then
+			self.listRewardCache = {}
+		end
+		if self.listRewardCache[index] then
+			for num, rewardItem in ipairs(self.listRewardCache[index]) do
+				rewardItem:Destroy()
+				rewardItem = nil
+			end
+		end
+		self.listRewardCache[index] = {}
+		
+		local num = 0
+		item.rewards = {}		
+		for k, reward in pairs(data.rewards) do
+			local rewardItem = CCommon.CreateItem(item.content, reward.key, CCommon.ShowItemTips, 
+												  {num = reward.value}, Define.SysId.TimeLimit)
+			num = num + 1
+			self.listRewardCache[index][num] = rewardItem
+			item.rewards[num] = reward
+		end
+		local row, rest = math.modf(num / self.rewardColumnCount)
+		if rest > 0 then
+			row = row + 1
+		end
+		for i = 1, row * self.rewardColumnCount - num do
+			local rewardItem = CCommon.CreateItem(item.content, DefaultItemId)
+			rewardItem:Get("color").SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num = num + 1
+			self.listRewardCache[index][num] = rewardItem
+		end
+		local width = item.item.SizeDelta.x
+		item.item.SizeDelta = Vector2(width, self.ItemDefaultHeight + (row - 1) * self.rewardRowHeight)
+		item.Background.SizeDelta = Vector2(width, self.ItemBgDefaultHeight + (row - 1) * self.rewardRowHeight)
+		item.height = item.item.SizeDelta.y
+	end
+end
+
+--刷新Item
+function _P.RefreshItem(self, index, isGeted)
+	local item = self.listCache[index]
+	if not item.item.Activity then
+		item.item.Activity = true
+	end
+
+	item.textTitle.Text = Csv.Text("timelimit_level_title", {num = index})
+	
+	return _P.RefreshItemProState(self, item, isGeted)
+end
+
+--刷新进度按钮状态
+function _P.RefreshItemProState(self, item, isGeted)
+	local isEnough = self.curPro >= item.maxPro
+	local csvTips
+	if isEnough then
+		csvTips = "timelimit_limit_enough"
+	else
+		csvTips = "timelimit_limit_not"
+	end
+	item.proText.Text = Csv.Text(csvTips, {text = self.proTextTips, cur = self.curPro, max = item.maxPro})
+
+	item.btnGet.Activity = not isGeted
+	item.getedPos.Activity = isGeted
+	if item.btnGet.Activity then
+		local isCanGet = not isGeted and isEnough
+		item.btnGet.RaycastTarget = isCanGet
+		item.btnGet.IsGray = not isCanGet
+		return isCanGet
+	end	
+end
+
+--重置缓存数据
+function _P.ResetCacheList(self)
+	if nil ~= self.listCache then
+		for index, item in pairs(self.listCache) do
+			if nil ~= item.item then
+				item.item.Activity = false
+			end
+		end
+	end
+end
+
+function _R.OnRefreshView(self)
+	_P.ResetCacheList(self)
+	_P.RefreshItemList(self)
+end
+
+--刷新按钮状态
+function _R.RefreshItemGetState(self, data)
+	if self.actId == data.actId then
+		local item = self.listCache[data.index]
+		if nil ~= item then
+			if data.isGeted then
+				item.btnGet.Activity = false
+				item.getedPos.Activity = true
+				item.getedPos.Alpha = 0
+				SoundMgr.Play(10004)
+				CCommon.CreateEffect(item.getedPos, GTE_EFFECT_ID, nil, function( ... ) 
+					item.getedPos.Alpha = 1
+				end)
+
+				if nil ~= item.rewards then
+					for index, reward in ipairs(item.rewards) do 
+						CCommon.ShowFlyItem(item.getedPos, reward.key, reward.value, index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
+					end
+				end
+			end
+		end
+	end
+end
+
+return _M

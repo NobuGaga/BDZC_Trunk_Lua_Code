@@ -1,0 +1,34 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+--界面构建
+function _M:OnCreate(...)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Final2")
+	self.mMoudle = moudle
+
+	local data = MRelations.ReportData
+	moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
+	moudle:Get("call").Text = Csv.Text("relations_dailytalkT")
+	moudle:Get("CallText").Text = Csv.Text("relations_overnone")
+	moudle:Get("Y").Text = Csv.Text("relations_cai")
+
+	moudle:Get("choose1"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end,nil,0.9)
+end
+
+function _M:BeforeDestroy()
+	MRelations.ReportData = nil
+end
+
+return _M

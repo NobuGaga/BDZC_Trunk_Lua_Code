@@ -1,0 +1,98 @@
+--没有加入商会时显示
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.DoUpdateDialogText(self)
+	local curTime = HeartBeat.ServSecond()
+	if MCommerce.NextJoinTime ~= nil and MCommerce.NextJoinTime > 0 and MCommerce.NextJoinTime > curTime then
+		self.DialogText.Text = CS.Utility.Utils.FormatSeconds(MCommerce.NextJoinTime - curTime, Csv.Text("commerce_noJoin1"))
+		return true
+	else
+		self.DialogText.Text = Csv.Text("commerce_noJoin2")
+		if self.DialogTextUpdate ~= nil then
+			self.DialogTextUpdate:Destroy()
+		end	
+		return false
+	end	
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Home")
+	self.Moudle = moudle
+
+	SoundMgr.PlaySystem(20116)
+	moudle:Get("C_BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		SoundMgr.DestroySystem()
+		self:Destroy()
+	end, nil, 1.2)
+	local funcCsv = Csv.Func[Define.SysId.Commerce]
+	moudle:Get("C_TltleText").Text = funcCsv.name
+	self.DialogText = moudle:Get("DialogText")
+	if _P.DoUpdateDialogText(self) then
+		self.DialogTextUpdate = self.DialogText:AddOnUpdate(function()
+			_P.DoUpdateDialogText(self)
+		end)
+	end
+	moudle:Get("BtnText").Text = Csv.Text("commerce_noJoin3")
+	moudle:Get("BtnText_0").Text = Csv.Text("commerce_noJoin4")
+	moudle:Get("BtnText_1").Text = Csv.Text("commerce_noJoin5")
+	moudle:Get("BtnText_2").Text = Csv.Text("commerce_noJoin6")
+
+	moudle:Get("Btn"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		--创建商会
+		WindowMgr.Create("UCommerceCreate")
+	end)
+	moudle:Get("Btn1"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		--随机入会
+		CCommerce.AutoJoinReq()
+	end)
+	moudle:Get("Btn2"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		--查询商会
+		WindowMgr.Create("UCommerceQueryInput")
+	end)
+
+	local rankBtn = moudle:Get("Btn3")
+	rankBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		--商会榜单
+		WindowMgr.Create("UCommerceRank")
+	end)
+	rankBtn.Activity = not GameSetting.IsiOSCommit
+end
+
+return _M

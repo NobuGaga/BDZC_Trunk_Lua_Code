@@ -1,0 +1,229 @@
+-- 员工快捷提升界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local PromoteUseType = 6
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.sliderButton ~= nil then
+		self.sliderButton:delete()
+		self.sliderButton = nil
+	end
+end
+
+
+function _M:OnCreate(staffId)
+	local module = self:CreateMoudle(self._RootNode, "M_Staff_AddStrength")
+	if module == nil then return end
+
+	self.mModule = module
+	self.CurSelectIndex = 1
+	self.BagNoneTip = module:Get("BagNoneTip")
+	self.BagNoneTip.Text = Csv.Text("car_garage_none")
+	module:Get("C_Text").Text = Csv.Text("staff_quickUp_title")
+
+	_P.SetListData(self)
+	
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_text").Text = Csv.Text("bag_use")
+	local useBtn = module:Get("C_Btn_a")
+	useBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUseItem(self, staffId)
+	end, nil, 0.9)
+
+	local staffConf = Csv.Personnel[staffId]
+	if staffConf then
+		module:Get("Tips").Text = staffConf.name
+
+		for i=1, 4 do
+			local iconData = staffConf.specialtyIcon[i]
+			local iconImg = module:Get("SxIcon" .. i)
+			iconImg.Activity = iconData
+
+			if iconData then
+				iconImg.SpriteName = iconData
+			end
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemid, itemcount, isAdd)
+		local type = Csv.Item[itemid].useType
+		if self.mItemID == itemid and type == 6 then
+			_P.SetListData(self)
+		end
+	end)
+end
+
+
+function _P.SetListData(self)
+	local contentTransform = self.mModule:Get("content")
+	contentTransform:DestroyChildren()
+
+	self.mAllBagItems = {}
+	local listData = MBag.GetBagItemsByUseType(PromoteUseType, true)
+	if listData == nil or next(listData) == nil then
+		self.BagNoneTip.Activity = true
+	else
+		self.BagNoneTip.Activity = false
+		for i,v in ipairs(listData) do
+			self.mAllBagItems[i] = _P.OnCreateItem(self, contentTransform, v, i)
+		end
+	end
+
+	-- 默认选中第一个
+	local curData = self.mAllBagItems[self.CurSelectIndex]
+	if curData and curData.data then
+		_P.SetOneItemData(self, curData.data)
+	else
+		if self.CurSelectIndex ~= 1 then
+			self.CurSelectIndex = 1
+		end
+
+		local oneData = self.mAllBagItems[self.CurSelectIndex]
+		if oneData and oneData.data then
+			_P.SetOneItemData(self, oneData.data)
+		else
+			_P.SetOneItemData(self, nil)
+		end
+	end
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, index)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Bag_GoodsItem", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("Icon")
+		local qualityImg = itemModule:Get("Color")
+		local numText = itemModule:Get("Num")
+		
+		iconImg.Activity = data
+		numText.Activity = data
+		if data then
+			local itemConf = Csv.Item[data.itemid]
+			iconImg.SpriteName = itemConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+			numText.Text = data.itemcount
+
+			item.id = data.itemid
+			item.num = data.itemcount
+			item.qualityId = itemConf.color
+		else
+			qualityImg.SpriteName = "ty_018"
+		end
+
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			self.CurSelectIndex = index
+			_P.SetOneItemData(self, data)
+		end, nil, 0.9)
+		qualityImg.RaycastTarget = data
+	end
+
+	item.data = data
+	item.module = itemModule
+	return item
+end
+
+
+function _P.SetOneItemData(self, itemData)
+	local module = self.mModule
+	local iconImg = module:Get("Icon")
+	local qualityImg = module:Get("IconColor")
+	local nameText = module:Get("Name")
+	local numText = module:Get("NumText")
+	local descTitleText = module:Get("ItemTitle")
+	local descText = module:Get("Desc")
+	local iconRect = module:Get("ItemRect")
+
+	iconRect.Activity = (itemData ~= nil)
+	
+	descTitleText.Text = Csv.Text("bag_desc")
+	if itemData == nil then
+		nameText.Text = ''
+		numText.Text = ''
+		descText.Text = ''
+		self.sliderValue = 0
+	else
+		local itemConf = Csv.Item[itemData.itemid]
+		local colorStr = Csv.ItemColor[itemConf.color].str
+
+		--nameText.Text = Csv.Text("common_color", {num = colorStr,name = itemConf.name})
+		nameText.Text = itemConf.name
+		numText.Text = Csv.Text("bag_num", {num = itemData.itemcount})
+		descText.Text = itemConf.tips
+		iconImg.SpriteName = itemConf.icon
+		qualityImg.SpriteName = itemConf.colorIcon
+
+		self.sliderButton = SliderButton.new(1, itemData.itemcount, 1, function(value)
+			_P.OnSliderValueChanged(self, value, itemData.itemcount)
+		end)
+		self.sliderButton:CreateSliderBtn(module:Get("Slider"), module:Get("Add1"), module:Get("Add2"))
+		
+		self.sliderValue = 1
+		_P.OnSliderValueChanged(self, 1, itemData.itemcount)
+	end
+end
+
+
+function _P.OnSliderValueChanged(self, value, maxValue)
+	self.sliderValue = value
+	self.mModule:Get("Num").Text = value
+end
+
+
+function _P.OnClickUseItem(self, staffId)
+	if self.sliderValue and self.sliderValue > 0 then
+		local selectData = self.mAllBagItems[self.CurSelectIndex]
+		if selectData and selectData.data then
+			local params = {}
+			table.insert(params, staffId)
+			self.mItemID = selectData.data.itemid
+			CBag.OnUseItem(self.mItemID, self.sliderValue, params)
+		end
+	end
+end
+
+
+function _R.StaffChange(self, data)
+	if data and data.list ~= nil then
+		local time = 0
+		for k,v in pairs(data.list) do
+			local type = Csv.Item[self.mItemID].useType
+			if type == 6 then
+				SoundMgr.Play(11000)
+
+				local flyNode = self.mModule:Get("C_Btn_a")
+				CCommon.ShowFlyText(self._RootNode, Csv.Text("bag_attr" .. v.attrtype, {num = v.attrvalue}), time, nil, nil, flyNode.RootCanvasPos)
+				time = time + 0.5
+			end
+		end
+	end
+end
+
+
+return _M

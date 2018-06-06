@@ -1,0 +1,485 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+local ROOM_EFFECT = 10087
+local CURTAIN_SCALE_TYPE = Csv.Const(10219) --1帘子动 2帘子不动
+
+local Curtain_Right = "T_GirlDate_Curtain_Right"
+local Curtain_Left = "T_GirlDate_Curtain_Left"
+local Curtain_Top = "T_GirlDate_Curtain_Top"
+local T_Curtain_Open = "T_Curtain_Open"
+local T_Curtain_Close = "T_Curtain_Close"
+local T_Curtain_Scale = "T_Curtain_Scale"
+local T_Curtain_Scale_Once = "T_Curtain_Scale_Once"
+local T_GirlDate_Red = "T_GirlDate_Red"
+local T_GirlDate_Red_Open = "T_GirlDate_Red_Open"
+local T_GirlDate_Red_Close = "T_GirlDate_Red_Close"
+
+local GirlDate_Fly_Text = "GirlDate_Fly_Text"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.mUStoryMoudle ~= nil then
+		self.mUStoryMoudle:Destroy()
+		self.mUStoryMoudle:delete()
+		self.mUStoryMoudle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(id)
+	local data = MGirl.GetKnowGirlData(id)
+	self.mDate = data
+	self.mState = 0
+	self.mIsGame = false
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		local state = self.mState
+		if state == 5 then
+			self:Destroy()
+			WindowMgr.Call("UGirl","CloseView")
+		elseif  state == 1 then
+			self.mState = 2
+			_P.ShowCurtain(self)
+		elseif state == 3 then
+			self.mState = 4
+			_P.ShowCurtain(self)
+		end
+	end)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Last_Date")
+	self.mMoudle = moudle
+
+	local value = moudle:Get("value")
+	local curtain = moudle:Get("Curtain")
+	local game = moudle:Get("game")
+	local mainActorPanel = moudle:Get("ActorPanel")
+	local redCurtain = moudle:Get("red")
+
+	--value
+	local bg = moudle:Get("bg")
+	local body = moudle:Get("body")
+	local talk = moudle:Get("DHKtext")
+	local talkBg = moudle:Get("DHK")
+
+	self.girl_prefab = nil
+	self.mBg = bg
+	self.mBody = body
+	self.mTalk = talk
+	self.mTalkBg = talkBg
+
+	--curtain
+
+	local topCurtain = moudle:Get("top")
+	local rightCurtain = moudle:Get("right")
+	local leftCurtain = moudle:Get("left")
+	local rightTween = rightCurtain.CachedTran:GetJTweener(Curtain_Right)
+	local leftTween = leftCurtain.CachedTran:GetJTweener(Curtain_Left)
+	local topTween = topCurtain.CachedTran:GetJTweener(Curtain_Top)
+	local redTween = redCurtain.CachedTran:GetJTweener(T_GirlDate_Red)
+
+	self.mTopCurt = topCurtain
+	self.mRightTween = rightTween
+	self.mLeftTween = leftTween
+	self.mTopTween = topTween
+	self.mMainActor = mainActorPanel
+	self.mRedTween = redTween
+
+	--game
+	local tips = moudle:Get("Tips")
+	local gameTime = moudle:Get("Time")
+	local scoreNum = moudle:Get("scoreNum")
+	local scoreIcon = moudle:Get("score")
+	local gamePanel = moudle:Get("gameRect")
+	scoreIcon.Activity = false
+	moudle:Get("Title").Text = Csv.Text("lastgirl_gametips")
+	moudle:Get("text1").Text = Csv.Text("lastgirl_gametips1")
+	moudle:Get("text2").Text = Csv.Text("lastgirl_gametips2")
+	moudle:Get("C_text").Text = Csv.Text("lastgirl_gamestart")
+	local gameBtn = moudle:Get("C_Btn_b")
+	gameBtn:AddOnButton(function(...)
+		tips.Activity = false
+		scoreIcon.Activity = true
+		CGirl.ReqDateGameStart(1,data.girlid)
+		_P.PlayGame(self)
+	end)
+	self.mGameTime = gameTime
+	self.mGameScore = scoreNum
+	self.mGamePanel = gamePanel
+
+	self.mValue = value
+	self.mCurtain = curtain
+	self.mGame = game
+
+	local pastBtn = moudle:Get("pastBtn")
+	local pastText = moudle:Get("pastText")
+	pastText.Text = Csv.Text("lastgirl_past")
+	pastBtn:AddOnButton(function()
+		
+	end)
+	pastBtn.Activity = false
+
+	-------------------------
+	value.Activity = false
+	curtain.Activity = false
+	game.Activity = false
+	local girlData = Csv.KnowGirl[data.girlid]
+	self.mGirlData = girlData
+
+	local StoryBack = function()
+		if body ~= nil then
+			value.Activity = true
+			bg.SpriteName = girlData.datebg
+
+			local girlCsv = Csv.Girl[girlData.id]
+			if self.girl_prefab ~= nil then
+				self.girl_prefab:Destroy()
+				self.girl_prefab = nil
+			end
+			if girlCsv.prefab ~= nil and girlCsv.prefab > 0 then
+				self.girl_prefab = CCommon.CreateActor(body, girlCsv.prefab, CCommon.ActorFieldMap.girl_home)
+				body.SpriteName = ""
+			else
+				body.SpriteName = girlData.dateIcon
+			end
+			
+			talk.Text = girlData.dateTalk
+			self.mState = 2
+			_P.ShowCurtain(self)
+		end
+	end
+
+	local storyId = girlData.story
+	self.mUStoryMoudle = UStoryMoudle.new(moudle.SelfRect,storyId,StoryBack)
+end
+
+function _P.ShowCurtain(self)
+	self.mCurtain.Activity = true
+
+	local state = self.mState
+	local CloseCurtain = function()
+		self:Unlock()
+		
+		local redCurtainClose = function()
+			if state == 2 then
+				_P.OpenCurtain(self)
+			elseif state == 4 then
+				--播放特效
+				self.mMainActor.Activity = true
+				local roomEffect = CCommon.CreateEffect(self.mMainActor,ROOM_EFFECT)
+				local EndScale = function()
+					self.mGame.Activity = true
+				end
+		
+				self.mRightTween:SetWaitEventOnComplete(T_Curtain_Scale, EndScale)
+				_P.ScaleCurtainTween(self)
+			end
+		end
+		self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Close, redCurtainClose)
+		self.mRedTween:Play(T_GirlDate_Red_Close)
+	end
+	self.mRightTween:SetWaitEventOnComplete(T_Curtain_Close, CloseCurtain)
+
+	self:Lock()
+	_P.CloseCurtainTween(self)
+end
+function _P.OpenCurtain(self)
+	self.mValue.Activity = true
+	local girlData = self.mGirlData
+	self.mBg.SpriteName = girlData.roombg
+
+	local girlCsv = Csv.Girl[girlData.id]
+	if self.girl_prefab ~= nil then
+		self.girl_prefab:Destroy()
+		self.girl_prefab = nil
+	end
+	if girlCsv.homePrefab ~= nil and girlCsv.homePrefab > 0 then
+		self.girl_prefab = CCommon.CreateActor(self.mBody, girlCsv.homePrefab, CCommon.ActorFieldMap.girl_home)
+		self.mBody.SpriteName = ""
+	else
+		self.mBody.SpriteName = girlData.roomIcon
+	end		
+	self.mTalk.Text = girlData.roomTalk
+
+	local RedCurtainOpen = function()
+		
+		local _OpenCurtain = function()
+			self.mCurtain.Activity = false
+			self:Unlock()
+		end
+	
+		self.mRightTween:SetWaitEventOnComplete(T_Curtain_Open, _OpenCurtain)
+		
+		---美女约会流程改版-------
+		if CURTAIN_SCALE_TYPE == 2 then
+			self.mState = 5
+			CGirl.ReqDateGameStart(1,girlData.id)
+			CGirl.ReqDateGameOver(1,girlData.id)
+			_P.ShowRward()
+		else
+			self.mState = 3
+		end
+	
+		_P.OpenCurtainTween(self)
+	end
+	
+	self:Lock()
+	self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Open,RedCurtainOpen)
+	self.mRedTween:Play(T_GirlDate_Red_Open)
+end
+
+function _P.PlayGame(self)
+	self.mIsGame = true
+
+	local moudle = self.mMoudle
+	local data = self.mGirlData
+	local parent = self.mGamePanel
+	local gameTime = self.mGameTime
+	local score = self.mGameScore
+
+	local gameLev = data.GirlGameLev
+	local gameTab = {}
+	local allTime = 0
+	for k,v in pairs(gameLev)do
+		local _time = Csv.GirlGameLev[v].lev_time
+		local _itemlife = Csv.GirlGameLev[v].Obj_life
+		allTime = allTime+ _time
+		table.insert(gameTab,{lv = v,time = _time,life = _itemlife })
+	end
+	self.mAllGameTile = allTime
+	gameTime.Text = Csv.Text("lastgirl_gametime",{time = LuaUtil.GetTimeHMS(allTime)})
+	score.Text = MGirl.lastDateScore
+
+	local allTime2 = allTime
+	local showTime = allTime
+
+	local dateItemTab = {}
+	local showDateItem = function()
+		if showTime - allTime >= gameTab[1].life then
+			showTime = allTime
+			parent:DestroyChildren()
+			dateItemTab =  _P.ShowDateItems(self,parent,gameTab[1].lv)
+		end
+	end
+
+	showDateItem()
+	moudle.SelfRect:AddOnUpdate(function()
+		if allTime > 0 then
+			allTime = allTime-0.1
+
+			gameTime.Text = Csv.Text("lastgirl_gametime",{time = LuaUtil.GetTimeHMS(math.ceil(allTime))})
+			
+			showDateItem()
+
+			--切换等级
+			if allTime2 - allTime >= gameTab[1].time then
+				allTime2 = allTime
+				table.remove(gameTab,1)
+				if #gameTab > 0 then
+					for k,v in pairs(dateItemTab)do
+						v.SelfRect:Destroy()
+					end
+					showDateItem()
+				end
+			end
+		else
+			if self.mIsGame then
+				parent:DestroyChildren()
+				_P.GameOver(self)
+				self.mMainActor.Activity = false
+			end
+		end
+	end,nil,0.1)
+
+end
+
+function _P.ShowDateItems(self,parent,level)
+	local dateItemTab = {}
+	local data =  Csv.GirlGameLev[level]
+
+	local num = data.Obj_num
+	local itemPoxTab = {}
+
+	for i = 1,num,1 do
+		local index = math.random(1,#data.Obj_id)
+		local itemId = data.Obj_id[index]
+
+		local itemPox = _P.GetItemIndex(itemPoxTab)
+		table.insert(itemPoxTab,itemPox)
+		local item = _P.CreatDateItem(self,parent,itemId,itemPox)
+		table.insert(dateItemTab,item)
+	end
+
+	return dateItemTab
+end
+
+function _P.GetItemIndex(indexTab)--x=1,y=2
+	local isGet = false
+	local pox = {}
+	local getIndex = function()
+		local _x = math.random(-2,2)
+		local _y = math.random(-3,2)
+	
+		isGet = true
+		pox = {x = _x, y =_y}
+		for k,v in pairs(indexTab)do
+			if v.x == _x and v.y == _y then
+				isGet = false
+			end
+		end
+	end
+	while(isGet == false)
+	do
+		getIndex()
+	end
+
+	return pox
+end
+
+function _P.CreatDateItem(self,parent,id,pox)
+	local data = Csv.GirlGameObj[id]
+	local _moudle = JGuiManager.GetMoudle(parent, "M_Girl_Last_Date_Item", WindowType.Tips1, 10)
+	_moudle.SelfRect.LocalPosition = Vector2(150*pox.x,150*pox.y)
+	local addText = _moudle:Get("add")
+	local rect = _moudle:Get("rect")
+	local actorPanel = _moudle:Get("ActorPanel")
+	local itemEffect = CCommon.CreateEffect(actorPanel,data.effect_id)
+
+	addText.Text = "+"..data.score
+	local addTween = addText.CachedTran:GetJTweener(GirlDate_Fly_Text)
+
+	local isClick = false
+	rect:AddOnButton(function(...)
+		--发送消息
+		if isClick == false then
+			isClick = true
+			CGirl.ReqDatePlayGame(1,self.mDate.girlid,id)
+
+			_P.ClickDateItem(self,data.score)
+			CCommon.CreateEffect(actorPanel,10076)
+
+			--抖动
+			_P.ScaleCurtainOnceTween(self)
+
+			--飘字
+			addTween:Play()
+
+			_moudle.SelfRect:AddOnTime(function()
+				_moudle.SelfRect.Activity = false
+			end,nil,0.5)
+		end
+	end)
+	
+	return _moudle
+end
+
+
+function _P.ClickDateItem(self,score)
+	local scoreText = self.mGameScore
+	MGirl.lastDateScore = MGirl.lastDateScore +score
+	scoreText.Text = MGirl.lastDateScore
+end
+
+function _P.GameOver(self)
+
+	self.mIsGame = false
+	--self.mValue.Activity = true
+	local girlData = self.mGirlData
+	self.mBg.SpriteName = girlData.roombg
+	-- self.mBody.SpriteName = girlData.roomIcon
+
+	self.mGameTime.Activity = false
+	self.mGameScore.Activity = false
+
+	local girlCsv = Csv.Girl[girlData.id]
+	if self.girl_prefab ~= nil then
+		self.girl_prefab:Destroy()
+		self.girl_prefab = nil
+	end
+	if girlCsv.homePrefab ~= nil and girlCsv.homePrefab > 0 then
+		self.girl_prefab = CCommon.CreateActor(self.mBody, girlCsv.homePrefab, CCommon.ActorFieldMap.girl_home)
+		self.mBody.SpriteName = ""
+	else
+		self.mBody.SpriteName = girlData.roomIcon
+	end	
+	self.mTalk.Text = girlData.roomTalk
+	--self.mTalkBg.Activity = true
+	--self.mBody.Activity = true
+
+	local RedCurtainOpen = function()
+		local OpenCurtain = function()
+			self:Unlock()
+			--奖励
+			self.mCurtain.Activity = false
+			_P.ShowRward()
+		end
+	
+		self.mRightTween:SetWaitEventOnComplete(T_Curtain_Open, OpenCurtain)
+		self.mState = 5
+		_P.OpenCurtainTween(self)
+	end
+	self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Open,RedCurtainOpen)
+	self.mRedTween:Play(T_GirlDate_Red_Open)
+
+	self:Lock()
+	CGirl.ReqDateGameOver(1,girlData.id)
+end
+
+function _P.ShowRward()
+	local score = MGirl.lastDateScore
+	local rewardTab = Csv.GirlGameReward
+	for k,v in pairs(rewardTab)do
+		local stage = v.score_stage
+		if score>= stage[1] and score<= stage[2] then
+			local rewards = v.reward
+			for k2,v2 in pairs(rewards)do
+				local itemData = Csv.Item[v2[1]]
+				CCommon.ShowError(itemData.name.."+"..v2[2])
+			end
+
+			MGirl.lastDateScore = 0
+			return
+		end
+	end
+	
+end
+
+function _P.OpenCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Open)
+	self.mLeftTween:Play(T_Curtain_Open)
+	self.mTopTween:Play(T_Curtain_Open)
+end
+
+function _P.CloseCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Close)
+	self.mLeftTween:Play(T_Curtain_Close)
+	self.mTopTween:Play(T_Curtain_Close)
+end
+
+function _P.ScaleCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Scale)
+	self.mLeftTween:Play(T_Curtain_Scale)
+	self.mTopTween:Play(T_Curtain_Scale)
+end
+
+function _P.ScaleCurtainOnceTween(self)
+	self.mRightTween:Play(T_Curtain_Scale_Once)
+	self.mLeftTween:Play(T_Curtain_Scale_Once)
+	self.mTopTween:Play(T_Curtain_Scale_Once)
+end
+
+return _M

@@ -1,0 +1,118 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local SHOWTWEEN_POP = "T_Wharf_Award"
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(dataList)
+	self.mDataList = dataList
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		SoundMgr.DestroySystem()
+		if _P.ChecKShow(self) == false then
+			self:Destroy()
+		end
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_Award")
+	local closeBtn = moudle:Get("backBtn")
+
+	self.Moudle = moudle
+
+	_P.ChecKShow(self)
+end
+
+function _P.ChecKShow(self)
+	local datas = self.mDataList
+
+	if datas ~= nil then
+		if #datas >0 then
+			_P.Refresh(self,datas[1])
+			table.remove(datas,1)
+		end
+	end
+
+	self.mDataList = datas
+
+	if #datas > 0 then
+		return true
+	end
+	return false
+end
+
+function _P.Refresh(self,visitdata)
+	local moudle = self.Moudle
+
+	local content = moudle:Get("content")
+	local contentTween = content.CachedTran:GetJTweener(SHOWTWEEN_POP)
+	contentTween:Play()
+
+	local buildName = moudle:Get("BuildName")
+	local bgImage = moudle:Get("image")
+	local body = moudle:Get("bsx")
+	local nameText = moudle:Get("nameText")
+	local asideText = moudle:Get("asideText")
+	local awardText = moudle:Get("award")
+
+	local data = Csv.WharfPeople[visitdata.peopleId]
+	buildName.Text =Csv.WharfBuild[data.build].name
+	bgImage.SpriteName = data.unlockBG
+	body.SpriteName = data.icon
+	nameText.Text = data.name
+	asideText.Text = data.talk
+
+	if data.sound ~= nil then
+		SoundMgr.PlaySystem(data.sound)--播放语音
+	end
+
+	body:SetNativeSize()
+	if data.type == 4 then
+		local nameContent = moudle:Get("name")
+		nameContent.Activity = false
+		--local asideContent = moudle:Get("aside")
+	else
+		local award = _P.GetAwardStr(visitdata,data)
+		awardText.Text = award
+		awardText:AddOnTime(function(...)
+			CCommon.ShowError(_P.GetAwardStr(visitdata,data))
+
+			if visitdata.itemCount >0 then
+				SoundMgr.Play(11000)
+			end
+		end,nil,0.5)
+	end
+end
+
+function _P.GetAwardStr(visitdata,data)
+
+	local itemData = Csv.Item[visitdata.itemId]
+
+	if visitdata.itemId == Define.SpecialItem.Meet then
+
+		local meetData = data.meetdesc
+		for meetK,meetV in pairs(meetData) do
+			if visitdata.meet >= meetV[1] and 
+				visitdata.meet <= meetV[2] then
+				 return meetV[3]
+			end
+		end
+	end
+	if visitdata.itemCount >0 then
+		return itemData.name.."+"..visitdata.itemCount
+	end
+	return itemData.name..visitdata.itemCount
+end
+
+return _M

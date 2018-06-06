@@ -1,0 +1,302 @@
+-- 目标系统主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CRank = JRequire "Dev.Rank.CRank"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MRank = JRequire "Dev.Rank.MRank"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local GTE_EFFECT_ID = 5
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
+local DefaultNoReward = "ty_023" --默认无奖励底图
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+-- 领取类型
+local GetTypeEnum = {
+	CanGeted = 1,--可领取
+	Geted = 2,--领取
+	CanNoGet = 3,--未领取
+}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--获取排名奖励数据
+function _P.GetRankData(self, activity)
+	local charityConf = Csv.Charity[activity]
+	local rewardTitle = ""
+	local rewardTarget = ""
+	rewardTarget = Csv.Text("charitable_rank_target", {score = Csv.Const(20002)})
+	self.mRankrewardData = {}
+	local rewarditemList = {}
+	for i=1, #charityConf.rankReward do
+		if charityConf.rankInterval[i][1] == charityConf.rankInterval[i][2] then
+			rewardTitle = Csv.Text("charitable_rank_title2",{num = charityConf.rankInterval[i][1]})
+		else
+			rewardTitle = Csv.Text("charitable_rank_title",{from = charityConf.rankInterval[i][1],
+			to = charityConf.rankInterval[i][2]})
+		end
+
+		local itemData = {
+			index = i,
+			from = charityConf.rankInterval[i][1],
+			to = charityConf.rankInterval[i][2],
+			memberReward = charityConf.rankReward[i],
+			rewardTitle = rewardTitle,
+			rewardTarget = rewardTarget,
+		}
+		rewarditemList[i] = itemData
+	end
+	self.mRankrewardData = rewarditemList
+end
+
+--排名奖励
+function _P.OnCreateItem(data,itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Charitable_Ranking_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("textTitle").Text = data.rewardTitle
+	itemModule:Get("textTarget").Text = data.rewardTarget
+	local bgHeight = itemModule.SelfRect.SizeDelta.y
+	
+	local content = itemModule:Get("GoodsItem")
+	content:DestroyChildren()
+
+	local layout = content:AddGridLayoutGroup()
+	local columnLimitNum = layout.constraintCount
+	local oneItemHeight = layout.cellSize.y + layout.spacing.y
+
+	local num = 0
+	for k, v in pairs(data.memberReward) do
+		CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Charitable)
+		num = num + 1
+	end
+
+	local remNum = num % columnLimitNum
+	if remNum ~= 0 then
+		for i=1, (columnLimitNum - remNum) do
+			local rewardItem = CCommon.CreateItem(content, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num = num + 1
+		end
+	end
+
+	local row, rest = math.modf(num / columnLimitNum)
+	itemModule.SelfRect.SizeDelta = Vector2(itemModule.SelfRect.SizeDelta.x, bgHeight + (row - 1) * oneItemHeight) -- 默认有一行不需要计算进去
+end
+
+--设置列表数据
+function _P.OnSetListData(self)
+	local rankList = self.mRankrewardData
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	if not rankList then return end
+	for k,v in pairs(rankList) do
+		_P.OnCreateItem(v, itemGrid)
+	end
+end
+
+-- 设置是否可以领取
+function _P.SetGetBtnData(self)
+	if self.mData.selfGetState == nil then return end
+	local text
+	local isFinish = self.time - HeartBeat.ServSecond() <= 0
+	local getState = self.mData.selfGetState
+	local isCanNotGet = getState == GetTypeEnum.CanNoGet
+	local isGeted = getState == GetTypeEnum.Geted
+	
+	local isCanGet = getState == GetTypeEnum.CanGeted and self.mRankData.pro >= Csv.Const(20002)
+	self.timeRect.Activity = not isFinish
+	self.getBtnText.Activity = isFinish
+	self.mModule:Get("redpoint").Activity = isCanGet
+	if isFinish then
+		if isCanNotGet then
+			text ="rankreward_can_not_get"
+		end
+	else
+		if isCanNotGet then
+			text ="rankreward_not_get_time"
+		end
+	end
+	if text then
+		self.getBtnText.Text = Csv.Text(text)
+	else
+		self.getBtnText.Text = ""
+	end
+	local isLight = isFinish and isCanGet
+	self.getBtn.IsGray = not isLight
+	self.getBtn.RaycastTarget = isLight
+	self.getBtn.Activity = not isGeted
+	self.getImg.Activity = isGeted
+end
+
+function _P.RefreshTime(self)
+	local time = self.time - HeartBeat.ServSecond() 
+
+	local isFinish = time <= 0
+	if isFinish then
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
+	else
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
+	end
+	return isFinish
+end
+
+function _P.SetRankData(self)
+	local rankText = self.mModule:Get("rankNum")
+	local rankStr = ""
+	if self.mselfRankData.rank and self.mselfRankData.rank > 0 then
+		rankStr = self.selfRankNum
+	else
+		rankStr = "10000+"
+	end
+
+	if self.mselfRankData ~= nil then
+		if self.mselfRankData.pro < Csv.Const(20002) then
+			rankStr = rankStr..Csv.Text("charitable_rank_limit")
+		end
+	end
+	rankText.Text = rankStr
+
+	_P.SetGetBtnData(self)
+end
+
+
+-- 自己活动排行版回调后
+function _R.OnGetSelfRankData(self, data)
+	self.selfRankNum = data.selfrank
+	self.mRankData.selfrank = data.selfrank
+	self.mRankData.ranklist = data.ranklist
+end
+
+function _R.OnUpdateData(self, actId)
+	local data = MActivity.GetFromId(actId)
+	self.mData = data
+	_P.SetGetBtnData(self)
+end
+
+function _R.OnSelfRankData(self,data)
+	self.mselfRankData = data
+	_P.SetRankData(self)
+	_P.SetGetBtnData(self)
+end
+
+function _R.UpdateRed(self)
+	local redRect = self.mModule:Get("redpoint")
+	redRect.Activity = MActivity.CharitableRed
+	local data = MActivity.GetFromId(self.actId)
+	self.mData = data
+	_P.SetGetBtnData(self)
+end
+
+--获得奖励返回
+function _R.OnGetRewardBack(self, data)
+	--播放奖励特效
+	if data.isGeted then
+		self.getBtn.Activity = false
+		self.mModule:Get("redpoint").Activity = false
+		SoundMgr.Play(10004)
+
+		local animRect = self.mModule:Get("GetAnim")
+		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
+			_R.OnUpdateData(self, data.actId)
+			local rewardIndex = data.index
+			local rewardItems = Csv.Charity[data.actId].rankReward[rewardIndex]
+			
+			local rewardList = rewardItems or {}
+			local delayCount = 0
+			for k,v in pairs(rewardList) do
+				CCommon.ShowFlyItem(animRect, v[1], v[2], delayCount)
+				delayCount = delayCount + 0.3
+			end
+		end)
+	end
+end
+
+--界面构造
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Charitable_Ranking")
+	self.mModule = module
+
+	self.mData = data
+	self.actId = data.actId
+	self.mRankData = data.rankData
+	local closeBtn = module:Get("Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local rankText = module:Get("C_text1")
+	rankText.Text = Csv.Text("charitable_self_rank")
+	self.rankText = rankText
+	self.getImg = module:Get("GetPos")
+	self.timeText = module:Get("TimeNum")
+	self.rankBtnText = module:Get("textBtnRank")
+	self.timeRect = module:Get("Time")
+	self.timeRect.Text = Csv.Text("charitable_rank_time")
+	self.rankBtnText.Text = Csv.Text("xinguan_rank_bangdan")
+	module:Get("textSelfRank").Text = Csv.Text("charitable_my_rank")
+	module:Get("textBtnGet").Text = Csv.Text("xinguan_rank_get")
+	self.getBtnText = module:Get("noneText")
+
+	local charityConf = Csv.Charity[data.actId]
+	self.selfRankType = charityConf.rankType
+	_P.GetRankData(self,data.actId)
+	CRank.GetRankList(self.selfRankType, true)
+	CActivity.ReqCharitableGetRank()
+
+	local state = data.state
+	local time = state.lefttime - HeartBeat.ServSecond()
+	self.time = state.lefttime
+	
+	self.getBtn = module:Get("btnGet")
+	self.getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CActivity.GetRewardReq(self.mData.actId, self.mselfRankData.rank)
+	end, nil, 0.95)
+
+	local personBtn = module:Get("btnRank")
+	personBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCharitableSelfRankPanel", self.mRankData, self.selfRankType, self.mData.actId)
+	end, nil, 0.95)
+	_P.RefreshTime(self)
+	if time > 0 then
+		self.countTime = self.timeText:AddOnUpdate(function() 
+			if _P.RefreshTime(self) then
+				if self.countTime then
+					self.countTime:Destroy()
+					self.countTime = nil
+				end
+				if self.mData.actType == Define.ActivityType.Charitable then
+					MActivity.IsUpdateTime1 = true
+				else
+					MActivity.IsUpdateTime2 = true
+				end
+			end
+		end, nil, 1)
+	end
+	_P.OnSetListData(self)
+	_P.SetGetBtnData(self)
+	-- local titleImg = module:
+
+end
+
+return _M

@@ -1,0 +1,42 @@
+local _M = {}
+
+_M.BackGroundVolume = 70
+_M.HumanVoice = 70
+_M.EffectVoice = 70
+
+_M.BackGroundSwitch = 1
+_M.HumanVoiceSwitch = 1
+_M.EffectVoiceSwitch = 1
+_M.IsSubmitAnimInfo = false
+
+
+function _M.Clean()
+	_M.BackGroundVolume = 70
+	_M.HumanVoice = 70
+	_M.EffectVoice = 70
+	_M.BackGroundSwitch = 1
+	_M.HumanVoiceSwitch = 1
+	_M.EffectVoiceSwitch = 1
+end
+
+function _M.SetiOSCommitData()
+	_M.BackGroundVolume = 0
+	_M.HumanVoice = 0
+	_M.EffectVoice = 0
+	_M.BackGroundSwitch = 0
+	_M.HumanVoiceSwitch = 0
+	_M.EffectVoiceSwitch = 0
+end
+
+function _M.OnSaveSetting()
+	local PlayerPrefs = CS.UnityEngine.PlayerPrefs
+	PlayerPrefs.SetFloat("BackGroundVolume", _M.BackGroundVolume)
+	PlayerPrefs.SetFloat("HumanVoice", _M.HumanVoice)
+	PlayerPrefs.SetFloat("EffectVoice", _M.EffectVoice)
+	PlayerPrefs.SetFloat("BackGroundSwitch", _M.BackGroundSwitch)
+	PlayerPrefs.SetFloat("HumanVoiceSwitch", _M.HumanVoiceSwitch)
+	PlayerPrefs.SetFloat("EffectVoiceSwitch", _M.EffectVoiceSwitch)
+end
+
+
+return _M

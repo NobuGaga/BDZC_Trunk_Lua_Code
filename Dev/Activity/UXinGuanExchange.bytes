@@ -1,0 +1,174 @@
+-- 新官上任（积分兑换）
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local NUM_TWEEN = "T_Club_NumSacle"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Exchange")
+	self.mModule = module
+
+	self.exchangeData = data
+	local closeBtn = module:Get("C_BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	--module:Get("C_Text").Text = Csv.Text("xinguan_exchange_title")
+	module:Get("Point").Text = Csv.Text("xinguan_exchange_point")
+	module:Get("PointNum").Text = self.exchangeData.point
+
+	_P.SetListData(self)
+end
+
+
+function _P.SetListData(self)
+	local shopList = _P.GetSortList(self.exchangeData.itemList)
+	if not shopList then return end
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+	
+	self.mRawTableItems = {}
+	for i,v in ipairs(shopList) do
+		self.mRawTableItems[v.index] = _P.OnCreateShopItem(self, v, itemGrid)
+	end
+end
+
+
+function _P.GetSortList(shopList)
+	if next(shopList) == nil then return {} end
+	local sortList = shopList
+
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateShopItem(self, v, itemGrid)
+	local shopItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Exchange_Item", WindowType.UI, 0)
+	if itemModule then
+		local itemConf = Csv.Item[v.itemId]
+
+		-- 设置item数据
+		local ItemNameText = itemModule:Get("GoodName")
+		local strColor = Csv.ItemColor[itemConf.color].str
+		ItemNameText.Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+		itemModule:Get("ItemNum").Text = (v.itemCount > 1 and v.itemCount) or ""
+		itemModule:Get("LeftNum").Text = (v.maxBuy - v.buyCount)
+
+		local IconImg = itemModule:Get("Icon")
+		IconImg.SpriteName = itemConf.icon
+		IconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickIcon(itemConf.id)
+		end, nil, 1)
+
+		local qualityImg  = itemModule:Get("IconBox")
+		qualityImg.SpriteName = itemConf.colorIcon
+
+		local scoreText = itemModule:Get("Score")
+		scoreText.Text = v.itemPoint .. Csv.Text("club_exchange_fenshu")
+
+		itemModule:Get("C_text").Text = Csv.Text("club_exchange_change")
+		local exchangeBtn = itemModule:Get("Exchange")
+		exchangeBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if v.buyCount >= v.maxBuy then
+				CCommon.ShowError(Csv.Text("club_exchange_numError"))
+				return
+			end
+
+			if self.exchangeData.point < v.itemPoint then  -- 积分不足
+				CCommon.ShowError(Csv.Text("club_exchange_pointError"))
+				return
+			end
+
+			-- 兑换商品
+			CActivity.ExchangeNewReq(self.exchangeData.actId, v.index)
+		end)
+		
+		_P.SetItemGray(itemModule, v, v.maxBuy)
+	end
+
+	shopItem.module = itemModule
+	return shopItem
+end
+
+
+-- 打开道具详情界面
+function _P.OnClickIcon(id)
+	if id then
+		WindowMgr.Create("UBagDetailPop", id)
+	end
+end
+
+
+-- 设置item是否为灰
+function _P.SetItemGray(itemModule, data, maxBuy)
+	local goodConf = Csv.ActivityNewExchange[data.goodid]
+	local isMax = data.buyCount >= maxBuy
+	
+	itemModule:Get("Icon").IsGray = isMax
+	itemModule:Get("IconBox").IsGray = isMax
+	itemModule:Get("Red").Activity = not isMax
+
+	-- 判断该商品兑换次数是否达到上限，若达到上限置灰，不可点击
+	local exchangeBtn = itemModule:Get("Exchange")
+	exchangeBtn.IsGray = isMax
+	exchangeBtn.RaycastTarget = not isMax
+end
+
+
+-- 兑换道具回调
+function _R.OnExchangeCallBack(self, data)
+	local updateItem = self.mRawTableItems[data.index]
+	local itemModule = updateItem.module
+	if updateItem == nil or itemModule == nil then return end
+	
+	-- 更新数据
+	self.exchangeData.point = data.point
+	local updateData = self.exchangeData.itemList[data.index]
+	updateData.buyCount = data.buyCount
+
+	itemModule:Get("LeftNum").Text = updateData.maxBuy - data.buyCount
+	_P.SetItemGray(itemModule, data, updateData.maxBuy)
+
+	-- 更新分数
+	local scoreText = self.mModule:Get("PointNum")
+	scoreText.Text = (data.point < 0 and 0) or data.point
+
+	-- 获得奖励动画
+	local ScoreTween = scoreText.CachedTran:GetJTweener(NUM_TWEEN)
+	ScoreTween:Play()
+
+	local effectRect = itemModule:Get("Score")
+	if not effectRect then return end
+
+	CCommon.ShowFlyItem(effectRect, updateData.itemId, updateData.itemCount)
+end
+
+
+return _M

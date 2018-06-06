@@ -1,0 +1,124 @@
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+local MAXBOOKSTAR = Csv.Const(Define.Const.StaffMax)[5]
+local ActiveActorId = 10009
+local SpeacilActorId = 10021
+
+function _M:Destroy( ... )
+	if self.Moudle ~= nil then
+		SoundMgr.DestroySystem()
+		self.Moudle:Destroy()
+		self.Moudle = nil
+	end
+end
+
+-- isBattle:是否是关卡战斗界面打开该界面
+function _M:ctor(parent, id)
+	local csvLine =  Csv.Personnel[id]
+	local showSysID = csvLine.showSysid
+	local mainLayerInfo = {}
+	if showSysID == Define.SysId.Airport then
+		WindowMgr.Call("UBattle", "GetSortLayer", mainLayerInfo)
+	elseif showSysID == Define.SysId.VIPWelfare then
+		WindowMgr.Call("UVipWelfare", "GetSortLayer", mainLayerInfo)
+	elseif showSysID == Define.SysId.FirstRecharge then
+		WindowMgr.Call("UFirstRecharge", "GetSortLayer", mainLayerInfo)
+	else
+		WindowMgr.Call("UMain", "GetSortLayer", mainLayerInfo)
+	end
+	local startIndex = mainLayerInfo.index
+
+	SoundMgr.PlaySystem(csvLine.sound)
+	local data = MStaff.GetStaffDataByID(id)
+	local moudle = JGuiManager.GetMoudle(parent, "M_Guidance_Staff", mainLayerInfo.type, mainLayerInfo.index)
+	self.Moudle = moudle
+
+	moudle.SelfRect.RaycastTarget = true
+	moudle.SelfRect:AddOnTime(function( ... )
+		moudle.SelfRect.RaycastTarget = false
+		_P.ShowTips(self)
+	end, nil, 1.2)
+	
+	mainLayerInfo.index = moudle.SortingOrder + 1
+	-- 播放员工激活特效
+	SoundMgr.Play(10005)
+	local isSpecail = (csvLine.special ~= nil)
+	local actorPanel = moudle:Get("ActorPanel")
+	actorPanel.LocalPosition = (isSpecail and Vector2.zero) or Vector2(-85, 330)
+	CCommon.CreateEffect(actorPanel, ((isSpecail and SpeacilActorId) or ActiveActorId))
+
+	if csvLine.prefab ~= nil and csvLine.prefab > 0 then
+		CCommon.CreateActor(moudle:Get("BSX"), csvLine.prefab, CCommon.ActorFieldMap.staff_get)
+	else
+		moudle:Get("BSX").SpriteName = csvLine.asset
+	end	
+	moudle:Get("Name").Text = csvLine.name
+	moudle:Get("Title").Text = Csv.Text("staff_aptitude_all",{num = _P.GetAllAptitude(id)})
+	local content = moudle:Get("Content")
+	for k,v in pairs(csvLine.book) do
+		local bookMoudle = JGuiManager.GetMoudle(content, "M_Guidance_StaffItem", mainLayerInfo.type, mainLayerInfo.index)
+		mainLayerInfo.index = bookMoudle.SortingOrder + 1
+		local csvBookLv = Csv.BookLv[v[2]*1000 + data.book[v[1]]]
+		local csvBook = Csv.Book[v[1]]
+		bookMoudle:Get("BookColor").SpriteName = csvBook.colorIcon
+		bookMoudle:Get("BookIcon").SpriteName = csvBook.icon
+		bookMoudle:Get("BookName").Text = csvBook.name
+		bookMoudle:Get("BookLv").Text = Csv.Text("staff_LV",{num = data.book[v[1]]})
+		bookMoudle:Get("ResultText").Text = Csv.Text("staff_aptiadd",{name = csvBook.addDesc,num = csvBookLv.aptitude})
+
+		for i=1,MAXBOOKSTAR do
+			bookMoudle:Get("StarIcon"..i).Activity = i <= v[2]
+		end
+	end
+
+	if showSysID == Define.SysId.Airport then
+		WindowMgr.Call("UBattle", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	elseif showSysID == Define.SysId.VIPWelfare then
+		WindowMgr.Call("UVipWelfare", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	elseif showSysID == Define.SysId.FirstRecharge then
+		WindowMgr.Call("UFirstRecharge", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	else
+		WindowMgr.Call("UMain", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	end
+
+	if csvLine.star ~= nil and csvLine.star > 0 then
+		for i=1,csvLine.star do
+			moudle:Get("star"..i).Activity = true
+		end
+	end
+end
+
+function _P.GetAllAptitude(id)
+	local allAptitude = 0
+	local books = Csv.Personnel[id].book
+	local data = MStaff.GetStaffDataByID(id)
+	for k,v in pairs(books) do
+		if data ~= nil and data.book ~= nil and data.book[v[1]] ~= nil then
+			local aptitude = Csv.BookLv[v[2]*1000 + data.book[v[1]]].aptitude
+			allAptitude = allAptitude + aptitude
+		else
+			print(data)
+			print(data.book)
+			print(data.book[v[1]])
+		end
+	end
+	return allAptitude
+end
+
+function _P.ShowTips(self)
+	local tipsText = self.Moudle:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+return _M

@@ -1,0 +1,127 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local luaUtil = JRequire"Libs.LuaUtil"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.GetRanDomName(self,randomName)
+	local input =  self.mInput
+	input.Text = randomName
+end
+
+function _R.ResetName(self,data)
+	if data.isSuccess ~= true then
+		CCommon.ShowError(Csv.Text("Girl_baby_changeNameFalse"))
+	end
+	self:Destroy()
+end
+
+function _M:OnCreate(id,name,isChangeName,gender)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Baby_ModifyName")
+	local backBtn = moudle:Get("C_backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local input = moudle:Get("input")
+	local randomBtn = moudle:Get("NameImage") 
+	local title = moudle:Get("title")
+	local sureBtn = moudle:Get("C_Btn_b")
+	local cancelBtn = moudle:Get("Btn_e")
+	local sureText = moudle:Get("C_text")
+	local cancelText = moudle:Get("C_text_0")
+	local placeText = moudle:Get("Placeholder")
+	local chooseText = moudle:Get("CHOOSE")
+	local chooseNum = moudle:Get("NumText")
+	local genderSp = moudle:Get("Gender")
+	self.mInput = input
+
+	if gender == 1 then
+		genderSp.SpriteName = "mn_080"
+	else
+		genderSp.SpriteName = "mn_081"
+	end
+
+	sureText.Text = Csv.Text("common_sure")--"确定"
+	cancelText.Text = Csv.Text("common_cancel")--"取消"
+	placeText.Text = Csv.Text("Girl_baby_inputName")--"输入您的名字"
+
+	if MBag.GetItemNum(Define.AssetsType.Gold) >= 20 then
+		chooseText.Text = Csv.Text("Girl_baby_changeNameCost2",{num = 20})--是否使用钻石<color=#ff0000>x{num}</color>修改名称
+	else
+		chooseText.Text = Csv.Text("Girl_baby_changeNameCost1",{num = 20})
+	end
+
+	randomBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CGirl.ReqRandomBabyName(id)
+	end)
+
+	--local data = MGirl.GetBabyDataByID(id)
+	if isChangeName == true then
+		title.Text = Csv.Text("Girl_baby_changeName")--"改名"
+		input.Text = name--"输入您的名字"
+		chooseText.Activity = true
+	else
+		CGirl.ReqRandomBabyName(id)
+		title.Text = Csv.Text("Girl_baby_giveName")--"赐名"
+		placeText.Text = Csv.Text("Girl_baby_inputName")--"输入您的名字"
+		chooseText.Activity = false
+	end
+
+	sureBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		local inputLength = luaUtil.StringLenght(input.Text)
+		if inputLength > 12 then
+			CCommon.ShowError(Csv.Text("Girl_baby_inputOut"))--"名称不能超过10个字符！"
+		else
+			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+			local cost = 20
+			local itemDate = Csv.Item[Define.AssetsType.Gold]
+	
+			if isChangeName == true then
+				if name ~= input.Text then
+					if cost > GoldCount then --名字未改
+						CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+					else
+						MGirl.babyName = input.Text
+						CGirl.ReqSetBabyName(id,input.Text)
+					end
+				end
+			else
+				MGirl.babyName = input.Text
+				CGirl.ReqSetBabyName(id,input.Text)
+			end
+		end
+	end)
+
+	cancelBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	
+end
+
+return _M

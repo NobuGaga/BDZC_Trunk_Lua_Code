@@ -1,0 +1,261 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local NUM_TWEEN = "T_Club_NumSacle"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Halo", WindowType.UI, 0)
+	self.mMoudle = moudle
+	local data = MStaff.GetStaffDataByID(id)
+	local contentTransform = moudle:Get("Content")
+	local tableItems = {}
+
+	if data == nil then
+		local aureole = Csv.Personnel[id].aureole
+		if aureole ~= nil then
+			for _i, _aid in pairs(aureole) do
+				local halo = Csv.Aureole[_aid * 1000 + 1]
+				local itemMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_HaloItem",WindowType.UI, 0)
+				itemMoudle:Get("BtnUp").Activity = false
+				itemMoudle:Get("Icon").SpriteName = halo.icon
+				local ImgColor = itemMoudle:Get("IconColor")
+				if halo.iconColor ~= nil then
+					ImgColor.Activity = true
+					ImgColor.SpriteName = halo.iconColor
+				else
+					ImgColor.Activity = false
+				end
+				itemMoudle:Get("Name").Text = halo.name
+				itemMoudle:Get("C_text").Text = Csv.Text("staff_up")
+
+				_P.SetAureoleDataNil(self,halo,itemMoudle,_aid,false)
+			end
+		end
+		return
+	end
+
+	for k,v in pairs(data.aureole) do
+		local halo = Csv.Aureole[k * 1000 + v.level]
+		local item = {}
+		local itemMoudle = JGuiManager.GetMoudle(contentTransform,"M_Staff_HaloItem",WindowType.UI, 0)
+		local BtnUp = itemMoudle:Get("BtnUp")
+		BtnUp:AddOnButton(function ( ... )
+			if not _P.CheckBtnIsClick(0.3) then return end
+
+			SoundMgr.Play(10001)
+			if halo.costitem ~= nil then
+				if not MBag.CheckItemEnough(halo.costitem,halo.costcount) then
+					return
+				end
+			end
+			CStaff.StaffAureoleUp(id,k)
+		end, nil, 0.9)
+
+		local ImgIcon = itemMoudle:Get("Icon")
+		ImgIcon.SpriteName = halo.icon
+
+		local ImgColor = itemMoudle:Get("IconColor")
+		if halo.iconColor ~= nil then
+			ImgColor.Activity = true
+			ImgColor.SpriteName = halo.iconColor
+		else
+			ImgColor.Activity = false
+		end
+
+		local TextName = itemMoudle:Get("Name")
+		TextName.Text = halo.name
+
+		_P.SetAureoleData(self,halo,itemMoudle,data,k,false)
+
+		local TextUp = itemMoudle:Get("C_text")
+		TextUp.Text = Csv.Text("staff_up")
+
+		item.moudle = itemMoudle
+		tableItems[k] = item
+	end
+	self.mTableItems = tableItems
+end
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+function _P.SetAureoleDataNil(self, halo,itemMoudle,k,isShowEffect)
+	itemMoudle:Get("Level").Text = Csv.Text("staff_lv",{num = 1})
+
+	local TextNow = itemMoudle:Get("NowLeft")
+	local TextNowNum = itemMoudle:Get("NowCenter")
+	local NowRight = itemMoudle:Get("NowRight")
+	local TextUp = itemMoudle:Get("UpLeft")
+	local TextUpNum = itemMoudle:Get("UpCenter")
+	local UpRight = itemMoudle:Get("UpRight")
+	local TextCost = itemMoudle:Get("Cost")
+	local BtnUp = itemMoudle:Get("BtnUp")
+
+	TextNow.Text = Csv.Text("staff_skicostN")
+	NowRight.Text = halo.effectDesc
+	TextNowNum.Text = halo.effectNumDesc
+	
+	local nextHalo = Csv.Aureole[k * 1000 + 2]
+	if nextHalo ~= nil then
+		TextUp.Text = Csv.Text("staff_hacondiN")
+		NowRight.Text = nextHalo.effectDesc
+		TextUpNum.Text = nextHalo.effectNumDesc
+		if halo.costitem ~= nil then
+			if MBag.GetItemNum(halo.costitem) >= halo.costcount then
+				TextCost.Text = Csv.Text("staff_skicostCG",{name = Csv.Item[halo.costitem].name,num = MBag.GetItemNum(halo.costitem),max = halo.costcount})
+			else
+				TextCost.Text = Csv.Text("staff_skicostC",{name = Csv.Item[halo.costitem].name,num = MBag.GetItemNum(halo.costitem),max = halo.costcount})
+			end
+		else
+			if halo.condiDesc ~= nil then
+				TextCost.Text = Csv.Text("staff_hacondiC",{num = halo.condiDesc})
+			else
+				TextCost.Text = Csv.Text("staff_hacondi")
+			end
+		end
+	else
+		TextUp.Text = Csv.Text("staff_hacondiN")
+		UpRight.Text = halo.effectDesc
+		TextUpNum.Text = halo.effectNumDesc
+		TextCost.Text = Csv.Text("staff_hacondi")
+	end
+	BtnUp.gameObject:SetActive(false)
+
+	TextNow:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowNum:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUp:AddContentSizeFitter():SetLayoutHorizontal()	
+	TextUpNum:AddContentSizeFitter():SetLayoutHorizontal()
+
+	-- 播放读字效果
+	if isShowEffect then
+		self.mMoudle.SelfRect:AddOnTime(function()
+			if TextNowNum.Text ~= "" then
+				local NowTween = TextNowNum.CachedTran:GetJTweener(NUM_TWEEN)
+				NowTween:Play()
+			end
+
+			if TextUpNum.Text ~= "" then
+				local UpTween = TextUpNum.CachedTran:GetJTweener(NUM_TWEEN)
+				UpTween:Play()
+			end
+		end, nil, 1)
+	end
+end
+
+function _P.SetAureoleData(self, halo,itemMoudle,data,k,isShowEffect)
+	local TextLevel = itemMoudle:Get("Level")
+	TextLevel.Text = Csv.Text("staff_lv",{num = data.aureole[k].level})
+
+	local TextNow = itemMoudle:Get("NowLeft")
+	local TextNowNum = itemMoudle:Get("NowCenter")
+	local NowRight = itemMoudle:Get("NowRight")
+	local TextUp = itemMoudle:Get("UpLeft")
+	local TextUpNum = itemMoudle:Get("UpCenter")
+	local UpRight = itemMoudle:Get("UpRight")
+	local TextCost = itemMoudle:Get("Cost")
+	local BtnUp = itemMoudle:Get("BtnUp")
+
+	TextNow.Text = Csv.Text("staff_skicostN")
+	NowRight.Text = halo.effectDesc
+	TextNowNum.Text = halo.effectNumDesc
+	if data.aureole[k].level >= Csv.ColorUp[data.color].aureoleMaxLv then
+		TextUp.Text = Csv.Text("staff_eff5")
+		TextUpNum.Text = ""
+		if halo.cost ~= nil then
+			TextCost.Text = Csv.Text("staff_skicost")
+		else
+			TextCost.Text = Csv.Text("staff_hacondi")
+		end
+		BtnUp.gameObject:SetActive(false)
+	else
+		local nextHalo = Csv.Aureole[k * 1000 + data.aureole[k].level + 1]
+		
+		if nextHalo ~= nil then
+			TextUp.Text = Csv.Text("staff_hacondiN")
+			--NowRight.Text = nextHalo.effectDesc
+			TextUpNum.Text = nextHalo.effectNumDesc
+			if halo.costitem ~= nil then
+				if MBag.GetItemNum(halo.costitem) >= halo.costcount then
+					TextCost.Text = Csv.Text("staff_skicostCG",{name = Csv.Item[halo.costitem].name,num = MBag.GetItemNum(halo.costitem),max = halo.costcount})
+				else
+					TextCost.Text = Csv.Text("staff_skicostC",{name = Csv.Item[halo.costitem].name,num = MBag.GetItemNum(halo.costitem),max = halo.costcount})
+				end
+				BtnUp.gameObject:SetActive(true)
+			else
+				if halo.condiDesc ~= nil then
+					TextCost.Text = Csv.Text("staff_hacondiC",{num = halo.condiDesc})
+				else
+					TextCost.Text = Csv.Text("staff_hacondi")
+				end
+				if nextHalo.type == 1 then
+					BtnUp.gameObject:SetActive(data.aureole[k].open)
+				else
+					BtnUp.gameObject:SetActive(true)
+				end
+			end
+			UpRight.Text = nextHalo.effectDesc
+		else
+			TextUp.Text = Csv.Text("staff_hacondiN")
+			UpRight.Text = halo.effectDesc
+			TextUpNum.Text = halo.effectNumDesc
+			TextCost.Text = Csv.Text("staff_hacondi")
+			BtnUp.gameObject:SetActive(false)
+		end
+	end
+
+	TextNow:AddContentSizeFitter():SetLayoutHorizontal()
+	TextNowNum:AddContentSizeFitter():SetLayoutHorizontal()
+	TextUp:AddContentSizeFitter():SetLayoutHorizontal()	
+	TextUpNum:AddContentSizeFitter():SetLayoutHorizontal()
+
+	-- 播放读字效果
+	if isShowEffect then
+		self.mMoudle.SelfRect:AddOnTime(function()
+			if TextNowNum.Text ~= "" then
+				local NowTween = TextNowNum.CachedTran:GetJTweener(NUM_TWEEN)
+				NowTween:Play()
+			end
+
+			if TextUpNum.Text ~= "" then
+				local UpTween = TextUpNum.CachedTran:GetJTweener(NUM_TWEEN)
+				UpTween:Play()
+			end
+		end, nil, 1)
+	end
+end
+
+function _M:ChangeAureoleLv(staffid,aureoleid,aureolelv,isShowEffect)
+	local haloItem = self.mTableItems[aureoleid]
+	if haloItem ~= nil then
+		local data = MStaff.GetStaffDataByID(staffid)
+		local moudle = haloItem.moudle
+		local halo = Csv.Aureole[aureoleid * 1000 + aureolelv]
+		_P.SetAureoleData(self, halo,moudle,data,aureoleid,isShowEffect)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

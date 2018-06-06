@@ -1,0 +1,316 @@
+local MClass = require "Libs.MClass"
+
+local classMap = MClass.classMap
+local classNameMap = MClass.classNameMap
+local scriptMgr = MClass.scriptMgr
+
+local function SuperMethodClean(classType)
+	local tmpClassInfo = classMap[classType]
+	local tmpInstList = tmpClassInfo.instList
+	local tmpVtbl = tmpClassInfo.vtbl
+
+	for k,vObj in pairs(tmpInstList) do
+		for k1,v1 in pairs(tmpVtbl) do
+			vObj[k1] = nil
+		end
+	end
+
+	local tmpSuperMethod = tmpClassInfo.superMethod
+	for k,vMethod in pairs(tmpSuperMethod) do
+		tmpVtbl[vMethod] = nil
+	end
+	tmpClassInfo.superMethod = {}
+
+	local tmpChildList = tmpClassInfo.childList
+	for kType,v in pairs(tmpChildList) do
+		SuperMethodClean(kType)
+	end
+end
+
+local function BindVtbl2Object(obj, vtbl)
+	setmetatable(obj,{ __index = function(t, k)
+			local f = vtbl[k]
+			t[k] = f
+			return f
+		end })
+end
+
+local function BindParentVtbl(classInfo, parentVtbl)
+	local vtbl = classInfo.vtbl
+	setmetatable(vtbl,{__index = function(t,k)
+				local ret = parentVtbl[k]
+				t[k] = ret
+				table.insert(classInfo.superMethod, k)
+				return ret
+			end
+		})
+end
+
+local function UpdateClass(classType, name)
+	local oldClassType = classNameMap[name]
+	if oldClassType ~= nil then
+		if MClass.reLoading == false then
+			error(string.format("classType name = %s is repeat!!! ",name))
+			return
+		end 
+		local oldClassInfo = classMap[oldClassType]
+		classMap[oldClassType] = nil
+		local classInfo = classMap[classType]
+		classInfo.oldClassType = oldClassType
+		local vtbl = classInfo.vtbl
+		local instList = oldClassInfo.instList
+		classInfo.instList = instList
+		for i,vObj in ipairs(instList) do
+			for k1,v1 in pairs(oldClassInfo.vtbl) do
+				vObj[k1] = nil
+			end
+			BindVtbl2Object(vObj, vtbl)
+		end
+
+		local childList = oldClassInfo.childList
+		classInfo.childList = childList
+		for kType,v in pairs(childList) do		
+			SuperMethodClean(kType)
+			rawset(kType, "super", vtbl)
+			local childClassInfo = classMap[kType]
+			childClassInfo.parent = classType
+			BindParentVtbl(childClassInfo, vtbl)
+		end
+	end
+	classNameMap[name] = classType
+end
+
+local buildClassRelation = {}
+local eventList = {}
+
+function SetJRequiredEvent(func)
+	table.insert(eventList, func)
+end
+
+local function _ClassDelObj(tab, isChild)
+    if tab ~= nil then
+		setmetatable(tab, nil)
+		for k,v in pairs(tab) do
+			if type(v) == "userdata" then
+				tab[k] = nil
+			end
+			-- if (not isChild and type(v) ~= "function") or type(v) == "userdata" then
+			-- 	-- print("~~~~~~~~del~~~~~~~~~", k)
+			-- 	tab[k] = nil
+			-- end
+
+			-- if type(v) == "table" then
+			-- 	_ClassDelObj(v, true)
+			-- end			
+		end
+	end
+end
+
+local _TempDestroyFunction = function() end
+
+function Class(super, name)
+	local classType={}
+	local vtbl={}
+	local classInfo = {
+		vtbl = vtbl, 
+		instList = setmetatable({},{__mode = "v"}),
+		childList = {},
+		superMethod = {},
+		name = name,
+		parent = nil,
+		oldClassType = nil,
+	}
+	classMap[classType] = classInfo
+
+	if super ~= nil then
+		table.insert(buildClassRelation, function (isReload)
+			local superClassType = super.__module or super
+			local superClassInfo = classMap[superClassType]
+			classInfo.parent = superClassType
+			rawset(classType, "super", superClassInfo.vtbl)
+			superClassInfo.childList[classType] = true
+
+			local superVtbl = superClassInfo.vtbl
+			BindParentVtbl(classInfo, superVtbl)
+
+			if classInfo.oldClassType ~= nil then
+				local pClassInfo = classMap[superClassType]
+				pClassInfo.childList[classInfo.oldClassType] = nil
+				classInfo.oldClassType = nil
+			end
+		end)
+	end
+	
+	classType.new = function(...)
+			local obj={}
+			obj.delete = function ()
+				for i,v in ipairs(classInfo.instList) do
+					if v == obj then
+						table.remove(classInfo.instList, i)
+						break
+					end
+				end
+				_ClassDelObj(obj)
+
+				obj.Destroy = _TempDestroyFunction
+			end
+			local ctor = vtbl.ctor
+			BindVtbl2Object(obj, vtbl)
+			table.insert(classInfo.instList, obj)
+			if ctor then
+				ctor(obj,...)
+			end
+			return obj
+		end
+
+	if name ~= nil then	
+		UpdateClass(classType, name)
+	end
+
+	setmetatable(classType,{__newindex=
+		function(t,k,v)
+			vtbl[k]=v;
+		end
+	})
+
+	return classType
+end
+
+local moduleInitData = MClass.moduleInit
+
+function JRequire(fileName)
+	local proxyModule = scriptMgr[fileName]
+
+	if proxyModule ~= nil then
+		if proxyModule.reload == false then
+			return proxyModule.proxy
+		else
+			local tmpModule = proxyModule.proxy.__module
+			local tmpProxy = proxyModule.proxy
+			for k,v in pairs(tmpProxy) do
+				if tmpModule[k] ~= nil then
+					tmpProxy[k] = nil
+				end
+			end
+			proxyModule.reload = false
+		end
+	else
+		proxyModule = {proxy = {}, reload = false}
+		scriptMgr[fileName] = proxyModule
+	end
+
+	local proxy = proxyModule.proxy
+	setmetatable(proxy,{
+		__index = function ( ... )
+			assert(false, "error, JRequire is loading!!! fileName:" .. fileName)
+		end,
+		__newindex = function ( ... )
+			assert(false, "error, JRequire is loading!!! fileName:" .. fileName)
+		end
+	})
+	moduleInitData.count = moduleInitData.count + 1
+	local rmodule = require(fileName)
+	moduleInitData.count = moduleInitData.count - 1
+	if type(rmodule) == "table" then
+		local classInfo = classMap[rmodule]
+		if classInfo ~= nil then
+			if classInfo.name == nil then
+				classInfo.name = fileName
+				UpdateClass(rmodule, fileName)
+			end
+		else
+			if rmodule.ModuleInit ~= nil then
+				table.insert(moduleInitData.initList, rmodule.ModuleInit)
+			end
+		end
+
+		rawset(proxy, "__module", rmodule)
+
+		setmetatable(proxy,{
+			__index = function (self,method)
+				local member = rmodule[method]
+				self[method] = member
+				return member
+			end,
+			__tostring = function ()
+				return fileName
+			end,
+			__newindex = function (t, k, v)
+				rmodule[k] = v
+			end})
+
+	else
+		setmetatable(proxy, nil)
+		if rmodule ~= true then
+			error(string.format("file:%s  require error!!",file))
+		end
+	end
+
+	if moduleInitData.count == 0 then
+		for k,v in pairs(buildClassRelation) do
+			v(MClass.reLoading)
+		end
+		buildClassRelation = {}
+		for k,v in pairs(moduleInitData.initList) do
+			v(MClass.reLoading)
+		end
+		moduleInitData.initList = {}
+		for k,v in pairs(eventList) do
+			v(MClass.reLoading)
+		end
+		eventList = {}
+	end
+	return proxy
+end
+
+function JRequireReload(fileName)
+	for k,v in pairs(scriptMgr) do
+		print(k, "------------>>>>")
+	end
+
+	if fileName == "Libs.Class" then
+		package.loaded[fileName] = nil
+		require(fileName)
+		print("reload ok!!", fileName)
+		return true
+	end
+
+	local proxyModule = scriptMgr[fileName]
+	if proxyModule == nil then 
+		print(string.format("error fileName cann't reload, file:%s", fileName))
+		return false
+	end
+	MClass.reLoading = true
+	scriptMgr[fileName].reload = true
+	package.loaded[fileName] = nil
+	JRequire(fileName)
+	MClass.reLoading = false
+	print("reload ok!!", fileName)
+	return true
+end
+
+local dataMap = MClass.dataMap
+function ModuleData(key, defaultValue, fileName)
+	local fileDataMap = dataMap[fileName]
+	if fileDataMap == nil then
+		fileDataMap = {}
+		dataMap[fileName] = fileDataMap
+	end
+
+	local data = fileDataMap[key]
+	if data == nil then
+		data = defaultValue
+		fileDataMap[key] = defaultValue
+	end
+
+	return data
+end
+
+function JRequireClean()
+	for fileName,_ in pairs(scriptMgr) do
+		local moudle = JRequire(fileName)
+		if moudle ~= nil and type(moudle) == "table" and moudle.ModuleClean ~= nil then
+			moudle.ModuleClean()
+		end
+	end
+end

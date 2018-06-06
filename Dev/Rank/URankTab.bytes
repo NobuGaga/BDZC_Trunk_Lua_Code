@@ -1,0 +1,185 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local URankWealth = JRequire "Dev.Rank.URankWealth"
+local URankCheckPoint = JRequire "Dev.Rank.URankCheckPoint"
+local URankClose = JRequire "Dev.Rank.URankClose"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local MMain = JRequire "Dev.Main.MMain"
+local MRank = JRequire "Dev.Rank.MRank"
+local CRank = JRequire "Dev.Rank.CRank"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+local RankID = {}
+local EFFECT_ID = 4
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.Rank_Wealth then
+		CRank.GetRankList(Define.RankType.Power,true)
+		self.ChooseMoudle = URankWealth.new(self.PageNode)		
+	elseif funcId == Define.SysId.Rank_CheckPoint then
+		CRank.GetRankList(Define.RankType.Battle,true)
+		self.ChooseMoudle = URankCheckPoint.new(self.PageNode)		
+	elseif funcId == Define.SysId.Rank_Close then
+		CRank.GetRankList(Define.RankType.Intimacy,true)
+		self.ChooseMoudle = URankClose.new(self.PageNode)		
+	end
+
+	MRank.LastChoose = funcId
+	_P.SetBottomData(self,funcId)
+end
+
+function _P.SetBottomData(self,funcId)
+	local rankid = RankID[funcId]
+	local rankinfo = MRank.RankTable[rankid]
+	local moudle = self.mMoudle
+	local TextValue = moudle:Get("text4_1")
+	local TextValueBattle = moudle:Get("text4_2")
+	TextValue.Text = ""
+	TextValueBattle.Text = ""
+	if rankinfo ~= nil then
+		if rankinfo.rankid == Define.RankType.Power then
+			TextValue.Text = rankinfo.selfvalue
+		elseif rankinfo.rankid == Define.RankType.Battle then
+			local csvBattle = Csv.Battle[rankinfo.selfvalue]
+			if csvBattle ~= nil then
+				local csvPart = Csv.Part[csvBattle.part]
+				if csvPart ~= nil then
+					TextValueBattle.Text = Csv.Text("battle_title",{index = csvPart.id,name = csvPart.name..MRank.GetNumText(csvBattle.chapter%10)})
+				end
+			end
+		elseif rankinfo.rankid == Define.RankType.Intimacy then
+			TextValue.Text = rankinfo.selfvalue
+		end
+		moudle:Get("text2_1").Text = rankinfo.selfrank
+		_P.ChangeShipState(self,rankinfo.isworshiped)
+	end
+end
+
+function _P.ChangeShipState(self,isworshiped)
+	local moudle = self.mMoudle
+	moudle:Get("after").Activity = isworshiped
+	moudle:Get("Btn_e").Activity = not isworshiped
+	moudle:Get("EffectNode").Activity = false
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Ranking_UMain")
+	self.mMoudle = moudle
+	RankID[Define.SysId.Rank_Wealth] = Define.RankType.Power
+	RankID[Define.SysId.Rank_CheckPoint] = Define.RankType.Battle
+	RankID[Define.SysId.Rank_Close] = Define.RankType.Intimacy
+
+	local BtnClose = moudle:Get("Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+	
+	moudle:Get("text").Text = Csv.Text("rank_tips")
+	moudle:Get("C_text").Text = Csv.Text("rank_btn")
+	moudle:Get("text2").Text = Csv.Text("rank_rankT")
+	
+	moudle:Get("text1_1").Text = MPlayer.GetName()
+	moudle:Get("text3_1").Text = Csv.Company[MPlayer.GetLevel()].name
+
+	moudle:Get("Btn_e"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CRank.GetAward(RankID[MRank.LastChoose],true)
+		end,nil,0.9)
+
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Rank, true)
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 3 then
+				tabHandle:Add(v.id, moudle:Get("Btn_c"..index), moudle:Get("C_text_"..index), v.name)
+			end
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+
+	moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+	local vip = MPlayer.GetVip()
+	local csvVip = Csv.Vip[vip]
+	local imgKuang = moudle:Get("VipBox")
+	local imgNum = moudle:Get("VipNum")
+	if vip <= 0 then
+		imgKuang.Activity = false
+		imgNum.Activity = false
+	else
+		imgKuang.SpriteName = csvVip.imgBord
+		imgNum.SpriteName = csvVip.icon
+	end
+end
+
+function _R.ResetList(self,data)
+	self.ChooseMoudle:ResetList(data)
+	if data.rankid == RankID[MRank.LastChoose] then
+		_P.SetBottomData(self,MRank.LastChoose)
+	end
+end
+
+function _R.GetAward(self,data)
+	if data.rankid == RankID[MRank.LastChoose] then
+		if data.exgold ~= nil then
+			SoundMgr.Play(10003)
+		end
+
+		local nodeTrans = self.mMoudle:Get("EffectNode")
+		nodeTrans:DestroyChildren()
+		nodeTrans.Activity = true
+		SoundMgr.Play(11007)
+		local effect = CCommon.CreateEffect(nodeTrans.transform,EFFECT_ID,nil,function(...)
+			nodeTrans.Activity = false
+		end,{M_Effect_Get = "ph_010"})
+		effect.SelfRect.SizeDelta = Vector2(102,102)
+		self.mMoudle.SelfRect:AddOnTime(function(...)WindowMgr.Create("URankWorship",data)
+		end,nil,0.5)
+		self.mMoudle:Get("Btn_e").Activity = false
+	end
+end
+
+function _M:BeforeDestroy()
+	WindowMgr.Call("URank","CloseDoor")
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end
+
+return _M

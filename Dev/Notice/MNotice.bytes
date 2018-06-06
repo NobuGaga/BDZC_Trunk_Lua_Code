@@ -1,0 +1,45 @@
+local _M = {}
+
+_M.ThemeType = {
+	Hot = 0,
+	New = 1,
+	Time = 2,
+}
+
+_M.Data = nil
+_M.IsOpened = false
+
+function _M.SetData(data)
+	if nil ~= data then
+		if nil ~= _M.Data then
+			_M.Data = nil
+		end
+		_M.Data = {}
+		_M.Data.pic = data.pic
+		_M.Data.themes = nil
+		if nil ~= data.themes then
+			local themes = {}
+			local index = 1
+			for key, theme in pairs(data.themes) do
+				local one = {}
+				one.sort = theme.sort
+				one.title = theme.title
+				one.hotOrNew = theme.hotOrNew
+				one.time = theme.time
+				one.text = theme.text
+				themes[index] = one
+				index = index + 1
+			end
+			table.sort(themes, function (left, right)
+				return left.sort < right.sort end)
+			_M.Data.themes = themes
+		end
+	end
+end
+
+function _M.Clean()
+	_M.Data = nil
+	_M.IsOpened = false
+end
+
+return _M

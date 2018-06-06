@@ -1,0 +1,147 @@
+--商会建设界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+function _R.OnUpdatemeMyInfo(self, isInit)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		if myInfo ~= nil then
+			local myBuild = myInfo.build
+			if myBuild ~= self.BuildId then
+				self.BuildId = myBuild
+
+				for k,v in pairs(self.Btns) do
+					if self.BuildId > 0 then
+						if self.BuildId == k then
+							v.haveBuild.Activity = true
+							v.btn.Activity = false
+							if not isInit then
+								v.haveBuild.Alpha = 0.2
+								v.haveBuild.LocalScale = Vector3(4,4,4)
+								SoundMgr.Play(10004)
+								local t = v.haveBuild.CachedTran:GetJTweener("T_Commerce_Build")
+								t:Play()
+							end
+						else
+							v.btn.Activity = false
+							v.haveBuild.Activity = false
+						end
+					else
+						v.btn.Activity = true
+						v.haveBuild.Activity = false
+					end
+				end
+			end
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Build")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_build1")
+	moudle:Get("Num").Text = tostring(MBag.GetItemNum(Define.AssetsType.Gold))
+	local content = moudle:Get("Content")
+	local lines = {}
+	for k,_ in pairs(Csv.CommerceBuild) do
+		table.insert(lines, Csv.CommerceBuild[k])
+	end
+	table.sort(lines, function (a, b)
+		return a.id < b.id
+	end)
+	self.Btns = {}
+	self.BuildId = 0
+
+	for _,line in pairs(lines) do
+		local lineId = line.id
+		local oneMoudle = self:CreateMoudle(content, "M_Gang_Build_Item")
+		oneMoudle:Get("IconBox").SpriteName = line.iconBg
+		oneMoudle:Get("icon").SpriteName = line.icon
+		oneMoudle:Get("ordinaryJB").Text = line.name
+		-- oneMoudle:Get("spend").Text = Csv.Text("commerce_build3")
+		local cost = line.cost
+		if cost[1] == Define.AssetsType.Gold then
+			oneMoudle:Get("spendNum").Text = tostring(cost[2])
+		else
+			-- oneMoudle:Get("costGold").Activity = false
+
+			local costItemCsv = Csv.Item[cost[1]]
+			oneMoudle:Get("spendNum").Text = costItemCsv.name .. "x" .. tostring(cost[2])
+			oneMoudle:Get("icon").SpriteName = costItemCsv.icon
+		end
+		-- oneMoudle:Get("Effect").Text = Csv.Text("commerce_build4")
+		-- oneMoudle:Get("EffectText").Text = line.rewardText
+		oneMoudle:Get("Effect1").Text = Csv.Text("commerce_detail4")
+		oneMoudle:Get("Effect2").Text = Csv.Text("commerce_detail5")
+		oneMoudle:Get("Effect3").Text = Csv.Text("commerce_detail26")
+
+		oneMoudle:Get("EffectText1").Text = line.reward1
+		oneMoudle:Get("EffectText2").Text = line.reward2
+		oneMoudle:Get("EffectText3").Text = line.reward3
+		oneMoudle:Get("EnemyText").Text = Csv.Text("commerce_build2")
+		local btn = oneMoudle:Get("EnemyBtn")
+		btn:AddOnButton(function()
+			SoundMgr.Play(10001)
+			if not MBag.CheckItemEnough(line.cost[1],line.cost[2]) then
+				return
+			end
+			CCommerce.BuildReq(lineId)
+		end)
+		local haveBuild = oneMoudle:Get("HaveBuild")
+		haveBuild.Text = Csv.Text("commerce_build5")
+		haveBuild.Activity = false
+		self.Btns[lineId] = {
+			btn = btn,
+			haveBuild = haveBuild,
+		}
+	end
+
+	_R.OnUpdatemeMyInfo(self, true)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if itemId == Define.AssetsType.Gold then
+			local moudle = self.Moudle
+			if moudle ~= nil then
+				moudle:Get("Num").Text = tostring(MBag.GetItemNum(Define.AssetsType.Gold))
+			end
+		end
+	end)
+end
+
+return _M

@@ -1,0 +1,109 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:RefreshGodDatas()
+	_P.ShowItems(self)
+end
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_God", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mContent = moudle:Get("Content")
+	_P.ShowItems(self)
+
+	CWelfare.ReqGetGoodLuckDatas()
+end
+
+function _P.ShowItems(self)
+	local content = self.mContent
+	content:DestroyChildren()
+	local godData = Csv.WelfareGod
+	for k,v in pairs(godData) do
+		_P.CreateItem(content,v)
+	end
+end
+
+function _P.CreateItem(parent,data)
+	local moudle = JGuiManager.GetMoudle(parent,"M_Welfare_GodItem", WindowType.UI, 10)
+
+	local title = moudle:Get("title")
+	local dayCount = moudle:Get("dayCount")
+	local desc = moudle:Get("desc")
+
+	local goodLuckData = MWelfare.GetGoodLuckDataByID(data.id)
+
+	local _cur = 0
+	local _max = 0
+	if goodLuckData ~= nil then
+		_cur = goodLuckData.ncur
+		_max = goodLuckData.nmax
+	end
+	
+	title.Text = data.name
+	dayCount.Text = Csv.Text("welfare_godTimes",{cur = _cur,max = _max})--"每日触发：<color=#ff0000>"..count.."</color>次"
+	desc.Text = Csv.Text("welfare_descsys_god")..data.desc
+
+	return moudle
+end
+
+function _P.cardGodCount(id, cardIndex)
+	if id == 1 then
+		return Csv.MonthlyCard[cardIndex].staffLevelUp
+	elseif id == 2 then
+		return Csv.MonthlyCard[cardIndex].companyContacts
+	elseif id == 3 then
+		return Csv.MonthlyCard[cardIndex].schoolAward
+	elseif id == 4 then
+		return Csv.MonthlyCard[cardIndex].havaChaildrenExp
+	elseif id == 5 then
+		return Csv.MonthlyCard[cardIndex].rankWorshipGold
+	elseif id == 6 then
+		return Csv.MonthlyCard[cardIndex].grilDateExp
+	end
+	return 0
+end
+
+function _P.GetCardGodCount(id)
+	local ret = 0
+	if MWelfare.CheckHasMonthCard() then
+		ret = ret + _P.cardGodCount(id, 1)
+	end
+	if MWelfare.CheckHasYearCard() then
+		ret = ret + _P.cardGodCount(id, 2)
+	end
+	return ret
+end
+
+function _P.GetCountByIndex(id)
+	local vipLevel = MPlayer.GetVip()
+	if id == 1 then
+		return Csv.Vip[vipLevel].staffLevelUp + _P.GetCardGodCount(id)
+	elseif id == 2 then
+		return Csv.Vip[vipLevel].companyContacts + _P.GetCardGodCount(id)
+	elseif id == 3 then
+		return Csv.Vip[vipLevel].schoolAward + _P.GetCardGodCount(id)
+	elseif id == 4 then
+		return Csv.Vip[vipLevel].havaChaildrenExp + _P.GetCardGodCount(id)
+	elseif id == 5 then
+		return Csv.Vip[vipLevel].rankWorshipGold + _P.GetCardGodCount(id)
+	elseif id == 6 then
+		return Csv.Vip[vipLevel].grilDateExp + _P.GetCardGodCount(id)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

@@ -1,0 +1,364 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+--@RefType [Dev.Quest.CQuest.bytes#_M]
+local CQuest = JRequire "Dev.Quest.CQuest"
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local EventCenter = JRequire "Dev.EventCenter"
+local MMain = JRequire "Dev.Main.MMain"
+
+----------------------CS类引用--------------------------
+local Linear = CS.DG.Tweening.Ease.Linear
+
+----------------------常量定义--------------------------
+local GTE_EFFECT_ID = 5
+
+local COLOR_BLUE = Color(93/255,153/255,255/255,1)
+local COLOR_RED = Color(255/255,93/255,140/255,1)
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local _R = {}
+
+function _P.DoTaskUpdate(self, questid)
+	local info = self.TaskList[questid]
+	local tmp = MQuest.GetDailyQuest(questid)
+	if tmp.pro >= tmp.maxval then
+		info.targetText.Color = COLOR_BLUE
+	else
+		info.targetText.Color = COLOR_RED
+	end
+	info.targetText.Text = Csv.Text("quest_pro", {pro = tmp.pro, max = tmp.maxval})
+	if tmp.state ~= info.state then
+		if tmp.state == MQuest.State.Finish then
+			info.GetBtn.Activity = false
+			local effect
+			SoundMgr.PlaySystem(10004)
+			SoundMgr.Play(11000)
+			effect = CCommon.CreateEffect(info.BtnRect, GTE_EFFECT_ID, nil, function( ... )	
+				if effect ~= nil then
+					effect:Destroy()
+				end
+				_P.UpdateTaskBtn(tmp.state, info)
+			end)
+			local csv = Csv.DailyQuest[questid]
+			if csv.activeAward ~= nil and csv.activeAward > 0 then
+				CCommon.ShowFlyText(self._RootNode, Csv.Text("quest_actAdd", {num = csv.activeAward }), nil, nil, nil, info.BtnRect.RootCanvasPos)
+			end
+			if csv.reward ~= nil then
+				for index,item in pairs(csv.reward) do
+					CCommon.ShowFlyItem(self._RootNode, item[1], item[2], index * 0.6, info.BtnRect.RootCanvasPos)
+				end
+			end
+		else
+			_P.UpdateTaskBtn(tmp.state, info)
+		end
+	end	
+	self.CurActiveAward.Text = tostring(MQuest.ActiveAward)
+end
+
+function _R.OnTaskUpdate(self, questid)
+	_P.UpdateSlider(self, false)
+	_P.DoTaskUpdate(self, questid)
+end
+
+function _R.OnActiveAwardUpdate(self, actId, rewardList)
+	_P.UpdateActiveAward(self, actId)
+
+	if rewardList ~= nil then
+		local info = self.ActiveAwardList[actId]
+		for index,v in pairs(rewardList) do
+			local pos = info.parent.RootCanvasPos
+			if pos.x > 160 then
+				pos.x = 160
+			end		
+			CCommon.ShowFlyItem(self._RootNode,v.key,v.value,(index- 1) * 0.6, pos)
+		end		
+	end
+end
+
+function _R.OnUpdateAll(self)
+	_P.UpdateSlider(self, false)
+	for _,v in pairs(MQuest.DailyQuest) do
+		_P.DoTaskUpdate(self, v.questid)
+	end
+end
+
+function _R.OnDayout(self)
+	for id,_ in pairs(MQuest.DailyQuest) do
+		_P.DoTaskUpdate(self, id)
+	end
+	_P.UpdateSlider(self, true)
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.OnActPress(actId)
+	local line = Csv.ActiveAward[actId]
+	if MQuest.ActiveAwardIsGeted(actId) or line.unlock > MQuest.ActiveAward then
+		--查看奖励
+		WindowMgr.Create("UDailyActPreview",actId)
+	else
+		CQuest.ActiveAwardReq(actId)
+	end
+end
+
+function _P.UpdateTaskBtn(state, info)
+	info.state = state
+	if state == MQuest.State.Doing then		
+		info.haveGet.Activity = false
+		info.GoBtn.Activity = true
+		info.GetBtn.Activity = false
+		-- info.GetBtn.RaycastTarget = false
+		-- info.GetBtn.IsGray = true
+	elseif state == MQuest.State.Done then
+		info.haveGet.Activity = false
+		info.GetBtn.Activity = true
+		info.GoBtn.Activity = false
+		-- info.GetBtn.RaycastTarget = true
+	elseif state == MQuest.State.Finish then
+		info.haveGet.Activity = true
+		info.GetBtn.Activity = false
+		info.GoBtn.Activity = false
+	end
+end
+
+function _P.OnTaskPress(id)
+	local info = MQuest.GetDailyQuest(id)
+	if info.state == MQuest.State.Done then
+		CQuest.DailyDoneReq(id)
+	elseif info.state == MQuest.State.Doing then
+		local csv = Csv.DailyQuest[id]
+		WindowOpen.Open(csv.funcId)
+	end
+end
+
+function _P.UpdateSlider(self, isInit)
+	local fillAmount = 0
+	if MQuest.ActiveAward >= self.MaxActValue then
+		fillAmount = 1
+	else
+		local nextNeed = 0
+		local maxLength = #self.ActIdSorts
+		local line = Csv.ActiveAward[self.ActIdSorts[maxLength]]
+		nextNeed = line.unlock
+		for i=maxLength - 1,1,-1 do
+			line = Csv.ActiveAward[self.ActIdSorts[i]]
+			if MQuest.ActiveAward >= line.unlock then
+				local tmp = (MQuest.ActiveAward - line.unlock) / (nextNeed - line.unlock)
+				fillAmount = i / maxLength + tmp * (1 / maxLength)
+				break
+			elseif i == 1 then
+				local tmp = MQuest.ActiveAward / line.unlock
+				fillAmount = tmp * (1 / maxLength)
+				break
+			end
+			nextNeed = line.unlock
+		end
+	end
+	self.Slider:DOKill()
+	fillAmount = math.min(fillAmount, 1)
+	if isInit then
+		self.Slider.FillAmount = fillAmount
+	else
+		local t = self.Slider:DOFillAmount(fillAmount, math.abs(fillAmount - self.Slider.FillAmount) * 1)
+		t:SetEase(Linear)
+	end	
+
+	for k,_ in pairs(self.ActiveAwardList) do
+		_P.UpdateActiveAward(self, k)
+	end
+end
+
+function _P.UpdateActiveAward(self, actId)
+	local line = Csv.ActiveAward[actId]
+	local info = self.ActiveAwardList[actId]
+	local nowState = 0
+	if MQuest.ActiveAwardIsGeted(actId) then
+		--已领取
+		nowState = 1
+	else
+		if line.unlock > MQuest.ActiveAward then
+			--不可领取
+			nowState = 2
+		else
+			--可领取
+			nowState = 3
+		end
+	end
+	if nowState ~= info.state then
+		if info.state == -1 then
+			info.numText.Text = Csv.Text("quest_act",{num = line.unlock})
+		end	
+
+		info.state = nowState
+		if info.effect ~= nil then
+			info.effect:Destroy()
+		end
+		if nowState == 1 then
+			info.chest.SpriteNameAutoScale = line.getedIcon
+		elseif nowState == 2 then
+			info.chest.SpriteNameAutoScale = line.lockIcon
+		else
+			info.chest.SpriteName = ""
+			info.effect = CCommon.CreateEffect(info.parent,line.canGetEffect,info.chest.LocalPosition, nil, line.effectParam)
+		end
+	end	
+
+	self.CurActiveAward.Text = tostring(MQuest.ActiveAward)
+end
+
+--界面构建
+function _M:OnCreate()
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_Daily_Tasks")
+	self.Moudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local selfCsv = Csv.Func[self._SysId]
+	moudle:Get("C_Text").Text = selfCsv.name
+	moudle:Get("new_text").Text = Csv.Text("quest_today")
+	self.CurActiveAward = moudle:Get("curText")
+	self.CurActiveAward.Text = tostring(MQuest.ActiveAward)
+
+	local actIds = {}
+	for id,_ in pairs(Csv.ActiveAward) do
+		table.insert(actIds, id)
+	end
+	table.sort(actIds)
+	self.ActIdSorts = actIds
+
+	self.Slider = moudle:Get("img")
+	self.ActiveAwardList = {}
+
+	local maxActId = actIds[#actIds]
+	local maxActCsv = Csv.ActiveAward[maxActId]
+	self.MaxActValue = maxActCsv.unlock
+
+	for index,id in pairs(actIds) do
+		local info = 
+		{
+			parent = moudle:Get("reward"..index),
+			chest = moudle:Get("chest"..index),
+			numText = moudle:Get("text"..index),
+			effect = nil,
+			state = -1,
+		}
+		info.chest:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			_P.OnActPress(id)
+		end, nil, 0.9)
+		self.ActiveAwardList[id] = info
+	end
+	_P.UpdateSlider(self, true)
+
+	local taskInfos = {}
+	for _,v in pairs(MQuest.DailyQuest) do
+		table.insert(taskInfos, v)
+	end
+	table.sort(taskInfos, function (a, b)
+		if a.state ~= b.state then
+			if a.state == MQuest.State.Done or b.state == MQuest.State.Finish then
+				return true
+			end
+			if a.state == MQuest.State.Finish or b.state == MQuest.State.Done then
+				return false
+			end
+		end
+		return a.questid < b.questid
+	end)
+
+	local taskParent = moudle:Get("content")
+	self.TaskList = {}
+	local line 
+	local taskMoudle
+	for _,item in pairs(taskInfos) do
+		local k = item.questid
+
+		line = Csv.DailyQuest[k]
+		assert(line ~= nil, k)
+		taskMoudle = self:CreateMoudle(taskParent, "M_Daily_TaskItem")
+		taskMoudle:Get("HYD").Text = Csv.Text("quest_hyd")
+		taskMoudle:Get("Hydtext").Text = line.activeAward
+		taskMoudle:Get("title").Text = line.title
+		taskMoudle:Get("target").Text = Csv.Text("quest_state")
+		taskMoudle:Get("rewardTitle").Text = Csv.Text("quest_reward")		
+
+		local rewardText = {}
+		-- if line.activeAward ~= nil and line.activeAward > 0 then
+		-- 	table.insert(rewardText, Csv.Text("quest_actAdd", {num = line.activeAward}))
+		-- end
+		if line.reward ~= nil then
+			for _,v in pairs(line.reward) do
+				table.insert(rewardText, string.format("%s+%d", Csv.Item[v[1]].name, v[2]))
+			end
+		end
+		if #rewardText > 0 then
+			local tmp = ""
+			if #rewardText > 0 then
+				for i=1,#rewardText do
+					-- tmp = string.format("%s,%s", tmp, rewardText[i])
+					if i == 1 then
+						tmp = rewardText[i]
+					else
+						tmp = string.format("%s,%s", tmp, rewardText[i])
+					end
+				end
+			end
+			taskMoudle:Get("rewardText").Text = tmp
+		end
+
+		taskMoudle:Get("C_text").Text = Csv.Text("quest_get")
+		taskMoudle:Get("C_text_0").Text = Csv.Text("quest_go")
+
+		local info = 
+		{
+			state = MQuest.State.Doing,
+			line = line,
+			moudle = taskMoudle,
+			targetText = taskMoudle:Get("targetText"),
+			haveGet = taskMoudle:Get("haveGet"),
+			GetBtn = taskMoudle:Get("GetBtn"),
+			GoBtn = taskMoudle:Get("GoBtn"),
+			BtnRect = taskMoudle:Get("BtnRect"),
+		}
+		info.GetBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnTaskPress(k)
+		end, nil, 0.9)	
+		info.GoBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnTaskPress(k)
+		end, nil, 0.9)		
+		self.TaskList[k] = info
+
+		if item.pro >= item.maxval then
+			info.targetText.Color = COLOR_BLUE
+		else
+			info.targetText.Color = COLOR_RED
+		end
+		info.targetText.Text = Csv.Text("quest_pro", {pro = item.pro, max = item.maxval})
+		_P.UpdateTaskBtn(item.state, info)
+	end
+end
+
+return _M

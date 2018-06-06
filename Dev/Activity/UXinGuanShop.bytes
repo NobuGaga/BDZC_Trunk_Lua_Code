@@ -1,0 +1,358 @@
+-- 新官上任（活动商铺）
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
+local EFFECT_ID = 12
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+
+-- 商店类型
+local ShopTypeEnum = {
+	Shop = 1,
+	Warehouse = 2
+}
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data, curPage)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Choose")
+	self.mModule = module
+
+	self.mData = data
+	if not self.mData then return end
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.goldRect = module:Get("IconBox")
+	module:Get("C_Text").Text = Csv.Text("xinguan_shop_Title")
+	module:Get("IconNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
+
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("xinguan_shop_none")
+	self.shopText = module:Get("ShopText")
+	self.wareHouseText = module:Get("HouseText")
+	self.shopText.Text = Csv.Text("xinguan_shop_shangcheng")
+	self.wareHouseText.Text = Csv.Text("xinguan_shop_changku")
+
+	self.curSelectToggle = curPage or ShopTypeEnum.Shop
+	_P.InitPageData(self)
+	_P.OnSetListData(self)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Gold then
+			module:Get("IconNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
+		end
+	end)
+end
+
+
+function _P.InitPageData(self)
+	self.shopSelectImg = self.mModule:Get("ShopBtn")
+	self.houseSelectImg = self.mModule:Get("HouseBtn")
+
+	_P.OnSetPageText(self)
+
+	self.shopSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, ShopTypeEnum.Shop)
+	end, nil, 0.95)
+	self.houseSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, ShopTypeEnum.Warehouse)
+	end, nil, 0.95)
+end
+
+
+function _P.OnSetPageText(self)
+	local isShop =(self.curSelectToggle == ShopTypeEnum.Shop)
+
+	self.shopSelectImg.SpriteName = ((isShop and _LightImg) or _DefaultImg)
+	self.houseSelectImg.SpriteName = ((not isShop and _LightImg) or _DefaultImg)
+	self.shopSelectImg.SizeDelta = ((isShop and _LightImgSize) or _DefaultImgSize)
+	self.houseSelectImg.SizeDelta = ((not isShop and _LightImgSize) or _DefaultImgSize)
+
+	self.shopText.FontSize = ((isShop and _LightFontSize) or _DefaultFontSize)
+	self.wareHouseText.FontSize = ((not isShop and _LightFontSize) or _DefaultFontSize)
+	self.shopText.Color = ((isShop and _LightFontColor) or _DefaultFontColor)
+	self.wareHouseText.Color = ((not isShop and _LightFontColor) or _DefaultFontColor)
+end
+
+
+function _P.OnClickPage(self, curSelect)
+	if self.curSelectToggle == curSelect then return end
+
+	self.curSelectToggle = curSelect
+	self.goldRect.Activity = (curSelect == ShopTypeEnum.Shop)
+
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+
+function _P.OnSetListData(self)
+	local isShop = self.curSelectToggle == ShopTypeEnum.Shop
+	local shopList
+	if isShop then
+		shopList = self.mData.shopList
+	else
+		shopList = _P.GetHouseList(self)
+	end
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	self.noneText.Activity = (not shopList) or (next(shopList) == nil)
+	if not shopList then return end
+	self.mRawTableItems = {}
+
+	for k,v in ipairs(shopList) do
+		if isShop then
+			self.mRawTableItems[k] = _P.OnCreateShopItem(self, v, itemGrid)
+		else
+			self.mRawTableItems[k] = _P.OnCreateHouseItem(self, v, itemGrid, v.index)
+		end
+	end
+end
+
+
+function _P.GetHouseList(self)
+	local houseList = {}
+	local xinGuanConf = Csv.ActivityNewTake[self.mData.actId]
+	local sortIndex = 1
+	for i=1, #xinGuanConf.shopId do
+		local itemId = xinGuanConf.shopId[i]
+		local itemNum = MBag.GetItemNum(itemId)
+		if itemNum > 0 then
+			local shopItem = {
+				index = i,
+				sortIndex = sortIndex,
+				itemId = itemId,
+				shopPoint = xinGuanConf.shopPoint[i],
+				shopDesc = xinGuanConf.shopDesc[i],
+				shopBuyCount = xinGuanConf.buyCount[i],
+				shopUseCount = xinGuanConf.useCount[i],
+				count = itemNum
+			}
+			houseList[i] = shopItem
+			sortIndex = sortIndex + 1
+		end
+	end
+	
+	return _P.GetSortList(houseList)
+end
+
+
+function _P.GetSortList(shopData)
+	if not shopData then return {} end
+	
+	local sortList = {}
+	for k,v in pairs(shopData) do
+		sortList[#sortList + 1] = v
+	end
+	table.sort(sortList, function (a, b)
+		return a.sortIndex < b.sortIndex
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateShopItem(self, data, itemGrid)
+	local shopItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Choose_Item2", WindowType.UI, 0)
+	if not itemModule then return end
+
+	local itemConf = Csv.Item[data.itemId]
+	local iconBox = itemModule:Get("IconBox")
+	if itemConf then
+		local ItemNameText = itemModule:Get("Name")
+		ItemNameText.Text = itemConf.name
+		itemModule:Get("Icon").SpriteName = itemConf.icon
+		iconBox.SpriteName = itemConf.colorIcon
+	end
+
+	-- 添加环形特效
+	CCommon.CreateItemLight(iconBox, Define.SysId.XinGuan1, data.itemId)
+
+	local priceRect = itemModule:Get("Need")
+	local getText = itemModule:Get("GetText")
+	local buyBtn = itemModule:Get("Buy")
+	local goBtn = itemModule:Get("Go")
+	local limitText = itemModule:Get("limit")
+	
+	local isBuy = data.shopType == 1
+	priceRect.Activity = isBuy
+	getText.Activity = not isBuy
+	buyBtn.Activity = isBuy
+	goBtn.Activity = not isBuy
+	limitText.Activity = isBuy
+	limitText.Text = Csv.Text("xinguan_shop_max")
+	
+	if isBuy then
+		local priceConf = Csv.Item[data.shopPrice[1]]
+		if priceConf then
+			itemModule:Get("NeedIcon").SpriteName = priceConf.icon
+		end
+		itemModule:Get("Need").Text = Csv.Text("xinguan_shop_price")
+		itemModule:Get("NeedText").Text = data.shopPrice[2]
+
+		local limitNumText = itemModule:Get("LimtNum")
+		limitNumText.Text = data.shopMax - data.buyCount
+	else
+		getText.Text = Csv.Text("xinguan_shop_get")
+	end
+
+	itemModule:Get("Score").Text = Csv.Text("xinguan_shop_point")
+	itemModule:Get("ScoreText").Text = data.shopPoint
+	itemModule:Get("Desc").Text = data.shopDesc
+
+	itemModule:Get("BtnText1").Text = Csv.Text("xinguan_shop_buy")
+	itemModule:Get("C_text").Text = Csv.Text("xinguan_shop_go")
+
+	local itemNumText = itemModule:Get("ItemNum")
+	itemNumText.Text = data.shopBuyCount
+	itemNumText.Activity = (data.shopBuyCount and data.shopBuyCount > 1)
+	
+	buyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if data.buyCount >= data.shopMax then
+			CCommon.ShowError(Csv.Text("xinguan_shop_getMax"))
+		else
+			local costNum = MBag.GetItemNum(data.shopPrice[1])
+			if costNum >= data.shopPrice[2] then
+				CActivity.BuyNewGoodsReq(self.mData.actId, data.index)
+			else
+				CCommon.ShowError(Csv.Text("err_newofficer_item_not"))
+			end
+		end
+	end, nil, 0.95)
+
+	goBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UShop")
+	end, nil, 0.95)
+
+	shopItem.module = itemModule
+	shopItem.data = data
+	return shopItem
+end
+
+
+function _P.OnCreateHouseItem(self, data, itemGrid, index)
+	local shopItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Choose_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	local itemConf = Csv.Item[data.itemId]
+	if itemConf then
+		local ItemNameText = itemModule:Get("Name")
+		ItemNameText.Text = itemConf.name
+		itemModule:Get("Icon").SpriteName = itemConf.icon
+		itemModule:Get("IconBox").SpriteName = itemConf.colorIcon
+		itemModule:Get("ItemNum").Text = data.count
+	end
+	itemModule:Get("Point").Text = Csv.Text("xinguan_shop_point")
+	itemModule:Get("PointText").Text = data.shopPoint
+	itemModule:Get("Desc").Text = data.shopDesc
+
+	itemModule:Get("BtnText1").Text = Csv.Text("xinguan_shop_select")
+	local selectBtn = itemModule:Get("Select")
+	selectBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		local state = self.mData.state.state
+		local isInTime = MActivity.XinGuanStatus[self.mData.actId]
+		if state ~= MActivity.ActivityState.Doing or (not isInTime) then
+			CCommon.ShowError(Csv.Text("xinguan_main_joinErr"))
+			return
+		end
+
+		-- 跳转到战斗界面
+		data.index = index
+		if WindowMgr.IsCreated("UXinGuanBattle") then
+			WindowMgr.Call("UXinGuanBattle", "UpdateItemData", data)
+			self:Destroy()
+		else
+			WindowMgr.Create("UXinGuanBattle", self.mData.actId, data)
+		end
+	end, nil, 0.95)
+
+	shopItem.module = itemModule
+	return shopItem
+end
+
+
+-- 购买道具返回
+function _R.OnBuyCallBack(self, data)
+	local index = data.index
+	local updateItem = self.mRawTableItems[index]
+	local itemModule = updateItem.module
+	if updateItem == nil or itemModule == nil then return end
+
+	local updateData = self.mData.shopList[index]
+	if updateData then updateData.buyCount = data.buyCount end
+
+	local xinGuanConf = Csv.ActivityNewTake[self.mData.actId]
+	if xinGuanConf.shopMax then
+		local limitText = itemModule:Get("LimtNum")
+		limitText.Text = xinGuanConf.shopMax[index] - data.buyCount
+		
+		-- 播放特效
+		local itemConf = Csv.Item[updateItem.data.itemId]
+		local spMap = {back = itemConf.colorIcon, icon = itemConf.icon}
+		local textMap = {num = updateItem.data.shopBuyCount}
+		CCommon.CreateEffect(self._RootNode, EFFECT_ID, itemModule:Get("IconBox").RootCanvasPos, nil, spMap, textMap)
+		SoundMgr.Play(11000)
+	end
+end
+
+
+function _R.UpdateBuyCountData(self)
+	local typeId = self.mData.actType
+	local data = MActivity.GetListFromType(typeId)
+	local activityId = MActivity.ActIdForType[typeId]
+	self.mData = data[activityId]
+
+	if self.curSelectToggle == ShopTypeEnum.Shop then
+		_P.OnSetListData(self)
+	end
+end
+
+
+return _M

@@ -1,0 +1,86 @@
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local JGuiManager = CS.JGui.JGuiManager
+local _M = Class()
+local _P = {}
+
+local COLOR_RED = Color(1,35/255,35/255,1)
+local COLOR_GREEN = Color(42/255,1,0,1)
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Lobby_Adver")
+	self.mMoudle = moudle
+
+	_P.RefreshView(self)
+
+	moudle:Get("Tips1").Text = Csv.Text("relations_tip7")
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local defenseData = MRelations.DefenseData
+	if defenseData ~= nil then
+		content:DestroyChildren()
+		local defenseTable = _P.GetSortTable(defenseData.list)
+		if defenseTable ~= nil then
+			for k,v in pairs(defenseTable) do
+				local defenseMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Appeal_Item2")
+				defenseMoudle:Get("name").Text = Csv.Text("relations_tip9",{name = v.name,num = v.playerid})
+				defenseMoudle:Get("time").Text = LuaUtil.GetTime(v.time)
+
+				local TextPoint = defenseMoudle:Get("shili")
+				if v.point >= 0 then
+					TextPoint.Text = Csv.Text("relations_pointadd",{point = v.point})
+					TextPoint.Color = COLOR_GREEN
+				else
+					TextPoint.Text = Csv.Text("relations_rankpoint",{point = v.point})
+					TextPoint.Color = COLOR_RED
+				end
+
+				local csvStaff = Csv.Personnel[v.staffid]
+				if csvStaff ~= nil then
+					local staffName = csvStaff.name
+					if v.staffName ~= nil then
+						staffName = v.staffName
+					end
+					defenseMoudle:Get("dengji").Text = Csv.Text("relations_defensemsg",{name = staffName,num = v.num})
+				end
+			end
+		end
+		local tip = moudle:Get("Tips1")
+		if defenseTable == nil or #defenseTable <= 0 then
+			tip.Activity = true
+		else
+			tip.Activity = false
+		end
+	end
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	return a.time > b.time
+end
+
+function _M:Refresh()
+	_P.RefreshView(self)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

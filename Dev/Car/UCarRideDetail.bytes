@@ -1,0 +1,85 @@
+-- 驾乘详情弹窗
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data, id, seatIndex)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Details")
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("HelpBtn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("Title").Text = Csv.Text("car_rideDetail_title")
+	module:Get("StaffLv").Text = Csv.Text("staff_level") .. data.level
+	module:Get("StaffTotal").Text = Csv.Text("car_main_shili") .. MCar.GetTotalAttrs(data.allAttr)
+	module:Get("ride").Text = Csv.Text("car_selectStaff_ride") .. "："
+
+	local staffConf = Csv.Personnel[data.id]
+	if staffConf then
+		module:Get("Staff").SpriteName = MStaff.Color2Image[data.color]
+		module:Get("StaffIcon").SpriteName = staffConf.asset
+		module:Get("StaffName").Text = staffConf.name
+		
+		if staffConf.specialtyIcon ~= nil then
+			module:Get("IconRect").Activity = true
+			for k,v in ipairs(staffConf.specialtyIcon) do
+				module:Get("icon" .. k).Activity = true
+				module:Get("icon" .. k).SpriteName = v
+			end
+		end
+	end
+
+	local carData = MCar.GetCurCarData(id)
+	local carId = carData.carid
+	local itemConf = Csv.Item[carId]
+	local carConf = Csv.Car[carId]
+	
+	if itemConf and carConf then
+		local rideText = module:Get("rideText")
+		local strColor = Csv.ItemColor[itemConf.color].str
+		rideText.Text = Csv.Text("common_color", {num = strColor, name = "【" .. carConf.name .. '】'})
+	end
+
+	-- 更换
+	module:Get("C_text").Text = Csv.Text("car_rideDetail_change")
+	local changeBtn = module:Get("C_Btn_b")
+	changeBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCarSelectStaff", id, seatIndex, true)
+		self:Destroy()
+	end, nil, 0.9)
+end
+
+
+return _M

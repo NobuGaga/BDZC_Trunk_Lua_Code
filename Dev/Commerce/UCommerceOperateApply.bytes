@@ -1,0 +1,165 @@
+--申请处理界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--收到申请处理
+function _R.OnApplyList(self, data)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local count = 0
+	if data ~= nil and data.list ~= nil then
+		for _,player in pairs(data.list) do
+			count = count + 1
+			local playerId = player.id
+			local oneMoudle = self:CreateMoudle(content, "M_Gang_Apply_Item")
+			oneMoudle:Get("ShName").Text = player.name
+			oneMoudle:Get("SLText").Text = Csv.Text("club_info_force")
+			oneMoudle:Get("SLNum").Text = tostring(player.power)
+			oneMoudle:Get("Company").Text = Csv.Text("club_info_company")
+			local companyCsv = Csv.Company[player.level]
+			oneMoudle:Get("NameText").Text = companyCsv.name
+			oneMoudle:Get("Time").Text = Csv.Text("commerce_op4")
+			oneMoudle:Get("PeopleNum").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - player.lastTime)
+			oneMoudle:Get("C_text_1").Text = Csv.Text("commerce_op5")
+			oneMoudle:Get("C_text_2").Text = Csv.Text("commerce_op6")
+			oneMoudle:Get("head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
+			-- oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex)
+			local csvVip = Csv.Vip[player.vip]
+			if csvVip.imgBord ~= nil then
+				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+				oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..player.vip
+			else
+				oneMoudle:Get("OutBox").Activity = false
+			end
+			oneMoudle:Get("Btn1"):AddOnButton(function()
+				SoundMgr.Play(10001)
+				-- 同意
+				CCommerce.OperateApplyReq(playerId, true)
+				
+				oneMoudle:Destroy()
+				self.Count = self.Count - 1
+				self.CountText.Text = tostring(self.Count)
+				if self.Count > 0 then
+					self.NoneText.Activity = false
+				else
+					self.NoneText.Activity = true
+				end
+			end)
+			oneMoudle:Get("Btn2"):AddOnButton(function()
+				SoundMgr.Play(10001)
+				-- 拒绝
+				CCommerce.OperateApplyReq(playerId, false)
+
+				oneMoudle:Destroy()
+				self.Count = self.Count - 1
+				self.CountText.Text = tostring(self.Count)
+				if self.Count > 0 then
+					self.NoneText.Activity = false
+				else
+					self.NoneText.Activity = true
+				end
+			end)
+		end
+	end
+	if count <= 0 then
+		MCommerce.MyCommerceInfo.haveApply = false
+		WindowMgr.Call("UCommerceManager","SetRedpointHidden")
+		WindowMgr.Call("UCommerce","SetRedpointHidden")
+	end
+	self.CountText.Text = tostring(count)
+	self.Count = count
+	if count > 0 then
+		self.NoneText.Activity = false
+	else
+		self.NoneText.Activity = true
+	end
+end
+
+function _R.OnUpdateAllowAuto(self)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		if info.allowAuto then
+			self.OFF.Activity = false
+			self.ON.Activity = true
+		else
+			self.OFF.Activity = true
+			self.ON.Activity = false
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	CCommerce.ApplyListReq()
+	self.Count = 0
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Apply")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("commerce_manager2")
+	moudle:Get("tipsText").Text = Csv.Text("commerce_create6")
+	moudle:Get("SHtext").Text = Csv.Text("commerce_op1")
+	self.NoneText = moudle:Get("None")
+	self.NoneText.Text = Csv.Text("commerce_op2")
+	self.CountText = moudle:Get("ShName_0")
+	self.CountText.Text = "0"
+	moudle:Get("C_text").Text = Csv.Text("commerce_op3")
+	self.OFF = moudle:Get("OFF")
+	self.ON = moudle:Get("ON")
+	self.OFF:AddOnButton(function()
+		SoundMgr.Play(10001)
+		self.OFF.Activity = false
+		self.ON.Activity = true
+		CCommerce.AllowAutoJoinReq(true)
+	end)
+	self.ON:AddOnButton(function()
+		SoundMgr.Play(10001)
+		self.OFF.Activity = true
+		self.ON.Activity = false
+		CCommerce.AllowAutoJoinReq(false)
+	end)
+	_R.OnUpdateAllowAuto(self)
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommerce.RefuseAllReq()
+		_R.OnApplyList(self)		
+	end)
+end
+
+return _M

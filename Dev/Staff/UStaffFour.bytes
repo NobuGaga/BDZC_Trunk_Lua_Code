@@ -1,0 +1,80 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local _M = Class()
+
+local StaffTable = Csv.Const(Define.Const.StaffFour)
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_sdjc_Gh")
+	self.mMoudle = moudle
+
+	moudle:Get("title").Text = Csv.Text("staff_speT")
+
+	local staffNum = 0
+	for k,v in ipairs(StaffTable) do
+		local csvStaff = Csv.Personnel[v]
+		local bsx = moudle:Get("bsx"..k)
+		if bsx ~= nil then
+			bsx.SpriteName = csvStaff.asset
+			if MStaff.StaffTable[v] ~= nil then
+				staffNum = staffNum + 1
+			else
+				bsx.IsGray = true
+			end
+		end
+	end
+
+	local aureoleName = ""
+	local aureoleAdd = ""
+	local addLast = ""
+	local addNow = ""
+	local staffFirst = Csv.Personnel[StaffTable[1]]
+	if staffFirst ~= nil then
+		for k,v in pairs(staffFirst.aureole) do
+			local csvAureole = Csv.Aureole[v * 1000 + 1]
+			if csvAureole ~= nil and csvAureole.costitem == nil then
+				aureoleName = csvAureole.name
+				aureoleAdd = csvAureole.desc
+				local csvLastAureole = Csv.Aureole[v * 1000 + staffNum - 1]
+				local csvNowAureole = Csv.Aureole[v * 1000 + staffNum]
+				if csvLastAureole ~= nil and csvLastAureole.effect ~= nil then
+					addLast = (csvLastAureole.effect[1][2]/100).."%"
+				else
+					addLast = "0%"
+				end
+				if csvNowAureole ~= nil and csvNowAureole.effect ~= nil then
+					addNow = (csvNowAureole.effect[1][2]/100).."%"
+				else
+					addNow = "0%"
+				end
+			end
+		end
+	end
+
+	moudle:Get("text1").Text = Csv.Text("staff_speT2",{name = aureoleName})
+	moudle:Get("text2").Text = Csv.Text("staff_speL",{num = staffNum - 1})
+	moudle:Get("text3").Text = Csv.Text("staff_speL",{num = staffNum})
+
+	moudle:Get("text4").Text = aureoleAdd
+	moudle:Get("text5").Text = addLast
+	moudle:Get("text6").Text = addNow
+
+	-- local back = moudle:Get("bg")
+	-- back:AddOnClick(function ( ... )
+	-- 	SoundMgr.Play(10001)
+	-- 	self:Destroy()
+	-- end, nil)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

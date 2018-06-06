@@ -1,0 +1,68 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local rapidjson = require "rapidjson"
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.DoLoginAccount(self)
+	local data = {}
+	data.func = "OnSDKLogin"
+	data.account = self.UserName.Text
+	data.password = self.Password.Text
+	SDKMgr.OnSdkCallBack(rapidjson.encode(data))
+	self:Destroy()
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Login_Input")
+
+	self.UserName = moudle:Get("UserName")
+	self.UserName.Text = string.gsub(MLogin.Account or "", "&.+", "")
+	self.UserName.PlaceholderWidget.Text = Csv.Text("login_tip1")
+	self.Password = moudle:Get("Password")
+	self.Password.Text = MLogin.Password
+	self.Password.PlaceholderWidget.Text = Csv.Text("login_tip2")
+
+	moudle:Get("BtnLogin"):AddOnButton(function (  )
+		SoundMgr.Play(10001)
+			if self.UserName.Text == "" or self.Password.Text == "" then
+				CCommon.ShowError(Csv.Text("login_err_no_np"))
+			else
+				_P.DoLoginAccount(self)
+			end
+		end, nil, 0.9)
+	moudle:Get("TxLogin").Text = Csv.Text("login_btn1")
+end
+
+function _R.Close(self)
+	self:Destroy()
+end
+
+return _M

@@ -1,0 +1,58 @@
+-- 失败界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local failActorId = 10140
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(battleId, onClose)
+	self.OnCloseCall = onClose
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_Fail")
+	self.mModule = module
+	-- 播放战斗失败特效
+	SoundMgr.PlayNonStopUI(10047)
+	CCommon.CreateEffect(module:Get("ActorPanel"), failActorId)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+		_P.ShowCloseTips(self)
+	end, nil, 0.5)
+
+	local battleId = (battleId > MLectures.MaxLecturesNum and MLectures.MaxLecturesNum) or battleId
+	local lectureConf = Csv.LecturesBattle[battleId]
+	if lectureConf then
+		module:Get("Text1").Text = Csv.Text("lectures_main_failShow", {name = lectureConf.name})
+	end
+end
+
+
+function _P.ShowCloseTips(self)
+	local tipsText = self.mModule:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+
+return _M

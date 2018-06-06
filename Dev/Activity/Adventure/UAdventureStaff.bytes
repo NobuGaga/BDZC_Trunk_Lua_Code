@@ -1,0 +1,438 @@
+-- 奇遇员工界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local TOP_BEGIN = 387
+local TOP_END = 850
+local BUTTOM_BEGIN = -809
+local BUTTOM_END = 0
+local DEFAULT_ICON = "HeroList_Add"
+local POSY_ANIM = "T_Adventure_PosY"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnComplete(self,data)
+	local data = 
+	{
+		actId = 40000,
+		eventIndex = 2,
+		compatibility = 0.5,
+		reward = {{id = 32005, count = 1},{id = 32006, count = 2}},
+		hotval = 5,
+		eventtimes = 2,
+		eventId = 1001,
+	}
+	WindowMgr.Create("UAdventureResult", data, function()
+	self:Destroy()
+	end)
+end
+
+--构造假数据
+function _P.CreateFadeData(self)
+
+end
+
+function _P.GetSortStaffs(self,rawTable, suitData)
+	local sortTable = {}
+	local suitTable = {} --符合条件的
+	local unsuitTable = {} --不符合条件的
+	local totalTable = {}--一共的
+	local overTable = {} --已加班不可使用的
+	local overUseTable = {} --已加班可以使用的
+	local freeTable = {} --没加班过的
+
+	for k,v in pairs(rawTable) do
+		--符合条件的
+		if _P.CheckIsSuit(self,suitData,v) then
+			table.insert(suitTable,v)
+		else
+			table.insert(unsuitTable,v)
+		end
+	end
+
+	--TODO：符合条件的排序：可使用》已使用可加班》已使用不可加班
+	
+
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+
+	table.sort(sortTable,function(a,b)
+		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
+	end)
+	return sortTable
+end
+
+--检测这名员工是否符合需求
+--排序：可使用》已使用可加班》已使用不可加班》不符合条件》属性数值》资质》
+function _P.CheckIsSuit(self,suitData, data)
+	local checkSum = 1 	--符合度
+	local checkSeed = 1000 --防止单属性偏差过大
+	local csvPerson = Csv.Personnel[data.id]
+	for i=1,#suitData do
+		--四种基本属性：公关，行政，技术，营销 走一套
+		if suitData[i].type <= 4 then
+			local dataVal = MStaff.GetAttrByType(data.id, suitData[i].type)
+			checkSum = checkSum + (dataVal - suitData[i].val) * checkSeed
+			--性别 国籍 年龄 员工ID
+		elseif suitData[i].type >= 5 and suitData[i].type <= 8 then
+			if csvPerson.sex == suitData[i].val then
+				checkSum = checkSum + 1*checkSeed
+			else
+				checkSum = 0
+			end
+		elseif suitData[i].type == MActivity.AdvReqTypeEnum.Job then
+			--和服务器约定suitData[i].val%10为员工级别类型stageType, /10为级别stage
+			if csvPerson.stage >= suitData[i]/10 and 
+				csvPerson.stageType >= suitData[i]%10 then
+					checkSum = checkSum + 1*checkSeed
+				else
+					checkSum = 0
+				end
+			end
+	end
+	--已选中直接置顶
+	if _P.IsContains(self, data.id) and checkSum > 0 then
+		checkSum = 99999
+	end
+	-- print("checkSum",checkSum.."dataId:",data.id)
+	return checkSum
+end
+
+--构建需求员工
+function _P.SetAskStaffList(self)
+	local contentTransform = self.mModule:Get("StaffContent")
+	contentTransform:DestroyChildren()
+
+	local reqstaffDatas = _P.GetReqStaffs(self)
+	for index=1,#reqstaffDatas do
+		self.mReqTableItems[index] = _P.OnCreateAskItem(self,reqstaffDatas[index],contentTransform,index)
+	end
+end
+
+function _P.OnCreateAskItem(self,data,contentTransform,index)
+	local reqStaff = {}
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Staff_AdvItem", WindowType.UI, 0)
+	local icon = itemMoudle:Get("Icon")
+	icon.SpriteName = DEFAULT_ICON
+	for i=1,5 do
+		itemMoudle:Get("Z"..i..i).Activity = false
+		itemMoudle:Get("Gou"..i).Activity = false
+	end
+	_P.SetReqDetail(data.attrInfo,itemMoudle,nil)
+	icon:AddOnButton(function(...)
+		-- print("点击了格子ID",LuaUtil.DumpTable(self.mReqTableItems[index]))
+		_P.SetOwnStaffList(self,data.attrInfo,index)
+		self.Top:DOAnchorPosY(TOP_END, 0.2)
+		self.Buttom:DOAnchorPosY(BUTTOM_END, 0.2)
+	end,nil,1.2)
+
+	reqStaff.module = itemMoudle
+	return reqStaff
+end
+
+--设置要求参数
+function _P.SetReqDetail(data, module,staffData)
+	for i=1, #data do
+		if data[i].type <= 4 then
+			module:Get("Z"..data[i].type..data[i].type).Activity = true
+			--自己的员工属性
+			if staffData ~= nil then
+				local val = MStaff.GetAttrByType(staffData.id,data[i].type)
+				module:Get("Num"..data[i].type).Text = val
+				module:Get("Gou"..data[i].type).Activity = val >= data[i].val
+			else
+				module:Get("Num"..data[i].type).Text = data[i].val
+			end
+		elseif data[i].type == MActivity.AdvReqTypeEnum.Sex then
+			if staffData ~= nil then
+				module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
+			elseif data[i].val == MActivity.AdvSexEnum.Man then
+				module:Get("Name").Text = Csv.Text("adventure_sex_man")
+			else
+				module:Get("Name").Text = Csv.Text("adventure_sex_female")
+			end
+		elseif data[i].type == MActivity.AdvReqTypeEnum.Nationality then
+			if staffData ~= nil then
+				module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
+			elseif data[i].val == 1 then
+				module:Get("Name").Text = Csv.Text("adventure_nation_chinese")
+			else
+				module:Get("Name").Text = Csv.Text("adventure_nation_alia")
+			end
+		elseif data[i].type == MActivity.AdvReqTypeEnum.Age then
+			if staffData ~= nil then
+				module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
+			else
+				module:Get("Name").Text = Csv.Text("adventure_age",{age = data.val})
+			end
+		elseif data[i].type == MActivity.AdvReqTypeEnum.YuanGong then
+			if staffData ~= nil then
+				module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
+			else
+				local name = MStaff.GetStaffName(data[i].val)
+				module:Get("Name").Text = Csv.Text("adventure_work",{name = name})
+			end
+		elseif data[i].type == MActivity.AdvReqTypeEnum.Job then
+
+		end
+	end
+end
+
+--获取需求员工数据
+function _P.GetReqStaffs(self)
+	return self.mData.eventInfo
+end
+
+function _P.SetOwnStaffList(self,suitData,index)
+	local contentTransform = self.mModule:Get("Content")
+	contentTransform:DestroyChildren()
+
+	local staffTableDatas = _P.GetSortStaffs(self, MStaff.StaffTable, suitData)
+	for k,v in ipairs(staffTableDatas) do
+		self.mRawTableItems[v.id] = _P.OnCreateOwnItem(self,v,contentTransform,suitData,index)
+	end
+end
+
+function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
+	local staff = {}
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Adventure_Choose_Item", WindowType.UI, 0)
+
+	local csvPerson = Csv.Personnel[data.id]
+	local ImgIcon = itemMoudle:Get("head")
+	ImgIcon.SpriteName = csvPerson.asset3
+
+	local TextLevel = itemMoudle:Get("number1")
+	TextLevel.Text = data.level
+	local sendBtnText = itemMoudle:Get("C_Text")
+	local sendBtn = itemMoudle:Get("C_Btn_b")
+	sendBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if _P.IsOverTime(self,data.id) then
+			CCommon.ShowError(Csv.Text("adventure_overtime"))
+		elseif _P.IsContains(self,data.id) then
+			--召回
+			_P.OnCallBackStaff(self,data,suitData)
+			sendBtnText.Text = Csv.Text("adventure_staff_send")
+		else
+			--派遣
+			if _P.IsItemFull(self,index) then
+				CCommon.ShowError(Csv.Text("adventure_call_back"))
+			else
+				_P.OnClickSendItem(self,data,suitData,index)
+				sendBtnText.Text = Csv.Text("adventure_staff_callback")
+			end
+		--加班
+		end
+		end, nil, 1)
+	local TextName = itemMoudle:Get("name")
+	TextName.Text = MStaff.GetStaffName(data.id)
+	
+	--TODO:资质图标
+	_P.SetStaffItem(self,suitData,data,itemMoudle)
+	local unSuit = itemMoudle:Get("Tips")
+	unSuit.Text = Csv.Text("adventure_unsuit")
+	--	还要判断有没有加班过
+	if _P.CheckIsSuit(self,suitData,data) > 0 and not _P.IsOverTime() then
+		unSuit.Activity = false
+		sendBtn.Activity = true
+	else
+		unSuit.Activity = true
+		sendBtn.Activity = false
+	end
+	
+	local allattrText = itemMoudle:Get("number2")
+	allattrText.Text = MStaff.GetAllAttr(data.id)
+	itemMoudle:Get("combat").Text = Csv.Text("adventure_staff_allattr")
+	--派遣
+	if _P.IsContains(self,data.id) then
+		sendBtnText.Text = Csv.Text("adventure_staff_callback")
+	else
+		sendBtnText.Text = Csv.Text("adventure_staff_send")
+	end
+	
+end
+
+function _P.SetStaffItem(self,suitData,data,module)
+	local suitType = suitData[1].type
+	--如果没有配四种属性默认取第一种把
+	if suitType > 4 then 
+		suitType = MActivity.AdvReqTypeEnum.Gongguan
+	end
+	if suitType == MActivity.AdvReqTypeEnum.Gongguan then
+			module:Get("icon1").SpriteName = "ty_133"
+	elseif suitType == MActivity.AdvReqTypeEnum.Xingzheng then
+		module:Get("icon1").SpriteName = "ty_134"
+	elseif suitType == MActivity.AdvReqTypeEnum.Tech then
+		module:Get("icon1").SpriteName = "ty_135"
+	elseif suitType == MActivity.AdvReqTypeEnum.Sell then
+		module:Get("icon1").SpriteName = "ty_136"
+	end
+
+	module:Get("number2_0").Text = MStaff.GetAttrByType(data.id, suitType)
+end
+
+-- 派遣员工
+function _P.OnClickSendItem(self,data,suitData,index)
+	data.selectId = index
+	_P.UpdateItem(self,suitData,data,index)
+	table.insert(self.selectDataList, data)
+	_P.UpdateTips(self)
+	-- _P.FindNext(self)
+end
+
+-- 更新格子数据
+function _P.UpdateItem(self,suitData,data,index)
+	--重新刷空格子
+	if data == nil then 
+		local itemMoudle = self.mReqTableItems[index].module
+		itemMoudle:Get("Icon").SpriteName = DEFAULT_ICON
+		for i=1,5 do
+			itemMoudle:Get("Z"..i..i).Activity = false
+			itemMoudle:Get("Gou"..i).Activity = false
+		end
+		_P.SetReqDetail(suitData,itemMoudle,nil)
+	else
+		print("index",LuaUtil.DumpTable(self.mReqTableItems))
+		local itemMoudle = self.mReqTableItems[index].module
+		local csvPerson = Csv.Personnel[data.id]
+		_P.SetReqDetail(suitData,itemMoudle,data)
+		itemMoudle:Get("Icon").SpriteName = csvPerson.asset2
+	end
+end
+
+--召回员工
+function _P.OnCallBackStaff(self,data,suitData)
+	_P.UpdateItem(self,suitData,nil,data.selectId)
+	data.selectId = nil
+	_P.Remove(self,data)
+	_P.UpdateTips(self)
+end
+-- 移除员工
+function _P.Remove(self,data)
+	local index = 0
+	for i=1, #self.selectDataList do
+		if self.selectDataList[i].id == data.id then
+			index = i
+			break
+		end
+	end
+	if index == 0 then return end
+	table.remove(self.selectDataList, index)
+end
+
+--这个格子是否已经有人了
+function _P.IsItemFull(self,index)
+	for i=1,#self.selectDataList do
+		if self.selectDataList[i].selectId == index then
+			return true
+		end
+	end
+	return false
+end
+
+-- 是否已经派遣
+function _P.IsContains(self,id)
+	local isHasSend = false
+	for i=1, #self.selectDataList do
+		if self.selectDataList[i].id == id then
+			isHasSend = true
+			break
+		end
+	end
+	return isHasSend
+end
+
+--判断是否已经加班过
+function _P.IsOverTime(self,id)
+	return false
+end
+-- 更新选择员工提示
+function _P.UpdateTips(self)
+	-- print("count", #self.selectDataList)
+	self.selectTips.Activity = #self.selectDataList == 0
+end
+
+--界面构造
+function _M:OnCreate(eventData)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Xzyg")
+	self.mModule = module
+
+	local closeBtn = self.mModule:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	self.mData = eventData
+
+	self.selectDataList = {}
+	self.mRawTableItems = {}
+	self.mReqTableItems = {}
+	local BtnRule = module:Get("C_Full_Help_Btn")
+	BtnRule:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Adventure)
+	end, nil, 1.2)
+	
+	LuaUtil.DumpTable(eventData)
+	self.eventId = self.mData.id
+	self.actId = self.mData.actId
+	local eventconf = Csv.AdventureMainEvent[self.mData.id]
+
+	module:Get("C_Text_0").Text = Csv.Text("adventure_title")
+	module:Get("Name").Text = eventconf.title
+	module:Get("Name_0").Text = eventconf.title
+	module:Get("Info").Text = eventconf.desc
+	module:Get("Icon").SpriteName = eventconf.icon
+	module:Get("C_text").Text = Csv.Text("adventure_staff_confirm")
+	module:Get("DHKtext").Text = Csv.Text("adventure_select")
+	self.selectTips = module:Get("Dhk")
+	self.DownRect = module:Get("BtnRect")
+	self.DownRect.CachedTran:GetJTweener(POSY_ANIM):Play()
+	self.DownBtn = module:Get("Btn")
+	self.Top = module:Get("TopRect")
+	self.Buttom = module:Get("StaffListBg")
+	self.confirm = module:Get("C_Btn_a")
+	self.confirm:AddOnButton(function(...)
+		--确认选择判断选择人数够了没
+		if #self.selectDataList < #self.mData.eventInfo then
+			CCommon.ShowError(Csv.Text("adventure_call_limit"))
+		else
+			--TODO：完成事件
+			-- CActivity.ReqAdvPersonEvent(actId,eventIndex,staffIds)
+			_R.OnComplete(self,nil)
+		end
+	end,nil,1.2)
+	
+	self.DownBtn:AddOnButton(function(...)
+		self.Top:DOAnchorPosY(TOP_BEGIN, 0.2)
+		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.2)
+	end,nil,1.2)
+
+	
+	for i=1,eventconf.star do
+		module:Get("Star"..i).Activity = true
+	end
+
+	self.OutBox = module:Get("OutBox")
+	_P.SetAskStaffList(self)
+end
+
+return _M

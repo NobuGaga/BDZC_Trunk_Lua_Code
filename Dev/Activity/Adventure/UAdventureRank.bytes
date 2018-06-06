@@ -1,0 +1,470 @@
+-- 奇遇排行榜界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CRank = JRequire "Dev.Rank.CRank"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MRank = JRequire "Dev.Rank.MRank"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local GTE_EFFECT_ID = 5
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+local DefaultNoReward = "ty_023" --默认无奖励底图
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--获取排名奖励数据
+function _P.GetRankData(self, activity)
+	local adventureConf = self.adventureConf
+	local rewardTitle = ""
+	self.mRankrewardData = {}
+	local rewarditemList = {}
+	for i=1, #adventureConf.rankReward do
+		if adventureConf.rankInterval[i][1] == adventureConf.rankInterval[i][2] then
+			rewardTitle = Csv.Text("charitable_rank_title2",{num = adventureConf.rankInterval[i][1]})
+		else
+			rewardTitle = Csv.Text("charitable_rank_title",{from = adventureConf.rankInterval[i][1],
+			to = adventureConf.rankInterval[i][2]})
+		end
+
+		local itemData = {
+			index = i,
+			from = adventureConf.rankInterval[i][1],
+			to = adventureConf.rankInterval[i][2],
+			memberReward = adventureConf.rankReward[i],
+			rewardTitle = rewardTitle,
+		}
+		rewarditemList[i] = itemData
+	end
+	self.mRankrewardData = rewarditemList
+
+	local gangrewarditemList = {}
+	for i=1, #adventureConf.commerceInterval do
+		if adventureConf.commerceInterval[i][1] == adventureConf.commerceInterval[i][2] then
+			rewardTitle = Csv.Text("charitable_rank_title2",{num = adventureConf.rankInterval[i][1]})
+		else
+			rewardTitle = Csv.Text("charitable_rank_title",{from = adventureConf.rankInterval[i][1],
+			to = adventureConf.rankInterval[i][2]})
+		end
+
+		local itemData = {
+			index = i,
+			from = adventureConf.commerceInterval[i][1],
+			to = adventureConf.commerceInterval[i][2],
+			memberReward = adventureConf.memberReward[i],
+			rewardTitle = rewardTitle,
+			presidentReward = adventureConf.presidentReward[i],
+		}
+		gangrewarditemList[i] = itemData
+	end
+	self.mGangrewardData = gangrewarditemList
+end
+
+--排名奖励
+function _P.OnCreateItem(data,itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Ranking_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("textTitle").Text = data.rewardTitle
+	local bgHeight = itemModule.SelfRect.SizeDelta.y
+	
+	local content = itemModule:Get("GoodsItem")
+	content:DestroyChildren()
+
+	local layout = content:AddGridLayoutGroup()
+	local columnLimitNum = layout.constraintCount
+	local oneItemHeight = layout.cellSize.y + layout.spacing.y
+
+	local num = 0
+	for k, v in pairs(data.memberReward) do
+		CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Adventure)
+		num = num + 1
+	end
+
+	local remNum = num % columnLimitNum
+	if remNum ~= 0 then
+		for i=1, (columnLimitNum - remNum) do
+			local rewardItem = CCommon.CreateItem(content, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num = num + 1
+		end
+	end
+
+	local row, rest = math.modf(num / columnLimitNum)
+	itemModule.SelfRect.SizeDelta = Vector2(itemModule.SelfRect.SizeDelta.x, bgHeight + (row - 1) * oneItemHeight) -- 默认有一行不需要计算进去
+end
+
+-- 联盟排名item
+function _P.OnCreateGangItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Ranking_Item1", WindowType.UI, 0)
+	if not itemModule then return end
+
+	local bgHeight = itemModule.SelfRect.SizeDelta.y
+	itemModule:Get("textTitle").Text = data.rewardTitle
+	itemModule:Get("huizhang").Text = Csv.Text("xinguan_rank_mengzhu")
+	itemModule:Get("huiyuan").Text = Csv.Text("xinguan_rank_member")
+
+	local gangContent = itemModule:Get("GoodsItem1")
+	local memberContent = itemModule:Get("GoodsItem2")
+	gangContent:DestroyChildren()
+	memberContent:DestroyChildren()
+
+	local memberRect = itemModule:Get("huiyuan")
+	local memberRectPos = memberRect.LocalPosition
+	local selfLayout = memberContent:AddGridLayoutGroup()
+	local columnLimitNum1 = selfLayout.constraintCount
+	local selfItemHeight = selfLayout.cellSize.y + selfLayout.spacing.y
+
+	local gangLayout = gangContent:AddGridLayoutGroup()
+	local columnLimitNum2 = gangLayout.constraintCount
+	local gangItemHeight = gangLayout.cellSize.y + gangLayout.spacing.y
+
+	local num1 = 0
+	for k, v in pairs(data.memberReward) do
+		CCommon.CreateItem(memberContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Adventure)
+		num1 = num1 + 1
+	end
+
+	local remNum1 = num1 % columnLimitNum1
+	if remNum1 ~= 0 then
+		for i=1, (columnLimitNum1 - remNum1) do
+			local rewardItem = CCommon.CreateItem(memberContent, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num1 = num1 + 1
+		end
+	end
+
+	local num2 = 0
+	for k, v in pairs(data.presidentReward) do
+		CCommon.CreateItem(gangContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Adventure)
+		num2 = num2 + 1
+	end
+	local remNum2 = num2 % columnLimitNum2
+	if remNum2 ~= 0 then
+		for i=1, (columnLimitNum2 - remNum2) do
+			local rewardItem = CCommon.CreateItem(gangContent, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num2 = num2 + 1
+		end
+	end
+
+	local row1, rest1 = math.modf(num1 / columnLimitNum1)
+	local row2, rest2 = math.modf(num2 / columnLimitNum2)
+	
+	local rowHeight2 = (row2 - 1) * gangItemHeight
+	memberRect.LocalPosition = Vector2(memberRectPos.x, memberRectPos.y - rowHeight2)
+	itemModule.SelfRect.SizeDelta = Vector2(itemModule.SelfRect.SizeDelta.x, bgHeight + (row1 - 1) * selfItemHeight + rowHeight2) -- 默认有一行不需要计算进去
+end
+
+--设置列表数据
+function _P.OnSetListData(self)
+	local rankList = {}
+	local isPerson = self.curSelectToggle == MActivity.AdvantureTypeEnum.Person
+	if isPerson then
+		rankList = self.mRankrewardData
+	else
+		rankList = self.mGangrewardData
+	end
+	print("ranklist")
+	LuaUtil.DumpTable(self.mRankrewardData)
+	LuaUtil.DumpTable(self.mGangrewardData)
+	LuaUtil.DumpTable(rankList)
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	if not rankList then return end
+	for k,v in pairs(rankList) do
+		if isPerson then
+			_P.OnCreateItem(v, itemGrid)
+		else
+			_P.OnCreateGangItem(v, itemGrid)
+		end
+	end
+end
+
+-- 设置是否可以领取
+function _P.SetGetBtnData(self)
+	if self.mData.selfGetState == nil then return end
+	local text
+	local isFinish = self.time - HeartBeat.ServSecond() <= 0
+	local getState = self.mData.selfGetState
+	local isCanNotGet = getState == MActivity.RewardGetState.CanNotGet
+	local isGeted = getState == MActivity.RewardGetState.Geted
+	
+	local isCanGet = getState == MActivity.RewardGetState.CanGet
+	self.timeRect.Activity = not isFinish
+	self.getBtnText.Activity = isFinish
+
+	if isFinish then
+		if isCanNotGet then
+			text ="rankreward_can_not_get"
+		end
+	else
+		if isCanNotGet then
+			text ="rankreward_not_get_time"
+		end
+	end
+	if text then
+		self.getBtnText.Text = Csv.Text(text)
+	else
+		self.getBtnText.Text = ""
+	end
+	local isLight = isFinish and isCanGet
+	self.getBtn.IsGray = not isLight
+	self.getBtn.RaycastTarget = isLight
+	self.getBtn.Activity = not isGeted
+	self.getImg.Activity = isGeted
+end
+
+function _P.RefreshTime(self)
+	local time = self.time - HeartBeat.ServSecond() 
+
+	local isFinish = time <= 0
+	if isFinish then
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
+	else
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
+	end
+	return isFinish
+end
+
+--设置个人排名（商会排名）数据
+function _P.SetRankData(self)
+	local isPerson =(self.curSelectToggle == MActivity.AdvantureTypeEnum.Person)
+	local rankText = self.mModule:Get("rankNum")
+	if isPerson then
+		if self.selfRankNum and self.selfRankNum > 0 then
+			rankText.Text = self.selfRankNum
+		else
+			rankText.Text = "10000+"
+		end
+		self.rankBtnText.Text = Csv.Text("adventure_person_rank")
+	else
+		if self.gangRankNum and self.gangRankNum > 0 then
+			rankText.Text = self.gangRankNum
+		else
+			rankText.Text = "10000+"
+		end
+		self.rankBtnText.Text = Csv.Text("adventure_gang_rank")
+	end
+
+	_P.SetGetBtnData(self)
+end
+
+
+-- 自己活动排行版回调后
+function _R.OnGetSelfRankData(self, data)
+	-- self.selfRankNum = data.selfrank
+	-- self.mRankData.selfrank = data.selfrank
+	-- self.mRankData.ranklist = data.ranklist
+end
+
+function _R.OnUpdateData(self, actId)
+	local data = MActivity.GetFromId(actId)
+	self.mData = data
+	_P.SetGetBtnData(self)
+end
+
+function _R.OnSelfRankData(self,data)
+	self.mselfRankData = data
+	_P.SetRankData(self)
+	_P.SetGetBtnData(self)
+end
+
+function _R.UpdateRed(self)
+	local redRect = self.mModule:Get("redpoint")
+	redRect.Activity = MActivity.CharitableRed
+	local data = MActivity.GetFromId(self.actId)
+	self.mData = data
+	_P.SetGetBtnData(self)
+end
+
+--获得奖励返回
+function _R.OnGetRewardBack(self, data)
+	-- 播放奖励动画
+	if data.isGeted then
+		self.getBtn.Activity = false
+		self.mModule:Get("redpoint").Activity = false
+		SoundMgr.Play(10004)
+
+		local animRect = self.mModule:Get("GetAnim")
+		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
+			_R.OnUpdateData(self, data.actId)
+
+			local rankType = data.index % 10000
+			local realIndex = math.floor(data.index / 10000)
+			local rewardItems = {}
+			local rankConf = Csv.Adventure[data.actId]
+			if rankType == 1 then
+				rewardItems = rankConf.rankReward[realIndex]
+			elseif rankType == 2 then
+				rewardItems = rankConf.memberReward[realIndex]
+			elseif rankType == 3 then
+				rewardItems = rankConf.presidentReward[realIndex]
+			end
+			
+			local rewardList = rewardItems or {}
+			local delayCount = 0
+			for k,v in pairs(rewardList) do
+				CCommon.ShowFlyItem(animRect, v[1], v[2], delayCount)
+				delayCount = delayCount + 0.3
+			end
+		end)
+	end
+end
+
+
+function _P.InitPageData(self)
+	_P.OnSetPageText(self)
+
+	self.personSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MActivity.AdvantureTypeEnum.Person)
+	end, nil, 0.95)
+	self.gangSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MActivity.AdvantureTypeEnum.Gang)
+	end, nil, 0.95)
+end
+
+function _P.OnSetPageText(self)
+	local isPerson =(self.curSelectToggle == MActivity.AdvantureTypeEnum.Person)
+
+	self.personSelectImg.SpriteName = ((isPerson and _LightImg) or _DefaultImg)
+	self.gangSelectImg.SpriteName = ((not isPerson and _LightImg) or _DefaultImg)
+	self.personSelectImg.SizeDelta = ((isPerson and _LightImgSize) or _DefaultImgSize)
+	self.gangSelectImg.SizeDelta = ((not isPerson and _LightImgSize) or _DefaultImgSize)
+
+	self.personText.Color = ((isPerson and _LightFontColor) or _DefaultFontColor)
+	self.gangText.Color = ((not isPerson and _LightFontColor) or _DefaultFontColor)
+	self.personText.FontSize = ((isPerson and _LightFontSize) or _DefaultFontSize)
+	self.gangText.FontSize = ((not isPerson and _LightFontSize) or _DefaultFontSize)
+
+	-- _P.SetRankData(self)
+end
+
+
+function _P.OnClickPage(self, curSelect)
+	if self.curSelectToggle == curSelect then return end
+	self.curSelectToggle = curSelect
+
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+--界面构造
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Ranking")
+	self.mModule = module
+	local closeBtn = module:Get("Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+
+	-- self.activityData = data
+	-- self.actId = data.actId
+	self.actId = 40000
+	self.adventureConf = Csv.Adventure[self.actId]
+	self.selfRankType = self.adventureConf.rankType
+	self.gangRankType = self.selfRankType + 1
+
+	_P.GetRankData(self, self.actId)
+	-- CRank.GetRankList(self.selfRankType, true)
+
+	self.curSelectToggle = MActivity.AdvantureTypeEnum.Person
+
+	module:Get("textSelfRank").Text = Csv.Text("xinguan_rank_selfRank")
+	local personText = module:Get("C_text1")
+	local gangText = module:Get("C_text2")
+	personText.Text = Csv.Text("xinguan_rank_mine_title")
+	gangText.Text = Csv.Text("xinguan_rank_gang_title")
+	self.personText = personText
+	self.gangText = gangText
+	self.getImg = module:Get("GetPos")
+	self.timeRect = module:Get("Time")
+	self.timeRect.Text = Csv.Text("xinguan_rank_time")
+	self.timeText = module:Get("TimeNum")
+	self.rankBtnText = module:Get("textBtnRank")
+	self.rankBtnText.Text = Csv.Text("xinguan_rank_bangdan")
+	module:Get("textBtnGet").Text = Csv.Text("xinguan_rank_get")
+	self.getBtnText = module:Get("noneText")
+	self.personSelectImg = module:Get("Btn_c1")
+	self.gangSelectImg = module:Get("Btn_c2")
+	-- local personBtn = module:Get("btnRank")
+	-- personBtn:AddOnButton(function ( ... )
+	-- 	SoundMgr.Play(10001)
+
+	-- 	local isPerson =(self.curSelectToggle == MActivity.ActivityType.Adventure)
+	-- 	if isPerson then
+	-- 		WindowMgr.Create("UAdventureRankDetail", self.selfRankType, true)
+	-- 	else
+	-- 		WindowMgr.Create("UAdventureRankDetail", self.gangRankType, false)
+	-- 	end
+	-- end, nil, 0.95)
+	
+	-- self.getBtn = module:Get("btnGet")
+	-- self.getBtn:AddOnButton(function ( ... )
+	-- 	SoundMgr.Play(10001)
+	-- 	local isPerson =(self.curSelectToggle == MActivity.ActivityType.Adventure)
+	-- 	CActivity.GetRewardReq(activityData.actId, (isPerson and 1) or 2)
+	-- end, nil, 0.95)
+
+	-- local state = activityData.state
+	-- local time = state.lefttime - HeartBeat.ServSecond()
+	-- self.time = state.lefttime
+
+	-- _P.RefreshTime(self)
+	-- if time > 0 then
+	-- 	self.countTime = self.timeText:AddOnUpdate(function() 
+	-- 		if _P.RefreshTime(self) then
+	-- 			if self.countTime then
+	-- 				self.countTime:Destroy()
+	-- 				self.countTime = nil
+	-- 			end
+	-- 			if activityData.actType == Define.ActivityType.Adventure then
+	-- 				MActivity.IsUpdateTime1 = true
+	-- 			end
+	-- 		end
+	-- 	end, nil, 1)
+	-- end
+
+	_P.InitPageData(self)
+	_P.OnSetListData(self)
+	-- local titleImg = module:
+
+end
+
+return _M

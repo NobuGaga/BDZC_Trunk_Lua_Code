@@ -1,0 +1,159 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Notice.MNotice.bytes#_M]
+local MNotice = JRequire "Dev.Notice.MNotice"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Notice"
+local BtnClose = "BackBtn"
+local ItemName = "M_Notice_Theme_Item"
+local ItemTextName = "M_Notice_Text_Item"
+
+--旋转箭头动画时间
+local ArrowRotateTime = 0.3
+
+local OpenRotate = Vector3.zero
+local CloseRotate = Vector3(0, 0, 90)
+
+local TextDefaultHeight = 150
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(keyWord)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(
+		function() 
+			_P.OnCloseButton(self) 
+		end, nil, 1.2)
+	self.moudle:Get("C_Btn_b"):AddOnButton(function() _P.OnCloseButton(self) end)
+	self.moudle:Get("Titele").Text = Csv.Text("notice_title")
+	self.moudle:Get("C_text").Text = Csv.Text("notice_btn")
+
+	self.moudle:Get("banner").SpriteName = MNotice.Data.pic
+	if nil ~= MNotice.Data and nil ~= MNotice.Data.themes then
+		self.listData = MNotice.Data.themes
+		if nil ~= keyWord then
+			_P.CalculateKeyWordItemIndex(self, keyWord)
+		end
+		_P.InitThemeList(self)
+	end
+end
+
+function _P.OnCloseButton(self)
+	SoundMgr.Play(10002)
+	self:Destroy()
+end
+
+function _P.CalculateKeyWordItemIndex(self, keyWord)
+	for index, themes in pairs(self.listData) do
+		local findStartPos = nil
+		if nil ~= themes.title then
+			findStartPos = string.find(themes.title, keyWord)
+		end
+		if nil == findStartPos then
+			if nil ~= themes.text then
+				findStartPos = string.find(themes.text, keyWord)
+			end
+		end
+		if nil ~= findStartPos then
+			self.selectTheme = index
+			break
+		end
+	end
+end
+
+function _P.InitThemeList(self)
+	self.content = self.moudle:Get("content")
+	-- self.content.CachedTran:SetSiblingIndex(0)
+	self.listArrowCache = {}
+	self.listTextItemCache = {}
+	self.selectTheme = self.selectTheme or 1
+
+	if nil ~= self.listData then
+		for index, theme in ipairs(self.listData) do
+			_P.CreateThemeTitleItem(self, index, theme)
+			_P.CreateThemeTextItem(self, index, theme)
+		end
+	end
+end
+
+function _P.CreateThemeTitleItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+
+	itemMoudle:Get("textTitle").Text = data.title
+	local New = itemMoudle:Get("New")
+	local Hot = itemMoudle:Get("Hot")
+	local textTime = itemMoudle:Get("textTime")
+	New.Activity = MNotice.ThemeType.New == data.hotOrNew
+	Hot.Activity = MNotice.ThemeType.Hot == data.hotOrNew
+	textTime.Activity = MNotice.ThemeType.Time == data.hotOrNew
+	if New.Activity then
+		itemMoudle:Get("textNew").Text = "NEW"
+	elseif Hot.Activity then
+		itemMoudle:Get("textHot").Text = "HOT"
+	elseif textTime.Activity then
+		textTime.Text = data.time
+	end
+
+	_P.SetItemArrowAndText(self, index, itemMoudle)
+end
+
+function _P.SetItemArrowAndText(self, index, itemMoudle)
+	local arrow = itemMoudle:Get("arrow")
+	if self.selectTheme == index then
+		arrow.LocalEulerAngles = OpenRotate
+	else
+		arrow.LocalEulerAngles = CloseRotate
+	end
+
+	itemMoudle.SelfRect:AddOnButton(function ()
+		local lastText = self.listTextItemCache[self.selectTheme]
+		local lastArrow = self.listArrowCache[self.selectTheme]
+		if nil ~= lastText and nil ~= lastArrow then
+			if self.selectTheme == index then
+				local islastTextActive = lastText.Activity
+				if islastTextActive then
+					lastArrow:DOLocalRotate(CloseRotate, ArrowRotateTime)
+				else 
+					lastArrow:DOLocalRotate(OpenRotate, ArrowRotateTime)
+				end
+				lastText.Activity = not islastTextActive
+			else
+				local nowText = self.listTextItemCache[index]
+				local nowArrow = self.listArrowCache[index]
+				if nil ~= nowText and nil ~= nowArrow then
+					lastArrow:DOLocalRotate(CloseRotate, ArrowRotateTime)
+					lastText.Activity = false
+					nowArrow:DOLocalRotate(OpenRotate, ArrowRotateTime)
+					nowText.Activity = true
+					self.selectTheme = index
+				end
+			end
+		end
+	end, nil, 1)
+	self.listArrowCache[index] = arrow
+end
+
+function _P.CreateThemeTextItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemTextName)
+	local moudleRect = itemMoudle.SelfRect
+	moudleRect.Activity = self.selectTheme == index
+	local noticeText = itemMoudle:Get("NoticeText")
+	noticeText.Text = data.text
+	local fix = noticeText.PreferredHeight - TextDefaultHeight
+	if 0 ~= fix then
+		local sizeMoudle = moudleRect.SizeDelta
+		local sizeText = moudleRect.SizeDelta
+		moudleRect.SizeDelta = Vector2(sizeMoudle.x, sizeMoudle.y + fix)
+		noticeText.SizeDelta = Vector2(sizeText.x, sizeText.y + fix)
+	end
+	self.listTextItemCache[index] = itemMoudle.SelfRect
+end
+
+return _M

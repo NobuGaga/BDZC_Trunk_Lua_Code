@@ -1,0 +1,466 @@
+--有商会的主界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Talk.MTalk.bytes#_M]
+local MTalk = JRequire "Dev.Talk.MTalk"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CVote = JRequire "Dev.Vote.CVote"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+_P.BtnPress = 
+{
+	[Define.SysId.Commerce_Manager] = function(self)
+		WindowMgr.Create("UCommerceManager")
+	end,
+	[Define.SysId.Commerce_Build] = function(self)
+		WindowMgr.Create("UCommerceBuild")
+	end,
+	[Define.SysId.Commerce_Members] = function(self)
+		WindowMgr.Create("UCommerceMembers")
+	end,
+	[Define.SysId.Commerce_Exchange] = function(self)
+		WindowMgr.Create("UCommerceExchange")
+	end,
+	[Define.SysId.Commerce_Battle] = function(self)
+		WindowMgr.Create("UCommerceBattleList")
+	end,
+	[Define.SysId.Commerce_Rank] = function(self)
+		WindowMgr.Create("UCommerceRank")
+	end,
+	[Define.SysId.Commerce_Study] = function(self)
+		WindowMgr.Create("UVoteStudy")
+	end,
+}
+_P.BtnLightUpdate = 
+{
+	[Define.SysId.Commerce_Manager] = function(self)
+		local data = MCommerce.MyCommerceInfo
+		local moudle = self.Moudle
+
+		--副本战斗小红点
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Manager]
+		if funcInfo ~= nil then
+			if funcInfo.light ~= nil then
+				funcInfo.light.Activity = data.haveApply
+			end
+		end
+	end,
+	[Define.SysId.Commerce_Build] = function(self)
+		local data = MCommerce.MyCommerceInfo
+		local myInfo = MCommerce.MyCommerceInfo.myInfo
+		local moudle = self.Moudle
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Build]
+		if funcInfo.light ~= nil then
+			local commerceConf = Csv.Commerce[data.level]
+			funcInfo.light.Activity = (myInfo.build <= 0) and ((not data.buildTimes) or (data.buildTimes and data.buildTimes < commerceConf.count))
+		end
+	end,
+	[Define.SysId.Commerce_Members] = function(self)
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Members]
+		if funcInfo ~= nil and funcInfo.light ~= nil then
+			funcInfo.light.Activity = false
+		end
+	end,
+	[Define.SysId.Commerce_Exchange] = function(self)
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Exchange]
+		if funcInfo ~= nil and funcInfo.light ~= nil then
+			funcInfo.light.Activity = false
+		end
+	end,
+	[Define.SysId.Commerce_Battle] = function(self)
+		local data = MCommerce.MyCommerceInfo
+		local moudle = self.Moudle
+
+		--副本战斗小红点
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Battle]
+		if funcInfo.light ~= nil then
+			funcInfo.light.Activity = data.canFight
+		end
+	end,
+	[Define.SysId.Commerce_Rank] = function(self)
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Rank]
+		if funcInfo ~= nil and funcInfo.light ~= nil then
+			funcInfo.light.Activity = false
+		end
+	end,
+	[Define.SysId.Commerce_Study] = function(self)
+		local funcInfo = self.Funcs[Define.SysId.Commerce_Study]
+		if funcInfo ~= nil and funcInfo.light ~= nil then
+			funcInfo.light.Activity = false
+		end
+	end,
+}
+
+function _R.OnUpdateHaveApply(self)
+	_P.BtnLightUpdate[Define.SysId.Commerce_Manager](self)
+end
+
+function _R.WaitCreateSuccess(self)
+	self.IsWaitShowSuccess = true
+	self:Lock()
+end
+
+function _R.OnUpdateName(self)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	--名字
+	moudle:Get("NameText").Text = data.name
+end
+function _R.OnUpdateExp(self)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	local csv = Csv.Commerce[data.level]
+	--图标
+	moudle:Get("GangInfo").SpriteName = csv.icon
+	--背景
+	moudle:Get("BG").SpriteName = csv.scene
+	--人物
+	moudle:Get("BSX").SpriteName = csv.actor
+	--等级
+	moudle:Get("lvNum").Text = tostring(data.level)
+	--经验
+	moudle:Get("Bar").FillAmount = data.exp / csv.exp
+	moudle:Get("Numtext").Text = data.exp .. "/" .. csv.exp
+	--成员数
+	moudle:Get("MoneyNum_0").Text = data.memberNum .. "/" .. csv.count
+end
+function _R.OnUpdateMoney(self)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	--财富值
+	moudle:Get("MoneyNum").Text = LuaUtil.NumberFormat(data.money)
+end
+function _R.OnUpdateNotice(self)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	--公告
+	moudle:Get("NoticeText").Text = data.notice or ""
+end
+function _R.OnUpdatemeCanFight(self)
+	_P.BtnLightUpdate[Define.SysId.Commerce_Battle](self)
+end
+function _R.OnUpdatemeMyInfo(self)
+	local myInfo = MCommerce.MyCommerceInfo.myInfo
+	local moudle = self.Moudle
+	--职位
+	moudle:Get("OfferText").Text = MCommerce.GetJobStr(myInfo.job)
+	--贡献
+	moudle:Get("contributionNum").Text = myInfo.contribution.ncur .. "/" .. myInfo.contribution.nmax
+	--功能按钮
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Commerce,true)
+	local count = #funcs
+	local index = 0
+	self.Funcs = {}
+	if count > 0 then
+		for _,funcCsv in pairs(funcs) do
+			local isHave = false
+			local tmpId = funcCsv.id
+			if funcCsv.id == Define.SysId.Commerce_Manager then
+				--商会管理
+				if myInfo.job == MCommerce.JobType.HuiZhang or 
+					myInfo.job == MCommerce.JobType.FuHuiZhang 
+				then
+					isHave = true
+				end
+			elseif funcCsv.id == Define.SysId.Commerce_Study then
+				if MCommerce.MyCommerceInfo.isOpenStudy then
+					isHave = true
+				end
+			else
+				isHave = true
+			end
+			if isHave then
+				index = index + 1
+				local btn = moudle:Get("Btn"..index)
+				btn.Activity = true
+				btn.SpriteName = funcCsv.icon
+				local light = moudle:Get("light"..index)
+				-- if light ~= nil then
+				-- 	if funcCsv.lightIcon ~= nil then
+				-- 		light.SpriteName = funcCsv.lightIcon
+				-- 		light.Activity = true
+				-- 		local t = light.CachedTran:GetJTweener("T_Commerce_Light")
+				-- 		t:Play()
+				-- 	else
+				-- 		light.Activity = false
+				-- 	end
+				-- end
+				self.Funcs[tmpId] = {btn = btn, light = light}
+				_P.BtnLightUpdate[tmpId](self)
+				btn:AddOnButton(function()
+					SoundMgr.Play(10001)
+					_P.BtnPress[tmpId](self)
+				end)
+
+				if tmpId == Define.SysId.Commerce_Rank then
+					btn.Activity = not GameSetting.IsiOSCommit
+				end
+			end
+		end
+	end
+	for i=index + 1,7 do
+		moudle:Get("Btn"..i).Activity = false
+	end
+end
+
+_P.MessageStr = 
+{
+	[1] = function(info)
+		-- 创建
+		return Csv.Text("commerce_main10")
+	end,
+	[2] = function(info)
+		-- 加入
+		return Csv.Text("commerce_main11")
+	end,
+	[3] = function(info)
+		-- 退出
+		return Csv.Text("commerce_main12")
+	end,
+	[4] = function(info)
+		-- 踢出
+		return Csv.Text("commerce_main13", {job = MCommerce.GetJobStr(info.param1), name = info.param2})
+	end,
+	[5] = function(info)
+		-- 转让
+		if info.param1 == 1 then
+			--主动转让
+			return Csv.Text("commerce_main19", {name = info.param2})
+		else
+			--超过15天没有登录
+			return Csv.Text("commerce_main20", {name = info.param2})
+		end
+	end,
+	[6] = function(info)
+		-- 任命
+		return Csv.Text("commerce_main14", {job1 = MCommerce.GetJobStr(info.param1), name = info.param2, job2 = MCommerce.GetJobStr(info.param3)})
+	end,
+	[7] = function(info)
+		-- 建设
+		local buildCsv = Csv.CommerceBuild[info.param1]
+		return Csv.Text("commerce_main15", {build = buildCsv.name, reward = buildCsv.rewardText})
+	end,
+	[8] = function(info)
+		-- 开启副本
+		local battleCsv = Csv.CommerceBattle[info.param3]
+		if info.param1 == 1 then
+			return Csv.Text("commerce_main16", {cost = battleCsv.cost1, battle = battleCsv.name})
+		else
+			return Csv.Text("commerce_main17", {cost = battleCsv.cost2, battle = battleCsv.name})
+		end		
+	end,
+	[9] = function(info)
+		-- 击杀副本BOSS
+		local battleCsv = Csv.CommerceBattle[info.param1]
+		return Csv.Text("commerce_main18", {battle = battleCsv.name, reward = battleCsv.killText})
+	end,
+}
+function _P.GetMessageStr(info)
+	return _P.MessageStr[info.type](info)
+end
+
+function _R.OnUpdatemeDynamics(self)
+	local dynamics = MCommerce.MyCommerceInfo.dynamics
+	local count = #dynamics
+	if count > 0 then
+		local moudle = self.Moudle
+		local lastInfo = dynamics[count]
+		moudle:Get("NameText_0").Text = lastInfo.name
+		moudle:Get("Info").Text = _P.GetMessageStr(lastInfo)
+	end
+end
+function _P.UpdateMessage(self, isActivity)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	if isActivity then
+		local dynamics = MCommerce.MyCommerceInfo.dynamics
+		local count = #dynamics
+		if count > 0 then
+			local lastIndex = math.max(1, count - 20)
+			local index = 1
+			for i=count,lastIndex,-1 do
+				local info = dynamics[i]
+				local childMoudle = self:CreateMoudle(content, "M_MoreInfo_Item")
+				childMoudle:Get("Index").Text = tostring(index)
+				childMoudle:Get("position").Text = Csv.Text("commerce_main8")
+				childMoudle:Get("Name").Text = info.name
+				childMoudle:Get("InfoText").Text = _P.GetMessageStr(info)
+				childMoudle:Get("TimeText").Text = Csv.Text("commerce_main9")
+				childMoudle:Get("TimeNum").Text = LuaUtil.TransToYearMonthDayHMS(info.time)
+				index = index + 1
+			end
+		end
+	end
+end
+
+--打开界面回包
+function _R.OnOpen(self)
+	local data = MCommerce.MyCommerceInfo
+	local moudle = self.Moudle
+	moudle:Get("MoneyNum_1").Text = tostring(data.id)
+
+	_R.OnUpdateName(self)
+	_R.OnUpdateExp(self)
+	_R.OnUpdateMoney(self)
+	_R.OnUpdateNotice(self)
+	_R.OnUpdatemeMyInfo(self)
+	_R.OnUpdatemeCanFight(self)
+	_R.OnUpdatemeDynamics(self)
+	
+	if self.IsWaitShowSuccess then
+		self.IsWaitShowSuccess = false
+		WindowMgr.Create("UCommerceCreateSuccess")
+	end
+
+	self:Unlock()
+end
+
+--聊天刷新
+function _R.OnTalkUpdate(self,sender, value)
+	if self.ChatText ~= nil then
+		self.ChatText.Text = "<color=#e2c7a9>"..sender.."：</color>"..value
+	end
+end
+
+function _M:BeforeDestroy()
+	if MCommerce.MyCommerceId ~= nil and MCommerce.MyCommerceId > 0 then
+		CCommerce.CloseReq()
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self.Funcs = {}
+	CCommerce.OpenReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main")
+	self.Moudle = moudle	
+
+	SoundMgr.PlaySystem(20116)
+	moudle:Get("C_BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		SoundMgr.DestroySystem()
+		self:Destroy()
+	end, nil, 1.2)
+	
+	local funcCsv = Csv.Func[Define.SysId.Commerce]
+	moudle:Get("C_TltleText").Text = funcCsv.name
+	moudle:Get("money").Text = Csv.Text("commerce_main1")
+	moudle:Get("money_0").Text = Csv.Text("commerce_main2")
+	moudle:Get("money_1").Text = Csv.Text("commerce_main3")
+	moudle:Get("OwnText").Text = Csv.Text("commerce_main4")
+	moudle:Get("ContributionText").Text = Csv.Text("commerce_main5")
+	moudle:Get("TitleText").Text = Csv.Text("commerce_main6")
+	moudle:Get("ZW").Text = Csv.Text("commerce_main8")
+	moudle:Get("GangInfo"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommerce.QueryReq(MCommerce.MyCommerceId)
+	end)
+	local arrow = moudle:Get("Arrow")
+	arrow.LocalScale = Vector3(1,-1,1)
+	local t = arrow.CachedTran:GetJTweener("T_Commerce_Arrow")
+	t:Play()
+	local messageRoot = moudle:Get("messageRoot")
+	moudle:Get("More"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		local isActivity = not messageRoot.Activity
+		messageRoot.Activity = isActivity
+		_P.UpdateMessage(self, isActivity)
+		moudle:Get("ZW").Activity = not isActivity
+		if isActivity then
+			arrow.LocalScale = Vector3.one
+		else
+			arrow.LocalScale = Vector3(1,-1,1)
+		end
+	end)
+	messageRoot:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		messageRoot.Activity = false
+		_P.UpdateMessage(self, false)
+		moudle:Get("ZW").Activity = true
+		arrow.LocalScale = Vector3(1,-1,1)
+	end)
+	moudle:Get("ChatEvent"):AddOnClick(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UTalkTips1", Define.SysId.Talk_Unions)
+	end)
+	self.ChatText = moudle:Get("ChatText")
+	local info = MTalk.GetLastOfChannel(MTalk.Channel.UnionsMsg)
+	if info ~= nil then
+		if info.value ~= nil and info.value ~= "" then
+			_R.OnTalkUpdate(self,info.sendername, info.value)
+		elseif info.voiceIndex ~= nil and info.voiceIndex > 0 then
+			if info.channel == MTalk.Channel.UnionsMsg then
+				_R.OnTalkUpdate(self,info.sendername, info.voiceTime .. "\"")
+			end
+		end	
+	end
+
+	local BtnCz = moudle:Get("CzBtn")
+	BtnCz:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UComRecharge")
+	end,nil,0.9)
+
+	local CzRed = moudle:Get("lightCz")
+	self:RegistRedpoint(CzRed, Define.SysId.Commerce_Recharge)
+
+
+	_R.OnRefreshActivityBtn(self)
+
+	moudle:Get("new_text").Text = Csv.Text("relations_tip3")
+end
+
+function _R.OnRefreshActivityBtn(self)
+	local info
+	if MActivity.GetListFromType(Define.ActivityType.Commerce_Recharge) ~= nil then
+		local data = MActivity.GetListFromType(Define.ActivityType.Commerce_Recharge)
+		local actId = MActivity.ActIdForType[Define.ActivityType.Commerce_Recharge]
+		if actId ~= nil then
+			info = data[actId]
+		end
+	end
+	local CzBtn = self.Moudle:Get("CzBtn")
+	if info ~= nil then
+		CzBtn.Activity = (info.state.state == MActivity.ActivityState.Doing or info.state.state == MActivity.ActivityState.Finish)
+	else
+		CzBtn.Activity = false
+	end
+end
+
+function _R.SetRedpointHidden(self)
+	_P.BtnLightUpdate[Define.SysId.Commerce_Manager](self)
+end
+
+return _M

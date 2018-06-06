@@ -1,0 +1,62 @@
+local _M = {}
+
+_M.StateType = 
+{
+	Open = 1,
+	Close = 2
+}
+
+_M.AnswerType =
+{
+	OneChoose = 1,
+	MultChoose = 2,
+	Input = 3
+}
+
+_M.Version = 0
+_M.State = _M.StateType.Close
+_M.EndTime = 0
+_M.RewardList = {}
+_M.AnswerData = {} -- 缓存玩家答案
+_M.QuestionRedPoint = false
+_M.IsGetRewardBack = false -- 是否是领取奖励返回
+
+function _M.Clean( ... )
+	_M.Version = 0
+	_M.State = _M.StateType.Close
+	_M.EndTime = 0
+	_M.RewardList = {}
+	_M.AnswerData = {}
+	_M.QuestionRedPoint = false
+	_M.IsGetRewardBack = false
+end
+
+function _M.IsShowBtn( ... )
+	return _M.State == _M.StateType.Open
+end
+
+function _M.GetCurVersonData()
+	local questionConf = Csv.Questionnaire
+	local data = {}
+	for k,v in pairs(questionConf) do
+		if v.version == _M.Version then
+			if v.id > 1000 then
+				if not data.questionList then
+					data.questionList = {}
+				end
+
+				data.questionList[#data.questionList + 1] = v
+			else
+				if not data.descList then
+					data.descList = {}
+				end
+
+				data.descList[#data.descList + 1] = v
+			end
+		end
+	end
+
+	return data
+end
+
+return _M

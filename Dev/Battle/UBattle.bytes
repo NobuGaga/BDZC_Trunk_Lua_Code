@@ -1,0 +1,690 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local JTweenerManager = CS.JTween.JTweenerManager
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MAX_BATTLE_COUNT = 6
+local LEVEL_UP_EFFECT_ID = 10006
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+local PASS_EFFECT_ID = 15
+local GF_EFFECT_ID = 19
+local BUILD_NUM = 6
+
+local ICON_WIDTH = 100
+local ICON_BOSS_WIDTH = 125
+local POP_WIDTH = 201
+local POP_HEIGHT = 123
+
+local LeftRecuitPos = Vector2(-80, -5)
+local RightRecuitPos = Vector2(85, -5)
+
+--界面删除前回收
+function _M:BeforeDestroy( ... )
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:Destroy()
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end
+end
+
+function _P.ShowFirstEnter(self)
+	self.WaitChapterStartStory = true
+	local curId = MBattle.CurId
+	local curBattleCsv = Csv.Battle[curId]
+	WindowMgr.Create("UBattlePartStart", curBattleCsv.part, function()
+		if self.Moudle ~= nil then
+			local newPartCsv = Csv.Part[curBattleCsv.part]
+			if newPartCsv.startStory ~= nil and newPartCsv.startStory > 0 then
+				if self.StoryMoudle ~= nil then
+					self.StoryMoudle:Destroy()
+					self.StoryMoudle:delete()
+					self.StoryMoudle = nil
+				end
+				self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, newPartCsv.startStory)
+			end
+		end
+	end)
+end
+
+--外部调用刷新
+function _R.OnResult(self, data)
+	self.VSEffect.Activity = false
+	
+	local playStory = function (staffId, storyId, callBack)
+		if self.StoryMoudle ~= nil then
+			self.StoryMoudle:Destroy()
+			self.StoryMoudle:delete()
+			self.StoryMoudle = nil
+		end
+
+		if staffId then
+			local staffData = {storyType = 2, objId = staffId, storyId = storyId, callBack = callBack}
+			self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, storyId, callBack, staffData, Define.SysId.Airport)
+		else
+			self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, storyId, callBack)
+		end
+	end
+	local playChapterEnd = function (chapterId, callBack)
+		local chapterCsv = Csv.Chapter[chapterId]
+		local btn = self.Battles[chapterId % 10]
+		if chapterCsv.endStory ~= nil and chapterCsv.endStory > 0 then
+			playStory(chapterCsv.staffId, chapterCsv.endStory, function( ... )
+				if self.Moudle ~= nil then
+					self:Lock()
+					_P.DoSelfState(self, chapterId)
+					SoundMgr.Play(10004)
+					local effectMoudle = CCommon.CreateEffect(self.Moudle.SelfRect, PASS_EFFECT_ID, btn.icon.LocalPosition, function()
+						if self.Moudle ~= nil then
+							self:Unlock()
+							_P.RefreshBattle(self)
+							_P.RefreshTips(self,true,false)
+							if callBack ~= nil then
+								callBack()
+							end
+						end
+					end)
+					effectMoudle.SelfRect.SizeDelta = Vector2(96,60)
+				end
+			end)
+		else
+			self:Lock()
+			_P.DoSelfState(self, chapterId)
+			SoundMgr.Play(10004)
+			local effectMoudle = CCommon.CreateEffect(self.Moudle.SelfRect, PASS_EFFECT_ID, btn.icon.LocalPosition, function()
+				if self.Moudle ~= nil then
+					self:Unlock()
+					_P.RefreshBattle(self)
+					_P.RefreshTips(self,true,false)
+					if callBack ~= nil then
+						callBack()
+					end
+				end
+			end)
+			effectMoudle.SelfRect.SizeDelta = Vector2(96,60)
+		end
+	end
+
+	local playNewPart = function(newPartId)
+		WindowMgr.Create("UBattlePartStart", newPartId, function()
+			if self.Moudle ~= nil then
+				local newPartCsv = Csv.Part[newPartId]
+				if newPartCsv.startStory ~= nil and newPartCsv.startStory > 0 then
+					playStory(nil, newPartCsv.startStory)
+				end
+			end
+		end)
+		_P.RefreshBuild(self)
+		_P.RefreshTips(self,false,false)
+		--WindowMgr.Create("UBattleBigMap",true)
+	end
+
+	local playPatrol = function (bgSp, patrolId, callBack)
+		WindowMgr.Create("UBattleGetPatrol", bgSp, patrolId, callBack)
+		_P.RefreshTips(self,false,false)
+	end
+
+	local lastBattleId = self.LastBattleID
+	local curId = MBattle.CurId
+	if curId ~= lastBattleId then
+		local lastBattleCsv = Csv.Battle[lastBattleId]
+		local curBattleCsv = Csv.Battle[curId]
+		if lastBattleCsv.chapter ~= curBattleCsv.chapter then
+			self.WaitChapterStartStory = true
+			if lastBattleCsv.part ~= curBattleCsv.part then
+				self:Lock()
+				self.Moudle.SelfRect:AddOnTime(function()
+					playChapterEnd(lastBattleCsv.chapter, function()
+						if self.Moudle ~= nil then
+							if lastBattleCsv.patrolid ~= nil and lastBattleCsv.patrolid > 0 then
+								playPatrol(Csv.BattleIcon[lastBattleCsv.scene].str, lastBattleCsv.patrolid, function()
+									if self.Moudle ~= nil then
+										playNewPart(curBattleCsv.part)
+									end
+								end)
+							else
+								playNewPart(curBattleCsv.part)
+							end
+						end				
+					end)
+					self:Unlock()
+				end,nil,1.8)
+				_P.RefreshTips(self,true,true)
+			else
+				playChapterEnd(lastBattleCsv.chapter, function()
+					if self.Moudle ~= nil then
+						if lastBattleCsv.patrolid ~= nil and lastBattleCsv.patrolid > 0 then
+							playPatrol(Csv.BattleIcon[lastBattleCsv.scene].str, lastBattleCsv.patrolid)
+							_P.RefreshTips(self,true,false)
+						end	
+					end	
+				end)
+			end	
+		else
+			_P.RefreshBattle(self)
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.RefreshLevel(self)
+	local nowLevel = MPlayer.GetLevel() 
+	local csv = Csv.Company[nowLevel]
+	self.RoleLv.Text = Csv.Text("player_level",{name = csv.name})
+	local exp = MPlayer.GetExp()
+	local tmp = {num = exp}
+	if csv.cost == nil or csv.cost <= 0 then
+		tmp.max = "MAX"
+		self.ExpProgress.FillAmount = 1
+	else
+		tmp.max = csv.cost
+		self.ExpProgress.FillAmount = exp / csv.cost
+	end
+	self.ExpText.Text = Csv.Text("company_exp",tmp)	
+end
+
+function _P.RefreshAvatar(self)
+	self.RoleIcon.SpriteName = MPlayer.GetSHeadIcon()
+end
+
+function _P.RefreshAttr(self)
+	self.RolePower.Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
+	self.DanShiText.Text = LuaUtil.NumberFormat(MPlayer.GetAttr(Define.AttrType.Wuli))
+end
+
+function _P.RefreshMoney(self)
+	self.MoneyText.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Soldier))
+end
+
+function _P.DoSelfState(self, chapterId)
+	local info = self.Battles[chapterId % 10]
+	local battleCsv = Csv.Battle[MBattle.CurId]
+	if chapterId > battleCsv.chapter then
+		info.icon.Activity = false
+		info.icon.RaycastTarget = false
+	elseif chapterId == battleCsv.chapter then
+		info.icon.Activity = true
+		info.icon.RaycastTarget = true
+		info.pass.Activity = false
+	else
+		info.icon.Activity = true
+		info.icon.RaycastTarget = false
+		info.pass.Activity = true
+	end
+end
+
+function _P.UpdateBattleState(self, chapterId, info)
+	local battleCsv = Csv.Battle[self.LastBattleID]
+	local chapterCsv = Csv.Chapter[chapterId]
+	--BOSS头像
+	if chapterCsv.type == MBattle.BattleType.BOSS then
+		self.BossIcon.SpriteName = chapterCsv.icon
+	else
+		info.head.SpriteName = chapterCsv.icon
+	end
+	
+	info.buyImg.Activity = chapterCsv.staffId
+	info.buyImg.LocalPosition = (info.icon.LocalPosition.x > 0 and RightRecuitPos) or LeftRecuitPos
+	if chapterId > battleCsv.chapter then
+		info.icon.Activity = false
+		info.icon.RaycastTarget = false
+	elseif chapterId == battleCsv.chapter then
+		info.icon.Activity = true
+		info.icon.RaycastTarget = true
+		info.pass.Activity = false
+
+		if battleCsv.next == nil or battleCsv.next <= 0 then
+			--最后一个关卡
+			info.icon.IsGray = true
+		end
+
+		--特效
+		local pos = info.icon.LocalPosition
+		if chapterCsv.type == MBattle.BattleType.BOSS then
+			pos.y = pos.y - 7
+		end
+		self.VSEffect.LocalPosition = pos
+		self.VSEffect.Activity = true
+
+		info.icon:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if battleCsv.next ~= nil and battleCsv.next > 0 then
+				if self.WaitChapterStartStory then
+					self.WaitChapterStartStory = false
+					if chapterCsv.startStory ~= nil and chapterCsv.startStory > 0 then
+						if self.StoryMoudle ~= nil then
+							self.StoryMoudle:Destroy()
+							self.StoryMoudle:delete()
+							self.StoryMoudle = nil
+						end
+						self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, chapterCsv.startStory, function()
+							if self.Moudle ~= nil then
+								if chapterCsv.type == MBattle.BattleType.BOSS then
+									WindowMgr.Create("UBattleBoss")
+								else
+									WindowMgr.Create("UBattleFight")
+								end
+							end
+						end)
+					else
+						if chapterCsv.type == MBattle.BattleType.BOSS then
+							WindowMgr.Create("UBattleBoss")
+						else
+							WindowMgr.Create("UBattleFight")
+						end
+					end	
+				else
+					if chapterCsv.type == MBattle.BattleType.BOSS then
+						WindowMgr.Create("UBattleBoss")
+					else
+						WindowMgr.Create("UBattleFight")
+					end
+				end				
+			else				
+				if not GameSetting.IsiOSCommit then
+					CCommon.ShowRight(Csv.Text("common_over"))
+				end
+			end			
+		end, nil, 0.9)
+	else
+		info.icon.Activity = true
+		info.icon.RaycastTarget = false
+		info.pass.Activity = true
+	end
+end
+
+function _P.RefreshBattle(self)
+	local curBattleId = MBattle.CurId
+	self.LastBattleID = curBattleId
+
+	local battleCsv = Csv.Battle[curBattleId]
+	local partCsv = Csv.Part[battleCsv.part]
+	if partCsv ~= nil then
+		local chapterIndex = battleCsv.chapter - battleCsv.chapter % 10
+		local chapterCsv
+		self.SceneSp.SpriteName = partCsv.scene
+		self.TitleText.Text = Csv.Text("battle_title",{index = partCsv.id,name = partCsv.name})
+		for index,info in pairs(self.Battles) do
+			chapterCsv = Csv.Chapter[chapterIndex + index]
+			if chapterCsv ~= nil then
+				info.icon.LocalPosition = Vector2(chapterCsv.pos[1], chapterCsv.pos[2])
+				_P.UpdateBattleState(self, chapterIndex + index, info)
+			else
+				info.icon.Activity = false
+			end
+		end
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Plot")
+	self.Moudle = moudle
+	moudle:Get("back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("HELPBTN"):AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Airport)
+	end, nil, 1.2)
+	moudle:Get("clickAble"):AddOnClick(function( ... )
+		_P.OnClickAble(self)
+	end)
+	--章节名
+	self.TitleText = moudle:Get("titleText")
+	--玩家头像
+	self.RoleIcon = moudle:Get("RoleIcon")
+	local RoleLevelUp = moudle:Get("RoleLevelUp")
+	--注册小红点
+	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	--可以升级特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	--点击头像
+	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UPlayer")
+	end, nil, 0.9)
+	--玩家战力
+	self.RolePower = moudle:Get("RolePower")
+	--玩家等级
+	self.RoleLv = moudle:Get("RloeLv")
+	self.StoryRoot = moudle:Get("StoryRoot")
+	
+	local itemCsv = Csv.Item[Define.AssetsType.Soldier]
+	moudle:Get("AssetIcon_1").SpriteName = itemCsv.miniIcon
+
+	--自己的兵力
+	self.MoneyText = moudle:Get("AssetNum_1")
+	--自己的武力
+	self.DanShiText = moudle:Get("AssetNum_4")
+	--自己的政绩
+	self.ExpProgress = moudle:Get("ProSp")
+	self.ExpText = moudle:Get("ProText")
+	--背景图
+	self.SceneSp = moudle:Get("Scene")
+	--关卡列表
+	self.Battles = {}
+	for i=1,MAX_BATTLE_COUNT do
+		self.Battles[i]	= { icon = moudle:Get("Ordinary_"..i), head = moudle:Get('head'..i), pass= moudle:Get("Pass"..i),buyImg = moudle:Get("Buy" .. i)}
+	end
+	self.BossIcon = moudle:Get("image1")
+	self.VSEffect = moudle:Get("VSEffect")
+	CCommon.CreateEffect(self.VSEffect, 10049)
+	self.VSEffect.Activity = false
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAttr(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if self.Moudle ~= nil and itemId == Define.AssetsType.Soldier then
+			_P.RefreshMoney(self)
+		end
+	end)
+	_P.RefreshAttr(self)
+	_P.RefreshAvatar(self)
+	_P.RefreshLevel(self)
+	_P.RefreshMoney(self)
+	_P.RefreshBattle(self)
+
+	if MBattle.IsFirstCreateBattle then
+		MBattle.IsFirstCreateBattle = nil
+
+		_P.ShowFirstEnter(self)
+	end
+	_P.RefreshBuild(self)
+	_P.RefreshTips(self,false,false)
+	moudle:Get("title2").Text = Csv.Text("battle_tipT1")
+	moudle:Get("chiyougupiao").Text = Csv.Text("battle_tipT2")
+	moudle:Get("chiyougufen").Text = Csv.Text("battle_tipT3")
+	moudle:Get("icon").SpriteName = Csv.Item[Define.AssetsType.Record].miniIcon
+	--moudle:Get("chigu").Text = Csv.Text("battle_tipT5")
+	--moudle:Get("chigu2").Text = "%"
+	moudle:Get("bianmaNum_1").Text = "%"
+	self.mLastGufen = _P.GetMyGufen()
+
+	-- if MBattle.IsFirstBattle() then
+	-- 	_P.ShowFirstEnter(self)
+	-- end
+end
+
+function _P.RefreshBuild(self)
+	local moudle = self.Moudle
+	local curBattleId = MBattle.CurId
+	local partId = Csv.Battle[curBattleId].part
+	for i=1,BUILD_NUM do
+		local csvChapter = Csv.Chapter[partId * 100 + i]
+		if csvChapter ~= nil then
+			local ImgBuild = moudle:Get("build"..i)
+			if ImgBuild ~= nil then
+				ImgBuild.Activity = true
+				ImgBuild.SpriteName = csvChapter.buildImg
+				ImgBuild.SizeDelta = Vector2(csvChapter.buildSize[1],csvChapter.buildSize[2])
+				ImgBuild.LocalPosition = Vector2(csvChapter.buildPos[1], csvChapter.buildPos[2])
+			end
+		else
+			local ImgBuild = moudle:Get("build"..i)
+			if ImgBuild ~= nil then
+				ImgBuild.Activity = false
+			end
+		end
+	end
+end
+
+function _P.GetMyGufen(self)
+	local curBattleId = MBattle.CurId
+	local csvBattle = Csv.Battle[curBattleId]
+	local partId = csvBattle.part
+	local chapterId = csvBattle.chapter
+	local gufen = 0
+	for i=1,BUILD_NUM do
+		local csvChapter = Csv.Chapter[partId * 100 + i]
+		if chapterId > partId * 100 + i then
+			gufen = gufen + csvChapter.gufen
+		end
+	end
+	return gufen
+end
+
+function _P.RefreshTips(self,isAnimate,isall)
+	local moudle = self.Moudle
+	local curBattleId = MBattle.CurId
+	local csvBattle = Csv.Battle[curBattleId]
+	local partId = csvBattle.part
+	local chapterId = csvBattle.chapter
+	local gufen = _P.GetMyGufen()
+	local csvPart = Csv.Part[partId]
+	if csvPart ~= nil then
+		if not isall then
+			moudle:Get("companyname").Text = csvPart.company
+			moudle:Get("bianmaNum").Text = csvPart.code
+		end
+	end
+	local box = moudle:Get("TIPSBOX")
+	if isAnimate then
+		local Num1 = moudle:Get("bianmaNum_0")
+		local Num2 = moudle:Get("bianmaNum_1")
+		Num1:DOScale(1.1,0.5)
+		Num2:DOScale(1.1,0.5)
+		box:AddOnTime(function()
+			local TextUpdate = Num1
+			if TextUpdate ~= nil then
+				TextUpdate:DOKill()
+				local lastNum = self.mLastGufen
+				local nowNum = gufen
+				self.mLastGufen = nowNum
+				if lastNum ~= nowNum then
+					local dura = 0.3
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if TextUpdate ~= nil then 
+							if isall then
+								TextUpdate.Text = LuaUtil.NumberFormat(100)
+							else
+								TextUpdate.Text = LuaUtil.NumberFormat(nowNum) 
+							end
+						end
+					end)
+					t:SetTarget(TextUpdate.CachedTran)
+				end
+			end
+			box:AddOnTime(function()
+				Num1:DOScale(1,0.5)
+				Num2:DOScale(1,0.5)
+			end,nil,0.3)
+		end,nil,0.5)
+		local btn
+		if isall then
+			btn = self.Battles[MAX_BATTLE_COUNT]
+		else
+			btn = self.Battles[chapterId % 10 - 1]
+		end
+		if btn ~= nil then
+			local icon = btn.icon
+			local gufenMoudle = CCommon.CreateEffect(moudle.SelfRect,GF_EFFECT_ID)
+			gufenMoudle.SelfRect.LocalPosition = icon.LocalPosition
+		end
+	else
+		moudle:Get("bianmaNum_0").Text = gufen
+	end
+
+	_P.RefreshMessage(self,isAnimate,isall)
+end
+
+function _P.RefreshMessage(self,isAnimate,isall)
+	local moudle = self.Moudle
+	local curBattleId = MBattle.CurId
+	local csvBattle = Csv.Battle[curBattleId]
+	local chapterId = csvBattle.chapter
+	local csvChapter = Csv.Chapter[chapterId]
+	self.mCsvChapter = csvChapter
+	local iconPos = csvChapter.pos
+	local posX
+	local posY = iconPos[2]
+	local nowIconWidth = ICON_WIDTH
+	if csvChapter.type == 2 then
+		nowIconWidth = ICON_BOSS_WIDTH
+	end
+	if posY >= 186 then
+		posY = iconPos[2] - nowIconWidth/2 - POP_HEIGHT/2 - 20
+		posX = iconPos[1]
+	else
+		if iconPos[1] > 0 then
+			posX = iconPos[1] - nowIconWidth/2 - POP_WIDTH/2 - 10
+		else
+			posX = iconPos[1] + nowIconWidth/2 + POP_WIDTH/2 + 10
+		end
+	end
+	local popWin = moudle:Get("box")
+	local func1 = function()
+		moudle:Get("nametext").Text = ""
+		moudle:Get("zhiwei").Text = ""
+		moudle:Get("chigu").Text = ""
+		moudle:Get("chigu1").Text = ""
+		moudle:Get("chigu2").Text = ""
+		moudle:Get("clickAble").RaycastTarget = true
+		self.mTweenText1 = moudle:Get("nametext"):DOText(csvChapter.name, 0.3)
+		self.mTweenText1:OnComplete(function()
+			self.mTweenText2 = moudle:Get("zhiwei"):DOText(csvChapter.posName, 0.9)
+			self.mTweenText2:OnComplete(function()
+				self.mTweenText3 = moudle:Get("chigu"):DOText(Csv.Text("battle_tipT5"), 0.3)
+				self.mTweenText3:OnComplete(function()
+					self.mTweenText4 = moudle:Get("chigu1"):DOText(tostring(csvChapter.gufen), 0.1)
+					self.mTweenText4:OnComplete(function()
+						self.mTweenText5 = moudle:Get("chigu2"):DOText("%", 0.1)
+						self.mTweenText5:OnComplete(function()
+							moudle:Get("clickAble").RaycastTarget = false
+						end)
+					end)
+				end)
+			end)
+		end)
+	end
+	local func2 = function()
+		moudle:Get("clickAble").RaycastTarget = false
+		moudle:Get("nametext").Text = csvChapter.name
+		moudle:Get("zhiwei").Text = csvChapter.posName
+		moudle:Get("chigu").Text = Csv.Text("battle_tipT5")
+		moudle:Get("chigu1").Text = tostring(csvChapter.gufen)
+		moudle:Get("chigu2").Text = "%"
+	end
+	if isAnimate then
+		local TextUpdate = moudle:Get("chigu1")
+		if TextUpdate ~= nil then
+			TextUpdate:DOKill()
+			local lastNum = csvChapter.gufen
+			local nowNum = 0
+			if lastNum ~= nowNum then
+				local dura = 0.3
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(0) end
+				end)
+				t:SetTarget(TextUpdate.CachedTran)
+			end
+		end
+		local delayTime = 0.5
+		if not isall then
+			popWin:AddOnTime(function()
+				popWin.LocalPosition = Vector2(posX,posY)
+				func1()
+			end,nil,delayTime)
+		--else
+			--func2()
+		end
+	else
+		popWin.LocalPosition = Vector2(posX,posY)
+		func2()
+	end
+end
+
+function _P.OnClickAble(self)
+	local moudle = self.Moudle
+	moudle:Get("clickAble").RaycastTarget = false
+	local textName = moudle:Get("nametext")
+	local textZhiwei = moudle:Get("zhiwei")
+	local textChigu = moudle:Get("chigu")
+	local textChigu1 = moudle:Get("chigu1")
+	local textChigu2 = moudle:Get("chigu2")
+	if self.mTweenText1 ~= nil then
+		textName:DOKill()
+	end
+	if self.mTweenText2 ~= nil then
+		textZhiwei:DOKill()
+	end
+	if self.mTweenText3 ~= nil then
+		textChigu:DOKill()
+	end
+	if self.mTweenText4 ~= nil then
+		textChigu1:DOKill()
+	end
+	if self.mTweenText5 ~= nil then
+		textChigu2:DOKill()
+	end
+	if self.mCsvChapter ~= nil then
+		local csvChapter = self.mCsvChapter
+		textName.Text = csvChapter.name
+		textZhiwei.Text = csvChapter.posName
+		textChigu.Text = Csv.Text("battle_tipT5")
+		textChigu1.Text = tostring(csvChapter.gufen)
+		textChigu2.Text = "%"
+	end
+end
+
+
+function _R.GetSortLayer(self, refTab)
+	refTab.type = self._Type
+	refTab.index = self._CanvasIndex
+end
+
+
+function _R.AddSortLayerCount(self, count)
+	self._CanvasIndex = self._CanvasIndex + count + 1
+end
+
+
+return _M

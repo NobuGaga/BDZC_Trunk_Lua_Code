@@ -1,0 +1,249 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local MShop = JRequire "Dev.Shop.MShop"
+local UShopSingle = JRequire "Dev.Shop.UShopSingle"
+local UShopPackage = JRequire "Dev.Shop.UShopPackage"
+local UShopLimit = JRequire "Dev.Shop.UShopLimit"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end 
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.Shop_Single then
+		self.ChooseMoudle = UShopSingle.new(self.PageNode)
+	elseif funcId == Define.SysId.Shop_Package then
+		self.ChooseMoudle = UShopPackage.new(self.PageNode)
+	elseif funcId == Define.SysId.Shop_Limit then
+		self.ChooseMoudle = UShopLimit.new(self.PageNode)
+	end
+
+	MShop.LastChoose = funcId
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Shop_UMain")
+	self.mMoudle = moudle
+	CCommon.CreateEffect(moudle:Get("FxNode"), 10128)
+	moudle:Get("Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	moudle:Get("AssetAdd_2"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowOpen.Open(Define.SysId.Recharge)
+	end,nil,1.2)
+	
+	local TextDiamond = moudle:Get("AssetNum_2")
+	TextDiamond.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
+	self.mCoin = MBag.GetItemNum(Define.AssetsType.Gold)
+
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = _P.GetFuncs(MMain.GetOpenedFuncs(Define.SysId.Shop, true))
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		-- local colorLight = Color(255/255,225/255,75/255,1)
+		-- local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023_2", "yth_023",nil,nil,nil,nil,nil,nil,nil,nil,true)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 3 then
+				tabHandle:Add(v.id, moudle:Get("Btn_c"..index), moudle:Get("C_text"..index), v.name)
+			end
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+	if count < 3 then
+		for i=count + 1,3 do
+			moudle:Get("Btn_c"..i).Activity = false
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Gold then
+			TextDiamond:DOKill()
+			local lastNum = self.mCoin
+			local nowNum = MBag.GetItemNum(itemid)
+			self.mCoin = nowNum
+			if lastNum ~= nowNum then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextDiamond ~= nil then TextDiamond.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if TextDiamond ~= nil then TextDiamond.Text = LuaUtil.NumberFormat(MBag.GetItemNum(itemid)) end
+				end)
+				t:SetTarget(TextDiamond.CachedTran)
+			end
+		end
+	end)
+
+	moudle:Get("AssetAdd_2").Activity = MMain.FuncIsOpen(Define.SysId.Recharge)
+end
+
+function _P.GetFuncs(funcTable)
+	local sortTable = {}
+	for k,v in pairs(funcTable) do
+		if v.id ~= Define.SysId.Shop_Package or _P.IsShowPackage() then
+			table.insert(sortTable,v)
+		end
+	end
+	return sortTable
+end
+
+function _P.IsShowPackage()
+	local package = MActivity.ActTypeCached[Define.ActivityType.Shop_Package]
+	if package ~= nil then
+		local num = 0
+		for k,v in pairs(package) do
+			num = num + 1
+		end
+		if num > 0 then
+			return true
+		end
+	end
+	return false
+end
+
+function _R.ResetShop(self)
+	self.ChooseMoudle:ResetShop()
+end
+
+function _R.ShopBuy(self,data)
+	if MShop.LastChoose == Define.SysId.Shop_Single or
+		MShop.LastChoose == Define.SysId.Shop_Limit then
+		self.ChooseMoudle:ShopBuy(data)
+	end
+end
+
+function _R.ShopBuyPackage(self,data)
+	if MShop.LastChoose == Define.SysId.Shop_Package then
+		self.ChooseMoudle:ShopBuy(data)
+	end
+end
+
+function _R.OnRefreshPackage(self)
+	if MShop.LastChoose == Define.SysId.Shop_Package then
+		self.ChooseMoudle:ResetShop()
+	end
+end
+
+-- function _R.ShopBuyLimit(self,data)
+-- 	if MShop.LastChoose == Define.SysId.Shop_Limit then
+-- 		self.ChooseMoudle:ShopBuy(data)
+-- 	end
+-- end
+
+-- function _R.OnRefreshLimit(self)
+-- 	if MShop.LastChoose == Define.SysId.Shop_Limit then
+-- 		self.ChooseMoudle:ResetShop()
+-- 	end
+-- end
+
+function _R.UpdateTime(self,shopid,index)
+	local moudle = self.mMoudle
+	if self.mUpdate ~= nil then
+		self.mUpdate:Destroy()
+	end
+	local time
+	if shopid == 1 then
+		local csvShop = Csv.SingleShop[index]
+		if csvShop ~= nil then
+			if csvShop.endtimeDate ~= nil then
+				local timeTable = {}
+				timeTable.year = csvShop.endtimeDate[1] or 0
+				timeTable.month = csvShop.endtimeDate[2] or 0
+				timeTable.day = csvShop.endtimeDate[3] or 0
+				timeTable.hour = csvShop.endtimeDate[4] or 0
+				timeTable.min = csvShop.endtimeDate[5] or 0
+				timeTable.sec = csvShop.endtimeDate[6] or 0
+				time = os.time(timeTable)
+				self.mEndTime = time
+				_P.UpdateTimeText(self)
+				self.mUpdate = moudle.SelfRect:AddOnUpdate(function()
+					_P.UpdateTimeText(self)
+				end,nil,1)
+			else
+				moudle:Get("time").Text = ""
+			end
+		end
+	elseif shopid == 2 then
+		local shopPackage = MActivity.ActList[index]
+		if shopPackage ~= nil then
+			self.mEndTime = shopPackage.state.endTime
+			_P.UpdateTimeText(self)
+			self.mUpdate = moudle.SelfRect:AddOnUpdate(function()
+				_P.UpdateTimeText(self)
+			end,nil,1)
+		else
+			moudle:Get("time").Text = ""
+		end
+	elseif shopid == 3 then
+		moudle:Get("time").Text = ""
+	end
+end
+
+function _P.UpdateTimeText(self)
+	local moudle = self.mMoudle
+	local textTime = moudle:Get("time")
+	if self.mEndTime ~= nil then
+		local second = self.mEndTime - HeartBeat.ServSecond()
+		if second > 0 then
+			textTime.Text = Csv.Text("bag_fashionTime",{time = LuaUtil.GetTimeHMS(second)})
+		else
+			textTime.Text = ""
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,188 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(marriedData)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Xuanhaizi")
+	local backBtn = moudle:Get("backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.mContent = moudle:Get("content")
+	self.mMarriedID = marriedData.babyid
+
+	local title = moudle:Get("Title")
+	title.Text = Csv.Text("Girl_married_selectBaby")--"选择孩子"
+
+	_P.ShowBabyItems(self,marriedData.gender,marriedData.degree)
+
+	local TextDiamond = moudle:Get("quantity")
+	TextDiamond.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+
+	local soltText = moudle:Get("C_text")
+	soltText.Text = Csv.Text("Girl_married_attrDown")--"属性降序"
+	local isUpSolt = false
+
+	local soltBtn = moudle:Get("C_Btn_b_3")
+	soltBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if isUpSolt == true then
+			isUpSolt = false
+			soltText.Text = Csv.Text("Girl_married_attrDown")--"属性降序"
+
+			_P.SoltUpItems(self)
+		else
+			isUpSolt = true
+			soltText.Text = Csv.Text("Girl_married_attrUp")--"属性升序"
+			
+			_P.SoltDowmItems(self)
+		end
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Gold then
+			TextDiamond:DOKill()
+			local lastNum = tonumber(TextDiamond.Text)
+			local nowNum = MBag.GetItemNum(itemid)
+			if lastNum ~= nowNum then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextDiamond ~= nil then TextDiamond.Text = tostring(value) end
+				end, function()
+					if TextDiamond ~= nil then TextDiamond.Text = tostring(MBag.GetItemNum(itemid)) end
+				end)
+				t:SetTarget(TextDiamond.CachedTran)
+			end
+		end
+	end)
+end
+
+function _P.ShowBabyItems(self,gender,degree)
+
+	local content = self.mContent
+	content:DestroyChildren()
+
+	local itemsTab = {}
+	local datas = MGirl.unmarrieds
+	for k,v in pairs(datas) do
+		if v.gender ~= gender and v.degree == degree then
+			local _item =  _P.CreatBabyItem(self,v,content)
+			local _index = _item.SelfRect.CachedTran:GetSiblingIndex()
+			itemsTab[_index] = {item = _item,data = v}
+		end
+	end
+
+	self.mItemTab = itemsTab
+end
+
+function _P.CreatBabyItem(self,data,parent)
+	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_SelectBabyItem", WindowType.UI, 10)
+	
+	local name = moudle:Get("OwnName")
+	local levelValue = moudle:Get("EducationText")
+	local attri = moudle:Get("attribute")
+	local attriValue = moudle:Get("attributeText")
+	local Icon = moudle:Get("OwnBSX")
+	local sceneBg = moudle:Get("OwnBG")
+	
+
+	attri.Text = Csv.Text("Girl_married_attribute")--"属性："
+	--sceneBg.SpriteName = "scene_10003"
+	
+	name.Text = data.name
+	levelValue.Text = MGirl.GetEducationName(data.degree)
+	attriValue.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	Icon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	Icon:SetNativeSize()
+
+	local selectText = moudle:Get("C_text")
+	selectText.Text = Csv.Text("Girl_married_select")--"选择"
+
+	local selectBtn = moudle:Get("C_Btn_b")
+	selectBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		MGirl.MarriedSelectID = data.babyid
+		WindowMgr.Create("UMarriedSelectCost",self.mMarriedID)
+	end)
+
+	return moudle
+end
+
+function _P.SoltDowmItems(self)
+	local childCount = self.mContent.CachedTran.childCount
+	local itemsTab = self.mItemTab
+
+	local temp = 0
+	for i = 0,childCount-2,1 do 
+		for j=0,childCount-i-2,1 do
+			local attr1 = _P.GetAllAttr(itemsTab[j].data)
+			local attr2 = _P.GetAllAttr(itemsTab[j+1].data)
+			if attr1 < attr2 then
+				local tab = itemsTab[j]
+				itemsTab[j] = itemsTab[j+1]
+				itemsTab[j+1] = tab
+			end
+		end
+	end
+
+	for k,v in pairs(itemsTab) do
+		v.item.SelfRect.CachedTran:SetSiblingIndex(k)
+	end
+end
+
+function _P.SoltUpItems(self)
+	local childCount = self.mContent.CachedTran.childCount
+	local itemsTab = self.mItemTab
+
+	local temp = 0
+	for i = 0,childCount-2,1 do 
+		for j=0,childCount-i-2,1 do
+			local attr1 = _P.GetAllAttr(itemsTab[j].data)
+			local attr2 = _P.GetAllAttr(itemsTab[j+1].data)
+			if attr1 > attr2 then
+				local tab = itemsTab[j]
+				itemsTab[j] = itemsTab[j+1]
+				itemsTab[j+1] = tab
+			end
+		end
+	end
+
+	for k,v in pairs(itemsTab) do
+		v.item.SelfRect.CachedTran:SetSiblingIndex(k)
+	end
+end
+
+function _P.GetAllAttr(data)
+	return data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+end
+
+return _M

@@ -1,0 +1,145 @@
+local MRank = JRequire "Dev.Rank.MRank"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CMain = JRequire "Dev.Main.CMain"
+local MActivity = JRequire "Dev.Activity.MActivity"
+
+local _M = {}
+local _P = {}
+
+local RANK_MAIN = {Define.RankType.Power,Define.RankType.Battle,Define.RankType.Intimacy}
+
+
+local ECmdId = {
+		cRankList							=	1,--获取列表 PRank.CGetList
+		cRankAward						    =	2,--膜拜     PRank.CGetList
+		cCrossCommerceList = 4, --获取跨服商会榜单 PRank.
+
+		sRankList							=	1,--获取列表 PRank.SGetList
+		sRankAward						    =	2,--膜拜     PRank.SWorship
+		sWorshipState						    =	3,--膜拜状态     PRank.SWorshipState
+		sCrossCommerceList = 4, --获取跨服商会榜单 PRank.SCrossRankList
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cRankList] = "PRank.CGetList",
+		[ECmdId.cRankAward] = "PRank.CGetList",
+	}
+	local recv = {
+		[ECmdId.sRankList]		=		{proto = "PRank.SGetList",		handle = _P.OnGetList},
+		[ECmdId.sRankAward]		=		{proto = "PRank.SWorship",		handle = _P.OnGetAward},
+		[ECmdId.sWorshipState]		=		{proto = "PRank.SWorshipState",		handle = _P.OnRefreshWorship},
+		[ECmdId.sCrossCommerceList] = {proto = "PRank.SCrossRankList",		handle = _P.OnRefreshCrossCommerce}
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Rank, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MRank.Clean()
+end
+
+--C
+function _M.GetRankList(ID,ISLOCAL)
+	_M.Send(ECmdId.cRankList,{islocal=ISLOCAL,rankid = ID})
+end
+
+function _M.GetAward(ID,ISLOCAL)
+	_M.Send(ECmdId.cRankAward,{islocal=ISLOCAL,rankid = ID})
+end
+
+function _M.GetCrossCommoncerRankList()
+	_M.Send(ECmdId.cCrossCommerceList)
+
+	-- local data = {}
+	-- data.rankid = 1
+	-- data.isworshiped = false
+	-- data.selfrank = 1
+	-- data.selfvalue = 5
+	-- data.selfName = "abc"
+	-- data.ranklist = {}
+	-- for i = 1, 5 do
+	-- 	local ri = {}
+	-- 	ri.rank = i
+	-- 	ri.commername = "name"..i
+	-- 	ri.playername = "pnmae"..i
+	-- 	ri.exp = 1000*i
+	-- 	ri.level = i
+	-- 	ri.joinMum = 2*i
+	-- 	ri.totalMum = 3*i
+	-- 	table.insert(data.ranklist, ri)
+	-- end
+	-- _P.OnRefreshCrossCommerce(data)
+end
+
+--S
+function _P.OnGetList(data)
+	MRank.CreateList(data)
+	if data.islocal == false and Define.CrossRankTypeFunc[data.rankid] ~= nil then
+		local info = Define.CrossRankTypeFunc[data.rankid]
+		WindowMgr.Call(info.view, info.func, data)
+	elseif Define.RankTypeFunc[data.rankid] ~= nil then
+		local info = Define.RankTypeFunc[data.rankid]
+		WindowMgr.Call(info.view, info.func, data)
+
+		_M.CheckRankRedPoint()
+	else
+		MActivity.UpdateActivitySelfRank(data.rankid, data.selfrank, data.selfvalue)
+
+		WindowMgr.Call("USevenDayTarget", "OnRefreshRankBottomInfo")
+		WindowMgr.Call("UTimeLimitActRank", "OnRefreshView", data)
+	end
+end
+
+function _P.OnRefreshCrossCommerce(data)
+	MRank.CreateList(data)
+	if  Define.CrossRankTypeFunc[data.rankid] ~= nil then
+		local info = Define.CrossRankTypeFunc[data.rankid]
+		WindowMgr.Call(info.view, info.func, data)
+	end
+end
+
+function _P.OnGetAward(data)
+	MRank.GetAward(data)
+	if data.islocal == true then
+		WindowMgr.Call("URankTab","GetAward",data)
+	else
+		WindowMgr.Call("URankCross","GetAward",data)
+	end
+	_M.CheckRankRedPoint()
+end
+
+function _P.OnRefreshWorship(data)
+	local isRedpoint = false
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			if v.cross == false then
+				MRank.RankRedPointTable[v.rankid] = v.state
+			else
+				MRank.AllRankRedPointTable[v.rankid] = v.state
+			end
+		end
+		isRedpoint = MRank.GetRedState()
+	end
+	if isRedpoint ~= MRank.RankRedPoint then
+		MRank.RankRedPoint = isRedpoint
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Rank)
+	end
+end
+
+function _M.CheckRankRedPoint()
+	local isRedpoint = false
+	isRedpoint = MRank.GetRedState()
+	if isRedpoint ~= MRank.RankRedPoint then
+		MRank.RankRedPoint = isRedpoint
+		if WindowMgr.IsCreated("UWorldMap") then
+			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+		end
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Rank)
+	end
+end
+
+return _M

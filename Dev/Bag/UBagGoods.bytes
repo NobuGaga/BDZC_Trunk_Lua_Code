@@ -1,0 +1,363 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CBag = JRequire "Dev.Bag.CBag"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = Class()
+local _P = {}
+
+local EMPTY_BACK = "ty_018"
+local BAGUSE_PARAM = Csv.Const(Define.Const.BagUseParam)
+local CHANGE_NAME_ITEMID = Csv.Const(Define.Const.BagChangeNameID)
+local CHANGE_AVATAR_ITEMID = Csv.Const(Define.Const.BagChangeAvatarID)
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Bag_Goods", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mImgSelect = moudle:Get("H")
+	local TextUse = moudle:Get("C_text")
+	TextUse.Text = Csv.Text("bag_use")
+	moudle:Get("NoneTips").Text = Csv.Text("bag_noneSelect")
+	local btnUse = moudle:Get("BtnUse")
+	btnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse()
+		end, nil, 0.9)
+	_P.RefreshView(self)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("Content")
+	content:DestroyChildren()
+	local sortGoods = _P.GetSortItems(MBag.Items[Define.BagType.Prop])
+	self.mRawTableItems = {}
+	self.mEmptyTableItems = {}
+	for k,v in ipairs (sortGoods) do
+		_P.OnCreateItem(self,v,false)
+	end
+	local length = #sortGoods
+	local emptyNum = 0
+	if length < 24 then
+		emptyNum = 24 - length
+	else
+		if length%4 > 0 then
+			emptyNum = 4 - length%4
+		end
+	end
+	for i=1,emptyNum do
+		_P.OnCreateItem(self,nil,true)
+	end
+	self.mSortGoods = sortGoods
+	if MBag.LastChooseItem == nil then
+		_P.SetLastChooseItem(self)
+	end
+	_P.OnClickItem(self,MBag.LastChooseItem)
+end
+
+function _P.OnCreateItem(self,itemData,isEmpty)
+	local goods = {}
+	local contentTransform = self.mMoudle:Get("Content")
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Bag_GoodsItem", WindowType.UI, 0)
+
+	local ImgIcon = itemMoudle:Get("Icon")
+	local ImgColor = itemMoudle:Get("Color")
+	local TextNum = itemMoudle:Get("Num")
+
+	goods.moudle = itemMoudle
+	goods.data = itemData
+	if isEmpty then
+		ImgIcon.gameObject:SetActive(false)
+		ImgColor.gameObject:SetActive(true)
+		ImgColor.SpriteName = EMPTY_BACK
+		TextNum.Text = ""
+		goods.ShowItem = function(data)
+			ImgIcon.gameObject:SetActive(true)
+			ImgColor.gameObject:SetActive(true)
+			local csv = Csv.Item[data.itemid]
+			ImgIcon.SpriteName = csv.icon
+			ImgColor:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				_P.OnClickItem(self,data)
+				end, nil, 0.9)
+			ImgColor.SpriteName = csv.colorIcon
+			TextNum.Text = data.itemcount
+			goods.data = data
+			self.mRawTableItems[data.itemid] = goods
+		end
+		table.insert(self.mEmptyTableItems,goods)
+	else
+		local csv = Csv.Item[itemData.itemid]
+		ImgIcon.SpriteName = csv.icon
+		ImgColor:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(self,itemData)
+			end, nil, 0.9)
+		ImgColor.SpriteName = csv.colorIcon
+		TextNum.Text = itemData.itemcount
+		goods.Destroy = function()
+			itemMoudle:Destroy()
+		end
+		self.mRawTableItems[itemData.itemid] = goods
+	end
+end
+
+function _P.GetSortItems(items)
+	local sortItems = {}
+	if items ~= nil then
+		for k,v in pairs(items) do
+			if v.itemcount > 0 then
+				table.insert(sortItems,v)
+			end
+		end
+		table.sort( sortItems, function(a,b)return _P.SortID(a,b)end )
+	end
+	return sortItems
+end
+
+function _P.SortID(a,b)
+	local csvA = Csv.Item[a.itemid]
+	local csvB = Csv.Item[b.itemid]
+	if csvA.sort == csvB.sort then
+		return a.itemid < b.itemid
+	end
+	return csvA.sort < csvB.sort
+end
+
+function _P.SetLastChooseItem(self)
+	local sortGoods = self.mSortGoods
+	local rawTableItems = self.mRawTableItems
+	local key = _P.GetTableFirstKey(sortGoods)
+	if key ~= nil then
+		MBag.LastChooseItem = rawTableItems[key].data
+	end
+end
+
+function _P.GetTableFirstKey(sortGoods)
+	for k,v in ipairs(sortGoods) do
+		if v ~= nil then
+			return v.itemid
+		end
+	end
+	return nil
+end
+
+function _P.OnClickItem(self,data)
+	local moudle = self.mMoudle
+	local TextGoodsName = moudle:Get("GoodsName")
+	local TextGoodsNum = moudle:Get("GoodsNum")
+	local TextGoodsDescTitle = moudle:Get("GoodsDescTitle")
+	local TextGoodsDesc = moudle:Get("GoodsDesc")
+	local ImgIcon = moudle:Get("Icon")
+	local ImgColor = moudle:Get("IconColor")
+	local BtnUse = moudle:Get("BtnUse")
+	local TextNoneTips = moudle:Get("NoneTips")
+	ImgIcon.gameObject:SetActive(data ~= nil)
+	ImgColor.gameObject:SetActive(data ~= nil)
+	TextNoneTips.Activity = (data == nil)
+	if data ~= nil then
+		local csv = Csv.Item[data.itemid]
+		local colorStr = Csv.ItemColor[csv.color].str
+		--TextGoodsName.Text = Csv.Text("common_color",{num=colorStr,name=csv.name})
+		TextGoodsName.Text = csv.name
+		TextGoodsNum.Text = Csv.Text("bag_num",{num = data.itemcount})
+		TextGoodsDesc.Text = csv.tips
+		TextGoodsDescTitle.Text = Csv.Text("bag_desc")
+		ImgIcon.SpriteName = csv.icon
+		ImgColor.SpriteName = csv.colorIcon
+		if csv.useType ~= nil then
+			local csvItemShowBtn = Csv.ItemShowBtn[csv.useType]
+			if csvItemShowBtn.value > 0 then
+				BtnUse.Activity = true
+			else
+				BtnUse.Activity = false
+			end
+			local textUse = moudle:Get("C_text")
+			if csv.useType == 31 then
+				textUse.Text = Csv.Text("car_garage_sell")
+			else
+				textUse.Text = Csv.Text("bag_use")
+			end
+		else
+			BtnUse.Activity = false
+		end
+		if self.mImgSelect ~= nil then
+			local item = self.mRawTableItems[data.itemid]
+			if item ~= nil and item.moudle ~= nil then
+				local itemMoudle = item.moudle
+				self.mImgSelect:SetParent(itemMoudle.SelfRect.CachedTran)
+				self.mImgSelect.CachedTran:SetSiblingIndex(1)
+				self.mImgSelect.LocalPosition = Vector2(0,0)
+				self.mImgSelect.Activity = true
+			end
+		end
+	else
+		TextGoodsName.Text = ""
+		TextGoodsNum.Text = ""
+		TextGoodsDesc.Text = ""
+		TextGoodsDescTitle.Text = ""
+		BtnUse.Activity = false
+		if self.mImgSelect ~= nil then
+			self.mImgSelect.Activity = false
+		end
+	end
+	MBag.LastChooseItem = data
+end
+
+function _P.OnClickUse()
+	local itemData = MBag.LastChooseItem
+	if itemData ~= nil then
+		local csvItem = Csv.Item[itemData.itemid]
+		if _P.IsShowStaff(csvItem) then
+			WindowMgr.Create("UBagStaffPop",itemData.itemid)
+		elseif csvItem.useType == 20 then	--碎片类
+			local useParam = csvItem.useParam
+			if MStaff.GetStaffDataByID(useParam[2]) ~= nil then
+				local csvStaff = Csv.Personnel[useParam[2]]
+				CCommon.ShowError(Csv.Text("bag_yijihuo",{name = csvStaff.name}))
+			else
+				if itemData.itemcount >= useParam[1] then
+					CBag.OnUseItem(itemData.itemid,useParam[1],nil)
+				else
+					CCommon.ShowError(Csv.Text("common_cont_enough",{name = csvItem.name}))
+				end
+			end
+		elseif csvItem.useType == 24 then	--升级资质物品类
+			WindowOpen.Open(csvItem.jumpID)
+		elseif csvItem.useType == 28 then	--红包
+			WindowMgr.Create("USendNormalPacket",itemData.itemid)
+		elseif csvItem.useType == 31 then	--回收出售
+			WindowMgr.Create("UCarSellMoreMaterial",{itemid = itemData.itemid,itemcount = itemData.itemcount},true)
+		else
+			if itemData.itemid == CHANGE_NAME_ITEMID then
+				WindowMgr.Create("UBagChangeName")
+				return
+			end
+			if itemData.itemid == CHANGE_AVATAR_ITEMID then
+				if MMain.FuncIsOpen(Define.SysId.MakeUp) then
+					WindowMgr.Create("UPlayerChangeHead")
+				else
+					WindowMgr.Create("UBagChangeHead")
+				end
+				return
+			end
+			if itemData.itemcount > BAGUSE_PARAM then
+				WindowMgr.Create("UBagUsePop",itemData)
+			else
+				CBag.OnUseItem(itemData.itemid,1,nil)
+			end
+		end
+	end
+end
+
+function _P.IsShowStaff(csvItem)
+	if csvItem.useType == 6 then		--员工属性增加物品
+		return true
+	end
+	if csvItem.useType == 2 or csvItem.useType == 12 then		--员工书籍经验，技能经验增加物品
+		if csvItem.useParam ~= nil then
+			if csvItem.useParam[1] == 0 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M:RefreshItemNum(itemid,itemcount,isAdd)
+	local sortGoods = self.mSortGoods
+	local rawTableItems = self.mRawTableItems
+	local goodsData = MBag.Get(itemid)
+	if goodsData ~= nil then
+		local item = rawTableItems[goodsData.itemid]
+		if item ~= nil then
+			local itemMoudle = item.moudle
+			if MBag.LastChooseItem ~= nil and MBag.LastChooseItem.itemid ~= nil then
+				if goodsData.itemid == MBag.LastChooseItem.itemid then
+					if goodsData.itemcount > 0 then
+						local TextNum = itemMoudle:Get("Num")
+						TextNum.Text = goodsData.itemcount
+						_P.OnClickItem(self,goodsData)
+					else
+						if self.mImgSelect ~= nil then
+							self.mImgSelect:SetParent(self.mMoudle.SelfRect.CachedTran)
+							self.mImgSelect.Activity = false
+						end
+						itemMoudle:Destroy()
+						_P.OnCreateItem(self,nil,true)
+						local index = _P.GetIndex(sortGoods,goodsData.itemid)
+						table.remove(sortGoods,index)
+						if index > #sortGoods then
+							index = index - 1
+						end
+						local nextData = sortGoods[index]
+						_P.OnClickItem(self,nextData)
+						rawTableItems[goodsData.itemid] = nil
+					end
+				else
+					itemMoudle:Get("Num").Text = goodsData.itemcount
+				end
+			end
+		else
+			if isAdd then
+				local itemData = {itemid = itemid,itemcount = itemcount}
+				table.insert(sortGoods,itemData)
+				local emptyTableItems = self.mEmptyTableItems
+				if #emptyTableItems > 0 then
+					emptyTableItems[1].ShowItem(itemData)
+					table.remove(emptyTableItems,1)
+				else
+					_P.OnCreateItem(self,itemData,false)
+					for i=1,3 do
+						_P.OnCreateItem(self,nil,true)
+					end
+				end
+			end
+		end
+	end
+end
+
+function _P.GetIndex(sortTable,itemid)
+	for k,v in ipairs(sortTable) do
+		if v.itemid == itemid then
+			return k
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		MBag.LastChooseItem = nil
+		moudle:Destroy()
+	end
+end
+
+function _M:ShowUsePackage(list)
+	local delay = 0
+	local parent = self.mMoudle:Get("EffectNode")
+	for k,v in pairs(list) do
+		CCommon.ShowFlyItem(parent,v.itemid,v.itemcount,delay)
+		delay = delay + 0.3
+	end
+end
+
+function _M:ShowSellGeted()
+	if MBag.SellGetData ~= nil then
+		local parent = self.mMoudle:Get("EffectNode")
+		CCommon.ShowFlyItem(parent,MBag.SellGetData.id,MBag.SellGetData.count)
+	end
+end
+
+function _M:RefreshSelect()
+	_P.RefreshView(self)
+end
+
+return _M

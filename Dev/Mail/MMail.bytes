@@ -1,0 +1,126 @@
+local _M = {}
+
+_M.MailTable = {}       -- 邮件列表
+_M.MailRedPoint = false -- 邮件红点
+
+
+function _M.Clean()
+	_M.MailTable = {}
+	_M.MailRedPoint = false
+end
+
+
+-- 初始化列表
+function _M.OnCreateList(listData)
+	if listData == nil then return end
+
+	if listData.maillist ~= nil then
+		_M.MailTable = listData.maillist
+	end
+end
+
+function _M.GetMailData(mailid)
+	local mailList = _M.MailTable
+	for k,v in pairs(mailList) do
+		if v.mailid == mailid then
+			return v
+		end
+	end
+end
+
+-- 更新列表
+function _M.OnUpdateList(data)
+	if data == nil then return end
+
+	local mailList = _M.MailTable
+	for k,v in pairs(mailList) do
+		if v.mailid == data.mailid then
+			v.read = data.read
+			v.gainAward = data.gainAward
+			break
+		end
+	end
+
+	_M.MailTable = mailList
+end
+
+-- 添加新邮件
+function _M.OnAddNewMail(data)
+	if data == nil then return end
+
+	local mailList = _M.MailTable
+	table.insert(mailList, data)
+	_M.MailTable = mailList
+end
+
+function _M.OnRemoveMail(id)
+	local mailList = _M.MailTable
+	for k,v in pairs(mailList) do
+		if v.mailid == id then
+			table.remove(mailList,k)
+		end
+	end 
+	_M.MailTable = mailList
+end
+
+--一键领取附件
+function _M.GainAllMails(data)
+	local mailList = _M.MailTable
+	if data.mails ~= nil then
+		for k,v in pairs(data.mails)do
+			for k2,v2 in pairs(mailList) do
+				if v2.mailid == v then
+					v2.read = true
+					v2.gainAward = true
+					break
+				end
+			end
+		end
+	end
+	_M.MailTable = mailList
+end
+--一键删除邮件
+function _M.DeleteAllMails(data)
+	if data.mails ~= nil then
+		for k,v in pairs(data.mails)do
+			_M.OnRemoveMail(v)
+		end
+	end
+end
+
+--检测有附件未领取邮件
+function _M.GetHasAwardMails()
+	local hasAwards = {}
+	local mailList = _M.MailTable
+	for k,v in pairs(mailList) do
+		local awardList = v.awardList
+		if awardList ~= nil and #awardList > 0 then
+			if v.gainAward == false then
+				table.insert(hasAwards,v)
+			end
+		end
+	end
+
+	return hasAwards
+end
+
+--检测无附件的已读邮件
+function _M.GetReadedMails()
+	local hasReads = {}
+	local mailList = _M.MailTable
+	for k,v in pairs(mailList) do
+		if v.read == true then
+			table.insert(hasReads,v)
+		end
+		--[[
+		local awardList = v.awardList
+		if awardList == nil or #awardList <= 0 then
+			
+		end
+		--]]
+	end
+
+	return hasReads
+end
+
+return _M

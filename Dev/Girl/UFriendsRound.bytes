@@ -1,0 +1,419 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+function _M:ClickSend()
+	local releaseWin = self.mReleaseWin
+	local GirlPosIds = MGirl.GetPosIds()
+	local count = #GirlPosIds
+	if count > 0 then
+		if releaseWin.Activity then
+			if self.mIsShowMessage then
+				releaseWin.Activity = false
+				self.mIsShowMessage = false
+				self.mShowMessage = nil
+			end
+		else
+			if self.mIsShowMessage == false then
+				releaseWin.Activity = true
+				self.mIsShowMessage = true
+				self.mMask.Activity = true
+				--
+				_P.SetShowWin(self,1,nil)
+
+				_P.ShowReleaseWin(self,GirlPosIds)
+
+				if count<3 then
+					releaseWin.SizeDelta = Vector2(710,211+count*100)
+				end
+			else
+				_P.CloseOtherMessage(self)
+			end
+		end
+	else
+		_P.CloseOtherMessage(self)
+		CCommon.ShowError(Csv.Text("lastgirl_nofriendround"))
+	end
+end
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Friend", WindowType.UI, 0)
+	--local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Friend")
+	self.mMoudle = moudle
+
+	self.mIsShowMessage = false
+	self.mShowMessage = nil
+
+	local content = moudle:Get("content")
+	self.mContent = content
+
+	moudle:Get("C_Text").Text = Csv.Text("girl_friendround_title")
+	moudle:Get("sendText").Text = Csv.Text("girl_friendround_send")
+	moudle:Get("title").Text = Csv.Text("lastgirl_fabu_friendround")
+
+	local releaseWin = moudle:Get("Release")
+	local releaseContent = moudle:Get("ReleaseContent")
+	self.mReleaseWin = releaseWin
+	self.mReleaseContent = releaseContent
+
+	local momentIndex = 0
+	local momentItemTab = {}
+	local momentsData = MGirl.moments
+	for k,v in pairs(momentsData)do
+		momentIndex = momentIndex +1
+		local _item = _P.SetFriendItem(v,content,self,momentIndex)
+		table.insert(momentItemTab,_item)
+	end
+	self.mMomentItemTab = momentItemTab
+	self.mMomentIndex = momentIndex
+	self.mLastMomentItem = nil
+
+	--关闭留言，
+	local mask = moudle:Get("mask")
+	mask.Activity = false
+	mask:AddOnButton(function()
+		_P.CloseOtherMessage(self)
+	end)
+	self.mMask = mask
+end
+
+function _P.ShowReleaseWin(self,posTab)
+	local parent = self.mReleaseContent
+	parent:DestroyChildren()
+
+	for k,v in pairs(posTab)do
+		local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Friend_ChooseItem", WindowType.UI, 10)
+		local posData = Csv.GirlPost[v.posId]
+		_moudle:Get("chooseText1").Text = posData.title
+		_moudle.SelfRect:AddOnButton(function()
+			CGirl.ReqPostMoments(v.posId,v.girlid)
+			--_P.CreatPosItem(self,v.posId)
+			self.mReleaseWin.Activity = false
+			self.mIsShowMessage = false
+			self.mShowMessage = nil
+			--
+		end)
+	end
+end
+
+--朋友圈消息
+function _M:CreatPosItem(id)
+	local parent = self.mContent
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Friend_Item", WindowType.UI, 10)
+
+	local headIon = _moudle:Get("Head")
+	local nameText = _moudle:Get("name")
+	local infoText = _moudle:Get("Info")
+	local img = _moudle:Get("Img")
+	local message = _moudle:Get("Message")
+	local messageText = _moudle:Get("messageText")
+	local MessageBtn = _moudle:Get("MessageBtn")
+	messageText.Text = Csv.Text("lastgirl_liuyan")
+	MessageBtn.Activity = false
+	message.Activity = false
+
+	local PosData = Csv.GirlPost[id]
+	headIon.SpriteName =  MPlayer.GetHeadIcon()
+	nameText.Text = MPlayer.GetName()
+	infoText.Text = PosData.title ----PosData.title,{name = "XCXX"}
+
+	--奖励
+	for k,v in pairs(PosData.reward)do
+		local rewardItemData = Csv.Item[v[1]]
+		CCommon.ShowError(rewardItemData.name.."+"..v[2])
+	end
+	
+	local itemHig = 160
+	if PosData.pic_id ~= nil then
+		img.SpriteName = PosData.pic_id
+		itemHig = itemHig + 255
+	end
+
+	_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
+	_moudle.SelfRect.CachedTran:SetSiblingIndex(0)
+
+	if parent.SizeDelta.y >1250 then
+		--parent.Pivot = Vector2(0.5,0)
+	end
+
+	------------------------------------
+	self.mMomentIndex = self.mMomentIndex +1
+	_P.CheckLastPosLine(self,_moudle,self.mMomentIndex)
+
+	self.mContent = parent
+end
+
+function _P.SetFriendItem(data,parent,self,monentIndex)
+	local girlsData = Csv.Girl[id]
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Friend_Item", WindowType.UI, 10)
+
+	local headIon = _moudle:Get("Head")
+	local nameText = _moudle:Get("name")
+	local infoText = _moudle:Get("Info")
+	local img = _moudle:Get("Img")
+
+	local message = _moudle:Get("Message")
+	local messageText = _moudle:Get("messageText")
+	local messageValue = _moudle:Get("Value")
+	messageText.Text = Csv.Text("lastgirl_liuyan")
+	message.Activity = false
+
+	local message2 = _moudle:Get("Message2")
+	local title = _moudle:Get("title")
+	title.Text = Csv.Text("lastgirl_pinglun")
+	local chooseTab = {}
+	for i = 1,3,1 do
+		local _btn = _moudle:Get("Choose"..i)
+		local _text = _moudle:Get("chooseText"..i)
+		_btn.Activity = false
+		table.insert(chooseTab,{btn =_btn,text = _text})
+	end
+	message2.Activity = false
+	
+	local messageText = _moudle:Get("messageText")
+	local MessageBtn = _moudle:Get("MessageBtn")
+	MessageBtn.Activity = false
+
+	local itemHig = 160
+	local messagePoxY = -130
+	local messageHig = 0
+	local isCanSend = false
+	self.mOldItemHig = 0
+
+	local PosData = Csv.GirlPost[data.id]
+	if PosData.type == 0 then
+		headIon.SpriteName =  MPlayer.GetHeadIcon()
+		nameText.Text = MPlayer.GetName()
+
+		local valueStr = ""
+		for k,v in pairs(PosData.nop_reply)do
+			if PosData.nop_reply_Type[k] ~= nil then
+				local replyTpye = PosData.nop_reply_Type[k]
+				if replyTpye[1] == 2 then
+					if replyTpye[2] ~= nil then
+						local replyName = MGirl.GetGirlName(replyTpye[2])
+						valueStr = valueStr..Csv.Text(v,{name = replyName}).."\n"
+					end
+				elseif replyTpye[1] == 1 then
+					if replyTpye[2] ~= nil then
+						local replyName = MStaff.GetStaffName(replyTpye[2])
+						valueStr = valueStr..Csv.Text(v,{name = replyName}).."\n"
+					end
+				end
+			else
+				valueStr = valueStr..v.."\n"
+			end
+		end
+		messageHig = messageHig - 20
+		message.Activity = true
+		messageValue.Text = valueStr
+		infoText.Text = PosData.title
+	else
+		local girlData = Csv.Girl[PosData.senderId]
+		headIon.SpriteName = girlData.icon
+		nameText.Text = MGirl.GetGirlName(PosData.senderId)----PosData.name
+
+		if data.commentId ~= nil and data.commentId ~= 0 then
+			local valueStr = PosData.p_reply[data.commentId]
+
+			message.Activity = true
+			messageValue.Text = Csv.Text("girl_friendround_release",{name = MPlayer.GetName(),value = valueStr })--LuaUtil.Format(valueStr, {name = MPlayer.GetName()})--valueStr
+		else
+			isCanSend = true
+			MessageBtn.Activity = true
+		end
+		infoText.Text = LuaUtil.Format(PosData.title, {name = MPlayer.GetName()})
+	end
+	messageHig = messageHig + messageValue.PreferredHeight + 30
+
+	if PosData.pic_id ~= nil then
+		img.SpriteName = PosData.pic_id
+		itemHig = itemHig + 255
+		messagePoxY = -420
+	end
+
+	itemHig = itemHig + messageHig
+
+	message.LocalPosition = Vector2(55,messagePoxY)
+	message.SizeDelta = Vector2(543,messageHig)
+
+	_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
+	_moudle.SelfRect.CachedTran:SetSiblingIndex(0)
+	
+	local showLiuyan = function(index)
+		message.Activity = true
+		messageValue.Text =  Csv.Text("girl_friendround_release",{name = MPlayer.GetName(),value = PosData.p_reply[index] }) --LuaUtil.Format(PosData.p_reply[index], {name = MPlayer.GetName()})--
+	
+		_moudle.SelfRect:AddOnTime(function()
+			messageHig = messageValue.PreferredHeight + 30
+			message.SizeDelta = Vector2(543,messageHig)
+
+			itemHig = itemHig + messageHig
+			_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
+			
+			_P.SetResetGrid(self,_moudle.SelfRect)
+		end,nil,0.05)
+		
+		for k,v in pairs(PosData.reward)do
+			local rewardItemData = Csv.Item[v[1]]
+			CCommon.ShowError(rewardItemData.name.."+"..v[2])
+		end
+
+	end
+
+	MessageBtn:AddOnButton(function()
+		if isCanSend then
+			if message2.Activity then
+
+				if self.mIsShowMessage then
+					self.mIsShowMessage = false
+					self.mShowMessage = nil
+					message2.Activity = false
+				
+					_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
+					_P.SetResetGrid(self,_moudle.SelfRect)
+				end
+			else
+				if self.mIsShowMessage == false then
+					self.mIsShowMessage = true
+					self.mMask.Activity = true
+					message2.Activity = true
+					--
+					_P.SetShowWin(self,2,_moudle)
+
+					self.mOldItemHig = _moudle.SelfRect.SizeDelta.y
+					if itemHig < 300 then
+						_moudle.SelfRect.SizeDelta = Vector2(750,400)
+					else
+						_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
+					end
+					
+					_P.SetResetGrid(self,_moudle.SelfRect)
+
+					if message2.RootCanvasPos.y < -250 then
+						parent:DOAnchorPosY(parent.LocalPosition.y+220,0.2)
+					end
+				else
+					--关闭其他
+					_P.CloseOtherMessage(self)
+				end
+			end
+
+			local index = 0
+			
+			for k,v in pairs(PosData.p_reply_title)do
+				index = index+1
+				chooseTab[index].btn.Activity = true
+				chooseTab[index].text.Text = v
+				chooseTab[index].btn:AddOnButton(function()
+					_P.SendPos(data.id,k)
+					showLiuyan(k)
+
+					isCanSend = false
+					message2.Activity = false
+					self.mIsShowMessage = false
+					self.mShowMessage = nil
+					MessageBtn.Activity = false
+				end)
+			end
+		end
+	end)
+
+	if parent.SizeDelta.y >1250 then
+		--parent.Pivot = Vector2(0.5,0)
+	end
+	self.mContent = parent
+
+	------------------------------------
+	_P.CheckLastPosLine(self,_moudle,monentIndex)
+
+	return _moudle
+end
+
+function _P.ShowItemMessageWin(self,_itemMoudle)
+	if self.mShowMessage ~= nil then
+	end
+end
+
+function _P.CloseItemMessageWin(self,_itemMoudle)
+	if self.mShowMessage ~= nil then
+	end
+end
+
+function _P.SetResetGrid(self,_itemRect)
+	_itemRect.Activity = false
+	_itemRect.Activity = true
+end
+
+function _P.SendPos(id,commentId)
+	CGirl.ReqCommentMoments(id,commentId)
+end
+
+function _P.SetShowWin(self,_type,_moudle)
+	self.mShowMessage = {type = _type,moudle = _moudle}
+end
+
+function _P.CloseOtherMessage(self)
+	self.mMask.Activity = false
+	if self.mIsShowMessage then
+		if self.mShowMessage ~= nil then
+			local messageWin = self.mShowMessage
+			if messageWin.type == 1 then
+				self.mReleaseWin.Activity = false
+				self.mIsShowMessage = false
+				self.mShowMessage = nil
+			else
+				local messageMoudel = messageWin.moudle
+				if messageMoudel ~= nil then
+					local messageItem =  messageMoudel:Get("Message2")
+					messageItem.Activity = false
+					self.mShowMessage = nil
+					self.mIsShowMessage = false
+					messageMoudel.SelfRect.SizeDelta = Vector2(750,self.mOldItemHig)
+					_P.SetResetGrid(self,messageMoudel.SelfRect)
+				end
+			end
+		end
+	end
+end
+
+function _P.CheckLastPosLine(self,moudle,index)
+	local line = moudle:Get("line")
+
+	if index == 1 then
+		line.Activity = false
+
+		if self.mLastMomentItem ~= nil then
+			self.mLastMomentItem:Get("line").Activity = true
+		end
+		self.mLastMomentItem = moudle
+	else
+		line.Activity = true
+	end
+end
+
+return _M

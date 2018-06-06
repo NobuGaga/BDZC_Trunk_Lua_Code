@@ -1,0 +1,167 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Rank.MRank.bytes#_M]
+local MRank = JRequire "Dev.Rank.MRank"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Rank.CRank.bytes#_M]
+local CRank = JRequire "Dev.Rank.CRank"
+--@RefType [Dev.Common.RankVertical.bytes#_M]
+local RankVertical = JRequire "Dev.Common.RankVertical"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Club_Ranking"
+local BtnClose = "C_Back_Btn"
+local Title = "C_Text"
+
+--全局配置表冲榜活动关卡冲榜榜单类型
+local BattleRank = 61
+
+local itemWidth = 635
+local itemHeight = 61
+local space = 12
+local pageNum = 11
+local pageHeight = 802
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+--删除界面前调用
+function _M:BeforeDestroy()
+	if self.scrollController then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(rankType, text, title, name, closeCallback)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		if nil ~= closeCallback and nil ~= self.selfRank and "function" == type(closeCallback) then
+			closeCallback(self.selfRank)
+		end
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	self.isBattleRank = Csv.Const(BattleRank) == rankType
+	self.isCommerceRank = nil ~= MActivity.CommerceRank[rankType]
+	_P.InitText(self, text, title, name)
+
+	local rankInfo = MRank.RankTable[rankType]
+	if nil ~= rankInfo then
+		_R.OnRefreshView(self, rankInfo)
+	end
+	CRank.GetRankList(rankType, true)
+end
+
+--初始化文本
+function _P.InitText(self, text, title, name)
+	self.moudle:Get(Title).Text = title
+	self.moudle:Get("ranking").Text = Csv.Text("rank_rank")
+	self.moudle:Get("name").Text = name
+	self.moudle:Get("Fraction").Text = text
+	self.moudle:Get("OwnName").Text = Csv.Text("finance_OwnName")
+	self.nameText = self.moudle:Get("NameText")
+	self.nameText.Text = MPlayer.GetName()
+	self.moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
+	self.moudle:Get("OwnFraction").Text = text
+
+	self.rankingText = self.moudle:Get("RankingText")
+	self.fractionText = self.moudle:Get("FractionText")
+	self.content = self.moudle:Get("content")
+end
+
+function _P.ScrollCallBack(self,index,value,moudle)
+	if moudle ~= nil then
+		if value.rank > 3 then
+			moudle:Get("rank").Text = value.rank
+		end
+		moudle:Get("name").Text = value.name
+		if self.isBattleRank then
+			local battleCsv = Csv.Battle[value.value]
+			if battleCsv ~= nil then 
+				local partCsv = Csv.Part[battleCsv.part]
+				if partCsv ~= nil then
+					moudle:Get("value").Text = Csv.Text("battle_title", {index = partCsv.id, 
+														name = partCsv.name .. MRank.GetNumText(battleCsv.chapter % 10)})
+				end
+			end
+		else
+			moudle:Get("value").Text = value.value
+		end	
+
+		if not self.isCommerceRank then
+			moudle.SelfRect:AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				CPlayer.LookPlayerReq(value.playerid)
+			end,nil,1)
+		end
+
+		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+--初始化排行榜列表
+function _R.OnRefreshView(self, data)
+	if nil ~= data then
+		self.rankingText.Text = data.selfrank
+		self.selfRank = data.selfrank
+		if self.isCommerceRank and nil ~= data.selfName then
+			self.nameText.Text = data.selfName
+		end
+		if self.isBattleRank then
+			local battleCsv = Csv.Battle[data.selfvalue]
+			if battleCsv ~= nil then
+				local partCsv = Csv.Part[battleCsv.part]
+				if partCsv ~= nil then
+					self.fractionText.Text = partCsv.name .. MRank.GetNumText(battleCsv.chapter % 10)
+				end
+			end
+		else
+			self.fractionText.Text = data.selfvalue
+		end		
+
+		if data.ranklist ~= nil then
+			self.content:DestroyChildren()
+			table.sort(data.ranklist, function(left, right) return left.rank < right.rank end)
+			self.mList = data.ranklist
+			local scroll = self.moudle:Get("scrollView")
+			if self.scrollController ~= nil then
+				self.scrollController:delete()
+				self.scrollController = nil
+			end
+			self.scrollController = RankVertical.new(scroll,self.content,"M_Club_Rankpoint",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+			self.scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,data.ranklist)
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,288 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCompany = JRequire "Dev.Company.CCompany"
+local CCommon = JRequire "Dev.Common.CCommon"
+local JTweenerManager = CS.JTween.JTweenerManager
+local luaUtil = JRequire"Libs.LuaUtil"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+local CostItemID = tonumber(Csv.Const(Define.Const.CompanyVerdictCostID))
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Company_Tab2", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local TextGold = moudle:Get("text1")
+	TextGold.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
+
+	local TextProduction = moudle:Get("text3")
+	TextProduction.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+
+	local TextGoods = moudle:Get("text4")
+	TextGoods.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Food))
+
+	local TextMoney = moudle:Get("text5")
+	TextMoney.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Soldier))
+
+	self.mAssetNum = {}
+	self.mAssetNum[Define.AssetsType.Coin] =  MBag.GetItemNum(Define.AssetsType.Coin)
+	self.mAssetNum[Define.AssetsType.Food] =  MBag.GetItemNum(Define.AssetsType.Food)
+	self.mAssetNum[Define.AssetsType.Soldier] =  MBag.GetItemNum(Define.AssetsType.Soldier)
+	self.mAssetNum[Define.AssetsType.Gold] =  MBag.GetItemNum(Define.AssetsType.Gold)
+
+	local ImgHead = moudle:Get("head")
+	ImgHead.SpriteName = MPlayer.GetSHeadIcon()
+
+	local TextShili = moudle:Get("textPower")
+	TextShili.Text = Csv.Text("company_verShili",{num = MPlayer.GetPower()})
+
+	local TextType = moudle:Get("textType")
+	TextType.Text = Csv.Text("company_verType",{name = Csv.Company[MPlayer.GetLevel()].name})
+
+	local TextYing = moudle:Get("textExpT")
+	TextYing.Text = Csv.Text("company_YXL")
+
+	local TextGetTitle1 = moudle:Get("textAnswerT1")
+	TextGetTitle1.Text = Csv.Text("company_getT")
+
+	local TextGetTitle2 = moudle:Get("textAnswerT2")
+	TextGetTitle2.Text = Csv.Text("company_getT")
+
+	local TextTimeNone = moudle:Get("textNone")
+	TextTimeNone.Text = Csv.Text("company_verNT")
+
+	local csvItem = Csv.Item[CostItemID]
+	local TextTimeLing = moudle:Get("textLing")
+	TextTimeLing.Text = Csv.Text("company_verNNum",{name = csvItem.name,num = MBag.GetItemNum(CostItemID)})
+	moudle:Get("iconBgLing").SpriteName = csvItem.colorIcon
+	moudle:Get("iconLing").SpriteName = csvItem.icon
+
+	local TextTimeLingDesc = moudle:Get("textLingDesc")
+	TextTimeLingDesc.Text = csvItem.tips
+
+	local TextUse = moudle:Get("C_text")
+	TextUse.Text = Csv.Text("bag_use")
+
+	moudle:Get("C_Text").Text = Csv.Text("home_btn4")
+
+	local BtnUse = moudle:Get("C_Btn_b")
+	BtnUse:AddOnButton(function()
+		SoundMgr.Play(10001)
+		local itemNum = MBag.GetItemNum(CostItemID)
+		if itemNum <= 0 then
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = Csv.Item[CostItemID].name}))
+		elseif itemNum == 1 then
+			CBag.OnUseItem(CostItemID,1)
+		else
+			local verdictMax = Csv.Company[MPlayer.GetLevel()].harvest[4] 
+			local num = math.min(itemNum,verdictMax)
+			local itemData = {itemid = CostItemID,itemcount = num}
+			WindowMgr.Create("UBagUsePop",itemData,nil)
+		end
+	end,nil,0.9)
+
+	_P.SetSlider(self,moudle)
+	_P.SetVerdict(self,moudle)
+
+	local BtnDecision1 = moudle:Get("decision1")
+	local BtnDecision2 = moudle:Get("decision2")
+
+	BtnDecision1:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		BtnDecision1.RaycastTarget = false
+		BtnDecision2.RaycastTarget = false
+		CCompany.CompanyVerdict(1)
+	end,nil,0.9)
+
+	BtnDecision2:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		BtnDecision1.RaycastTarget = false
+		BtnDecision2.RaycastTarget = false
+		CCompany.CompanyVerdict(2)
+	end,nil,0.9)
+
+	moudle:Get("iconBgLing"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CCommon.ShowItemTips(CostItemID)
+	end,nil,0.9)
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		_P.UpdateAsset(self, itemid, itemcount, isAdd)
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.UpdateTime(self)
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		_P.UpdateSlider(self)
+	end)
+
+	CCompany.CompanyRefreshVerdict()
+	moudle:Get("iconExp").SpriteName = Csv.Item[Define.AssetsType.Record].miniIcon
+end
+
+function _P.SetSlider(self,moudle)
+	local cost = Csv.Company[MPlayer.GetLevel()].cost
+	if cost ~= nil then
+		local ImgSlider = moudle:Get("img")
+		ImgSlider.SizeDelta = Vector2(530,17)
+		local TextExp = moudle:Get("textExp")
+		TextExp.Text = Csv.Text("company_exp",{num = MPlayer.GetExp(),max = cost})
+		local RectExp = moudle:Get("rect")
+		local sliderNum = MPlayer.GetExp()/cost
+		if sliderNum > 1 then
+			sliderNum = 1
+		end
+		RectExp.transform.sizeDelta = Vector2(530*sliderNum,21)
+		if sliderNum <= 0 then
+			RectExp.transform.sizeDelta = Vector2(0.1,21)
+		end
+	else
+		moudle:Get("textExp").Text = Csv.Text("staff_max")
+		moudle:Get("rect").transform.sizeDelta = Vector2(530,21)
+	end
+	self.mLastExp = MPlayer.GetExp()
+end
+
+function _P.SetVerdict(self,moudle)
+	local verdict = MCompany.Verdict
+	local GoCenter = moudle:Get("artist")
+	local GoAnswer1 = moudle:Get("decision1")
+	local GoAnswer2 = moudle:Get("decision2")
+	local GoTime = moudle:Get("time")
+	if verdict ~= nil then
+		GoCenter.gameObject:SetActive(verdict.times > 0)
+		GoAnswer1.gameObject:SetActive(verdict.times > 0)
+		GoAnswer2.gameObject:SetActive(verdict.times > 0)
+		GoTime.gameObject:SetActive(verdict.times <= 0)
+		if verdict.times > 0 then
+			local csvVerdict = Csv.Verdict[verdict.id]
+			local verdictMax = Csv.Company[MPlayer.GetLevel()].harvest[4]
+			moudle:Get("textEventNum").Text = Csv.Text("company_verNum",{num = verdict.times,max = verdictMax})
+			moudle:Get("textDesc").Text = csvVerdict.question
+			moudle:Get("textAnswer1").Text = csvVerdict.answer1
+			moudle:Get("textAnswer2").Text = csvVerdict.answer2
+			moudle:Get("textAnswerA1").Text = Csv.Text("company_veraward",{name = Csv.Item[csvVerdict.item[1]].name,num = verdict.count})
+			moudle:Get("textAnswerA2").Text = Csv.Text("company_verawardS",{num = Csv.Company[MPlayer.GetLevel()].exp})
+			moudle:Get("bg").SpriteName = csvVerdict.bgIcon
+		else
+			moudle:Get("textTime").Text = Csv.Text("company_verNTime",{time = luaUtil.GetTimeHMS(verdict.time - HeartBeat.ServSecond())})
+			if verdict.time <= 0 then
+				CCompany.CompanyRefreshVerdict()
+			end
+		end
+		self.mNowID = verdict.id
+		self.mNowNum = verdict.times
+	end
+
+	GoAnswer1.RaycastTarget = true
+	GoAnswer2.RaycastTarget = true
+end
+
+function _P.UpdateAsset(self,itemid, itemcount, isAdd)
+	local TextUpdate = self.mMoudle:Get("text"..itemid)
+	if TextUpdate ~= nil then
+		TextUpdate:DOKill()
+		local lastNum = self.mAssetNum[itemid]
+		local nowNum = MBag.GetItemNum(itemid)
+		self.mAssetNum[itemid] = nowNum
+		if lastNum ~= nowNum then
+			local dura
+			local dec = math.abs(nowNum - lastNum)
+			if dec >= 10000 then
+				dura = 2
+			else
+				dura = math.max(0.2, dec / 10000 * 2)
+			end
+			local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+				if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+			end, function()
+				if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(MBag.GetItemNum(itemid)) end
+			end)
+			t:SetTarget(TextUpdate.CachedTran)
+		end
+	end
+	if itemid == CostItemID then
+		local csvItem = Csv.Item[CostItemID]
+		self.mMoudle:Get("textLing").Text = Csv.Text("company_verNNum",{name = csvItem.name,num = MBag.GetItemNum(CostItemID)})
+	else
+		local trans = self.mMoudle:Get("decision1")
+		CCommon.ShowFlyItem(trans,itemid,itemcount)
+	end
+end
+
+function _P.UpdateTime(self)
+	local moudle = self.mMoudle
+	local verdict = MCompany.Verdict
+	if verdict.times > 0 then
+		return
+	else
+		_P.SetVerdict(self,moudle)
+	end
+end
+
+function _R.UpdateUI(self)
+	local moudle = self.mMoudle
+	if self.mNowNum <= 0 then
+		_P.SetVerdict(self,moudle)
+		return
+	end
+	local bg = moudle:Get("bg")
+	local tween = bg.CachedTran:GetJTweener("T_Verdict")
+	tween:SetOnComplete(function ( ... )
+		_P.SetVerdict(self,moudle)
+		bg.Alpha = 1
+	end)
+	tween:Play()
+end
+
+function _R.UpdateCount(self,count)
+	local moudle = self.mMoudle
+	local nowid = self.mNowID
+	if count ~= nil then
+		-- local csvVerdict = Csv.Verdict[nowid]
+		-- moudle:Get("textAnswerA1").Text = Csv.Text("company_veraward",{name = Csv.Item[csvVerdict.item[1]].name,num = count})
+		_P.SetVerdict(self,moudle)
+	end
+end
+
+function _P.UpdateSlider(self)
+	local getZhengji = MPlayer.GetExp() - self.mLastExp
+	local trans = self.mMoudle:Get("decision2")
+	local csvItem = Csv.Item[Define.AssetsType.Record]
+	CCommon.ShowFlyItem(trans,Define.AssetsType.Record,getZhengji)
+	_P.SetSlider(self,self.mMoudle)
+end
+
+function _R.Reset(self)
+	local moudle = self.mMoudle
+	moudle:Get("decision1").RaycastTarget = true
+	moudle:Get("decision2").RaycastTarget = true
+	_P.SetVerdict(self,moudle)
+end
+
+return _M

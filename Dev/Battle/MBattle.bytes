@@ -1,0 +1,169 @@
+local _M = {}
+
+_M.State = 
+{
+	Close = 1,	--关闭
+	Open = 2,	--打开
+	Pass = 3	--通过
+}
+
+_M.BattleType = 
+{
+	Common = 1,
+	BOSS = 2
+}
+
+_M.ResultState = 
+{
+	Continue = 1,
+	Win = 2,
+	Fail = 3
+}
+
+--当前关卡id--
+_M.CurId = 0
+--当前关卡血量--
+_M.CurBlood = 0
+--锁定的员工
+_M.LockedStaffs = {}
+--员工剩余的出战次数
+_M.StaffLifeNum = {}
+-- 一键秒杀数据
+_M.SeckillBattleData = {}
+-- 是否是一键秒杀
+_M.IsSeckill = false
+
+
+function _M.Clean( ... )
+	_M.CurId = 0
+	_M.CurBlood = 0
+	_M.LockedStaffs = {}
+	_M.StaffLifeNum = {}
+	_M.SeckillBattleData = {}
+	_M.IsSeckill = false
+end
+
+
+-- 一键秒杀是否全部击杀完
+function _M.IsSeckillFinished()
+	local seckillData = _M.SeckillBattleData
+	if (not seckillData) or (not seckillData.list) then return false end
+
+	local lastLevelId = seckillData.lastId
+	if not lastLevelId then return false end
+
+	local lastResult = _M.GetCurData(seckillData.list, lastLevelId)
+	if not lastResult then return false end
+
+	if lastLevelId % 10 == 8 and lastResult.state == _M.ResultState.Win then
+		return true
+	else
+		return false
+	end
+end
+
+
+-- 获取总的节省金钱数
+function _M.GetAllSeckillMoney()
+	local totalNum = 0
+	for k,v in pairs(_M.SeckillBattleData.list) do
+		if v.state == _M.ResultState.Win then
+			local battleConf = Csv.Battle[v.id]
+			if battleConf then
+				totalNum = totalNum + (battleConf.gold - v.selfcost)
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 获取总的股份值
+function _M.GetAllNum()
+	local totalNum = 0
+	for k,v in pairs(_M.SeckillBattleData.list) do
+		local battleConf = Csv.Battle[v.id]
+		if v.state == _M.ResultState.Win then
+			if battleConf then
+				totalNum = totalNum + battleConf.gold
+			end
+		else
+			if battleConf then
+				totalNum = totalNum + (battleConf.gold - v.blood)
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 获取一键秒杀奖励
+function _M.GetAllReward()
+	local rewardData = {}
+	rewardData.item = {}
+	rewardData.money = 0
+	rewardData.financial = 0
+
+	local list = _M.SeckillBattleData.list
+	for k,v in pairs(list) do
+		if v.state == _M.ResultState.Win then
+			rewardData.money = rewardData.money + v.money
+			local battleConf = Csv.Battle[v.id]
+			if battleConf then
+				rewardData.financial = rewardData.financial + battleConf.financial
+
+				if battleConf.item then
+					for i,itemValue in ipairs(battleConf.item) do
+						local itemId = itemValue[1]
+						if rewardData.item[itemId] then
+							rewardData.item[itemId][2] = rewardData.item[itemId][2] + itemValue[2]
+						else
+							rewardData.item[itemId] = {itemId, itemValue[2]}
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return rewardData
+end
+
+
+-- 获取指定数据
+function _M.GetCurData(list, battleId)
+	if list then
+		for k,v in pairs(list) do
+			if v.id == battleId then
+				return v
+			end
+		end
+	end
+end
+
+
+-- 获取通关关数
+function _M.GetPassNum()
+	local list = _M.SeckillBattleData.list
+	local totalNum = 0
+	for k,v in pairs(list) do
+		if v.state == _M.ResultState.Win then
+			totalNum = totalNum + 1
+		end
+	end
+
+	return totalNum
+end
+
+function _M.IsFirstBattle()
+	local battleid = _M.CurId
+	if battleid%10000 == 101 then
+		return true
+	else
+		return false
+	end
+end
+
+return _M

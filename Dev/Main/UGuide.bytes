@@ -1,0 +1,256 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local Linear = CS.DG.Tweening.Ease.Linear
+
+function _P.OnToDone(self, csvLine)
+	if self._EventNode ~= nil then
+		if self.Moudle ~= nil then
+			self.Moudle:Destroy()
+		end
+		if self.PressPosition ~= nil then
+			local raycastObjs = JGuiManager.RaycastAll(self.PressPosition)
+			if raycastObjs ~= nil and raycastObjs.Length > 0 then
+				local obj 
+				for i=0,raycastObjs.Length -1 do
+					obj = raycastObjs[i]
+					if obj ~= self._EventNode.CachedObj then
+						JGuiManager.CallEvent(obj, self.PressPosition)
+						break
+					end
+				end
+			end
+		end
+		CTrigger.OnGuideDone(csvLine.id)
+		CMain.OnGuideDone(csvLine)
+		if csvLine.next ~= nil and csvLine.next > 0 then
+			_P.doCreate(self, csvLine.next)
+		else
+			self.IsMyDestroy = true
+			self:Destroy()
+		end
+	end
+end
+
+function _P.doCreate(self, id)
+	self.GuideId = id
+	CS.Utility.LogPoint.LogPost(15, id)
+
+	local csvLine = Csv.Guide[id]	
+	--是不是强制
+	if self.EventClickEvent ~= nil then
+		self.EventClickEvent:Destroy()
+	end
+	if csvLine.isLock == 1 then
+		--点击任意区域完成
+		if csvLine.doneType == 2 then
+			self.EventClickEvent = self._EventNode:AddOnClick(function ( ... )
+				SoundMgr.Play(10001)
+				_P.OnToDone(self, csvLine)
+			end, nil)
+		else
+			self._EventNode.RaycastTarget = true
+		end
+	else
+		self._EventNode.RaycastTarget = false
+	end
+	--声音
+	if csvLine.sound ~= nil and csvLine.sound > 0 then
+		SoundMgr.Play(csvLine.sound)
+	end
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Guide_Hole")
+	self.Moudle = moudle
+	
+	--有效时长
+	if csvLine.vaildTime ~= nil and csvLine.vaildTime > 0 then
+		moudle.SelfRect:AddOnTime(function ( ... )
+			_P.OnToDone(self, csvLine)
+		end, nil, csvLine.vaildTime)
+	end
+	if csvLine.backImage ~= nil then
+		moudle:Get("BackImage").SpriteName = csvLine.backImage
+	end
+	--压暗
+	local bg = moudle:Get("Bg")
+	if csvLine.anchor ~= nil and csvLine.anchor > 0 then
+		bg:SetAnchor(csvLine.anchor)
+	end
+	bg.SizeDelta = 3 * bg.SizeDelta
+	if csvLine.dark ~= nil and csvLine.dark > 0 then
+		bg.Alpha = csvLine.dark
+	else
+		bg.Alpha = 0
+	end	
+	--中心点位置
+	local pos = {x = 0, y = 0}
+	if csvLine.mainBtn ~= nil and csvLine.mainBtn > 0 then	
+		local funcCsv = Csv.Func[csvLine.mainBtn]
+		if funcCsv ~= nil then
+			if funcCsv.fid == Define.SysId.Main or
+				funcCsv.fid == Define.SysId.Bottom or
+				funcCsv.fid == Define.SysId.Top or
+				funcCsv.fid == Define.SysId.Left or
+				funcCsv.fid == Define.SysId.Right 
+			then
+				WindowMgr.Call("UMain","GetBtnPos",csvLine.mainBtn, bg.CachedTran, pos)
+			elseif funcCsv.fid == Define.SysId.Home then
+				WindowMgr.Call("UHomeMap","GetBtnPos",csvLine.mainBtn, bg.CachedTran, pos)
+			elseif funcCsv.fid == Define.SysId.World then
+				WindowMgr.Call("UWorldMap","GetBtnPos",csvLine.mainBtn, bg.CachedTran, pos)
+			else
+				error("UGuide Create Error, csvLine.mainBtn error, guideId:" .. id)
+			end
+		else
+			error("UGuide Create Error, csvLine.mainBtn error, guideId:" .. id)
+		end
+	elseif csvLine.offset ~= nil then
+		pos.x = pos.x + csvLine.offset[1]
+		pos.y = pos.y + csvLine.offset[2]
+	end
+	bg.LocalPosition = pos
+	--挖洞
+	if csvLine.hole ~= nil then
+		if csvLine.hole[2] ~= nil and csvLine.hole[2] > 0 then
+			bg:SetHole(Vector2.zero, Vector2(csvLine.hole[1], csvLine.hole[2]))
+		else
+			bg:SetHole(Vector2.zero, csvLine.hole[1])
+		end
+	end
+	--选中框
+	if csvLine.lightSp ~= nil then
+		local light = moudle:Get("Light")
+		if csvLine.lightSize ~= nil then
+			light.SizeDelta = Vector2(csvLine.lightSize[1], csvLine.lightSize[2])
+		end
+		if csvLine.lightPos ~= nil then
+			light.LocalPosition = Vector2(csvLine.lightPos[1], csvLine.lightPos[2])
+		end
+		light.SpriteName = csvLine.lightSp
+		if csvLine.lightTween ~= nil then
+			local t = light.CachedTran:GetJTweener(csvLine.lightTween)
+			t:Play()
+		end
+	end
+	
+	--碰撞
+	self.PressPosition = nil
+	if csvLine.btnSize ~= nil then
+		local btn = moudle:Get("Btn")
+		if csvLine.btnPos ~= nil then
+			btn.LocalPosition = Vector2(csvLine.btnPos[1], csvLine.btnPos[2])
+		end	
+		if csvLine.btnSize ~= nil then
+			btn.SizeDelta = Vector2(csvLine.btnSize[1], csvLine.btnSize[2])
+		end	
+		self.PressPosition = CS.UnityEngine.RectTransformUtility.WorldToScreenPoint(self._CanvasNode.WorldCamera, btn.CachedTran.position)
+		btn:AddOnClick(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnToDone(self, csvLine)
+		end, nil)
+	end
+	
+	--Tips
+	local TipsBg = moudle:Get("TipsBg")
+	if csvLine.tips ~= nil then
+		if csvLine.tipsPos ~= nil then
+			TipsBg.LocalPosition = Vector2(csvLine.tipsPos[1], csvLine.tipsPos[2])
+		end
+		if csvLine.tipsSize ~= nil then
+			TipsBg.SizeDelta = Vector2(csvLine.tipsSize[1], csvLine.tipsSize[2])
+		end
+		if csvLine.tipsSp ~= nil then
+			TipsBg.SpriteName = csvLine.tipsSp
+		end
+		local tips = moudle:Get("Tips")
+		if csvLine.tipsTime ~= nil and csvLine.tipsTime > 0 then
+			local TipsCover = moudle:Get("TipsCover")
+			TipsCover:AddOnClick(function ( ... )
+				SoundMgr.Play(10001)
+				if TipsCover ~= nil then 
+					TipsCover:Destroy()
+				end
+				if tips ~= nil then
+					tips:DOKill()
+					tips.Text = csvLine.tips
+				end	
+			end, nil)
+			local tween = tips:DOText(csvLine.tips, csvLine.tipsTime)
+			tween:SetEase(Linear)
+			tween:OnComplete(function()
+				if TipsCover ~= nil then
+					TipsCover:Destroy()
+				end
+			end)
+		else
+			moudle:Get("TipsCover"):Destroy()
+			tips.Text = csvLine.tips
+		end
+	else
+		moudle:Get("TipsCover"):Destroy()	
+	end
+
+	--天使
+	if csvLine.angelSp ~= nil and csvLine.angelPos ~= nil then
+		local Angel = moudle:Get("Angel")
+		Angel.SpriteName = csvLine.angelSp
+		Angel.LocalPosition = Vector2(csvLine.angelPos[1], csvLine.angelPos[2])
+	end
+
+	--特效
+	if csvLine.effectId ~= nil and csvLine.effectId > 0 then
+		local effectPos
+		if csvLine.effectPos ~= nil then
+			effectPos = Vector2(csvLine.effectPos[1], csvLine.effectPos[2])
+		else
+			effectPos = Vector2.zero
+		end
+		local effectNode = moudle:Get("EffectNode")
+		if csvLine.effectRot then
+			effectNode.LocalEulerAngles = Vector3(0, 0, csvLine.effectRot)
+		end
+		CCommon.CreateEffect(effectNode, csvLine.effectId, effectPos)
+	end
+
+	if GameSetting.IsEditor then
+		moudle:Get("C_text").Text = "PASS"
+		local pass = moudle:Get("C_Btn_e")
+		pass.Activity = true
+		pass:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			self.DoneCall = nil
+			self:Destroy()
+		end)
+	end
+end
+
+function _M:EndDestroy( ... )	
+	if self.IsMyDestroy then
+		if self.DoneCall ~= nil then
+			self.DoneCall()
+		end
+
+		WindowMgr.Call("UMain","ShowStory")
+	end
+end
+
+function _M:OnCreate(id, doneCall)
+	self.IsMyDestroy = false
+	self.DoneCall = doneCall
+	self:UnBlack()
+	_P.doCreate(self, id)
+end
+
+return _M

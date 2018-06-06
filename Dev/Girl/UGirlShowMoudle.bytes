@@ -1,0 +1,90 @@
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local ActiveActorId = 10008
+
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+function _M:Destroy( ... )
+	if self.Moudle ~= nil then
+		SoundMgr.DestroySystem()
+		self.Moudle:Destroy()
+		self.Moudle = nil
+	end
+end
+
+function _M:ctor(parent,id,storyType)
+	local csvLine = Csv.Girl[id]
+	local showSysID = csvLine.showSysid
+
+	local mainLayerInfo = {}	
+
+	if storyType == 1 then
+		WindowMgr.Call("UMain", "GetSortLayer", mainLayerInfo)
+	else
+		if showSysID == Define.SysId.VIPWelfare then
+			WindowMgr.Call("UVipWelfare", "GetSortLayer", mainLayerInfo)
+		elseif showSysID == Define.SysId.FirstRecharge then
+			WindowMgr.Call("UFirstRecharge", "GetSortLayer", mainLayerInfo)
+		else
+			WindowMgr.Call("UMain", "GetSortLayer", mainLayerInfo)
+		end
+	end
+	
+	local startIndex = mainLayerInfo.index
+
+	local moudle = JGuiManager.GetMoudle(parent, "M_Guidance_Girl", mainLayerInfo.type, mainLayerInfo.index)
+	self.Moudle = moudle
+	moudle.SelfRect.RaycastTarget = true
+	moudle.SelfRect:AddOnTime(function( ... )
+		moudle.SelfRect.RaycastTarget = false
+		_P.ShowTips(self)
+	end, nil, 1.2)
+	mainLayerInfo.index = moudle.SortingOrder + 1
+
+	local bsxSp = moudle:Get("BSX")
+	local name = moudle:Get("Name")
+	local charm = moudle:Get("text2")
+	local desc = moudle:Get("text3")
+	local talk = moudle:Get("text")
+
+	--播放语音
+	if csvLine.sound ~= nil then
+		SoundMgr.PlaySystem(csvLine.sound)
+	end
+
+	-- 播放美女激活特效
+	SoundMgr.Play(10006)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), ActiveActorId)
+	if csvLine.prefab ~= nil and csvLine.prefab > 0 then
+		CCommon.CreateActor(bsxSp, csvLine.prefab, CCommon.ActorFieldMap.girl_get)
+	else
+		bsxSp.SpriteName = csvLine.homeicon
+	end
+
+	name.Text = csvLine.name
+	charm.Text = Csv.Text("Girl_charm")..csvLine.charm
+	desc.Text = Csv.Text("Girl_gift_desc",{value = csvLine.tips})
+	talk.Text = csvLine.talk
+
+	if showSysID == Define.SysId.VIPWelfare then
+		WindowMgr.Call("UVipWelfare", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	else
+		WindowMgr.Call("UMain", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	end
+end
+
+function _P.ShowTips(self)
+	local tipsText = self.Moudle:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+		
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+return _M

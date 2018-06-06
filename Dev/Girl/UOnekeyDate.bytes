@@ -1,0 +1,100 @@
+
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.GetOnekeyDate(self,data)
+	local content = self.mContent
+
+	local dateList = {}
+	for k,v in pairs(data) do
+		if dateList[v.girlid] ~= nil then
+			dateList[v.girlid].data.gainFriend = dateList[v.girlid].data.gainFriend +v.gainFriend
+			dateList[v.girlid].data.gainIntimacy = dateList[v.girlid].data.gainIntimacy +v.gainIntimacy
+
+			if v.crit then
+				dateList[v.girlid].crit = dateList[v.girlid].crit +1
+			end 
+		else
+			dateList[v.girlid] = {}
+			dateList[v.girlid].data = v
+			dateList[v.girlid].crit = 0
+			if v.crit then
+				dateList[v.girlid].crit = 1
+			end
+		end
+	end
+	for k,v in pairs(dateList) do
+		_P.CreatItem(content,v)
+	end
+end
+
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_UOnekeyDate")
+
+	local scrollView = moudle:Get("scrollView")
+	local content = moudle:Get("content")
+	self.mContent = content
+
+	-- local mask = moudle:Get("blackBg")
+	-- mask:AddOnClick(function(...)
+	-- 	SoundMgr.Play(10001)
+	-- 	self:Destroy()
+	-- end)
+	local backBtn = moudle:Get("backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local btn = moudle:Get("Btn")
+	btn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local Tips = moudle:Get("Tips")
+	Tips.Text = Csv.Text("Girl_onekeyUseEnergy")
+	moudle:Get("BtnText").Text = Csv.Text("lastgirl_iknown")
+end
+
+function _P.CreatItem(parent,value)
+	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_Random_Item", WindowType.UI, 10)
+
+	local bodyIcon = moudle:Get("BSX")
+	local title1 = moudle:Get("Text")
+	local title2 = moudle:Get("Text2")
+	local value1 = moudle:Get("NumText")
+	local value2 = moudle:Get("NumText_0")
+	local name = moudle:Get("name")
+	title2.Activity = false
+
+	local girlData = Csv.Girl[value.data.girlid]
+	bodyIcon.SpriteName = girlData.dateIcon
+	name.Text = girlData.name
+
+	title1.Text = Csv.Text("Girl_friend")
+	value1.Text = "+"..value.data.gainFriend
+
+	if value.crit > 0 then
+		title2.Activity = true
+		title2.Text = Csv.Text("Girl_dateCrit")
+		value2.Text = "x"..value.crit
+	end
+end
+
+return _M

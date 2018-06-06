@@ -1,0 +1,142 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local itemWidth = 100
+local itemHeight = 120
+local space = 10
+local pageNum = 3
+local pageWidth = 380
+
+function _R.OnBagMerge(self, mergeid , count)
+  local contentTransform = self.mMoudle:Get("Content")
+  contentTransform:DestroyChildren()
+  _P.OnSetData(self,mergeid)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(id)
+  local moudle = self:CreateMoudle(self._RootNode, "M_Bag_SyntheticPop")
+  local BtnSynthetic = moudle:Get("Btn")
+  BtnSynthetic:AddOnButton(function ( ... )
+    SoundMgr.Play(10001)
+    self:OnClickSynthetic()
+    end, nil, 0.9)
+  self.mMoudle = moudle
+  _P.OnSetData(self,id)
+end
+
+function _P.OnSetData(self,id)
+  local moudle = self.mMoudle
+  local mergeData = MBag.MergeItems[id]
+  local csvItem = Csv.Item[Csv.Merge[id].itemid]
+
+  local BtnClose = moudle:Get("BtnClose")
+  BtnClose:AddOnButton(function ( ... )
+    SoundMgr.Play(10002)
+    self:Destroy()
+    end, nil, 0.9)
+  
+  self.Id = id
+
+  local TextTitle = moudle:Get("Title")
+  TextTitle.Text = Csv.Text("bag_syntit")
+
+  local TextSecondTitle = moudle:Get("SecondTitle")
+  TextSecondTitle.Text = Csv.Text("bag_syntit2")
+  
+  local strColor = Csv.ItemColor[csvItem.color].str
+  local TextName = moudle:Get("Name")
+  TextName.Text = csvItem.name
+
+  -- local TextTime = moudle:Get("Time")
+  -- TextTime.Text = os.date("%H:%M:%S")
+
+  local TextLimit = moudle:Get("Limit")
+  if Csv.Merge[id].max == 0 then
+    --TextLimit.Text = Csv.Text("bag_syntit1",{num = Csv.Text("staff_none")})
+    TextLimit.Activity = false
+  else
+    TextLimit.Text = Csv.Text("bag_syntit3",{num = mergeData.count,max = Csv.Merge[id].max})
+    TextLimit.Activity = true
+  end
+
+  local TextDesc = moudle:Get("Desc")
+  TextDesc.Text = Csv.Text("bag_detdescsp",{num = csvItem.tips})
+
+  local TextBtn = moudle:Get("C_text")
+  TextBtn.Text = Csv.Text("bag_syn")
+
+  local ImgIconColor = moudle:Get("IconColor")
+  ImgIconColor.SpriteName = csvItem.colorIcon
+
+  local ImgIcon = moudle:Get("Icon")
+  ImgIcon.SpriteName = csvItem.icon
+
+  _P.CreateList(self,id)
+end
+
+function _P.CreateList(self,id)
+	local contentTransform = self.mMoudle:Get("Content")
+  for k,v in pairs(Csv.Merge[id].cost_item) do
+    local mergeMoudle = JGuiManager.GetMoudle(contentTransform,"M_Bag_SyntheticPopItem", WindowType.UI, 0)
+    
+    local csvItem = Csv.Item[v[1]]
+    local ImgIcon = mergeMoudle:Get("Icon")
+    ImgIcon.SpriteName = csvItem.icon
+
+    local ImgIconColor = mergeMoudle:Get("IconColor")
+    ImgIconColor.SpriteName = csvItem.colorIcon
+
+    ImgIconColor:AddOnButton(function()
+      SoundMgr.Play(10001)
+      CCommon.ShowItemTips(v[1])
+    end,nil,0.9)
+
+    local TextNum = mergeMoudle:Get("Num")
+    local have = MBag.GetItemNum(v[1])
+    if have >= v[2] then
+      TextNum.Text = Csv.Text("bag_haveG",{num = have,max = v[2]})
+    else
+      TextNum.Text = Csv.Text("bag_haveR",{num = have,max = v[2]})
+    end
+  end
+end
+
+function _M:ScrollCallBack(index,value,moudle)
+  local contentTransform = self.mMoudle:Get("Content")
+  if moudle ~= nil then
+    local rect = moudle:Get("M_Bag_SyntheticPopItem")
+    rect.LocalPosition = self:GetPos(index)
+    moudle:Get("Icon").SpriteName = value.img
+    moudle:Get("IconColor").SpriteName = "ty_023"
+    moudle:Get("Num").Text = value.num
+  end
+end
+
+function _M:GetPos(index)
+  local allNum = #self.mTableCost
+  local xPos = ((index - 1) * (itemWidth + space) + itemWidth/2) - ((itemWidth + space) * allNum - space)/2
+  return Vector2(xPos,0)
+end
+
+function _M:OnClickSynthetic()
+    CBag.OnMergeItem(self.Id,1)
+end
+
+return _M

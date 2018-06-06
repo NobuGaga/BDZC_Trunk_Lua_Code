@@ -1,0 +1,198 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseWin(self)
+	self:Destroy()
+end
+
+function _M:OnCreate()
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Tiqin")
+	local backBtn = moudle:Get("backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local title = moudle:Get("TITLE")
+	title.Text = Csv.Text("Girl_married_tiqin")--"提亲"
+
+	local ownBg = moudle:Get("OwnBG")
+	local ownIcon = moudle:Get("OwnBSX")
+	local ownName = moudle:Get("OwnName")
+	local ownParentText = moudle:Get("Parent")
+	local ownParentValue = moudle:Get("ParentText")
+	local ownAttrText = moudle:Get("attribute")
+	local ownAttrValue = moudle:Get("attributeText")
+	local ownEducation = moudle:Get("EducationText")
+
+	local otherEducation = moudle:Get("EducationText_0")
+	local selectTiqinText = moudle:Get("SelectedText")
+	local selectNum = moudle:Get("BianhaoText")
+	local allTiqinText = moudle:Get("AllText")
+	local placeholder = moudle:Get("Placeholder")
+
+	ownParentText.Text = Csv.Text("Girl_married_mother")--"母亲："
+	ownAttrText.Text = Csv.Text("Girl_married_attribute")--"属性："
+	selectTiqinText.Text = Csv.Text("Girl_married_selectTiqin")--"指定提亲"
+	selectNum.Text = Csv.Text("Girl_married_bianhao")--"编号："
+	allTiqinText.Text = Csv.Text("Girl_married_allTiqin")--"全部提亲"
+	placeholder.Text = Csv.Text("Girl_married_inputNum")
+	
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
+
+	ownName.Text = data.name
+	--ownBg.SpriteName = "scene_10003"
+	ownIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	ownParentValue.Text = Csv.Girl[data.girlid].name
+	ownAttrValue.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	ownEducation.Text = MGirl.GetEducationName(data.degree)
+	otherEducation.Text = MGirl.GetEducationName(data.degree)
+	ownIcon:SetNativeSize()
+
+	local selectRect = moudle:Get("selectRect")
+	local allRect = moudle:Get("allRect")
+	local selectImg = moudle:Get("selectImg")
+	local allSelectImg = moudle:Get("AllselectImg")
+
+	local isSelectID = true
+	allSelectImg.Activity = false
+	selectImg.Activity = true --默认指定提亲
+
+	selectRect:AddOnClick(function(...)
+		SoundMgr.Play(10001)
+		allSelectImg.Activity = false
+		selectImg.Activity = true
+
+		isSelectID = true
+	end)
+
+	allRect:AddOnClick(function(...)
+		SoundMgr.Play(10001)
+		allSelectImg.Activity = true
+		selectImg.Activity = false
+
+		isSelectID = false
+	end)
+
+	local input = moudle:Get("input")
+
+----------------------------------------------------------------
+	local selectTitle = moudle:Get("title")
+	selectTitle.Text = Csv.Text("Girl_married_selectItemTiqin")--"选择结婚道具"
+
+	local goldData = Csv.Item[Define.AssetsType.Gold]
+	local goldBox = moudle:Get("goodsBox1")
+	local goldIcon = moudle:Get("goods1")
+	local goldcostText = moudle:Get("consumeText1")
+	local goldhaveText = moudle:Get("HaveText1")
+	local selectGoldText = moudle:Get("C_text")
+	local useGoldBtn = moudle:Get("Btn_b")
+
+	local costGold = MGirl.GetMarriedGoldCost(data.degree)
+	local haveGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	local goldItemData = Csv.Item[Define.AssetsType.Gold]
+
+	selectGoldText.Text = Csv.Text("Girl_married_select")--"选择"
+	goldBox.SpriteName = goldData.colorIcon
+	goldIcon.SpriteName = goldData.icon
+	goldcostText.Text = Csv.Text("Girl_married_costGold",{cost = costGold })--"消耗<color=#FF2323>"..costGold.."</color>钻石"
+	goldhaveText.Text = Csv.Text("Girl_married_haveGold",{have = haveGold})--"现拥有<color=#FF2323>"..haveGold.."</color>钻石"
+
+	useGoldBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if isSelectID == true then
+			if input.Text == "" then
+				CCommon.ShowError(Csv.Text("Girl_married_NumberFalse"))--"请出入正确的玩家编号!"
+			else	
+				local inputNum = tonumber(input.Text)
+				if inputNum == MPlayer.GetId() then
+					CCommon.ShowError(Csv.Text("Girl_married_toself"))--不能向自己提亲
+				elseif costGold <= haveGold then
+ 					CGirl.ReqTiQin(MGirl.MarriedSelectID,Define.AssetsType.Gold,input.Text)
+					WindowMgr.Call("UMarriedTips","CloseWin")--关闭结婚选项
+					self:Destroy()
+				else
+					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))--goldItemData.name.."不足!"
+				end
+			end
+		else
+			if costGold <= haveGold then
+				CGirl.ReqTiQin(MGirl.MarriedSelectID,Define.AssetsType.Gold,0)
+				WindowMgr.Call("UMarriedTips","CloseWin")--关闭结婚选项
+				self:Destroy()
+			else
+				CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))--goldItemData.name.."不足!"
+			end
+		end
+	end)
+
+	local itemData = Csv.Item[marriedCostItem[1]]
+	local itemBox = moudle:Get("goodsBox2")
+	local itemIcon = moudle:Get("goods2")
+	local itemcostText = moudle:Get("consumeText2")
+	local itemhaveText = moudle:Get("HaveText2")
+	local selectItemText = moudle:Get("C_text_0")
+	local useItemBtn = moudle:Get("Btn_d")
+
+	local costItem = marriedCostItem[2]
+	local haveItem = MBag.GetItemNum(marriedCostItem[1])
+	
+	selectItemText.Text = Csv.Text("Girl_married_select")--"选择"
+	itemBox.SpriteName = itemData.colorIcon
+	itemIcon.SpriteName = itemData.icon
+	itemcostText.Text = Csv.Text("Girl_married_costItem",{name = itemData.name,num = costItem})--"消耗"..itemData.name.."x"..costItem
+	itemhaveText.Text = Csv.Text("Girl_married_haveItem",{have = haveItem,name = itemData.name})--"现拥有<color=#FF2323>"..haveItem.."</color>"..itemData.name
+
+	useItemBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if isSelectID == true then
+			if input.Text == "" then
+				CCommon.ShowError(Csv.Text("Girl_married_NumberFalse"))--请输入正确的玩家编号!
+			else	
+				local inputNum = tonumber(input.Text)
+				if inputNum == MPlayer.GetId() then
+					CCommon.ShowError(Csv.Text("Girl_married_toself"))--不能向自己提亲
+				elseif costItem <= haveItem then
+					CGirl.ReqTiQin(MGirl.MarriedSelectID,marriedCostItem[1],input.Text)
+					WindowMgr.Call("UMarriedTips","CloseWin")--关闭结婚选项
+					self:Destroy()
+				else
+					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))--itemData.name.."不足!"
+				end
+			end
+		else
+			if costItem <= haveItem then
+				CGirl.ReqTiQin(MGirl.MarriedSelectID,marriedCostItem[1],0)
+				WindowMgr.Call("UMarriedTips","CloseWin")--关闭结婚选项
+				self:Destroy()
+			else
+				CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))--itemData.name.."不足!"
+			end
+		end
+	end)
+end
+
+return _M

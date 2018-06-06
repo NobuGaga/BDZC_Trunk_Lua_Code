@@ -1,0 +1,407 @@
+
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EFFECT_ID = 18
+local GETBABYACTORID = 10024
+local CRITACTORID = 10025
+
+local MASK_TWEEN_NAME = "T_Girl_DateMask"
+local ITEM_TWEENS_NAME = "T_Girl_DateItem"
+local DATE1_TWEENS_NAME = "T_Girl_Date1"
+local DATE2_ROOM_HEART = "T_GirlRoom_Heart"
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.GetDateEvent(self)
+	CCommon.ShowError(Csv.Text("Girl_friendName")..Csv.Text("Girl_skill_add")..MGirl.FriendChange)
+	SoundMgr.Play(11000)
+	local rect = self.mDate4
+	rect:AddOnTime(function(...) 
+		if MGirl.isDateRoom == true then
+			rect.Activity = false
+			_P.CreatDate_2(self)
+		else
+			self:Destroy()
+		end
+	end,nil,1)
+end
+
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_UDate")
+	self.mMoudle = moudle
+	SoundMgr.DestroySystem()
+	
+	local selectItem = moudle:Get("SelectItem")
+	local nextMask = moudle:Get("Next")
+	local mask = moudle:Get("mask")
+	local date1 = moudle:Get("Date1")
+	local date2 = moudle:Get("Date2")
+	local date3 = moudle:Get("Date3")
+	local date4 = moudle:Get("Date4")
+
+	local maskTween = mask.CachedTran:GetJTweener(MASK_TWEEN_NAME)
+	local itemTweenS = selectItem.CachedTran:GetJTweener(ITEM_TWEENS_NAME)
+	local date1Tween = date1.CachedTran:GetJTweener(DATE1_TWEENS_NAME)
+	local date2Tween = date2.CachedTran:GetJTweener(DATE1_TWEENS_NAME)
+	local date3Tween = date3.CachedTran:GetJTweener(DATE1_TWEENS_NAME)
+	local date4Tween = date4.CachedTran:GetJTweener(DATE1_TWEENS_NAME)
+
+	self.mDate1 = date1
+	self.mDate2 = date2
+	self.mDate3 = date3
+	self.mDate4 = date4
+	self.mDate1Tween = date1Tween
+	self.mDate2Tween = date2Tween
+	self.mDate3Tween = date3Tween
+	self.mDate4Tween = date4Tween
+	self.mGirlID = id
+	self.mNext = nextMask
+
+	local openTab = {}
+	for i = 1,4,1 do
+		openTab[i] = i
+	end
+	self.mOpenTab = openTab
+
+	nextMask.Activity = true
+	moudle.SelfRect:AddOnTime(function(...) 
+		--nextMask.Activity = true
+	end,nil,1)
+
+	--CreatDate_4
+	nextMask:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		SoundMgr.DestroySystem()
+		if MGirl.dateEventID > 0 then
+			_P.CreatDate_4(self)
+		elseif MGirl.isDateRoom == true then
+			_P.CreatDate_2(self)
+		elseif MGirl.isBaby == true then
+			_P.CreatDate_3(self)
+		else
+			self:Destroy()
+		end
+	end,nil,1)
+
+	itemTweenS:SetOnComplete(function()
+		selectItem.Activity = false
+		_P.CreatDate_1(self)
+	end)
+
+
+	_P.CreatDate_1(self)
+
+	--[[
+	if MGirl.isRandomDate == true then
+		--_P.CreatItem(self,selectItem,id,itemTweenS)
+	else
+		_P.CreatDate_1(self)
+	end
+	--]]
+	
+	maskTween:Play()
+end
+
+function _P.CreatItem(self,parent,id,tweenr)
+	local data = MGirl.GetGirlData(id)
+
+	parent.LocalScale = Vector3(0.95,0.95,0.95)
+	local girlsData = Csv.Girl[id]
+
+	local girlBody = self.mMoudle:Get("GirlBody")
+	girlBody.SpriteName = girlsData.homeicon
+	girlBody:SetNativeSize()
+	--[[
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Tab1_ele", WindowType.UI, 10)
+	
+	local icon = _moudle:Get("bsx")
+	local bg = _moudle:Get("bg")
+	local name = _moudle:Get("Name")
+	local qinmiduText = _moudle:Get("qinmidu_text")
+	local meilizhiText = _moudle:Get("meilizhi_text")
+
+	icon.SpriteName = girlsData.icon
+	bg.SpriteName = girlsData.bg
+	name.Text = girlsData.name
+
+	qinmiduText.Text = data.intimacy
+	meilizhiText.Text = data.charm
+	--]]
+
+	if tweenr ~= nil then
+		tweenr:Play()
+	end
+
+	return _moudle
+end
+
+--约会
+function _P.CreatDate_1(self)
+	self.mOpenTab[1] = true
+	local id = self.mGirlID
+	local parent = self.mDate1
+	local tweenr = self.mDate1Tween
+	_P.CloseOtherDate(self,1)
+
+	local data = MGirl.GetGirlData(id)
+	local girlsData = Csv.Girl[id]
+
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_date_1", WindowType.Tips3, 10)
+
+	local bgSp = _moudle:Get("bg")
+	local body = _moudle:Get("body")
+	--local nameText = _moudle:Get("name")
+	local talkText = _moudle:Get("DHKtext")
+
+	bgSp.SpriteName = girlsData.datebg
+	body.SpriteName = girlsData.dateIcon
+	--nameText.Text = girlsData.name
+	talkText.Text = girlsData.meetTalk
+	
+	if girlsData.meetSound ~= nil then
+		SoundMgr.PlaySystem(girlsData.meetSound)--播放语音
+	end
+	
+	tweenr:SetOnComplete(function()
+		if MGirl.dateEventID > 0 then
+			--_P.CreatDate_4(self)
+		elseif MGirl.isDateRoom == true then
+			--_P.CreatDate_2(self)
+		else
+			if _P.CheckIsLastDate(self,1) == true then
+				--self:Destroy()
+			end
+		end
+	end)
+
+	if tweenr ~= nil then
+		tweenr:Play()
+	end
+
+	CCommon.ShowError(Csv.Text("Girl_friendName")..Csv.Text("Girl_skill_add")..MGirl.FriendChange)
+	SoundMgr.Play(11000)
+	if MGirl.isDateCrit == true then
+		SoundMgr.Play(10003)
+
+		-- 播放获得宝宝特效
+		--CCommon.CreateEffect(_moudle:Get("ActorPanel"), CRITACTORID)
+		--暴击
+		local nodeTrans = _moudle:Get("EffectNode")
+		CCommon.PlayEffectGod(nodeTrans,Define.SysId.Girl_Unlock)
+	end
+end
+
+--剧情
+function _P.CreatDate_4(self)
+	self.mOpenTab[4] = true
+	self.mNext.Activity = false -- 关闭跳过
+	local id = self.mGirlID
+	local parent = self.mDate4
+	local tweenr = self.mDate4Tween
+	_P.CloseOtherDate(self,4)
+
+	local data = MGirl.GetGirlData(id)
+	local girlsData = Csv.Girl[id]
+
+	local eventID = MGirl.dateEventID
+	local EventData = Csv.GirlRandEvent[eventID]
+
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_date_4", WindowType.UI, 10)
+
+	local bgSp = _moudle:Get("bg")
+	local body = _moudle:Get("body")
+	local nameText = _moudle:Get("name_text")
+	local dialongText = _moudle:Get("dialong_text")
+
+	bgSp.SpriteName = girlsData.datebg
+	body.SpriteName = girlsData.dateIcon
+	nameText.Text = girlsData.name
+	dialongText.Text = EventData.content
+
+	for i = 1,2,1 do
+		local choose = _moudle:Get("choose_"..i)
+		local chooseText= _moudle:Get("chooseText_"..i)
+		choose.RaycastTarget = true
+
+		if i == 1 then
+			chooseText.Text = EventData.selecttext_1
+		elseif i == 2 then
+			chooseText.Text = EventData.selecttext_2
+		end
+
+		choose:AddOnButton(function ()
+			SoundMgr.Play(10001)
+			_P.SelectEvent(self,i,_moudle)
+		end)
+	end
+
+	if tweenr ~= nil then
+		tweenr:Play()
+	end
+end
+
+function _P.SelectEvent(self,index,_moudle)
+	CGirl.ReqDateEvent(index)
+	MGirl.dateEventID = -1 --事件完成
+
+	for i = 1,2,1 do
+		local choose = _moudle:Get("choose_"..i)
+		choose.RaycastTarget = false
+	end
+end
+
+--开房
+function _P.CreatDate_2(self)
+	self.mOpenTab[2] = true
+	self.mNext.Activity = false -- 关闭跳过
+	MGirl.isDateRoom = false
+	_P.CloseOtherDate(self,2)
+
+	local id = self.mGirlID
+	local parent = self.mDate2
+	local tweenr = self.mDate2Tween
+
+	local data = MGirl.GetGirlData(id)
+	local girlsData = Csv.Girl[id]
+
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_date_2", WindowType.UI, 10)
+	local heart = _moudle:Get("heart")
+	local heartTween = heart.CachedTran:GetJTweener(DATE2_ROOM_HEART)
+	heartTween:Play()
+
+	local bgSp = _moudle:Get("bg")
+	local body = _moudle:Get("body") 
+	--talkText.Text = girlsData.meetTalk
+	
+	_moudle.SelfRect:AddOnTime(function(...)
+		self.mNext.Activity = true -- 关闭跳过
+		if MGirl.isBaby == true then
+			_P.CreatDate_3(self)
+		else
+			if _P.CheckIsLastDate(self,2) == true then
+				--self:Destroy()
+			end
+		end
+	end,nil,2.5)
+
+	tweenr:SetOnComplete(function()
+		heart.Activity = false
+		
+		bgSp.SpriteName = girlsData.roombg
+		body.SpriteName = girlsData.roomIcon
+
+		if girlsData.roomSound ~= nil then
+			SoundMgr.PlaySystem(girlsData.roomSound)--播放语音
+		end
+	end)
+
+	if tweenr ~= nil then
+		tweenr:Play()
+	end
+end
+
+
+--生娃
+function _P.CreatDate_3(self)
+	self.mOpenTab[3] = true
+	self.mNext.Activity = false -- 关闭跳过
+	MGirl.isBaby = false
+	_P.CloseOtherDate(self,3)
+
+	SoundMgr.Play(10007)
+	local id = self.mGirlID
+	local parent = self.mDate3
+	local tweenr = self.mDate3Tween
+
+	local data = MGirl.GetGirlData(id)
+	local girlsData = Csv.Girl[id]
+	local babyData = MGirl.GetBabyDataByID(MGirl.newBabyID)
+	
+	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_date_3", WindowType.Tips3, 10)
+
+	local bgSp = _moudle:Get("bg")
+	local tips = _moudle:Get("text_0")
+	local cancelText = _moudle:Get("C_text")
+	local sureText = _moudle:Get("C_text_0")
+	local title = _moudle:Get("title")
+	local level = _moudle:Get("ZZText")
+
+	--据说改成特效
+	if babyData.gender == 1 then
+		title.SpriteName = "mn_019"
+	else
+		title.SpriteName = "mn_020"
+	end
+	
+	level.Text =  Csv.Const(10206)[babyData.IQ+1]
+
+	tips.Text = Csv.Text("Girl_gotoBaby")--"是否立即前往查看婴儿"
+	cancelText.Text = Csv.Text("common_cancel")--"取消"
+	sureText.Text = Csv.Text("common_sure")--"确定"
+
+	bgSp.SpriteName = girlsData.roombg
+
+	local cancelBtn = _moudle:Get("C_Btn_e")
+	cancelBtn:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		MGirl.isBaby = false
+		self:Destroy()
+	end)
+
+	local sureBtn = _moudle:Get("C_Btn_a")
+	sureBtn:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		MGirl.isBaby = false
+		--WindowMgr.Create("UGirl",MGirl.TOGGLE_ID.BABY) 
+		--parent.Activity = false
+		WindowMgr.Create("UGirlBaby")
+	end)
+
+	if tweenr ~= nil then
+		tweenr:Play()
+	end
+
+	-- 播放获得宝宝特效
+	CCommon.CreateEffect(_moudle:Get("ActorPanel"), GETBABYACTORID)
+end
+
+function _P.CheckIsLastDate(self,index)
+	local openTab = self.mOpenTab
+
+	for k,v in pairs(openTab) do
+		if k > index then
+			if v == true then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+function _P.CloseOtherDate(self,index)
+
+	local dateTab = {self.mDate1,self.mDate2,self.mDate3,self.mDate4}
+	for k,v in pairs(dateTab) do 
+		if k == index then
+			v.Activity = true
+		else
+			v.Activity = false
+		end
+	end
+end
+
+return _M

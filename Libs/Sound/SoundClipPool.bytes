@@ -1,0 +1,150 @@
+
+local LoadAccessor = CS.Loader.LoadAccessor
+local LoadSession = CS.Loader.LoadSession
+local TimeDelay = CS.Utility.TimeDelay
+
+
+local _M = {}
+
+local clipPool = {}
+local loadingAudio = {}
+local delPool = {}
+
+local noDelClips = {}
+
+function _M.Pop(clipName, source, callBack)
+	if source ~= nil then
+		if clipPool[clipName] ~= nil then
+			source.clip = clipPool[clipName].clip
+			table.insert(clipPool[clipName].using, source)
+			if callBack ~= nil then 
+				callBack() 
+			end
+		elseif delPool[clipName] ~= nil then
+			local tmp = {clip = delPool[clipName].clip, using = {}}
+			delPool[clipName] = nil
+			clipPool[clipName] = tmp
+			source.clip = tmp.clip
+			table.insert(tmp.using, source)
+			if callBack ~= nil then 
+				callBack()
+			end
+		else
+			if loadingAudio[clipName] == nil then
+				loadingAudio[clipName] = {}
+				table.insert(loadingAudio[clipName], {source = source, callBack = callBack})
+
+				_M.doLoad(clipName)
+			else
+				table.insert(loadingAudio[clipName], {source = source, callBack = callBack})
+			end
+		end
+	end
+end
+
+function _M.doLoad(clipName)
+	LoadAccessor.LoadAsset(LoadSession.Pop(clipName, string.format("Audio/%s", clipName)), function(session, obj)
+		if obj == nil or session.Error ~= nil then
+			error(clipName, "Load Audio error!!", session.Error)
+			local cachedPool = loadingAudio[clipName]
+			loadingAudio[clipName] = nil
+			for k,v in pairs(cachedPool) do
+				if v.callBack ~= nil then
+					v.callBack()
+				end
+			end
+		else
+			local clip = obj --CS.UnityEngine.Object.Instantiate(obj)
+			clip.name = clipName
+			local tmp = {clip = clip, using = {}}
+			clipPool[clipName] = tmp
+			local cachedPool = loadingAudio[clipName]
+			loadingAudio[clipName] = nil
+
+			for k,v in pairs(cachedPool) do
+				if v.source ~= nil then
+					table.insert(tmp.using, v.source)
+					v.source.clip = clip
+				end
+				if v.callBack ~= nil then
+					v.callBack()
+				end
+			end
+		end
+		LoadSession.Push(session)					
+	end)
+end
+
+function _M.PrevLoadSound(clipName)
+	if clipPool[clipName] ~= nil or loadingAudio[clipName] ~= nil then
+		return
+	elseif delPool[clipName] ~= nil then
+		local tmp = {clip = delPool[clipName].clip, using = {}}
+		delPool[clipName] = nil
+		clipPool[clipName] = tmp
+	else 
+		loadingAudio[clipName] = {}
+		_M.doLoad(clipName)
+	end
+end
+
+function _M.SetNoDel(clipName)
+	noDelClips[clipName] = true
+end
+
+--
+function _M.Push(source)
+	if source ~= nil and source.clip ~= nil then
+		local clipName = source.clip.name
+		-- error("--Push-->", clipName)
+
+		source.clip = nil
+		local tmp = clipPool[clipName]
+		local newUsing = {}
+		if tmp.using ~= nil then			
+			for k,v in pairs(tmp.using) do
+				if v ~= source then
+					table.insert(newUsing, v)
+				end
+			end
+		end
+		if #newUsing > 0 or noDelClips[clipName] then
+			tmp.using = newUsing
+		else
+			delPool[clipName] = {name = clipName, clip = clipPool[clipName].clip, time = CS.UnityEngine.Time.time}
+			clipPool[clipName] = nil
+		end
+	end
+end
+
+
+local MAX_COUNT = 10
+function _M.CheckUnLoad()
+	TimeDelay.DelayCall(30, false, function ( ... )
+		_M.CheckUnLoad()
+
+		local tmp = {}
+		for k,v in pairs(delPool) do
+			table.insert(tmp, v)
+		end
+		local count = #tmp
+		if count > MAX_COUNT then			
+			table.sort(tmp, function(a, b)
+				return a.time < b.time
+			end)
+			for i = 1, count - MAX_COUNT  do
+				local delInfo = tmp[i]
+				if delInfo.clip ~= nil then
+					-- CS.UnityEngine.Object.DestroyImmediate(delInfo.clip)
+					delInfo.clip:UnloadAudioData()
+					CS.UnityEngine.Resources.UnloadAsset(delInfo.clip)
+				end
+				delPool[delInfo.name] = nil
+			end
+		end
+	end)
+end
+_M.CheckUnLoad()
+
+
+return _M

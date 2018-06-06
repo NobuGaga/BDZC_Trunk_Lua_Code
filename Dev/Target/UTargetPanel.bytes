@@ -1,0 +1,156 @@
+-- 目标系统主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local UTargetUpPanel = JRequire "Dev.Target.UTargetUpPanel"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MMain = JRequire "Dev.Main.MMain"
+local MTarget = JRequire "Dev.Target.MTarget"
+local CTarget = JRequire "Dev.Target.CTarget"
+local luaUtil = JRequire"Libs.LuaUtil"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+	if self.ChooseModule ~= nil then
+		self.ChooseModule:delete()
+		self.ChooseModule = nil
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Target_Main")
+	self.mModule = module
+
+	local closeBtn = module:Get("closeBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.pageNode = module:Get("ValueRect")
+	self.titleText = module:Get("TitleText")
+
+	local funcs = _P.GetFuncs(MMain.GetOpenedFuncs(self._SysId, true))
+	local count = #funcs
+	if count > 0 then
+		local defaultColor = Color(247/255, 211/255, 169/255, 1)
+		self.tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "fl_007", "fl_008", defaultColor)
+	
+		local isVipUp = false
+		local isTitleUp = false
+		local isPowerUp = false
+		for k,v in pairs(funcs) do
+			self.tabHandle:Add(v.id, module:Get("Welfare_Item".. k), module:Get("nameText_" .. k), v.name)
+
+			--注册小红点
+			self:RegistRedpoint(module:Get("redPoint_" .. k), v.id)
+
+			if v.id == Define.SysId.Target_CompanyUp then
+				local index = MTarget.TargetTypeEnum.CompanyUp
+				local upData = MTarget.TargetTable[index]
+				isTitleUp = MTarget.IsTheLastOne(index, upData.index)
+			elseif v.id == Define.SysId.Target_PowerUp then
+				local index = MTarget.TargetTypeEnum.PowerUp
+				local upData = MTarget.TargetTable[index]
+				isPowerUp = MTarget.IsTheLastOne(index, upData.index)
+			elseif v.id == Define.SysId.Target_VipUp then
+				local index = MTarget.TargetTypeEnum.VipUp
+				local upData = MTarget.TargetTable[index]
+				isVipUp = MTarget.IsTheLastOne(index, upData.index)
+			end
+		end
+
+		-- 排序，默认选中未完成的目标
+		if not isVipUp then
+			self.tabHandle:Choose(funcs[1].id)
+		elseif isVipUp and not isTitleUp then
+			self.tabHandle:Choose(funcs[2].id)
+		elseif isVipUp and isTitleUp and not isPowerUp then
+			self.tabHandle:Choose(funcs[3].id)
+		else
+			self.tabHandle:Choose(funcs[1].id)
+		end
+	end
+end
+
+
+function _P.GetFuncs(funcTable)
+	local sortTable = {}
+	for k,v in pairs(funcTable) do
+		if v.id ~= Define.SysId.Target then
+			sortTable[#sortTable + 1] = v
+		end
+	end
+
+	table.sort(sortTable,function(a,b)
+		return a.sort < b.sort
+	end)
+
+	return sortTable
+end
+
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseModule ~= nil then
+		self.ChooseModule:Destroy()
+		self.ChooseModule:delete()
+		self.ChooseModule = nil
+	end
+
+	if funcId == Define.SysId.Target_CompanyUp then
+		self.ChooseModule = UTargetUpPanel.new(self.pageNode, MTarget.TargetTypeEnum.CompanyUp)
+	elseif funcId == Define.SysId.Target_PowerUp then
+		self.ChooseModule = UTargetUpPanel.new(self.pageNode, MTarget.TargetTypeEnum.PowerUp)
+	elseif funcId == Define.SysId.Target_VipUp then
+		self.ChooseModule = UTargetUpPanel.new(self.pageNode, MTarget.TargetTypeEnum.VipUp)
+	end
+
+	self.titleText.Text = Csv.Func[funcId].name
+end
+
+
+-- 通过类型获取系统id
+function _P.GetSysIdBuyType(type)
+	if type == MTarget.TargetTypeEnum.CompanyUp then
+		return Define.SysId.Target_CompanyUp
+	elseif type == MTarget.TargetTypeEnum.PowerUp then
+		return Define.SysId.Target_PowerUp
+	elseif type == MTarget.TargetTypeEnum.VipUp then
+		return Define.SysId.Target_VipUp
+	end
+end
+
+
+-- 获取奖励回调
+function _R.OnUpdateData(self, data)
+	CCommon.ShowRight(Csv.Text("Target_vip_getSuccess"))
+	if self.ChooseModule ~= nil then
+		-- local systemId = _P.GetSysIdBuyType(data.type)
+		-- _P.OnChoose(self, systemId)
+		self:Destroy()
+	end
+end
+
+
+return _M

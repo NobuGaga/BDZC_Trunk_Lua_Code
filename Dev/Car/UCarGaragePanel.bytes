@@ -1,0 +1,427 @@
+-- 车库座驾分页
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
+local PointerRotateActs = {0, -53, -110, -178, -232}
+local BatchBreakData = Csv.Const(82)
+local BatchSelectBgImgs = {"zj_033", "zj_027", "zj_028", "zj_029", "zj_030", "zj_031"}
+
+local _M = Class()
+local _P = {}
+
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Car_Garage_Car", WindowType.UI, 0)
+	self.mModule = module
+	self.mImgSelect = module:Get("H")
+	
+	self.hasRect = module:Get("InfoRect")
+	self.noneRect = module:Get("NoneTips")
+	self.noneRect.Text = Csv.Text("car_garage_none")
+	self.BatchRect = module:Get("BatchRect")
+	self.BatchRect.Activity = false
+	self.CurSelectIndex = 1
+
+	module:Get("C_text_0").Text = Csv.Text("car_garage_fenjie")
+	self.decomposeBtn = module:Get("Decompose")
+	self.decomposeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickDecompse(self)
+	end, nil, 0.9)
+
+	module:Get("C_text").Text = Csv.Text("car_garage_chongzhu")
+	self.recastBtn = module:Get("Recast")
+	self.recastBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickRecast(self)
+	end, nil, 0.9)
+
+	_P.CreateListData(self)
+	if not self.SelectCarData then
+		_P.UpdateCarInfo(self)
+	end
+
+	_P.OnInitBatchData(self)
+end
+
+
+function _M:UpdateData()
+	self.SelectCarData = nil
+	_P.CreateListData(self)
+
+	if not self.SelectCarData then
+		_P.UpdateCarInfo(self)
+	end
+end
+
+
+function _M:IsShowOneKeyData(isShow)
+	self.IsBatch = isShow or false
+	self.BatchRect.Activity = isShow
+	self.hasRect.Activity = (not isShow) and self.SelectCarData
+	self.noneRect.Activity = (not isShow) and (not self.SelectCarData)
+
+	for i,v in ipairs(BatchBreakData) do
+		if isShow then
+			local isSelect = MCar.BatchBreakList[v + 1]
+			_P.UpdateSelectData(self, v, isSelect)
+		else
+			_P.UpdateSelectData(self, v, false)
+		end
+	end
+end
+
+
+function _P.CreateListData(self)
+	self.mImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+	self.mImgSelect.Activity = false
+	local contentTransform = self.mModule:Get("Content")
+	contentTransform:DestroyChildren()
+
+	local listData = _P.GetSortList(MCar.CarTable)
+	if listData == nil then return end
+
+	self.mAllCarItems = {}
+	self.mRawCarItems = {}
+	self.batchBreakIdList = {}
+	-- 分批创建列表（当列表数据比较多的时候）
+	local hasItemNum = #listData
+	local delayTime = (hasItemNum > 50 and 0.01) or 0
+
+	for i,v in ipairs(listData) do
+		local item = _P.OnCreateItem(self, contentTransform, v, i)
+		self.mAllCarItems[i] = item
+		self.mRawCarItems[v.id] = item
+	end
+	
+	local emptyNum = 0
+	if hasItemNum < 16 then
+		emptyNum = 16 - hasItemNum
+	else
+		if hasItemNum % 4 > 0 then
+			emptyNum = 4 - hasItemNum % 4
+		end
+	end
+
+	local MaxListNum = MCar.CarShopListMax
+	if hasItemNum + emptyNum > MaxListNum then
+		emptyNum = MaxListNum - hasItemNum
+	end
+
+	for i=1, emptyNum do
+		_P.OnCreateItem(self, contentTransform, nil)
+	end
+
+	local firstData = self.mAllCarItems[self.CurSelectIndex]
+	if firstData and firstData.data then
+		_P.OnSelectCarData(self, firstData.data, true, self.CurSelectIndex)
+	else
+		if self.CurSelectIndex ~= 1 then
+			self.CurSelectIndex = 1
+		end
+
+		local oneData = self.mAllCarItems[self.CurSelectIndex]
+		if oneData and oneData.data then
+			_P.OnSelectCarData(self, oneData.data, true, self.CurSelectIndex)
+		end
+	end
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, index)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_Garage_Car_Item", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("CarIcon")
+		local qualityImg = itemModule.SelfRect
+		local starImg = itemModule:Get("CarQualifications")
+		local levelText = itemModule:Get("CarLv1")
+		local starLevelText = itemModule:Get("CarLv2")
+		local cornerImg = itemModule:Get("Corner")
+		
+		iconImg.Activity = data
+		starImg.Activity = data
+		levelText.Activity = data
+		starLevelText.Activity = data
+		cornerImg.Activity = false
+		if data then
+			local carConf = Csv.Car[data.carid]
+			local itemConf = Csv.Item[data.carid]
+			local isExpCar = (carConf and carConf.isExpCar and carConf.isExpCar == 1)
+			iconImg.SpriteName = carConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+
+			local qualityNum = (data.color > 6 and 6) or data.color
+			starImg.SpriteName = QualityIconNameArr[qualityNum]
+			levelText.Text = 'Lv' .. data.level
+			starLevelText.Text = Csv.Text("car_main_jieji") .. data.star
+
+			if data.isequip then
+				cornerImg.SpriteName = 'xy_018'
+				cornerImg.Activity = true
+			elseif isExpCar then
+				cornerImg.SpriteName = 'xy_019'
+				cornerImg.Activity = true
+			end
+
+			item.qualityId = ((isExpCar and 0) or carConf.quality)
+			item.isequip = data.isequip
+			item.isUp =  MCar.CheckIsUp(data)
+			item.id = data.id
+			item.data = data
+		else
+			qualityImg.SpriteName = "ty_018"
+		end
+
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnSelectCarData(self, data, false, index)
+		end, nil, 0.9)
+		qualityImg.RaycastTarget = data
+	end
+
+	item.module = itemModule
+	return item
+end
+
+
+-- 选中车库数据
+function _P.OnSelectCarData(self, data, isUpdate, index)
+	if self.SelectCarData == data then return end
+	if self.IsBatch and (not isUpdate) and data then return end
+
+	self.SelectCarData = data
+	self.CurSelectIndex = index
+	_P.UpdateCarInfo(self, data)
+	local item = self.mRawCarItems[data.id]
+	if item ~= nil then
+		local module = item.module
+		if module ~= nil then
+			self.mImgSelect:SetParent(module.SelfRect.CachedTran)
+			self.mImgSelect.LocalPosition = Vector2(0,0)
+			self.mImgSelect.CachedTran:SetSiblingIndex(0)
+			self.mImgSelect.Activity = true
+		end
+	end
+end
+
+
+function _P.GetSortList(list)
+	local sortList = {}
+	for k,v in pairs(list) do
+		sortList[#sortList + 1] = v
+	end
+
+	table.sort(sortList, function (a, b)
+		if a.score == b.score then
+			return a.id < b.id
+		end
+
+		return a.score > b.score
+	end)
+
+	return sortList
+end
+
+
+-- 设置座驾具体信息（下方）
+function _P.UpdateCarInfo(self, data)
+	self.hasRect.Activity = data and (not self.IsBatch)
+	self.noneRect.Activity = not data and (not self.IsBatch)
+
+	if data then
+		local itemConf = Csv.Item[data.carid]
+		local carConf = Csv.Car[data.carid]
+		self.mModule:Get("Icon").SpriteName = carConf.body
+		self.mModule:Get("IconColor").SpriteName = itemConf.colorIcon
+		self.mModule:Get("GoodsDesc").Text = carConf.desc
+		_P.SetCarAttrData(self, data)
+		_P.SetCarGraphData(self, carConf, data)
+
+		self.decomposeBtn.Activity = (carConf and carConf.isBreak and carConf.isBreak == 1)
+		self.recastBtn.Activity = (carConf and carConf.isRecast and carConf.isRecast == 1)
+	end
+end
+
+
+-- 设置资质值
+function _P.SetCarAttrData(self, data)
+	local attrData = data.Attr
+	local totalAttr = MCar.GetTotalAttrs(attrData)
+	self.mModule:Get("WholeAttr").Text = Csv.Text("Target_company_zizhi")
+	self.mModule:Get("WholeZZNum").Text = totalAttr
+	self.mModule:Get("Score").Text = Csv.Text("car_main_pinfeng")
+	self.mModule:Get("ScoreNum").Text = data.score
+
+	local attrLightList = {}
+	attrLightList[1] = MCar.GetAttrLightNum(attrData.Wuli, 1, data.carid)
+	attrLightList[2] = MCar.GetAttrLightNum(attrData.Zhili, 2, data.carid)
+	attrLightList[3] = MCar.GetAttrLightNum(attrData.Zhengzhi, 3, data.carid)
+	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, data.carid)
+	
+	for i=1, 4 do
+		local lightNum = attrLightList[i]
+		local nameStr = "Attr" .. i .. "Value"
+		for j=1, MCar.CarSeatOpenMax do
+			local valueImg = self.mModule:Get(nameStr .. j)
+			if valueImg then
+				valueImg.Activity = j <= lightNum
+			end
+		end
+
+		self.mModule:Get("AttrText" .. i).Text = Csv.Text("car_main_attri" .. i)
+		
+		local numText = self.mModule:Get("AttrNum" .. i)
+		if i == 1 then
+			numText.Text = attrData.Wuli
+		elseif i == 2 then
+			numText.Text = attrData.Zhili
+		elseif i == 3 then
+			numText.Text = attrData.Zhengzhi
+		else
+			numText.Text = attrData.Meili
+		end
+	end
+end
+
+
+-- 设置座驾评分数据
+function _P.SetCarGraphData(self, carConf, carData)
+	self.mModule:Get("Name").Text = carConf.name .. ' ' .. carConf.model
+	self.mModule:Get("CarName").Text = carConf.name
+	self.mModule:Get("CarModel").Text = carConf.model
+	self.mModule:Get("CarLevel").Text = Csv.Text("car_main_level") .. carData.level
+	self.mModule:Get("Num").Text = carData.star
+
+	local qualityData = MCar.GetCarStarIcon(carData.star)
+	local qualityNum = (carData.color > 6 and 6) or carData.color
+	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[qualityNum]
+	self.mModule:Get("Circular").SpriteName = qualityData.name
+
+	for i=1, MCar.CarSeatOpenMax do
+		local arcRect = self.mModule:Get("Arc" .. i)
+		if arcRect then
+			arcRect.Activity = i <= qualityData.num
+		end
+	end
+
+	self.mModule:Get("PointerRect").LocalEulerAngles = Vector3(0, 0, PointerRotateActs[qualityData.index])
+end
+
+
+-- 点击分解
+function _P.OnClickDecompse(self)
+	if not self.SelectCarData then return end
+
+	local isUp = MCar.CheckIsUp(self.SelectCarData)
+	WindowMgr.Create("UCarDecomposePanel", isUp, self.SelectCarData)
+end
+
+
+-- 点击重铸
+function _P.OnClickRecast(self)
+	if not self.SelectCarData then return end
+
+	local isUp = MCar.CheckIsUp(self.SelectCarData)
+	if not isUp then
+		CCommon.ShowError(Csv.Text("err_car_noUp"))
+	else
+		WindowMgr.Create("UCarRecastPanel", self.SelectCarData)
+	end
+end
+
+
+-- 初始化一键分解界面数据
+function _P.OnInitBatchData(self)
+	local module = self.mModule
+	module:Get("TitleText").Text = Csv.Text("car_batch_breakSelect")
+	module:Get("BatchTip").Text = Csv.Text("car_batch_breakShow")
+	module:Get("BatchText").Text = Csv.Text("car_batch_break")
+
+	local batchBtn = module:Get("Batch")
+	batchBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if next(self.batchBreakIdList) == nil then
+			CCommon.ShowError(Csv.Text("car_batch_selectErr"))
+		else
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					local list = {}
+					for k,v in pairs(self.batchBreakIdList) do
+						list[#list + 1] = v
+					end
+					CCar.CarTotalBreakDownReq(list)
+				end
+			end, {content = Csv.Text("car_batch_checkBreak")})
+		end
+	end, nil, 0.9)
+
+	local count = 0
+	for i,v in ipairs(BatchBreakData) do
+		if i <= 6 then
+			local itemData = {index = v, isSelect = MCar.BatchBreakList[v + 1]}
+			_P.OnCreateSelectItem(self, itemData, i)
+			count = count + 1
+		end
+	end
+
+	for i = count + 1, 6 do
+		module:Get("Quality" .. i).Activity = false
+	end
+end
+
+
+-- 创建选择框
+function _P.OnCreateSelectItem(self, data, index)
+	local module = self.mModule
+	local qualityRect = module:Get("Quality" .. index)
+	module:Get("Car" .. index).Text = Csv.Text("car_batch_breakCar" .. data.index)
+
+	qualityRect.Activity = true
+	qualityRect.SpriteName = BatchSelectBgImgs[data.index + 1]
+
+	local lightImg = module:Get("Gou" .. index)
+	lightImg.Activity = data.isSelect
+
+	qualityRect:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		lightImg.Activity = not lightImg.Activity
+
+		if lightImg.Activity then
+			MCar.BatchBreakList[data.index + 1] = data.index
+		else
+			MCar.BatchBreakList[data.index + 1] = nil
+		end
+
+		_P.UpdateSelectData(self, data.index, lightImg.Activity)
+	end, nil, 1.2)
+end
+
+
+-- 更新座驾列表选中效果
+function _P.UpdateSelectData(self, qualityId, isSelect)
+	for i,v in ipairs(self.mAllCarItems) do
+		if v.qualityId == qualityId and (not v.isequip) and (not v.isUp) then
+			v.module:Get("Black").Activity = isSelect
+
+			self.batchBreakIdList[v.id] = ((isSelect and v.id) or nil)
+		end
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

@@ -1,0 +1,381 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local TALK_TWEEN_NAME = "T_Battle_Talk"
+local DEFAULT_BODY_NAME = "staff_choose"
+local attackActorId = 10038
+local T_FB_Staff_AttackGo = "T_FB_Staff_AttackGo"
+local T_FB_Staff_AttackBack = "T_FB_Staff_AttackBack"
+local T_FB_Boss_Dark = "T_FB_Boss_Dark"
+local T_FB_Boss_blood = "T_FB_Boss_blood"
+local T_FB_Boss_Hurt = "T_FB_Boss_Hurt"
+local T_FB_Boss_HurtBack = "T_FB_Boss_HurtBack"
+
+function _R.OnResult(self, data, onDoneCall)
+	self.PkRoot.Activity = false
+	local OnResultClose = function ()
+		if self.Moudle ~= nil then
+			if self.LastBattleID ~= MBattle.CurId then
+				self:Destroy()
+			else
+				_P.RefreshEnemy(self)
+				_P.AutoSelectStaff(self)
+				self.PkRoot.Activity = true
+				self:Unlock()
+			end
+		end
+		if onDoneCall ~= nil then
+			onDoneCall()
+		end
+	end
+	local DoShowResult = function()
+		if self.Moudle ~= nil then
+			if data.state == MBattle.ResultState.Fail or
+				data.state == MBattle.ResultState.Continue
+			then
+				WindowMgr.Create("UBattleFail", data.id, data.hurt, OnResultClose)
+			else
+				WindowMgr.Create("UBattleWin", data.id, data.money, OnResultClose)
+			end
+		elseif onDoneCall ~= nil then
+			onDoneCall()
+		end
+	end
+
+	local PlayFight = function()
+		--战斗效果播放
+		self:Lock()
+		if data.hurt <= 9 then
+			DoShowResult()
+		else
+			local battleCsv = Csv.Battle[self.LastBattleID]
+			self.BossTalkList = LuaUtil.Shuffle(battleCsv.talk)
+			local staffCsv = Csv.Personnel[self.ChoosedStaffId]
+			if staffCsv ~= nil then
+				self.StaffTalkList = LuaUtil.Shuffle(staffCsv.battleTalk)
+			else
+				self.StaffTalkList = {}
+			end	
+
+			local oneHurt = data.hurt
+			local startBlood = self.LastEnemyBlood
+
+			local t = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Battle_FightBoss")
+
+			local doHurt = function(isFire)
+				local info = self.Enemy
+				local lastBlood = startBlood
+				startBlood = math.max(0,startBlood - oneHurt)
+				local fill = startBlood / self.FullBlood
+				info.BloodBar:DOKill()
+				info.Blood:DOKill()
+				local ft = info.BloodBar:DOFillAmount(fill, 0.2)
+				if isFire then
+					ft:SetDelay(0.26)
+				end
+				local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
+					if info.Blood ~= nil then
+						local endValue = (value / self.FullBlood) * 100
+						local per = math.floor(endValue + 0.5)
+						if per == 0 and endValue > 0 then
+							per = 1
+						end
+						info.Blood.Text = Csv.Text("battle_bossBlood", {per = per}) 
+					end
+				end, function()
+					if info.Blood ~= nil then 
+						local endValue = fill * 100
+						local per = math.floor(endValue + 0.5)
+						if per == 0 and endValue > 0 then
+							per = 1
+						end
+						info.Blood.Text = Csv.Text("battle_bossBlood", {per = per}) 
+					end
+
+					CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
+				end)
+				t:SetTarget(info.Blood.CachedTran)
+			end
+
+			local ownFire = function ()
+				if t ~= nil then
+					t:Restore()
+					DoShowResult()
+				end
+			end
+
+			---------------员工 --> boss----------------------------------
+			local ownTalk = function()
+				if t ~= nil then
+					_P.OwnTalk(self,function()
+						t:Play(T_FB_Boss_blood)
+						t:Play(T_FB_Boss_Hurt)
+
+						SoundMgr.Play(10021)
+						local actorPanel = self.Moudle:Get("ActorLightPanel")
+						CCommon.CreateEffect(actorPanel, attackActorId)
+					end)
+				end
+			end
+
+			local enemyHurtBack = function()
+				if t ~= nil then
+					t:Play(T_FB_Boss_HurtBack)
+				end
+			end
+
+			local StaffAttackEnd = function()
+				doHurt()
+				t:Play(T_FB_Staff_AttackBack)
+			end
+
+			local staffRound = function()
+				if t ~= nil then
+					self.Moudle.SelfRect:AddOnTime(function()
+						ownFire()	
+					end,nil,0.5)	
+				end
+			end
+
+			t:SetWaitEventOnComplete(T_FB_Staff_AttackGo, ownTalk)
+			t:SetWaitEventOnComplete(T_FB_Boss_Hurt, enemyHurtBack)
+			t:SetWaitEventOnComplete(T_FB_Boss_HurtBack, StaffAttackEnd)
+			t:SetWaitEventOnComplete(T_FB_Staff_AttackBack, staffRound)
+
+			SoundMgr.Play(10020)
+			t:Play(T_FB_Staff_AttackGo)
+			t:Play(T_FB_Boss_Dark)
+		end		
+	end
+	
+	PlayFight()
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.RefreshEnemy(self)
+	local info = self.Enemy
+	local fill = MBattle.CurBlood / self.FullBlood
+	self.LastEnemyBlood = MBattle.CurBlood
+
+	info.BloodBar:DOKill()
+	info.Blood:DOKill()
+	
+	info.BloodBar.FillAmount = fill
+	local endValue = fill * 100
+	local per = math.floor(endValue + 0.5)
+	if per == 0 and endValue > 0 then
+		per = 1
+	end
+	info.Blood.Text = Csv.Text("battle_bossBlood", {per = per})
+end
+
+function _P.RefreshTalk(self)
+	local csv = Csv.Battle[self.LastBattleID]
+	if self.TalkTween ~= nil then
+		self.TalkTween:Restore()
+	else
+		self.Enemy.Talk.LocalScale = Vector3(0.1, 0.1, 1)
+		self.TalkTween = self.Enemy.Talk.CachedTran:GetJTweener(TALK_TWEEN_NAME)
+		self.TalkTween:SetOnComplete(function ( ... )
+			if self.Enemy.Talk ~= nil then
+				self.Enemy.Talk.Activity = false
+			end
+		end)
+	end
+	if csv.talk ~= nil and #csv.talk > 0 then
+		local index = math.random(1, #csv.talk)
+		self.Enemy.DiaText.Text = Csv.Talk[csv.talk[index]].str
+		self.Enemy.Talk.Activity = true
+		self.TalkTween:Play()
+	else
+		self.Enemy.Talk.Activity = false
+	end
+end
+
+function _P.OwnTalk(self, callBack)
+	--播放特效
+	if self.LastOwnTalkTween ~= nil then
+		self.LastOwnTalkTween:Restore()
+	end
+	local text = Csv.Talk[self.StaffTalkList[1]].str
+	table.remove(self.StaffTalkList, 1)
+	self.Own.TalkBG.Activity = true
+	self.Own.TalkText.Text = text
+	local t = self.Own.TalkBG.CachedTran:GetJTweener("T_CommerceBattle_OwnTalk")
+	self.LastOwnTalkTween = t
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.Own.TalkBG.Activity = false
+		end		
+	end)
+	t:Play()
+	self.Moudle:Get("BG_Img"):AddOnTime(function()
+		callBack()
+	end,nil,0.3)
+end
+
+function _P.ThatTalk(self, callBack)
+	--播放特效
+	if self.LastBossTalkTween ~= nil then
+		self.LastBossTalkTween:Restore()
+	end
+	local text = Csv.Talk[self.BossTalkList[1]].str
+	table.remove(self.BossTalkList, 1)
+	self.Enemy.TalkBG.Activity = true
+	self.Enemy.TalkText.Text = ""
+	local t = self.Enemy.TalkBG.CachedTran:GetJTweener("T_CommerceBattle_BossTalk")
+	self.LastBossTalkTween = t
+	local tween = t:GetTweenForType(42)
+	if tween ~= nil then
+		tween.ToText = text
+		tween.ScrambleChars = text
+	end
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.Enemy.TalkBG.Activity = false
+			callBack()
+		end		
+	end)
+	t:Play()
+end
+
+function _P.OnPressPK(self)
+	if self.ChoosedStaffId > 0 then
+		self.PkRoot.Activity = false
+		CBattle.BattleReq(self.LastBattleID, self.ChoosedStaffId)
+	else
+		CCommon.ShowError(Csv.Text("battle_bossNoStaff"))
+	end
+end
+
+function _P.OnChooseStaff(self, staffId)
+	self.ChoosedStaffId = staffId
+
+	if staffId > 0 then
+		local info = MStaff.GetStaffDataByID(staffId)
+		local staffCsv = Csv.Personnel[staffId]
+		self.Own.Body.SpriteName = staffCsv.asset
+		self.Own.Power.Text = tostring(info.power)
+	else
+		self.Own.Body.SpriteName = DEFAULT_BODY_NAME
+		self.Own.Power.Text = ""
+	end	
+end
+
+function _P.Sort(a, b)
+	if MBattle.LockedStaffs[a.id] then
+		if MBattle.LockedStaffs[b.id] then
+			return MStaff.SortForPower(a,b)
+		end
+		return false
+	else
+		if not MBattle.LockedStaffs[b.id] then
+			return MStaff.SortForPower(a,b)
+		end
+		return true
+	end
+end
+
+function _P.AutoSelectStaff(self)
+	local haveStaffs = {}
+	for _,v in pairs(MStaff.StaffTable) do
+		if not MBattle.LockedStaffs[v.id] then
+			table.insert(haveStaffs, v)
+		end		
+	end
+	if #haveStaffs > 0 then
+		table.sort(haveStaffs, _P.Sort)
+		_P.OnChooseStaff(self, haveStaffs[1].id)
+	else
+		_P.OnChooseStaff(self, 0)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self.LastBattleID = MBattle.CurId
+	self.LastEnemyBlood = MBattle.CurBlood
+	local csv = Csv.Battle[self.LastBattleID]
+	self.FullBlood = csv.gold
+	self.ChoosedStaffId = 0
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_PKBOSS")
+	self.Moudle = moudle
+	moudle:Get("Btn_back"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	moudle:Get("BG_Img").SpriteName = Csv.BattleIcon[csv.scene].str
+	moudle:Get("BossImg").SpriteName = Csv.BattleIcon[csv.icon].str
+	moudle:Get("tab").SpriteName = Csv.BattleIcon[csv.tableImg].str
+	moudle:Get("new_text").Text = Csv.Text("battle_begin")
+	self.Enemy = 
+	{
+		BloodBar = moudle:Get("bar"),
+		Blood = moudle:Get("text"),
+		Talk = moudle:Get("dialogueBg"),
+		DiaText = moudle:Get("dialogue"),
+		HurtFly = moudle:Get("HurtFly"),
+		TalkBG = moudle:Get("DHK1"),
+		TalkText = moudle:Get("text1")
+	}
+
+	moudle:Get("major").Text = Csv.Text("staff_power")
+	moudle:Get("chooseText").Text = Csv.Text("battle_choose")
+	moudle:Get("ChooseBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBattleStaffChoose", function (staffId)
+			if self.Moudle ~= nil then
+				_P.OnChooseStaff(self, staffId)
+			end
+		end)
+	end, nil, 0.9)
+
+	self.Own = 
+	{
+		Body = moudle:Get("OwnImg"),
+		Power = moudle:Get("majorText"),
+		TalkBG = moudle:Get("DHK12"),
+		TalkText = moudle:Get("text1_0")
+	}
+
+	self.PkRoot = moudle:Get("beginPK")
+	self.PkRoot:AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		_P.OnPressPK(self)
+	end, nil, 0.9)	
+
+	_P.RefreshEnemy(self)
+	_P.AutoSelectStaff(self)
+end
+
+return _M

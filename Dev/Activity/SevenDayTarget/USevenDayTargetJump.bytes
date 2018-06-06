@@ -1,0 +1,63 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_7Day_Jump"
+local btnClose = "btnClose"
+local ItemName = "M_7Day_Jump_Item"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(title, jumpData)
+	_P.InitMoudleTopInfo(self, title)
+	_P.InitJumpList(self, jumpData)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self, title)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		self:Destroy()
+	end, nil, 1.2)
+	self.moudle:Get("textTitle").Text = title
+	self.moudle:Get("textJumpTips").Text = Csv.Text("sevendaytarget_jump_tips")
+end
+
+--初始化跳转列表
+function _P.InitJumpList(self, jumpData)
+	if jumpData then
+		local content = self.moudle:Get("content")
+		for _, sysIdAndName in pairs(jumpData) do
+			if sysIdAndName[1] and sysIdAndName[2] then
+				local itemMoudle = JGuiManager.GetMoudle(content, ItemName)
+				itemMoudle:Get("textSysName").Text = sysIdAndName[2]
+				if sysIdAndName[3] then
+					itemMoudle:Get("textSysText").Text = sysIdAndName[3]
+				end
+				itemMoudle:Get("btnJump"):AddOnButton(function ()
+					WindowOpen.Open(sysIdAndName[1])
+				end)
+				itemMoudle:Get("textBtnJump").Text = Csv.Text("bag_itemTrack2")
+			end
+		end
+	end
+end
+
+return _M

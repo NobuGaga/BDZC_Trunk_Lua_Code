@@ -1,0 +1,106 @@
+-- 经济讲座城市界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CLectures = JRequire "Dev.Lectures.CLectures"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(cityId)
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_Enemy")
+	self.mModule = module
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local cityConf = Csv.LecturesBattle[cityId]
+	if cityConf == nil then return end
+
+	module:Get("Title").Text = Csv.Text("lectures_main_title", {num = cityId, name = cityConf.name})
+	module:Get("Img").SpriteName = cityConf.icon
+	module:Get("AptiText").Text = Csv.Text("lectures_main_xingzheng")
+	module:Get("AptiNum").Text = cityConf.power
+	module:Get("ExpText").Text = Csv.Text("lectures_main_exp")
+	module:Get("ExpNum").Text = cityConf.cityXp
+	module:Get("Get").Text = Csv.Text("lectures_main_pro")
+
+	_P.SetListData(self)
+
+	module:Get("C_text").Text = Csv.Text("lectures_main_go")
+	local goBtn = module:Get("C_Btn_b")
+	goBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+
+		local hasExpNum = MBag.GetItemNum(Define.AssetsType.Coin)
+		if hasExpNum <= 0 then
+			CCommon.ShowError(Csv.Text("lecture_city_battleErr"))
+		else
+			CLectures.OneLectureReq(cityId)
+		end
+	end, nil, 0.9)
+end
+
+
+function _P.SetListData(self)
+	local listData = MLectures.ShowRewTable
+	if listData == nil or next(listData) == nil then return end
+
+	local itemRoot = self.mModule:Get("Content")
+	for _,v in pairs(listData) do
+		local itemRect = CCommon.CreateItem(itemRoot, v.key, nil, {num = v.value})
+		itemRect.SelfRect.SizeDelta = Vector2(100, 100)
+
+		local iconImg = itemRect:Get("Icon")
+		iconImg.SizeDelta = Vector2(90, 90)
+		iconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickIcon(v.key)
+		end, nil, 1)
+
+		local itemLight = CCommon.CreateItemLight(iconImg, Define.SysId.Lecture, v.key)
+		if itemLight ~= nil then
+			itemLight.SelfRect.SizeDelta = Vector2(145, 145)
+		end
+	end
+
+	local hasListNum = #listData
+	if hasListNum < 6 then
+		for i = hasListNum + 1,6 do
+			local itemRect = CCommon.CreateItem(itemRoot, 1)
+			itemRect.SelfRect.SizeDelta = Vector2(100, 100)
+			itemRect:Get("Icon").Activity = false
+		end
+	end
+end
+
+
+-- 打开道具详情界面
+function _P.OnClickIcon(id)
+	if id then
+		WindowMgr.Create("UBagDetailPop", id)
+	end
+end
+
+
+function _R.OnBattleResult(self, data, onClose)
+	WindowMgr.Create("ULecturesBattlePanel", data, onClose)
+end
+
+
+return _M

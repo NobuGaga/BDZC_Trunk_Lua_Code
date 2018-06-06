@@ -1,0 +1,144 @@
+-- 一键演讲界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CLectures = JRequire "Dev.Lectures.CLectures"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local MBag = JRequire "Dev.Bag.MBag"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.SliderBtn ~= nil then
+		self.SliderBtn:delete()
+		self.SliderBtn = nil
+	end
+end
+
+
+function _M:OnCreate(autoList)
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_OneKey")
+	if autoList == nil or module == nil then return end
+	self.mModule = module
+	self.mList = autoList
+
+	local closeBtn = module:Get("BtnClose")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local useBtn = module:Get("BtnUse")
+	useBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+
+		_P.OnGoToOneKeyBattle(self)
+	end, nil, 1.2)
+
+	local assetNum = MBag.GetItemNum(Define.AssetsType.Coin)
+	module:Get("Desc").Text = Csv.Text("lecture_oneKey_exp", {num = LuaUtil.NumberFormat(assetNum)})
+	module:Get("Title").Text = Csv.Text("lecture_oneKey_title")
+	module:Get("Desc2").Text = Csv.Text("lecture_oneKey_show")
+	module:Get("Num").Text = Csv.Text("lecture_oneKey_battle")
+	module:Get("C_text").Text = Csv.Text("lecture_oneKey_btn")
+
+	self.mMaxLevelData = _P.GetTotalSpeechNum(self, autoList)
+	self.SliderBtn = SliderButton.new(1, self.mMaxLevelData.count, 1, function(value) _P.OnSliderValueChanged(self, value) end)
+	self.SliderBtn:CreateSliderBtn(module:Get("Slider"), module:Get("BtnAdd"), module:Get("BtnMinus"))
+	self.mValue = 1
+	_P.OnSliderValueChanged(self, 1)
+end
+
+
+function _P.OnSliderValueChanged(self, value)
+	self.mValue = value
+
+	local curCostNum = _P.GetCurCostExp(self)
+	local assetNum = MBag.GetItemNum(Define.AssetsType.Coin)
+	local maxNum = LuaUtil.NumberFormat(assetNum)
+	self.mModule:Get("NumText").Text = Csv.Text("bag_have", {num = value, max = self.mMaxLevelData.count})
+	self.mModule:Get("consume").Text = Csv.Text("lecture_oneKey_costShow", {curNum = LuaUtil.NumberFormat(curCostNum), maxNum = maxNum})
+end
+
+
+function _P.OnGoToOneKeyBattle(self)
+	if self.mValue then
+		CLectures.OneKeyLectureReq(MLectures.CurBattleId, self.mValue)
+	end
+end
+
+
+-- 获取当前经验能一键演讲关卡数
+function _P.GetTotalSpeechNum(self, listData)
+	local count = 0
+	local totalExpNum = 0
+	for k,v in pairs(listData) do
+		count = count + 1
+		totalExpNum = totalExpNum + v.value
+	end
+
+	return {count = count, totalExpNum = totalExpNum}
+end
+
+
+function _P.GetCurCostExp(self)
+	local listData = self.mList
+	local totalExpNum = 0
+	for i = 1, self.mValue do
+		local oneData = listData[i]
+		totalExpNum = totalExpNum + oneData.value
+	end
+
+	return totalExpNum
+end
+
+
+function _R.OnBattleResult(self, data, OnClose)
+	if data.state == MLectures.ResultState.Win then
+		WindowMgr.Create("ULecturesWinPanel", data, function( ... )
+			if OnClose ~= nil then
+				OnClose()
+			end
+			self:Destroy()
+		end)
+	else
+		WindowMgr.Create("ULecturesFailPanel", data.id, function( ... )
+			if OnClose ~= nil then
+				OnClose()
+			end
+			self:Destroy()
+		end)
+	end
+end
+
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+return _M

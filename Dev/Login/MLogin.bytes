@@ -1,0 +1,105 @@
+
+local JGuiManager = CS.JGui.JGuiManager
+
+local _M = {}
+
+_M.ELoginStatus = {
+	NotLogin = 1,
+	WaitLogin = 2,
+	Login = 3,
+	ConnectSrv = 4,
+}
+
+local ELoginStatus  = _M.ELoginStatus
+
+--状态:
+_M.Status = ELoginStatus.NotLogin
+--账号:
+_M.Account = ""
+--密码:
+_M.Password = ""
+
+--服务器列表
+_M.ServerList = {}
+--上次登陆选择的服务器
+_M.LastLoginServer = nil
+--选择服务器
+_M.SelectServer = nil
+
+-- 配置账号互通用
+local AccountExMap = 
+{
+	-- develop 为益玩 iOS 账号
+	["develop"] = "develop",		["DEVELOP"] = "develop",
+	["mayw"] = "MAYW",				["MAYW"] = "MAYW",
+	["mayw_1"] = "MAYW",			["MAYW_1"] = "MAYW",
+	["mayw_2"] = "MAYW",			["MAYW_2"] = "MAYW",
+	["mayw_3"] = "MAYW",			["MAYW_3"] = "MAYW",
+	["MIYW"] = "develop",			["miyw"] = "develop",
+}
+
+function _M.GetServerId()
+	if _M.SelectServer == nil then
+		return -1
+	end
+	return _M.SelectServer.id
+end
+
+function _M.GetAccount()
+	if _M.Account == nil or _M.Account == "" then
+		return "test1"
+	end
+	local account = _M.Account
+	local tmp = LuaUtil.Split(account, "&")
+	if tmp ~= nil and #tmp == 2 then
+		if AccountExMap[tmp[2]] ~= nil then
+			return (tmp[1]) .. "&" .. (AccountExMap[tmp[2]])
+		end
+		-- return tmp[1] .. "&" .. string.upper(tmp[2])
+	end
+	return account
+end
+
+--获取服务器状态名称
+function _M.SetSrvStatusName(status, lbText, redStatus)
+	status = tonumber(status)
+	local color = '0xb27114'
+	if status == 1 then
+		--火爆
+		color = '0xfe3c3c'
+	elseif status == 2 then
+		--推荐
+		color = '0x64f134'
+	elseif status == 3 then
+		--拥挤
+		color = '0xebed26'
+	elseif status == 4 then
+		--维护
+		color = '0x9e61e8'
+	end
+	lbText.Text = Csv.Text("login_srv_" .. status)
+	color = JGuiManager.HexToColor(color)
+	lbText.Color = color
+	if redStatus ~= nil then
+		redStatus.Color = color
+	end
+end
+
+function _M.IsNoPassBtn()
+	local list = Csv.Const(Define.Const.ShowPassBtnServers)
+	if list ~= nil and #list > 0 then
+		for k,v in pairs(list) do
+			if v == _M.GetServerId() then
+				return false
+			end
+		end
+		return true
+	end
+	return false
+end
+
+--清理函数, 由CLogin调用执行
+function _M.Clean( ... )
+end
+
+return _M

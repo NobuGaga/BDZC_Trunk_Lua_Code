@@ -1,0 +1,397 @@
+-- 座驾赠送、座驾更换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
+local PointerRotateActs = {0, -53, -110, -178, -232}
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(typeEnum, carIndex, playerData, carid)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Garage_Give")
+	self.mModule = module
+	self.typeEnum = typeEnum
+	self.carIndex = carIndex
+	self.playerData = playerData
+	self.lastCarData = MCar.GetCurCarData(carid)
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil, 1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("C_Text").Text = Csv.Text("car_garage_title")
+	module:Get("TabText1").Text = Csv.Text("car_main_title")
+
+	self.tipText = module:Get("Tips")
+	self.tipText.Text = Csv.Text("car_garage_tip")
+	self.btnText = module:Get("C_text")
+	self.hasRect = module:Get("InfoRect")
+	self.noneRect = module:Get("NoneTips")
+	self.noneRect.Text = Csv.Text("car_garage_none")
+	_P.CreateListData(self)
+
+	local clickBtn = module:Get("Btn")
+	clickBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickBtn(self, typeEnum)
+	end, nil, 0.9)
+	_P.SetAssignData(self, data, typeEnum)
+end
+
+
+function _P.CreateListData(self)
+	local contentTransform = self.mModule:Get("Content")
+	contentTransform:DestroyChildren()
+
+	local carList
+	if self.typeEnum == MCar.GarageTypeEnum.Give then
+		carList = _P.GetSortGiveList(MCar.GetGiveCarList())
+	else
+		carList = _P.GetSortList(MCar.GetChangeCarList())
+	end
+	if carList == nil then return end
+
+	for i,v in ipairs(carList) do
+		_P.OnCreateItem(self, contentTransform, v, typeEnum)
+	end
+
+	local hasItemNum = #carList
+	local emptyNum = 0
+	if hasItemNum < 30 then
+		emptyNum = 30 - hasItemNum
+	else
+		if hasItemNum % 5 > 0 then
+			emptyNum = 5 - hasItemNum % 5
+		end
+	end
+
+	local MaxListNum = MCar.CarShopListMax
+	if hasItemNum + emptyNum > MaxListNum then
+		emptyNum = MaxListNum - hasItemNum
+	end
+
+	for i=1, emptyNum do
+		_P.OnCreateItem(self, contentTransform, nil)
+	end
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_Garage_Car_Item", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("CarIcon")
+		local qualityImg = itemModule.SelfRect
+		local starImg = itemModule:Get("CarQualifications")
+		local levelText = itemModule:Get("CarLv1")
+		local starLevelText = itemModule:Get("CarLv2")
+		local stopImg = itemModule:Get("CarStop")
+		local cornerImg = itemModule:Get("Corner")
+		
+		iconImg.Activity = data
+		starImg.Activity = data
+		levelText.Activity = data
+		starLevelText.Activity = data
+		cornerImg.Activity = false
+		if data then
+			local carConf = Csv.Car[data.carid]
+			local itemConf = Csv.Item[data.carid]
+			local isExpCar = carConf and carConf.isExpCar and carConf.isExpCar == 1
+			iconImg.SpriteName = carConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+
+			local qualityNum = (data.color > 6 and 6) or data.color
+			starImg.SpriteName = QualityIconNameArr[qualityNum]
+			levelText.Text = 'Lv' .. data.level
+			starLevelText.Text = Csv.Text("car_main_jieji") .. data.star
+
+			if self.typeEnum == MCar.GarageTypeEnum.Give then -- 赠送
+				stopImg.Activity = not data.isCanGive
+			else
+				stopImg.Activity = isExpCar
+			end
+
+			if data.isequip then
+				cornerImg.SpriteName = 'xy_018'
+				cornerImg.Activity = true
+			elseif isExpCar then
+				cornerImg.SpriteName = 'xy_019'
+				cornerImg.Activity = true
+			end
+		else
+			qualityImg.SpriteName = "ty_018"
+		end
+
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnSelectCarData(self, data)
+		end, nil, 0.9)
+
+		qualityImg.RaycastTarget = data
+
+		if not self.SelectCarData then
+			if data then
+				_P.OnSelectCarData(self, data)
+			else
+				_P.UpdateCarInfo(self)
+			end
+		end
+	end
+end
+
+
+function _P.GetSortList(list)
+	local sortList = list
+	table.sort(sortList, function (a, b)
+		if a.score == b.score then
+			return a.id < b.id
+		end
+
+		return a.score > b.score
+	end)
+
+	return sortList
+end
+
+
+-- 赠送列表排序(可以赠送的座驾->品质->ID->不可赠送的座驾->品质->id)
+function _P.GetSortGiveList(list)
+	local sortList  = {}
+	for k,v in pairs(list) do
+		local oneItem = v
+		local carConf = Csv.Car[v.carid]
+		local isUp = MCar.CheckIsUp(v)
+		local isCanGive = ((not isUp) and carConf and carConf.isHandSel == 1)
+		oneItem.isCanGive = isCanGive
+		sortList[#sortList + 1] = oneItem
+	end
+
+	table.sort(sortList, function (a, b)
+		if not a.isCanGive then
+			if not b.isCanGive then
+				if a.color == b.color then
+					return a.id < b.id
+				end
+
+				return a.color > b.color
+			end
+			return false
+		else
+			if b.isCanGive then
+				if a.color == b.color then
+					return a.id < b.id
+				end
+
+				return a.color > b.color
+			end
+			return true
+		end
+	end)
+
+	return sortList
+end
+
+
+function _P.OnSelectCarData(self, data)
+	if self.SelectCarData == data then return end
+
+	self.SelectCarData = data
+	_P.UpdateCarInfo(self, data)
+end
+
+
+-- 设置座驾具体信息（下方）
+function _P.UpdateCarInfo(self, data)
+	self.hasRect.Activity = data
+	self.noneRect.Activity = not data
+
+	if data then
+		local itemConf = Csv.Item[data.carid]
+		local carConf = Csv.Car[data.carid]
+		self.mModule:Get("Icon").SpriteName = carConf.body
+		self.mModule:Get("IconColor").SpriteName = itemConf.colorIcon
+		self.mModule:Get("GoodsDesc").Text = carConf.desc
+		_P.SetCarAttrData(self, data)
+		_P.SetCarGraphData(self, carConf, data)
+	end
+end
+
+
+-- 设置资质值
+function _P.SetCarAttrData(self, data)
+	local attrData = data.Attr
+	local totalAttr = MCar.GetTotalAttrs(attrData)
+	self.mModule:Get("WholeAttr").Text = Csv.Text("Target_company_zizhi")
+	self.mModule:Get("WholeZZNum").Text = totalAttr
+	self.mModule:Get("Score").Text = Csv.Text("car_main_pinfeng")
+	self.mModule:Get("ScoreNum").Text = data.score
+
+	local attrLightList = {}
+	attrLightList[1] = MCar.GetAttrLightNum(attrData.Wuli, 1, data.carid)
+	attrLightList[2] = MCar.GetAttrLightNum(attrData.Zhili, 2, data.carid)
+	attrLightList[3] = MCar.GetAttrLightNum(attrData.Zhengzhi, 3, data.carid)
+	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, data.carid)
+	
+	for i=1, 4 do
+		local lightNum = attrLightList[i]
+		local nameStr = "Attr" .. i .. "Value"
+		for j=1, MCar.CarSeatOpenMax do
+			local valueImg = self.mModule:Get(nameStr .. j)
+			if valueImg then
+				valueImg.Activity = j <= lightNum
+			end
+		end
+
+		self.mModule:Get("AttrText" .. i).Text = Csv.Text("car_main_attri" .. i)
+		
+		local numText = self.mModule:Get("AttrNum" .. i)
+		if i == 1 then
+			numText.Text = attrData.Wuli
+		elseif i == 2 then
+			numText.Text = attrData.Zhili
+		elseif i == 3 then
+			numText.Text = attrData.Zhengzhi
+		else
+			numText.Text = attrData.Meili
+		end
+	end
+end
+
+
+-- 设置座驾评分数据
+function _P.SetCarGraphData(self, carConf, carData)
+	self.mModule:Get("Name").Text = carConf.name .. ' ' .. carConf.model
+	self.mModule:Get("CarName").Text = carConf.name
+	self.mModule:Get("CarModel").Text = carConf.model
+	self.mModule:Get("CarLevel").Text = Csv.Text("car_main_level") .. carData.level
+	self.mModule:Get("Num").Text = carData.star
+
+	local qualityData = MCar.GetCarStarIcon(carData.star)
+	local qualityNum = (carData.color > 6 and 6) or carData.color
+	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[qualityNum]
+
+	for i=1, MCar.CarSeatOpenMax do
+		local arcRect = self.mModule:Get("Arc" .. i)
+		if arcRect then
+			arcRect.Activity = i <= qualityData.num
+		end
+	end
+
+	self.mModule:Get("PointerRect").LocalEulerAngles = Vector3(0, 0, PointerRotateActs[qualityData.index])
+end
+
+
+-- 设置固有属性
+function _P.SetAssignData(self, data, typeEnum)
+	if typeEnum == MCar.GarageTypeEnum.Equiping then
+		self.tipText.Activity = false
+		self.btnText.Text = Csv.Text("car_garage_equip")
+	elseif typeEnum == MCar.GarageTypeEnum.Change then
+		self.tipText.Activity = false
+		self.btnText.Text = Csv.Text("car_main_change")
+	elseif typeEnum == MCar.GarageTypeEnum.Give then
+		self.tipText.Activity = true
+		self.btnText.Text = Csv.Text("car_garage_give")
+	end
+end
+
+
+-- 点击按钮
+function _P.OnClickBtn(self, typeEnum)
+	if typeEnum == MCar.GarageTypeEnum.Give then
+		if self.SelectCarData.isCanGive then
+			if self.SelectCarData.isequip then
+				CCommon.ShowError(Csv.Text("err_car_giveErr"))
+			else
+				-- 已经培养的不能赠送
+				local isUp = MCar.CheckIsUp(self.SelectCarData)
+				if isUp then
+					CCommon.ShowError(Csv.Text("err_car_upErr"))
+				else
+					local carConf = Csv.Car[self.SelectCarData.carid]
+					CCommon.CheckTips(function(isSure,rg)
+						if isSure then
+							-- 赠送
+							CCar.CarHandselReq(self.playerData.id, self.SelectCarData.id)
+						end
+					end, {content = Csv.Text("car_garage_giveShow", {name = carConf.name, playerName = self.playerData.name}), isNoCancel = false})
+				end
+			end
+		else
+			CCommon.ShowError(Csv.Text("err_car_give"))
+		end
+	elseif typeEnum == MCar.GarageTypeEnum.Equiping then
+		-- 装备
+		local carConf = Csv.Car[self.SelectCarData.carid]
+		if carConf and carConf.isExpCar and carConf.isExpCar == 1 then
+			CCommon.ShowError(Csv.Text("car_garage_isEquipErr"))
+		else
+			CCar.CarAddReq(self.carIndex, self.SelectCarData.id)
+			self:Destroy()
+		end
+	elseif typeEnum == MCar.GarageTypeEnum.Change then
+		-- 更换
+		local carConf = Csv.Car[self.SelectCarData.carid]
+		if carConf and carConf.isExpCar and carConf.isExpCar == 1 then
+			CCommon.ShowError(Csv.Text("car_garage_isEquipErr"))
+		else
+			if self.lastCarData.staffs then
+				CCommon.CheckTips(function(isSure,rg)
+					if isSure == true then
+						CCar.CarRepalceReq(self.carIndex, self.SelectCarData.id)
+						self:Destroy()
+					end
+				end, {content = Csv.Text("car_main_changeTip")})
+			else
+				CCar.CarRepalceReq(self.carIndex, self.SelectCarData.id)
+				self:Destroy()
+			end
+		end
+	end
+end
+
+
+-- 赠送座驾成功返回
+function _R.OnGiveCarBack(self, carid)
+	-- _P.CreateListData(self)
+
+	CCommon.ShowError(Csv.Text("success_car_give"))
+	self:Destroy()
+end
+
+
+return _M

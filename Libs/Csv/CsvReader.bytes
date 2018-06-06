@@ -1,0 +1,114 @@
+local tmpCsv = JRequire "Libs.Csv.CsvMaker"
+local CsvMaker = tmpCsv.CsvMaker
+local CsvMap = tmpCsv.CsvMap
+local CCsv = CS.CsvUnserialize
+
+local _M = {}
+local _P = { CsvData = {} }
+
+function _P.loaderCsv(loadName, lastName)
+    local CsvData = _P.CsvData
+    local data = {}
+    local metable = {
+        __index = function(t,k)
+            local field = rawget(t, k)
+            if field == nil then
+                local sid = rawget(t, "_tmp_str_id")
+                if sid ~= nil then
+                    t["_tmp_str_id"] = nil
+                    CCsv.GetLine(loadName, sid, t)
+
+                    field = rawget(t, k)
+                end
+            end
+            return field
+        end
+    }
+    CCsv.GetKeys(loadName, data, metable)
+
+    local makerMapName = lastName or loadName
+    if CsvMaker[makerMapName] ~= nil then
+        local result = {CsvMaker[makerMapName](data)}
+        for i = 1,#result do
+            local data = result[i]
+            CsvData[data[1]] = data[2]
+        end
+    else
+        CsvData[loadName] = data
+        if lastName ~= nil then
+            CsvData[lastName] = data
+        end
+    end    
+end
+
+function _P.Reader(csvname)
+	local CsvData = _P.CsvData
+	local data = CsvData[csvname]
+    if data ~= nil then
+        return data
+    else
+        local lastName = CsvMap[csvname] or csvname
+        local loadName = lastName
+        if GameSetting.IsiOSCommit then
+            local iosMapCsv = CsvData["iosCommitMap"]
+            if iosMapCsv == nil then
+                _P.loaderCsv("iosCommitMap")
+                iosMapCsv = CsvData["iosCommitMap"]
+            end
+            if iosMapCsv[loadName] ~= nil then
+                loadName = iosMapCsv[loadName].value
+                _P.loaderCsv(loadName, lastName)
+            else
+                _P.loaderCsv(loadName)
+            end
+        else
+            _P.loaderCsv(loadName)
+        end        
+        return CsvData[csvname]
+    end
+end
+
+function _M.Text(key,param)
+    local line = _P.Reader("Text")[key]
+    local str = key
+    if line ~= nil then
+        if line.str == nil  then
+            print(string.format("error text:%s",key))
+        else
+            str = line.str
+        end
+    end
+    return LuaUtil.Format(str, param)
+end
+
+function _M.Const(id)
+    local line = _P.Reader("Const")[id]
+    if line and line.value then
+        return line.value
+    end
+    error("Const id error:" ..id)
+    return nil
+end
+
+function _M.Reload(csvName)
+	_P.CsvData[csvName] = nil
+	CCsv.Clear(csvName)
+end
+function _M.ReloadAll()
+	_P.CsvData = {}
+	CCsv.Clear()
+end
+
+function _M.ModuleInit(isReload)
+
+end
+
+function _M.ModuleClean()
+
+end
+
+setmetatable(_M, {__index = function (tab, csvName)
+	return _P.Reader(csvName)
+end})
+
+return _M

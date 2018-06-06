@@ -1,0 +1,199 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+--@RefType [Dev.Quest.CQuest.bytes#_M]
+local CQuest = JRequire "Dev.Quest.CQuest"
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType  [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local GTE_EFFECT_ID = 5
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local _R = {}
+
+function _R.OnTaskUpdate(self)
+	local lastTask = self.TaskInfo
+	if lastTask.questid ~= MQuest.MainQuest.questid then
+		local effect
+		SoundMgr.PlaySystem(10004)
+		effect = CCommon.CreateEffect(self.ContentRoot, GTE_EFFECT_ID, self.BtnDone.LocalPosition, function( ... )
+			if effect ~= nil then
+				effect:Destroy()
+			end
+			if MQuest.MainTaskIsEnd() then
+				self:Destroy()
+			else
+				_P.doCreate(self)
+			end			
+		end)
+		self.BtnDone.Activity = false
+		local csv = Csv.MainQuest[lastTask.questid]
+		if csv ~= nil and csv.reward ~= nil then
+			for index,info in pairs(csv.reward) do
+				CCommon.ShowFlyItem(self.ContentRoot,info[1],info[2], (index - 1) * 0.6)
+			end
+		else
+			error("cont find funcId! questid: " .. lastTask.questid)
+		end
+	else
+		_P.doCreate(self)
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.doCreate(self)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		local mainTask = MQuest.MainQuest
+		self.TaskInfo = 
+		{
+			questid = mainTask.questid,
+			pro = mainTask.pro,
+			maxval = mainTask.maxval,
+		}
+		local csv = Csv.MainQuest[mainTask.questid]
+		if csv ~= nil then
+			self.Title.Text = csv.title
+			self.Desc.Text = csv.desc
+			self.Items:DestroyChildren()
+
+			if csv.reward ~= nil then
+				for _,info in pairs(csv.reward) do
+					local id = info[1]
+					CCommon.CreateItem(self.Items, id,function ( ... )
+						WindowMgr.Create("UBagDetailPop",id)
+					end,{num = info[2]},Define.SysId.Quest)
+				end
+			end
+
+			if mainTask.pro >= mainTask.maxval then
+				self.BtnDone.RaycastTarget = true
+
+				self.BtnPro.Activity = false
+				self.BtnDone.Activity = true
+				self.StatePro.Activity = false
+				self.StateDone.Activity = true
+			else
+				self.BtnPro.Activity = true
+				self.BtnDone.Activity = false
+				self.StatePro.Activity = true
+				self.StateDone.Activity = false
+
+				local proStr
+				local maxStr
+				if csv.proType == 1 then
+					--公司规模到达
+					local maxCsv = Csv.Company[mainTask.maxval]
+					if maxCsv ~= nil then
+						self.StatePro.Text = Csv.Text("quest_pro_1", {max = maxCsv.name})
+					else
+						self.StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
+					end					
+				else
+					self.StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
+				end						
+			end
+		else
+			error("cont find Quest Csv! questid: " .. mainTask.questid)
+		end
+	end	
+end
+
+function _P.OnPressDone(self)
+	self.BtnDone.RaycastTarget = false
+
+	CQuest.MainDoneReq()
+end
+
+function _P.OnPressGo(self)
+	local mainTask = self.TaskInfo
+
+	local csv = Csv.MainQuest[mainTask.questid]
+	if csv ~= nil and csv.funcId ~= nil then
+		if MMain.FuncIsOpen(csv.funcId) then
+			WindowOpen.Open(csv.funcId)
+			EventCenter.CallEventTrigger(Define.EventListenId.MainQuestOpen, csv.id)
+		else
+			local funcCsv = Csv.Func[csv.funcId]
+			if funcCsv ~= nil and funcCsv.conditionDesc ~= nil then
+				CCommon.ShowError(funcCsv.conditionDesc)
+			else
+				CCommon.ShowError(Csv.Text("common_funcClose"))
+			end
+		end		
+	else
+		error("cont find funcId! questid: " .. mainTask.questid)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M__Task")
+	self.Moudle = moudle
+	moudle:Get("BG1").RaycastTarget = true
+
+	moudle:Get("return"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.BtnPro = moudle:Get("BtnPro")
+	self.BtnDone = moudle:Get("BtnDone")
+	self.Title = moudle:Get("title")
+	self.Desc = moudle:Get("desc")
+	self.StateDone = moudle:Get("stateDone")
+	self.StatePro = moudle:Get("statePro")
+	self.Items = moudle:Get("Items")
+	self.ContentRoot = moudle:Get("content")
+
+	moudle:Get("text").Text = Csv.Text("quest_main")
+	moudle:Get("descTitle").Text = Csv.Text("quest_desc")
+	moudle:Get("stateTitle").Text = Csv.Text("quest_state")
+	moudle:Get("rewardTitle").Text = Csv.Text("quest_reward")
+	moudle:Get("C_text_0").Text = Csv.Text("quest_get")
+	moudle:Get("C_text").Text = Csv.Text("quest_go")
+	
+	self.StateDone.Text = Csv.Text("quest_done")
+
+	self.BtnPro:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnPressGo(self)
+	end, nil, 0.9)
+	self.BtnDone:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnPressDone(self)
+	end, nil, 0.9)
+
+	_P.doCreate(self)
+end
+
+return _M

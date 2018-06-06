@@ -1,0 +1,58 @@
+--商会名字输入界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CHANGE_NAME_ITEMID = Csv.Const(Define.Const.BagChangeNameID)
+
+--界面构建
+function _M:OnCreate(...)
+	self.InputName = nil
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main_Info_Name")
+	moudle:Get("C_backBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	moudle:Get("Title").Text = Csv.Text("Girl_baby_changeName")
+	local input = moudle:Get("input")
+	input.PlaceholderWidget.Text = Csv.Text("bag_rename")
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+	moudle:Get("C_Btn_b"):AddOnButton(function ()
+		SoundMgr.Play(10001)
+		self.InputName = LuaUtil.Trim(input.Text)
+		local nameNum = CS.Utility.Utils.UnicodeStringLength(self.InputName)
+		if self.InputName == "" then
+			CCommon.ShowError(Csv.Text("bag_nullname"))
+		elseif self.InputName == MPlayer.GetName() then
+			CCommon.ShowError(Csv.Text("bag_samename"))
+		elseif nameNum > 12 then
+			CCommon.ShowError(Csv.Text("login_err_name_len"))
+		else
+			CPlayer.Rename(CHANGE_NAME_ITEMID,self.InputName)
+			self:Destroy()
+		end
+	end)	
+	input.Text = MPlayer.GetName()
+end
+
+return _M

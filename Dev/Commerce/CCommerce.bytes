@@ -1,0 +1,757 @@
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	--Client -> Server	
+	--会长操作:
+	cCreate = 1,		--创建		PCommerce.CCreate
+	cUpdateInfo = 2,	--修改商会信息PCommerce.CUpdateInfo
+	cOperateApply = 3,	--同意加入商会PCommerce.COperateApply
+	cRefuseAll = 4,		--拒绝所有申请
+	cTransfer = 5,		--转让会长    PCommerce.PID
+	cDisband = 6,		--解散商会	  PCommerce.CDisband
+	cOut = 7,			--踢出成员	  PCommerce.PID
+	cAppoint = 8,		--职位任免    PCommerce.CAppoint
+	cLevelUp = 9,		--商会升级	
+	cAllowAutoJoin = 10,--自动加入状态变更 PCommerce.CAllowAutoJoin
+	cApplyList = 11,	--入会申请列表获取
+	cTransferList = 12,	--可以转让的会员列表
+
+	--会员操作		
+	cAutoJoin = 13,		--随机入会	
+	cApplyJoin = 14,	--申请加入    PCommerce.PID
+	cQuit = 15,			--退出商会
+	cQuery = 16,		--查询商会 	  PCommerce.PID	
+	cRank = 17,			--排行榜	   PCommerce.CRankReq
+	cBuild = 18,		--商会建设 	  PCommerce.PID
+	cExchange = 19, 	--兑换物品 	  PCommerce.PID
+	cMembers = 20,		--查看成员列表
+
+	--副本操作
+	cOpenBattle = 21,	--开启副本 	  PCommerce.COpenBattle
+	cBattle = 22,		--副本对战    PCommerce.CBattle
+	cUnlock = 23,		--使用出战令解锁员工 PCommerce.PID
+	cBattleInfo = 24,	--打开副本时初始化副本信息 
+	cBattleReport = 25,	--已经打过的查看副本的战报 PCommerce.PID
+	cBattleBattle = 26,	--没有打完的点击挑战按钮 PCommerce.PID
+	
+	--刷新操作
+	cOpen = 27,			--进入商会界面(接受商会内动态的广播)
+	cClose = 28,		--退出商会界面
+
+
+	--Server -> Client
+	--初始化 --> 只发商会id(用来标识有没有商会)
+	sInit = 1,			--PCommerce.SInit
+	--创建成功 --> 创建成功返回商会id
+	sCreate = 2,		--PCommerce.PID
+	--加入商会 --> 返回商会id
+	sJoin = 3,			--PCommerce.PID
+	--被踢出商会 --> 通知被踢出的人
+	sOut = 4,
+	--打开了商会界面
+	sOpen = 5,			--PCommerce.SInfo
+ --在商会界面中的刷新
+	sUpdate = 6,		--PCommerce.SInfo
+	--查看商会信息
+	sQuery = 7,			--PCommerce.SQuery
+	--入会申请列表获取
+	sApplyList = 8,		--PCommerce.SPlayerList
+	--可以转让的会员列表
+	sTransferList = 9,	--PCommerce.SPlayerList
+	--查看成员列表
+	sMembers = 10,		--PCommerce.SPlayerList
+	--排行榜获取
+	sRank = 11,			--PCommerce.SRank
+	--兑换成功反馈
+	sExchange = 12,		--PCommerce.SExchange
+	--获取副本信息(点击副本按钮时返回)
+	sBattleList = 13,	--PCommerce.SBattleList
+	--已打完的副本查看战报
+	sBattleReport = 14,	--PCommerce.SBattleReport
+	--没有打完的副本进入对战界面
+	sBattleBattle = 15,	--PCommerce.SBattleBattle
+	--员工解锁成功
+	sUnlock = 16,		--PCommerce.PID
+	--战斗回包
+	sBattleResult = 17,	--PCommerce.SBattleResult
+	--开启副本反馈
+	sOpenBattle = 18,	--PCommerce.SBattleBattle
+	--申请加入商会成功
+	sApplyJoin = 19,	--PCOmmerce.PID
+	--转让会长成功
+	sTransfer = 20,	--PCOmmerce.STransfer
+	--关闭副本
+	sCloseBattle = 21, 
+}
+
+function _M.ModuleClean()
+	MCommerce.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		--会长操作:
+		[CMD_ID.cCreate] = "PCommerce.CCreate",
+		[CMD_ID.cUpdateInfo] = "PCommerce.CUpdateInfo",
+		[CMD_ID.cOperateApply] = "PCommerce.COperateApply",
+		[CMD_ID.cRefuseAll] = "",
+		[CMD_ID.cTransfer] = "PCommerce.PID",
+		[CMD_ID.cDisband] = "PCommerce.CDisband",
+		[CMD_ID.cOut] = "PCommerce.PID",
+		[CMD_ID.cAppoint] = "PCommerce.CAppoint",
+		[CMD_ID.cLevelUp] = "",
+		[CMD_ID.cAllowAutoJoin] = "PCommerce.CAllowAutoJoin",
+		[CMD_ID.cApplyList] = "",
+		[CMD_ID.cTransferList] = "",
+
+		--会员操作		
+		[CMD_ID.cAutoJoin] = "",
+		[CMD_ID.cApplyJoin] = "PCommerce.PID",
+		[CMD_ID.cQuit] = "",
+		[CMD_ID.cQuery] = "PCommerce.PID",
+		[CMD_ID.cRank] = "PCommerce.CRankReq",
+		[CMD_ID.cBuild] = "PCommerce.PID",
+		[CMD_ID.cExchange] = "PCommerce.PID",
+		[CMD_ID.cMembers] = "",
+
+		--副本操作
+		[CMD_ID.cOpenBattle] = "PCommerce.COpenBattle",
+		[CMD_ID.cBattle] = "PCommerce.CBattle",
+		[CMD_ID.cUnlock] = "PCommerce.PID",
+		[CMD_ID.cBattleInfo] = "",
+		[CMD_ID.cBattleReport] = "PCommerce.PID",
+		[CMD_ID.cBattleBattle] = "PCommerce.PID",
+	
+		--界面监听
+		[CMD_ID.cOpen] = "",
+		[CMD_ID.cClose] = "",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sInit] = {		proto = "PCommerce.SInit",		handle = _P.OnInit},
+		[CMD_ID.sCreate] = {	proto = "PCommerce.PID",		handle = _P.OnCreate},
+		[CMD_ID.sJoin] = {		proto = "PCommerce.PID",		handle = _P.OnJoin},
+		[CMD_ID.sOut] = {		proto = "PCommerce.SOut",			handle = _P.OnOut},
+		[CMD_ID.sOpen] = {		proto = "PCommerce.SInfo",		handle = _P.OnOpen},
+		[CMD_ID.sUpdate] = {	proto = "PCommerce.SInfo",		handle = _P.OnUpdate},
+		[CMD_ID.sQuery] = {		proto = "PCommerce.SQuery",		handle = _P.OnQuery},
+		[CMD_ID.sApplyList] = {	proto = "PCommerce.SPlayerList",handle = _P.OnApplyList},
+		[CMD_ID.sTransferList]={proto = "PCommerce.SPlayerList",handle = _P.OnTransferList},
+		[CMD_ID.sMembers] = {	proto = "PCommerce.SPlayerList",handle = _P.OnMembers},
+		[CMD_ID.sRank] = {		proto = "PCommerce.SRank",		handle = _P.OnRank},
+		[CMD_ID.sExchange] = {	proto = "PCommerce.SExchange",	handle = _P.OnExchange},
+		[CMD_ID.sBattleList] = {proto = "PCommerce.SBattleList",	handle = _P.OnBattleList},
+		[CMD_ID.sBattleReport]={proto = "PCommerce.SBattleReport",	handle = _P.OnBattleReport},
+		[CMD_ID.sBattleBattle]={proto = "PCommerce.SBattleBattle",	handle = _P.OnBattleBattle},
+		[CMD_ID.sUnlock] = {	proto = "PCommerce.SUnlock",		handle = _P.OnUnlock},
+		[CMD_ID.sBattleResult]={proto = "PCommerce.SBattleResult",	handle = _P.OnBattleResult},
+		[CMD_ID.sOpenBattle] =  {proto = "PCommerce.SBattleBattle",	handle = _P.OnOpenBattle},
+		[CMD_ID.sApplyJoin] =  {proto = "PCommerce.PID",	handle = _P.OnApplySuccess},
+		[CMD_ID.sTransfer] =  {proto = "PCommerce.STransfer",	handle = _P.OnTransferSuccess},
+		[CMD_ID.sCloseBattle] =  {handle = _P.OnBattleClosePush},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Commerce, func_send, func_recv, isReload)	
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+--进入商会界面
+function _M.EnterCommerce()
+	if MCommerce.IsJoinCommerce() then
+		WindowMgr.Create("UCommerce")
+	else
+		WindowMgr.Create("UCommerceNoJoin")
+	end
+end
+
+---------------------Client -> Server----------------------
+--会长操作
+
+	--创建商会
+	function _M.CreateReq(name, password, isAuto, weixin, qq, declaration)
+		_M.Send(CMD_ID.cCreate, {
+			name = name,
+			password = password, 
+			isAuto = isAuto, 
+			weixin = weixin, 
+			qq = qq, 
+			declaration = declaration
+		})
+	end
+	--更新商会信息
+	function _M.UpdateReq(name, weixin, qq, declaration, notice)
+		_M.Send(CMD_ID.cUpdateInfo, {
+			name = name,
+			weixin = weixin, 
+			qq = qq, 
+			declaration = declaration,
+			notice = notice
+		})
+	end
+	--玩家加入处理
+	function _M.OperateApplyReq(playerId, isAuto)
+		_M.Send(CMD_ID.cOperateApply, {playerId = playerId, isAllow = isAuto})
+	end
+	--拒绝所有申请
+	function _M.RefuseAllReq()
+		_M.Send(CMD_ID.cRefuseAll)
+	end
+	--商会转让
+	function _M.TransferReq(playerId)
+		_M.Send(CMD_ID.cTransfer, {id = playerId})
+	end
+	--解散商会
+	function _M.DisbandReq(password)
+		_M.Send(CMD_ID.cDisband, {password = password})
+	end
+	--踢出会员
+	function _M.OutMemberReq(playerId)
+		_M.Send(CMD_ID.cOut, {id = playerId})
+	end
+	--职位任免
+	function _M.AppointReq(playerId, job)
+		_M.Send(CMD_ID.cAppoint, {id = playerId, job = job})
+	end
+	--商会升级
+	function _M.LevelUpReq()
+		_M.Send(CMD_ID.cLevelUp)
+	end
+	--自动加入状态变更
+	function _M.AllowAutoJoinReq(isAuto)
+		_M.Send(CMD_ID.cAllowAutoJoin, {isAuto = isAuto})
+	end
+	--入会申请列表获取
+	function _M.ApplyListReq()
+		_M.Send(CMD_ID.cApplyList)
+	end
+	--可以转让的会员列表
+	function _M.TransferListReq()
+		_M.Send(CMD_ID.cTransferList)
+	end
+
+
+--会员操作
+
+	--随机入会
+	function _M.AutoJoinReq()
+		_M.Send(CMD_ID.cAutoJoin)
+	end
+	--申请入会
+	function _M.ApplyJoinReq(id)
+		_M.Send(CMD_ID.cApplyJoin, {id = id})
+	end
+	--退出商会
+	function _M.QuitReq()
+		_M.Send(CMD_ID.cQuit)
+	end
+	--查询商会信息
+	function _M.QueryReq(id)
+		_M.Send(CMD_ID.cQuery, {id = id})
+	end
+	--查看排行
+	function _M.RankReq()
+		_M.Send(CMD_ID.cRank, {lastTime = MCommerce.LastPowerRankTime})
+	end
+	--商会建设
+	function _M.BuildReq(id)
+		_M.Send(CMD_ID.cBuild, {id = id})
+	end
+	--兑换物品
+	function _M.ExchangeReq(id)
+		_M.Send(CMD_ID.cExchange, {id = id})
+	end
+	--查看成员列表
+	function _M.MembersReq()
+		_M.Send(CMD_ID.cMembers)
+	end
+
+--副本操作
+
+	--开启副本
+	function _M.OpenBattleReq(battleId, openType)
+		_M.Send(CMD_ID.cOpenBattle, {battleId = battleId, openType = openType})
+	end
+	--副本对战
+	function _M.BattleReq(id, staffId)
+		_M.Send(CMD_ID.cBattle, {id = id, staffId = staffId})
+	end
+	--员工解锁
+	function _M.UnlockStaffReq(staffId)
+		_M.Send(CMD_ID.cUnlock, {id = staffId})
+	end
+	--打开副本时初始化副本信息
+	function _M.BattleInfoReq()
+		_M.Send(CMD_ID.cBattleInfo)
+	end
+	--已经打过的查看副本的战报
+	function _M.BattleReportReq(battleId)
+		_M.Send(CMD_ID.cBattleReport, {id = battleId})
+	end
+	--没有打完的点击挑战按钮
+	function _M.BattleBattleReq(battleId)
+		_M.Send(CMD_ID.cBattleBattle, {id = battleId})
+	end
+
+--广播停靠记录
+
+	--进入商会界面
+	function _M.OpenReq()
+		_M.Send(CMD_ID.cOpen)
+	end
+	--离开商会界面
+	function _M.CloseReq()
+		_M.Send(CMD_ID.cClose)
+	end
+
+---------------------Server -> Client----------------------
+
+--初始化
+function _P.OnInit(data)
+	MCommerce.MyCommerceId = data.id
+	MCommerce.NextJoinTime = data.joinTime
+	MCommerce.CommerceName = data.name
+end
+--创建成功
+function _P.OnCreate(data)
+	MCommerce.MyCommerceId = data.id
+
+	if MCommerce.MyCommerceId > 0 then
+		if WindowMgr.IsCreated("UCommerceNoJoin") then
+			_M.EnterCommerce()
+			WindowMgr.Call("UCommerce", "WaitCreateSuccess")
+		end
+	end
+end
+--加入商会成功
+function _P.OnJoin(data)
+	MCommerce.MyCommerceId = data.id
+
+	if MCommerce.MyCommerceId > 0 then
+		if WindowMgr.IsCreated("UCommerceNoJoin") then
+			_M.EnterCommerce()
+		end
+	end
+end
+--退出商会
+function _P.OnOut(data)
+	MCommerce.MyCommerceId = 0
+	MCommerce.NextJoinTime = data.joinTime
+	MCommerce.CommerceName = nil
+
+	if data.outType == 1 then
+		--被人踢出商会
+		CCommon.ShowError(Csv.Text("commerce_out1",{
+			leaderName = data.leaderName, 
+			leaderJob = MCommerce.GetJobStr(data.leaderJob),
+			coName = data.coName
+			}))
+	elseif data.outType == 2 then
+		--自己退出商会
+		CCommon.ShowError(Csv.Text("commerce_out2",{ coName = data.coName }))
+	elseif data.outType == 3 then
+		--商会被解散
+		CCommon.ShowError(Csv.Text("commerce_out4",{
+			leaderName = data.leaderName, 
+			leaderJob = MCommerce.GetJobStr(data.leaderJob),
+			coName = data.coName
+			}))
+	elseif data.outType == 4 then
+		--自己解散了商会
+		CCommon.ShowError(Csv.Text("commerce_out3",{ coName = data.coName }))
+	else
+		CCommon.ShowError(Csv.Text("commerce_out2",{ coName = data.coName }))
+	end
+
+	if WindowMgr.IsCreated("UCommerce") then
+		_M.EnterCommerce()
+	end
+end
+--打开界面
+function _P.OnOpen(data)
+	MCommerce.MyCommerceInfo = 
+	{
+		--商会编号
+		id = data.id,	
+		--商会名
+		name = data.name,	
+		--商会等级
+		level = data.level,	
+		--商会经验
+		exp = data.exp,	
+		--商会财富
+		money = data.money,	
+		--对内公告
+		notice = data.notice,	
+		--成员数
+		memberNum = data.memberNum,	
+		--副本是不是可以打(用于副本小红点 1可打, 0不可以打)
+		canFight = data.canFight,
+		--管理界面是不是有操作true有申请(用于管理按钮的小红点)
+		haveApply = data.haveApply,
+		--势力
+		power = data.power,	
+		--QQ
+		qq = data.qq,	
+		--微信
+		weixin = data.weixin,
+		--对外宣言
+		declaration = data.declaration,	
+		--会长名
+		leader = data.leader,	
+		--排名
+		rank = data.rank,
+		--是不是可以自动加入
+		allowAuto = data.allowAuto,
+		--今天动态列表
+		dynamics = {},
+		--商会总建设次数
+		buildTimes = data.buildTimes,
+		--是否开启商会学习
+		isOpenStudy = data.isOpenStudy
+	}
+	if MCommerce.MyCommerceInfo.notice == nil or MCommerce.MyCommerceInfo.notice == "" then
+		MCommerce.MyCommerceInfo.notice = Csv.Text("commerce_create15")
+	end
+	if MCommerce.MyCommerceInfo.declaration == nil or MCommerce.MyCommerceInfo.declaration == "" then
+		MCommerce.MyCommerceInfo.declaration = Csv.Text("commerce_create16")
+	end
+
+	--我的信息
+	local myInfo = data.myInfo
+	local tmpMyInfo = {
+		--我的职位(0普通会员, 1会长, 2副会长, 3精英)
+		job = myInfo.job,
+		--我的建设ID(0没有建设)
+		build = myInfo.build,
+		--我的贡献(当前贡献和历史总贡献)
+		contribution = {
+			ncur = myInfo.contribution.ncur,
+			nmax = myInfo.contribution.nmax,
+		},
+		--我已经兑换的物品次数列表, 兑换表id对应可以兑换的次数
+		exchangeList = {},
+		--我锁定的员工列表
+		lockedStaffs = {},
+		--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
+		staffLifeNum = {}
+	}
+	if myInfo.exchangeList ~= nil then
+		for _,v in pairs(myInfo.exchangeList) do
+			tmpMyInfo.exchangeList[v.key] = v.value
+		end
+	end
+	if myInfo.lockedStaffs ~= nil then
+		for _,v in pairs(myInfo.lockedStaffs) do
+			tmpMyInfo.lockedStaffs[v] = true
+		end
+	end
+	if myInfo.staffLifeNum ~= nil then
+		for _,v in pairs(myInfo.staffLifeNum) do
+			tmpMyInfo.staffLifeNum[v.id] = v.count
+		end
+	end
+	MCommerce.MyCommerceInfo.myInfo = tmpMyInfo
+	if data.dynamics ~= nil then
+		for _,v in pairs(data.dynamics) do
+			table.insert(MCommerce.MyCommerceInfo.dynamics, {
+				type = v.type,
+				name = v.name,
+				time = v.time,
+				param1 = v.param1,
+				param2 = v.param2,
+				param3 = v.param3
+			})
+		end
+		table.sort(MCommerce.MyCommerceInfo.dynamics, function (a, b)
+			return a.time < b.time
+		end)
+	end
+
+	MCommerce.CommerceName = data.name
+
+	WindowMgr.Call("UCommerce","OnOpen")
+
+	if WindowMgr.IsCreated("UCommerceExchange") then
+		WindowMgr.Call("UCommerceExchange","RefreshItems")
+	end
+end
+--界面刷新
+function _P.OnUpdate(data)
+	local cachedInfo = MCommerce.MyCommerceInfo
+	if data.name ~= nil then
+		cachedInfo.name = data.name
+
+		WindowMgr.Call("UCommerce","OnUpdateName")
+	end
+	local isNeedUpdateExp = false
+	if data.level ~= nil then
+		cachedInfo.level = data.level
+		isNeedUpdateExp = true
+	end
+	if data.exp ~= nil then
+		cachedInfo.exp = data.exp
+		isNeedUpdateExp = true
+	end
+	if data.money ~= nil then
+		cachedInfo.money = data.money
+
+		WindowMgr.Call("UCommerce","OnUpdateMoney")
+	end
+	if data.notice ~= nil then
+		cachedInfo.notice = data.notice
+		if cachedInfo.notice == "" then
+			cachedInfo.notice = Csv.Text("commerce_create15")
+		end
+		WindowMgr.Call("UCommerce","OnUpdateNotice")
+	end
+	if data.memberNum ~= nil then
+		cachedInfo.memberNum = data.memberNum
+		isNeedUpdateExp = true
+	end
+	if data.canFight ~= nil then
+		cachedInfo.canFight = data.canFight
+
+		WindowMgr.Call("UCommerce","OnUpdatemeCanFight")
+	end
+	if data.haveApply ~= nil then
+		cachedInfo.haveApply = data.haveApply
+		WindowMgr.Call("UCommerce","OnUpdateHaveApply")
+	end
+	if data.power ~= nil then
+		cachedInfo.power = data.power
+	end
+	if data.qq ~= nil then
+		cachedInfo.qq = data.qq
+	end
+	if data.weixin ~= nil then
+		cachedInfo.weixin = data.weixin
+	end
+	if data.declaration ~= nil then
+		cachedInfo.declaration = data.declaration
+		if cachedInfo.declaration == "" then
+			cachedInfo.declaration = Csv.Text("commerce_create16")
+		end
+	end
+	if data.leader ~= nil then
+		cachedInfo.leader = data.leader
+	end
+	if data.rank ~= nil then
+		cachedInfo.rank = data.rank
+	end
+	if data.allowAuto ~= nil then
+		cachedInfo.allowAuto = data.allowAuto
+		WindowMgr.Call("UCommerceOperateApply","OnUpdateAllowAuto")
+	end
+	if isNeedUpdateExp then
+		WindowMgr.Call("UCommerce","OnUpdateExp")
+	end
+	if data.myInfo ~= nil then
+		local myInfo = data.myInfo
+		local tmpMyInfo = {
+			--我的职位(0普通会员, 1会长, 2副会长, 3精英)
+			job = myInfo.job,
+			--我的建设ID(0没有建设)
+			build = myInfo.build,
+			--我的贡献(当前贡献和历史总贡献)
+			contribution = {
+				ncur = myInfo.contribution.ncur,
+				nmax = myInfo.contribution.nmax,
+			},
+			--我已经兑换的物品次数列表, 兑换表id对应可以兑换的次数
+			exchangeList = {},
+			--我锁定的员工列表
+			lockedStaffs = {},
+			--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
+			staffLifeNum = {}
+		}
+		cachedInfo.myInfo = tmpMyInfo
+		if myInfo.exchangeList ~= nil then
+			for _,v in pairs(myInfo.exchangeList) do
+				tmpMyInfo.exchangeList[v.key] = v.value
+			end
+		end
+		if myInfo.lockedStaffs ~= nil then
+			for _,v in pairs(myInfo.lockedStaffs) do
+				tmpMyInfo.lockedStaffs[v] = true
+			end
+		end
+		if myInfo.staffLifeNum ~= nil then
+			for _,v in pairs(myInfo.staffLifeNum) do
+				tmpMyInfo.staffLifeNum[v.id] = v.count
+			end
+		end
+
+		WindowMgr.Call("UCommerce","OnUpdatemeMyInfo")
+		WindowMgr.Call("UCommerceBuild","OnUpdatemeMyInfo")
+		WindowMgr.Call("UCommerceExchange","OnUpdateMyInfo")
+	end
+	if data.dynamics ~= nil then
+		for _,v in pairs(data.dynamics) do
+			table.insert(cachedInfo.dynamics, {
+				type = v.type,
+				name = v.name,
+				time = v.time,
+				param1 = v.param1,
+				param2 = v.param2,
+				param3 = v.param3
+			})
+		end
+		table.sort(cachedInfo.dynamics, function (a, b)
+			return a.time < b.time
+		end)
+		WindowMgr.Call("UCommerce","OnUpdatemeDynamics")
+	end
+	if data.isOpenStudy ~= nil then
+		cachedInfo.isOpenStudy = data.isOpenStudy
+		WindowMgr.Call("UCommerce","OnUpdatemeMyInfo")
+	end
+end
+--查询信息
+function _P.OnQuery(data)
+	if WindowMgr.IsCreated("UCommerce") or
+		WindowMgr.IsCreated("UCommerceNoJoin")
+	 then
+		WindowMgr.Create("UCommerceDetail", data)
+	end
+end
+
+--会长管理
+	--入会申请列表
+	function _P.OnApplyList(data)
+		WindowMgr.Call("UCommerceOperateApply","OnApplyList", data)
+	end
+	--转让会长时获取的可以转让的会员列表
+	function _P.OnTransferList(data)
+		WindowMgr.Call("UCommerceTransfer","OnTransferList", data)
+	end
+
+--查看成员列表
+function _P.OnMembers(data)
+	WindowMgr.Call("UCommerceMembers", "OnMemberList", data)
+	if WindowMgr.IsCreated("UParliamentAwardPop") then
+		WindowMgr.Call("UParliamentAwardPop", "SetCommerceMember", data)
+	end
+	if WindowMgr.IsCreated("UVoteStudyAccess") then
+		WindowMgr.Call("UVoteStudyAccess", "SetCommerceMember", data)
+	end
+end
+--查看排名
+function _P.OnRank(data)
+	MCommerce.PowerRankData = data
+	WindowMgr.Call("UCommerceRank","OnPowerRank")
+end
+--兑换成功
+function _P.OnExchange(data)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		myInfo.exchangeList[data.id] = data.num
+
+		WindowMgr.Call("UCommerceExchange","OnUpdateItem", data.id, data.num)
+	end
+end
+function _P.OnBattleList(data)
+	WindowMgr.Call("UCommerceBattleList", "OnBattleList", data)
+end
+function _P.OnBattleReport(data)
+	WindowMgr.Call("UCommerceBattleReport", "OnBattleReport", data)
+end
+function _P.OnBattleBattle(data)
+	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
+	WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+end
+function _P.OnBattleResult(data)
+	local lockStaff = data.lockStaff
+	if lockStaff ~= nil and lockStaff > 0 then
+		local info = MCommerce.MyCommerceInfo
+		if info ~= nil then
+			local lockedStaffs = info.myInfo.lockedStaffs
+			lockedStaffs[lockStaff] = true
+		end
+	end
+	if data.staffLifeNum ~= nil then
+		info.myInfo.staffLifeNum[data.staffLifeNum.id] = data.staffLifeNum.count
+	end
+	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
+	WindowMgr.Call("UCommerceBattle","OnBattleResult",data)
+end
+function _P.OnUnlock(data)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local lockedStaffs = info.myInfo.lockedStaffs
+		lockedStaffs[data.staffId] = nil
+
+		if data.staffLifeNum ~= nil then
+			info.myInfo.staffLifeNum[data.staffLifeNum.id] = data.staffLifeNum.count
+		end
+
+		WindowMgr.Call("UCommerceBattleStaffChoose", "OnUnlock", data.staffId)
+	end
+end
+function _P.OnOpenBattle(data)
+	if WindowMgr.IsCreated("UCommerceBattleList") then
+		WindowMgr.Create("UCommerceBattle", data.info.id)
+	end
+	WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+end
+
+function _P.OnDayout()
+	if MCommerce.MyCommerceInfo ~= nil then
+		local myInfo = MCommerce.MyCommerceInfo.myInfo
+		myInfo.exchangeList = {}
+		myInfo.lockedStaffs = {}
+		myInfo.staffLifeNum = {}
+		myInfo.build = 0
+		_P.OnUpdate({myInfo = myInfo})
+	end	
+end
+
+function _P.OnApplySuccess(data)
+	if data ~= nil then
+		CCommon.ShowRight(Csv.Text("commerce_right1"))
+	end
+end
+
+function _P.OnTransferSuccess(data)
+	if data ~= nil then
+		if WindowMgr.IsCreated("UCommerceManager") then
+			WindowMgr.Destroy("UCommerceManager")
+		end
+	end
+end
+
+
+-- 商会副本结束后端推送
+function _P.OnBattleClosePush(data)
+	-- 关闭副本战斗界面
+	if WindowMgr.IsCreated("UCommerceBattle") then 
+		WindowMgr.Destroy("UCommerceBattle")
+		CCommon.ShowError(Csv.Text("err_commerce_battle_closed"))
+	end
+
+	-- 更新副本列表信息界面
+	if WindowMgr.IsCreated("UCommerceBattleList") then
+		_M.BattleInfoReq()
+	end
+end
+
+
+return _M

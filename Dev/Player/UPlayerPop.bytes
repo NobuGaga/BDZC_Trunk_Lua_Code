@@ -1,0 +1,172 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MRank = JRequire "Dev.Rank.MRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MCar = JRequire "Dev.Car.MCar"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CLogin = JRequire "Dev.Login.CLogin"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Role_UMain_Other")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("palyer_title")
+
+	local sex = data.sex
+	local headId = data.avatar.head
+	local bodyId = data.avatar.body
+	-- if data.titleId ~= nil then
+	-- 	if data.titleId > 0 then
+	-- 		bodyId = Csv.Title[data.titleId].avatarId
+	-- 	end
+	-- end
+	-- print(data.name, data.avatar.head, data.avatar.body, "--------------------Look--------------------")
+	local headPrefab = MPlayer.GetPrefabID(headId, sex)
+    local bodyPrefab = MPlayer.GetPrefabID(bodyId, sex)
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        CCommon.CreateRole(moudle:Get("body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.player_look)
+    else
+        moudle:Get("body").SpriteName = MPlayer.GetSpFromSex(bodyId, sex)
+		moudle:Get("head").SpriteName = MPlayer.GetSpFromSex(headId, sex)
+    end
+
+	moudle:Get("vip").SpriteNameAutoScale = "vip_"..data.vip
+	moudle:Get("name").Text = data.name
+	local levelCsv = Csv.Company[data.level]
+	moudle:Get("text1").Text = levelCsv.name
+	moudle:Get("text2").Text = Csv.Text("player_ID", {id = data.id})
+	local serverInfo = CLogin.GetServerInfoByID(data.serverId)
+	moudle:Get("text3").Text = Csv.Text("player_area", {name = serverInfo.name})
+	local chenghaoText = moudle:Get("scaleText")
+	local chenghaoBG = moudle:Get("scaleBG")
+	if data.titleId ~= nil then
+		chenghaoBG.Activity = true
+		local csvTitle = Csv.Title[data.titleId]
+		if csvTitle ~= nil then
+			chenghaoText.Text = csvTitle.name
+		else
+			chenghaoBG.Activity = false
+		end
+	else
+		chenghaoBG.Activity = false
+	end
+	local attrIndex = 0
+	for k,v in pairs(Define.AttrType) do
+		attrIndex = attrIndex + 1
+		moudle:Get("B1attrTitle" .. v).Text = MPlayer.Attr2Str(v)
+		moudle:Get("B1attrNum" .. v).Text = tostring(data.attr[k])
+	end
+	moudle:Get("power").Text = Csv.Text("palyer_allPower",{num = tostring(data.power)})
+
+	moudle:Get("B2attrTitle1").Text = Csv.Text("player_exp")
+	moudle:Get("B2attrNum1").Text = tostring(data.exp)
+	moudle:Get("B2attrTitle2").Text = Csv.Text("Girl_initimacy")
+	moudle:Get("B2attrNum2").Text = tostring(data.intimacy)
+	moudle:Get("B2attrTitle3").Text = Csv.Text("player_tabpan")
+	moudle:Get("BtnText").Text = Csv.Text("player_zszj")
+	local battleId = data.battleId or 10101
+	local battleCsv = Csv.Battle[battleId]
+	local partCsv = Csv.Part[battleCsv.part]
+	moudle:Get("B2attrNum3").Text = Csv.Text("battle_title",{index = partCsv.id,name = partCsv.name .. MRank.GetNumText(battleCsv.chapter%10)})
+	
+	local titleTable = {}
+	if data.titleList ~= nil then
+		local content = moudle:Get("content")
+		for k,v in pairs(data.titleList) do 
+			local titleMoudle = JGuiManager.GetMoudle(content,"M_Role_UMain_Item", WindowType.UI, 10)
+			local csvItem = Csv.Item[v]
+			if csvItem ~= nil then
+				titleMoudle:Get("Icon").SpriteName = csvItem.icon
+				titleMoudle:Get("name").Text = csvItem.name
+			end
+			titleTable[v] = titleMoudle
+		end
+	end
+	self.TitleTable = titleTable
+
+	local ImgLight = moudle:Get("Ing")
+	if data.titleId ~= nil and data.titleId > 0 then
+		local titleMoudle = self.TitleTable[data.titleId]
+		if titleMoudle ~= nil then
+			ImgLight.Activity = true
+			ImgLight:SetParent(titleMoudle.SelfRect.CachedTran)
+			ImgLight.LocalPosition = Vector2(0,0)
+		else
+			ImgLight.Activity = false
+		end
+	else
+		ImgLight.Activity = false
+	end
+
+	_P.RefreshDress(self,data)
+
+	-- 赠送座驾按钮
+	local sellBtn = moudle:Get("SellBtn")
+	sellBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCarGarageGive", MCar.GarageTypeEnum.Give, nil, data)
+	end,nil,0.9)
+	sellBtn.Activity = (data.id ~= MPlayer.GetId() and data.serverId ~= MPlayer.GetServerId())
+end
+
+function _P.RefreshDress(self,data)
+	local moudle =self.Moudle
+	local car = moudle:Get("car")
+	local yacht = moudle:Get("yacht")
+	local air = moudle:Get("air")
+	local girl1 = moudle:Get("girl1")
+	local girl2 = moudle:Get("girl2")
+
+	local dressTable = _P.GetDress(data)
+	if dressTable[Define.SysId.Car] ~= nil then
+		car.SpriteName = Csv.Item[dressTable[Define.SysId.Car]].asset
+	end
+	if dressTable[Define.SysId.Yacht] ~= nil then
+		yacht.SpriteName = Csv.Item[dressTable[Define.SysId.Yacht]].asset
+	end
+	if dressTable[Define.SysId.Aircraft] ~= nil then
+		air.SpriteName = Csv.Item[dressTable[Define.SysId.Aircraft]].asset
+	end
+	if dressTable[Define.SysId.Girl] ~= nil then
+		girl1.SpriteName = Csv.Item[dressTable[Define.SysId.Girl]].asset
+	end
+	if dressTable[Define.SysId.Manage] ~= nil then
+		girl2.SpriteName = Csv.Item[dressTable[Define.SysId.Manage]].asset
+	end
+end
+
+function _P.GetDress(data)
+	local dress = {}
+	if data.dress ~= nil then
+		for k,v in pairs(data.dress) do
+			dress[v.sysId] = v.itemId
+		end
+	end
+	return dress
+end
+
+function _P.GetAvatar(data)
+	local sex = data.sex
+	local bodyId = data.avatar.body
+	local bodyCsv = Csv.Avatar[bodyId]
+
+	if data.titleId ~= nil then
+		if data.titleId > 0 then
+			local fashionData = Csv.Title[data.titleId]
+			bodyCsv = Csv.Avatar[fashionData.avatarId]
+		end
+	end
+
+	return bodyCsv["asset_"..sex]
+end
+
+return _M

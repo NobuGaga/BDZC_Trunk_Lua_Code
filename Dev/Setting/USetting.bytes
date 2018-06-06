@@ -1,0 +1,412 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local MSetting = JRequire "Dev.Setting.MSetting"
+local CSetting = JRequire "Dev.Setting.CSetting"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MLogin = JRequire "Dev.Login.MLogin"
+local CNotice = JRequire "Dev.Notice.CNotice"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+--兑换码功能表ID
+local RedeemCodeFuncID = 11201
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.musicSliderBtn ~= nil then
+		self.musicSliderBtn:delete()
+		self.musicSliderBtn = nil
+	end
+	if self.peopleSliderBtn ~= nil then
+		self.peopleSliderBtn:delete()
+		self.peopleSliderBtn = nil
+	end
+	if self.effectSliderBtn ~= nil then
+		self.effectSliderBtn:delete()
+		self.effectSliderBtn = nil
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Setup_UMain")
+	self.mModule = module
+
+	-- 获取设置的信息
+	CSetting.LoadSetting()
+
+	--页头文字
+	module:Get("C_Text").Text = Csv.Text("set_setting")
+	module:Get("Account").Text = Csv.Text("set_Account")
+
+	--返回按钮
+	local BtnClose = module:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	--玩家信息
+	--昵称
+	module:Get("name").Text = Csv.Text("set_name")
+	module:Get("NameText").Text = MPlayer.GetName()
+	--编号
+	module:Get("number").Text = Csv.Text("set_ID")
+	module:Get("NumberText").Text = MPlayer.GetId()
+	--区服
+	module:Get("area").Text =Csv.Text("set_ServerID")
+	module:Get("AreaText").Text = MLogin.SelectServer.name
+
+	--兑换码系统
+	local funcData = Csv.Func[RedeemCodeFuncID]
+	if nil ~= funcData then
+		local sdkInput = module:Get("input")
+		module:Get("Placeholder").Text = Csv.Text("set_RedeemCode")
+		module:Get("SdkText").Text = Csv.Text("set_RedeemCodeText")
+		local SubmitSDKBtn = module:Get("SdkBtn")
+		SubmitSDKBtn:AddOnButton(function ( ... )
+			-- 防止不断点击，向后端频繁请求，做了2s限制
+			if not _P.CheckBtnIsClick(2) then
+				CCommon.ShowRight(Csv.Text("set_input_often"))
+				return
+			end
+
+			if sdkInput.Text == "" then
+				CCommon.ShowRight(Csv.Text("set_input_null"))
+			else
+				CPlayer.GetGift(sdkInput.Text)
+			end
+		end, nil, 0.9)
+	else
+		module:Get("redeemCode").Activity = false
+	end
+
+	--防沉迷
+	module:Get("Code").Text = Csv.Text("set_AntiText")
+	module:Get("YTX").Text = Csv.Text("set_AntiTextDown")
+	
+	module:Get("C_text").Text = Csv.Text("set_AntiTextsubmit")
+	self.FCMInfo = module:Get("FCMInfo")
+	self.AntiBtn = module:Get("C_Btn_a")
+	self.IsCloseAnti = self.AntiBtn.Activity
+	if self.IsCloseAnti then
+		self.AntiBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UAntiAddiction")
+		end, nil, 0.9)
+		_P.OnSetAntiData(self)
+	end
+	
+	--联系客服
+	module:Get("C_text_0").Text = Csv.Text("set_ConnectServer")
+	local Service = module:Get("C_Btn_b")
+	Service:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("USetService")
+	end, nil, 0.9)
+	--游戏公告
+	module:Get("C_text_0_0").Text = Csv.Text("set_Notice")
+	local Notice = module:Get("C_Btn_b2")
+	Notice:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CNotice.ShowNoticePopup(Notice)
+	end, nil, 0.9)
+
+	--游戏设置
+	module:Get("SetupText").Text = Csv.Text("set_gameset")
+	module:Get("volumeText").Text = Csv.Text("set_volumeText")
+
+	--背景音乐
+	_P.OnSetMusicSlider(self, module)
+
+	-- 人声
+	_P.OnSetPeopleSlider(self, module)
+
+	--特效音
+	_P.OnSetEffectSlider(self, module)
+	
+	--退出帐号
+	if GameSetting.isHasExitAccount then
+		module:Get("C_text_2").Text=Csv.Text("set_exit")
+		module:Get("C_Btn_d"):AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			GameSetting.ToReLogin(GameSetting.ReLoginType.ChangeAccount)
+		end,nil,0.9)
+	else
+		module:Get("C_Btn_d").Activity = false
+	end
+
+	--切换区服
+	module:Get("C_text_3").Text=Csv.Text("set_change")
+	module:Get("C_Btn_e"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+	    GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)		
+	end,nil,0.9)
+
+	--版本号
+	if not GameSetting.IsiOSCommit then
+		module:Get("Edition").Text = Csv.Text("service_Version") .. GameSetting.ClientVersion
+	end
+end
+
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+-- 音乐
+function _P.OnSetMusicSlider(self, module)
+	local musicSlider =  module:Get("slider")
+	local musicFakeslider =  module:Get("fakeslider")
+	local musicFill = module:Get("Fill")
+	local musicFakefill = module:Get("fakefill")
+	local musicHandle = module:Get("handle")
+
+	if self.musicSliderBtn ~= nil then
+		self.musicSliderBtn:delete()
+		self.musicSliderBtn = nil
+	end
+	self.musicSliderBtn = SliderButton.new(0, 100 ,MSetting.BackGroundVolume,
+		function(value)
+			_P.OnSliderValueChanged(self, value, musicHandle, 1)
+		end)
+	self.musicSliderBtn:CreateSliderBtn(musicSlider, nil, nil)
+
+	local volumeOnBtn = module:Get("Btn1")
+	local volumeOffBtn = module:Get("Btn2")
+	local isOn = MSetting.BackGroundSwitch == 1
+	volumeOnBtn.Activity = isOn
+	volumeOffBtn.Activity = not isOn
+
+	if not isOn then
+		_P.CantTouch(musicFill, musicFakefill, musicHandle, musicFakeslider)
+	end
+	
+	volumeOnBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+	    _P.OnOperateBtnByType(volumeOffBtn, volumeOnBtn, true, 1)
+		_P.CantTouch(musicFill, musicFakefill, musicHandle, musicFakeslider)
+	end, nil, 0.9)
+
+	volumeOffBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnOperateBtnByType(volumeOffBtn, volumeOnBtn, false, 1)
+		_P.CanTouch(musicFill, musicFakefill, musicHandle, musicFakeslider)
+	end, nil, 0.9)
+		
+	module:Get("small").Text = Csv.Text("set_small")
+	module:Get("big").Text = Csv.Text"set_big"
+end
+
+
+-- 人声
+function _P.OnSetPeopleSlider(self, module)
+	local peopleSlider =  module:Get("slider1")
+	local peopleFakeslider =  module:Get("fakeslider1")
+	local peopleFill = module:Get("Fill_1")
+	local peopleFakefill = module:Get("fakefill1")
+	local peopleHandle = module:Get("handle_1")
+
+	if self.peopleSliderBtn ~= nil then
+		self.peopleSliderBtn:delete()
+		self.peopleSliderBtn = nil
+	end
+	self.peopleSliderBtn = SliderButton.new(0 , 100, MSetting.HumanVoice,
+		function(value)
+			_P.OnSliderValueChanged(self, value, peopleHandle, 2)
+		end)
+	self.peopleSliderBtn:CreateSliderBtn(peopleSlider, nil, nil)
+
+	module:Get("VoiceText").Text = Csv.Text("set_VoiceText")
+	module:Get("small2").Text = Csv.Text("set_small")
+	module:Get("big2").Text = Csv.Text("set_big")
+
+	local peopleOnBtn = module:Get("Btn3")
+	local peopleOffBtn = module:Get("Btn4")
+	local isOn = MSetting.HumanVoiceSwitch == 1
+	peopleOnBtn.Activity = isOn
+	peopleOffBtn.Activity = not isOn
+
+	if not isOn then
+		_P.CantTouch(peopleFill, peopleFakefill, peopleHandle, peopleFakeslider)
+	end
+
+	peopleOnBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnOperateBtnByType(peopleOffBtn, peopleOnBtn, true, 2)
+		_P.CantTouch(peopleFill, peopleFakefill, peopleHandle, peopleFakeslider)
+	end, nil, 0.9)
+
+	peopleOffBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnOperateBtnByType(peopleOffBtn, peopleOnBtn, false, 2)
+		_P.CanTouch(peopleFill, peopleFakefill, peopleHandle, peopleFakeslider)
+	end, nil, 0.9)
+end
+
+
+-- 特效音
+function _P.OnSetEffectSlider(self, module)
+	local effectSlider =  module:Get("slider2")
+	local effectFakeslider =  module:Get("fakeslider2")
+	local effectFill = module:Get("Fill_2")
+	local effectFakeFill = module:Get("fakefill2")
+	local effectHandle = module:Get("handle_2")
+	
+	if self.effectSliderBtn ~= nil then
+		self.effectSliderBtn:delete()
+		self.effectSliderBtn = nil
+	end
+	self.effectSliderBtn = SliderButton.new(0, 100, MSetting.EffectVoice, 
+		function(value)_P.OnSliderValueChanged(self, value, effectHandle, 3) 
+		end)
+	self.effectSliderBtn:CreateSliderBtn(effectSlider, nil, nil)
+
+	module:Get("effectsText").Text = Csv.Text("set_effectsText")
+	module:Get("small3").Text = Csv.Text("set_small")
+	module:Get("big3").Text = Csv.Text("set_big")
+
+	local effectOnBtn = module:Get("Btn5")
+	local effectOffBtn = module:Get("Btn6")
+	local isOn = MSetting.EffectVoiceSwitch == 1
+	effectOnBtn.Activity = isOn
+	effectOffBtn.Activity = not isOn
+
+
+	if not isOn then
+		_P.CantTouch(effectFill, effectFakeFill, effectHandle, effectFakeslider)
+	end
+
+	effectOnBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnOperateBtnByType(effectOffBtn, effectOnBtn, true, 3)
+		_P.CantTouch(effectFill, effectFakeFill, effectHandle, effectFakeslider)
+	end, nil, 0.9)
+	
+	effectOffBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnOperateBtnByType(effectOffBtn, effectOnBtn, false, 3)
+		_P.CanTouch(effectFill, effectFakeFill, effectHandle, effectFakeslider)
+	end, nil, 0.9)
+end
+
+
+-- 操作开关按钮
+function _P.OnOperateBtnByType(volumeOffBtn, volumeOnBtn, isOn, typeId)
+	volumeOffBtn.Activity = isOn
+	volumeOnBtn.Activity = 	not isOn
+
+	if typeId == 1 then
+		MSetting.BackGroundSwitch = ((isOn and 0) or 1)
+		CSetting.SetBackGround((isOn and 0) or MSetting.BackGroundVolume)
+	elseif typeId == 2 then
+		MSetting.HumanVoiceSwitch = ((isOn and 0) or 1)
+		CSetting.SetHumanVoice((isOn and 0) or MSetting.HumanVoice)
+	else
+		MSetting.EffectVoiceSwitch = ((isOn and 0) or 1)
+		CSetting.SetEffectVoice((isOn and 0) or MSetting.EffectVoice)
+	end
+
+	MSetting.OnSaveSetting()
+end
+
+
+function _P.OnSetAntiData(self)
+	if not self.IsCloseAnti then
+		return
+	end
+	local isSubmit = MSetting.IsSubmitAnimInfo
+	self.FCMInfo.Text = (isSubmit and Csv.Text("set_AntiTextDown")) or Csv.Text("set_AntiTextinfo")
+	self.AntiBtn.Activity = not isSubmit
+end
+
+
+function _P.OnSliderValueChanged(self, value, handle, typeId)
+	if typeId == 1 then
+		MSetting.BackGroundVolume = value
+		if MSetting.BackGroundSwitch == 1 then
+			CSetting.SetBackGround(MSetting.BackGroundVolume) 
+		end
+	elseif typeId == 2 then
+		MSetting.HumanVoice = value
+		if MSetting.HumanVoiceSwitch == 1 then
+			CSetting.SetHumanVoice(MSetting.HumanVoice) 
+		end
+	elseif typeId == 3 then
+		MSetting.EffectVoice = value
+		if MSetting.EffectVoiceSwitch == 1 then
+			CSetting.SetEffectVoice(MSetting.EffectVoice) 
+		end
+	end
+	MSetting.OnSaveSetting()
+end
+
+
+function _P.CantTouch(fillObj, fakeFillObj, handleObj, fakeSliderObj)
+	fillObj.Color = CS.UnityEngine.Color.gray
+	handleObj.Color = CS.UnityEngine.Color.gray
+	fakeFillObj.Color = CS.UnityEngine.Color.gray 
+	fakeSliderObj.Color = CS.UnityEngine.Color.gray
+	fillObj.RaycastTarget = false
+	handleObj.RaycastTarget = false
+	fakeFillObj.RaycastTarget = false
+	fakeSliderObj.RaycastTarget = false
+end
+
+function _P.CanTouch(fillObj, fakeFillObj, handleObj, fakeSliderObj)
+	fillObj.Color = CS.UnityEngine.Color(1,1,1,1)
+	handleObj.Color = CS.UnityEngine.Color(1,1,1,1)
+	fakeFillObj.Color = CS.UnityEngine.Color(1,1,1,1) 
+	fakeSliderObj.Color = CS.UnityEngine.Color(1,1,1,1)
+	fillObj.RaycastTarget = true
+	handleObj.RaycastTarget = true
+	fakeFillObj.RaycastTarget = true
+	fakeSliderObj.RaycastTarget = true
+end
+
+
+-- 提交防沉迷回调
+function _R.OnSubmitCallBack(self)
+	if not self.IsCloseAnti then
+		return
+	end
+	
+	MSetting.IsSubmitAnimInfo = true
+
+	_P.OnSetAntiData(self)
+end
+
+
+-- 兑换码返回
+function _R.OnExchangeSuccess(self)
+	local sdkInput = self.mModule:Get("input")
+	if sdkInput == nil then return end
+
+	sdkInput.Text = ""
+end
+
+return _M

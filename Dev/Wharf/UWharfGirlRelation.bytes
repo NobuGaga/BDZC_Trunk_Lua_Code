@@ -1,0 +1,502 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CWharf = JRequire "Dev.Wharf.CWharf"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local CCommon = JRequire"Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local T_Wharf_GirlLight = "T_Wharf_GirlLight"
+
+local DONE_EFFECT_ID = 10111
+
+local FIRST_GIRL = Csv.Const(16001)
+
+function _M:BeforeDestroy()
+	if self.mUStoryMoudle ~= nil then
+		self.mUStoryMoudle:Destroy()
+		self.mUStoryMoudle:delete()
+		self.mUStoryMoudle = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ShowBattling(self,data)
+	--WindowMgr.Create("UWharfBattling",data)
+end
+
+
+function _R.RefreshGirlEvent(self,data)
+	local peopleId = self.selectPeople
+
+	local eventTab = {}
+	if peopleId > 0 then
+		local PeopleData = Csv.WharfPeople[peopleId]
+		if PeopleData.event ~= nil then
+			for k,v in pairs(PeopleData.event) do
+				local _data = {id = v,state = -1}
+				if data.eventList ~= nil then
+					for k2,v2 in pairs(data.eventList) do
+						if v2.id == _data.id then
+							_data.state = v2.state
+						end
+					end
+				end
+				table.insert(eventTab,_data)
+			end
+		end
+	end
+	_P.UpDateEvents(self,eventTab)
+end
+
+function _R.UpdateEvent(self,data)
+	_P.SelectGirl(self,self.selectPeople)
+end 
+
+function _R.UpDateTopGirl(self)
+	self.isDone = true
+end
+
+--传入人物数据
+function _M:OnCreate(id,eventID)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_Relationship")
+	self.mMoudle = moudle
+	local closeBtn = moudle:Get("back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+	end, nil, 1.2)
+
+	self.isOpen = false
+	moudle:Get("Btn"):AddOnButton(function()
+		self.isOpen = not self.isOpen
+		if self.isOpen then
+			moudle:Get("StoryBg").Activity = true
+			moudle:Get("arrow").LocalScale = Vector3(-1,1,1)
+		else
+			moudle:Get("StoryBg").Activity = false
+			moudle:Get("arrow").LocalScale = Vector3(1,1,1)
+		end
+	end,nil,1)
+
+	self.isDone = false
+	self.selectGirl = 0
+	self.selectPeople = 0
+	self.mSelectEvent = nil
+
+	--只用于记录从新事件图标进来的事件
+	self.mselectEventID = 0 
+	if eventID ~= nil then
+		self.mselectEventID = eventID
+	end
+
+	--local wharfGirlData = Csv.WharfGirl[id]
+	moudle:Get("titleText").Text = Csv.Text("Wharf_Girllist_title")
+	--moudle:Get("Love").Text = Csv.Text("Wharf_love")
+	--moudle:Get("StoryText").Text = Csv.Text("Wharf_story")
+
+	moudle:Get("Name").Text = Csv.Text("Wharf_info_name")
+	moudle:Get("Edge").Text = Csv.Text("Wharf_info_age")
+	moudle:Get("Zhiye").Text = Csv.Text("Wharf_info_job")
+	moudle:Get("Aihao").Text = Csv.Text("Wharf_info_aihao")
+	moudle:Get("Chuanwen").Text = Csv.Text("Wharf_info_tiptitle")
+
+	-- self.mTopScroll = moudle:Get("scrollView")
+	-- self.mTopContent = moudle:Get("content")
+	self.mContent_1 = moudle:Get("content_1")
+
+	local nameLab = moudle:Get("nameText")
+	local offer = moudle:Get("Offer")
+	local iconSp = moudle:Get("bsx")
+	local bg = moudle:Get("bg")
+
+	-- local descBtn = moudle:Get("StoryIcon")
+	-- descBtn:AddOnButton(function()
+	-- 	--展示美女详情
+	-- 	WindowMgr.Create("UWharfDesc",self.selectGirl,false)
+	-- end)
+
+	self.mIconSp = iconSp
+	self.mNameLab = nameLab
+	self.mOffer = offer
+	self.mBg = bg
+
+	-----
+	local sliderValue = moudle:Get("Slier")
+	self.mSliderValue = sliderValue
+
+	self.mActorPanel = moudle:Get("ActorPanel")
+
+	self.mSelectTopGirl = nil
+	_P.ShowTopGirlItems(self,id)
+	
+	moudle:Get("scrollView_1").OnValueChanged:AddListener(function(...) _P.OnScrollValueChange(self) end)
+
+	_P.SetNpcDesc(self,id)
+end
+
+function _P.OnScrollValueChange(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content_1")
+	local pos = content.LocalPosition
+	local slider = moudle:Get("SliderBg")
+	slider.LocalPosition = pos
+end
+
+function _P.ShowTopGirlItems(self,selectid)
+	-- local content = self.mTopContent
+	local topGirls = MWharf.WharfGirls
+
+	-- content:DestroyChildren()
+
+	local lastID = -1
+	local topgirlTab = {}
+	for k,v in pairs(topGirls)do
+		-- local girlMoudle = _P.CreateTopGirl(self,content,v)
+		table.insert(topgirlTab,{id = v.id,peopleId = v.peopleId})
+	end
+
+	if #topgirlTab > 0 then
+		lastID = topgirlTab[1].peopleId
+	end
+
+	--下一个美女
+	local lastGirlID = MWharf.GetLastPeople()
+	if lastGirlID ~= nil then
+		local girlData = Csv.WharfPeople[lastGirlID]
+		local data = {id = girlData.girlId,peopleId = lastGirlID,state = 0}
+		-- local girlMoudle = _P.CreateTopGirl(self,content,data)
+		table.insert(topgirlTab,{id = data.id,peopleId = lastGirlID})
+
+		if lastID < 0 then
+			lastID = lastGirlID
+		end
+	end
+
+	self.mTopGirlTab = topgirlTab
+
+	self.mMoudle.SelfRect:AddOnTime(function()
+		if selectid ~= nil then
+			_P.SelectGirl(self,selectid)
+		else
+			_P.SelectGirl(self,lastID)
+		end
+	end,nil,0.05)
+end
+
+function _P.CreateTopGirl(self,content,v)
+	local girlMoudle = JGuiManager.GetMoudle(content, "M_Inquiries_UMain_Item", WindowType.UI, 10)
+	local girlData = Csv.Girl[v.id]
+	girlMoudle:Get("head").SpriteName = girlData.xieicon
+	girlMoudle:Get("PKtext").Text = girlData.name
+	girlMoudle:Get("BG").SpriteName = girlData.colorBg
+
+	_P.RefreshTopGirl(self,girlMoudle,v)
+	
+	return girlMoudle
+end
+
+function _P.RefreshTopGirl(self,girlMoudle,v)
+	local light = girlMoudle:Get("light")
+	local red = girlMoudle:Get("red")
+	local success = girlMoudle:Get("Success")
+	local question = girlMoudle:Get("Question")
+	local head = girlMoudle:Get("head")
+
+	light.Activity = false
+	red.Activity = false
+	success.Activity = false
+	question.Activity = false
+	head.Color = Color(1,1,1,1)
+
+	if v.state == 0 then
+		head.Color = Color(0.5,0.5,0.5,1)
+	end
+
+	girlMoudle:Get("BG"):AddOnButton(function()
+		_P.SelectGirl(self,v.peopleId)
+	end)
+end
+
+function _P.SelectGirl(self,id)
+	local wharfPeopleData = Csv.WharfPeople[id]
+	CWharf.ReqGirlEvent(wharfPeopleData.girlId)--请求美女事件状态
+
+	self.selectGirl = wharfPeopleData.girlId
+	self.selectPeople = id
+	
+	
+	local girlData = Csv.Girl[wharfPeopleData.girlId]
+
+	self.mIconSp.SpriteName = girlData.homeicon
+	self.mNameLab.Text = girlData.colorname
+	self.mOffer.Text = girlData.job
+	self.mBg.SpriteName = girlData.homebg
+
+	-- local topGirls = self.mTopGirlTab
+	-- for k,v in pairs(topGirls)do
+	-- 	if v.id == wharfPeopleData.girlId then
+	-- 		v.moudle:Get("light").Activity = true
+
+	-- 		--_P.RefreshContentPos(self,v.moudle)
+	-- 	else
+	-- 		v.moudle:Get("light").Activity = false
+	-- 	end
+	-- end
+
+end
+
+
+--content按左对齐
+--子对象居中对齐
+function _P.RefreshContentPos(self,moudle)
+	local scroll = self.mTopScroll
+	local content = self.mTopContent
+
+	if scroll == nil or content == nil then
+		return
+	end
+	
+	local imgWidth = moudle.SelfRect.SizeDelta.x
+	local imgPosx = moudle.SelfRect.LocalPosition.x
+	local scrollWidth = scroll.SizeDelta.x
+	local contentPOSX = content.LocalPosition.x 
+
+	local targartPos = scrollWidth - imgPosx - imgWidth/2 
+	
+	if targartPos <= 1 then
+		content:DOAnchorPosX(targartPos,0.2)
+	else
+		content:DOAnchorPosX(0,0.2)
+	end
+end
+
+
+function _P.UpDateEvents(self,events)
+	local content1 = self.mContent_1
+	content1:DestroyChildren()
+
+	JGuiManager.GetMoudle(self.mContent_1, "M_Inquiries_Relationship_Heart", WindowType.UI, 10)
+
+	local eventTab = {}
+	--local events = wharfPeopleData.event
+	--id,state
+	local maxEvent = #events
+	local curEvent = 0
+	for i = #events,1,-1 do
+		local v = events[i]
+		local eventData = Csv.WharfEvent[v.id]
+		eventItem = _P.CreatEventItem(self,self.mContent_1,v)
+		--table.insert(eventTab,{id = v.id,moudle = eventItem})
+		eventTab[v.id] = {moudle = eventItem,value = v}
+
+		if v.state == 2 then
+			curEvent = curEvent + 1
+		end
+	end
+
+	self.mEventItemTab = eventTab
+	if self.mselectEventID ~= 0 then
+		local item = eventTab[self.mselectEventID]
+		if item ~= nil and item.value.state == 1 then
+			_P.SelectEventItem(self,item.moudle,item.value)
+		end
+		self.mselectEventID = 0
+	end
+
+	--
+	local silderfill = curEvent/maxEvent
+	self.mSliderValue.FillAmount = silderfill
+
+	if silderfill == 1 then
+		self.isDone = true
+	end
+end
+
+function _P.CreatEventItem(self,parent,value)
+	local eventMoudle = JGuiManager.GetMoudle(parent, "M_Inquiries_UMain_Item", WindowType.UI, 10)
+	
+	local icon = eventMoudle:Get("head")
+	local name = eventMoudle:Get("PKtext")
+
+	local eventData = Csv.WharfEvent[value.id]
+	icon.SpriteName = eventData.xieicon
+	name.Text = eventData.name
+	--icon:SetNativeSize()
+
+	eventMoudle:Get("BG").SpriteName = eventData.colorBg
+
+	_P.UpdateEventState(self,eventMoudle,value)
+
+	return eventMoudle
+end
+
+function _P.UpdateEventState(self,moudle,value)
+	local red = moudle:Get("red")
+	local success = moudle:Get("Success")
+	local question = moudle:Get("Question")
+	local head = moudle:Get("head")
+
+	red.Activity = false
+	success.Activity = false
+	question.Activity = false
+	head.Color = Color(1,1,1,1)
+
+	
+	if value.state == -1 then
+		head.Color = Color(0.5,0.5,0.5,1)
+	elseif value.state == 0 then
+		red.Activity = true
+	elseif value.state == 1 then
+		red.Activity = true
+	elseif value.state == 2 then
+		success.Activity = true
+	end
+
+	moudle:Get("BG"):AddOnButton(function()
+		_P.SelectEventItem(self,moudle,value)
+	end)
+end
+
+function _P.SelectEventItem(self,moudle,value)
+	if self.mSelectEvent ~= nil then
+		self.mSelectEvent:Get("light").Activity = false
+	end
+	self.mSelectEvent = moudle
+	moudle:Get("light").Activity = true
+
+	if value.state == -1 then
+		--未解锁展示
+		WindowMgr.Create("UWharfDesc",value.id,true)
+	elseif value.state == 0 then
+		CWharf.ReqReadEvent(value.id)
+		local eventData = Csv.WharfEvent[value.id]
+
+		local stroyBack = function()
+			--剧情之后直接挑战
+			WindowMgr.Create("UWharfBattle",value.id)
+		end
+		if self.mUStoryMoudle ~= nil then
+			self.mUStoryMoudle:Destroy()
+			self.mUStoryMoudle:delete()
+			self.mUStoryMoudle = nil
+		end
+		self.mUStoryMoudle = UStoryMoudle.new(self.mMoudle.SelfRect,eventData.story,stroyBack)
+	elseif value.state == 1 then
+		WindowMgr.Create("UWharfBattle",value.id)		
+	elseif value.state == 2 then
+		--未解锁展示
+		WindowMgr.Create("UWharfDesc",value.id,true)
+	end
+end
+
+function _P.SetNpcDesc(self,id)
+	local moudle = self.mMoudle
+	local data = Csv.WharfPeople[id]
+	if data ~= nil then
+		moudle:Get("NameText").Text = data.name
+		moudle:Get("EdgeText").Text = data.age
+		moudle:Get("ZhiyeText").Text = data.job
+		moudle:Get("AihaoText").Text = data.hobby
+		moudle:Get("Tips").Text = data.desc
+	end
+end
+
+function _P.TurnLeftTopGirl(self)
+	local selectPeople = self.selectPeople
+	local selectGirl = self.selectGirl
+	local topGirl = self.mTopGirlTab
+
+	local beforeID = 0
+	for k,v in pairs(topGirl)do
+		if v.id == selectGirl then
+			if beforeID ~= 0 then
+				_P.SelectGirl(self,beforeID)
+				return
+			else
+				_P.SelectGirl(self,v.peopleId)
+				return
+			end
+		end
+		beforeID = v.peopleId
+	end
+end
+
+function _P.TurnRightTopGirl(self)
+	_P.SelectGirl(self,_P.GetTopTurnRightMoudle(self))
+end
+
+function _P.GetTopTurnRightMoudle(self)
+	local selectGirl = self.selectGirl
+	local topGirl = self.mTopGirlTab
+
+	local isget = false
+	for k,v in pairs(topGirl)do
+		if isget then
+			return v.peopleId
+		else
+			if v.id == selectGirl then
+				isget = true
+			end
+		end
+	end
+	return self.selectPeople
+end
+
+-----------------------------------------------------
+function _R.CheckGirlDone(self)
+	if self.isDone then
+		
+		
+		self:Lock()
+
+		--self.mContent_1.Activity = false
+
+		local girlTween = self.mIconSp.CachedTran:GetJTweener(T_Wharf_GirlLight)
+
+		local effectDone = function()
+			girlTween:SetOnComplete(function()
+				self.mIconSp:AddOnTime(function()
+					local girlData = Csv.Girl[self.selectGirl]
+					local peopleData = Csv.WharfPeople[self.selectPeople]
+					if self.mUStoryMoudle ~= nil then
+						self.mUStoryMoudle:Destroy()
+						self.mUStoryMoudle:delete()
+						self.mUStoryMoudle = nil
+					end
+					self.mUStoryMoudle =  UStoryMoudle.new(self.mMoudle.SelfRect,girlData.knownStory)
+	
+					--刷新美女列表
+					self.isDone = false
+					_P.ShowTopGirlItems(self)
+
+					self.mContent_1.Activity = true
+				end,nil,0.5)
+
+				self:Unlock()
+			end)
+			girlTween:Play()
+		end
+
+		CCommon.CreateEffect(self.mActorPanel, DONE_EFFECT_ID,nil,effectDone)
+	end
+end
+
+return _M 

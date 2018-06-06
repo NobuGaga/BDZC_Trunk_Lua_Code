@@ -1,0 +1,173 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+--_M.WELFARE_VIPROUND = Csv.Const(11008)
+--_M.VIPREWARD_STATE = {noEnough = 0,get = 1,got = 2}
+
+_M.selectToggle = 0
+_M.SignDay = 1
+_M.isSign = false
+
+_M.firstRechargeState = 0
+_M.monthCardData = {}
+_M.yearCard = {}
+
+_M.isGetQQWelfare = false
+_M.isGetWeixinWelfare = false
+_M.WaitShows = {}
+_M.GoodLuckDatas = {}
+
+function _M.Clean()
+	_M.selectToggle = 0
+	_M.SignDay = 1
+	_M.isSign = false
+	_M.isGetQQWelfare = false
+	_M.isGetWeixinWelfare = false
+	_M.WaitShows = {}
+	_M.GoodLuckDatas = {}
+end
+
+function _M.InitSign(data)
+	_M.SignDay = data.day
+	_M.isSign = data.isGet
+end
+
+function _M.RefreshSign(data)
+	if data.success == true then
+		_M.isSign = true
+	end
+end
+
+function _M.GetFirstRechargeState(data)
+	_M.firstRechargeState = data.state
+end
+
+function _M.GetMonthCardData(_data)
+	local data = {}
+	data.productId = _data.productId
+	data.leftDays = _data.leftDays
+	data.hasReward = _data.hasReward
+	_M.monthCardData = data
+end
+
+function _M.GetYearCardData(_data)
+	local data = {}
+	data.productId = _data.productId
+	data.leftDays = _data.leftDays
+	data.hasReward = _data.hasReward
+	_M.yearCard = data
+end
+
+function _M.CheckHasMonthCard()
+	if _M.monthCardData ~= nil  then
+		if _M.monthCardData.leftDays ~= nil then
+			if _M.monthCardData.leftDays > 0 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.CheckHasYearCard()
+	if _M.yearCard ~= nil  then
+		if _M.yearCard.leftDays ~= nil then
+			if _M.yearCard.leftDays == -1 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetMonthCardShowState()
+	return not _M.CheckHasMonthCard()
+end
+
+function _M.GetYearCardShowState()
+	-- if _M.GetMonthCardShowState() then
+	-- 	return false
+	-- else
+		if _M.CheckHasYearCard() then
+			return false
+		else
+			return true
+		end
+	-- end
+end
+
+-- 获取员工资质
+function _M.GetAllApitude(bookList)
+	local allAptitude = 0
+	for k,v in pairs(bookList) do
+		local aptitude = Csv.BookLv[v[2]*1000 + 1].aptitude
+		allAptitude = allAptitude + aptitude
+	end
+
+	return allAptitude
+end
+
+-------------------------剧情--------------------------------------------------
+--type 美女1 员工2 座驾3 飞机4
+function _M.EnqueueWaitShow(storyType,objId,storyId,callBack,info)
+	table.insert(_M.WaitShows, {storyType = storyType, objId = objId,storyId = storyId,callBack = callBack,data = info})
+end
+
+function _M.DequeueWaitShow()
+	if #_M.WaitShows > 0 then
+		local ret = _M.WaitShows[1]
+		table.remove(_M.WaitShows, 1)
+		return ret
+	end
+	return nil
+end
+
+-------------------------------------------------------------------------
+
+function _M.SetGoodLuckDatas(data)
+	_M.GoodLuckDatas = {}
+
+	if data.goodluck ~= nil then
+		for k,v in pairs(data.goodluck)	do
+			_M.GoodLuckDatas[v.id] = {ncur = v.ncur,nmax = v.nmax}
+		end
+	end
+	WindowMgr.Call("UWelfare","RefreshGodDatas")
+end
+
+function _M.GetGoodLuckDataByID(id)
+	if _M.GoodLuckDatas ~= nil then
+		if id == 1 then
+			if _M.GoodLuckDatas[0] ~= nil then
+				return _M.GoodLuckDatas[0]
+			end
+		elseif id == 2 then
+			if _M.GoodLuckDatas[1] ~= nil then
+				return _M.GoodLuckDatas[1]
+			end
+		elseif id == 3 then
+			if _M.GoodLuckDatas[2] ~= nil then
+				return _M.GoodLuckDatas[2]
+			end
+		elseif id == 4 then
+			if _M.GoodLuckDatas[3] ~= nil then
+				return _M.GoodLuckDatas[3]
+			end
+		elseif id == 5 then
+			if _M.GoodLuckDatas[4] ~= nil then
+				return _M.GoodLuckDatas[4]
+			end
+		elseif id == 6 then
+			if _M.GoodLuckDatas[5] ~= nil then
+				return _M.GoodLuckDatas[5]
+			end
+		end
+	end
+	return nil
+end
+
+
+return _M

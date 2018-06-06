@@ -1,0 +1,129 @@
+local protobuf = require "Libs.protobuf"
+
+local MSocket = JRequire "Libs.Socket.MSocket"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+local LoadBytes = CS.Loader.LoadAccessor.LoadBytes
+local LuaConnect = CS.Net.LuaConnect
+local CsSend = LuaConnect.Send
+
+local _M = {}
+local _Send = MSocket.Send
+local _Recv = MSocket.Recv
+local _ProtoMap = MSocket.ProtoMap
+local _ProtoMapEx = MSocket.ProtoMapEx
+
+function _M.Regist(sysId, send, recv, isReload)
+	if send ~= nil then
+		if isReload == false then
+			assert(_Send[sysId] == nil,string.format("send Message sysId:%d has register",sysId))
+		end
+		_Send[sysId] = send
+	end
+
+	if recv ~= nil then
+		if isReload == false then
+			assert(_Recv[sysId] == nil,string.format("recv Message sysId:%d has register",sysId))
+		end
+		_Recv[sysId] = recv
+	end
+
+	return function (msgId, msg)
+		_M.Send(sysId, msgId, msg)
+	end
+end
+
+function _M.Disconnect()
+	LuaConnect.Disconnect()
+	EventCenter.CallEventTrigger(Define.EventListenId.DisconnectServer)
+end
+
+function _M.LoadProto(protoName)
+	if _ProtoMapEx[protoName] ~= nil then
+		return
+	end
+	_ProtoMapEx[protoName] = true
+
+	if _ProtoMap["PCommon"] == nil then
+		local pbData = LoadBytes("Dev/Pb/PCommon")
+		protobuf.register(pbData)
+		_ProtoMap["PCommon"] = true
+	end
+
+	local strArray = LuaUtil.StringSplit(protoName, "%.")
+	if strArray ~= nil and strArray[1] ~= nil then
+		if strArray[2] == nil then
+			--表示用的是PCommon中的结构
+			return
+		end
+
+		local fileName = strArray[1]
+		if _ProtoMap[fileName] ~= nil then
+			return
+		end
+
+		local pbData = LoadBytes("Dev/Pb/" .. fileName)
+		protobuf.register(pbData)
+		_ProtoMap[fileName] = true
+	else
+		error("load protobuf error name = " .. protoName)
+	end
+end
+
+function _M.Send(sysId, msgId, msg)
+	local sendProtos = _Send[sysId]
+	if msg == nil and sendProtos == nil then
+		--空消息
+		CsSend(sysId, msgId)
+		return
+	end
+	assert(sendProtos ~= nil,string.format("send Message sysId:%d not register",sysId))
+	local proto = sendProtos[msgId]
+	-- assert(proto ~= nil,string.format("send Message sysId:%d msgId:%d not register",sysId, msgId))
+	if proto == nil or proto == "" then
+		--空消息
+		CsSend(sysId, msgId)
+	else
+		--有消息体
+		_M.LoadProto(proto)
+
+		CsSend(sysId, msgId, protobuf.encode(proto, msg or {}))
+	end
+end
+
+local function doDispatcher(sysId, msgId, data)
+	local recvProtos = _Recv[sysId]
+	if recvProtos == nil then
+		error(string.format("recv Message sysId:%d not register",sysId))
+		return
+	end
+	local info = recvProtos[msgId]
+	if info == nil or info.handle == nil then
+		error(string.format("recv Message sysId:%d msgId:%d not register",sysId, msgId))
+		return
+	end
+
+	local proto = info.proto
+	local ret = nil
+	local ok = false
+	if proto ~= nil then
+		_M.LoadProto(proto)
+		ok, ret = protobuf.decode(proto, data)
+		if ok == false then
+			error(string.format("recv Message %s sysId:%d msgId:%d decode failure. error message = %s", info.proto, sysId, msgId, ret))
+			return
+		end
+	end
+	info.handle(ret)
+end
+
+function _M.Dispatcher(sysId, msgId, data)
+	local r, err = pcall(doDispatcher, sysId, msgId, data)
+	if not r then
+		error("Dispatcher error::", sysId, msgId, "error info: ", err)
+	end
+end
+
+LuaConnect.RegistDispatcher(_M.Dispatcher)
+
+return _M

@@ -1,0 +1,512 @@
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Dev.RedPacket.MRedpacket.bytes#_M]
+local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CmdId = 
+{
+	cLevelUp 		= 1, --升级请求
+	cLookPlayer		= 2, --查看其他玩家 PPlayer.CLookPlayer
+	cHeartBeat		= 4,--请求心跳 PPlayer.CHeartBeat
+	cRename         = 5, --改名 PPlayer.CRename
+	cGetGift		= 6, -- 兑换码获取礼包 PPlayer.CGetGift
+	cChangeDress    = 7, --更改装扮 PPlayer.CChangeDress
+
+	--红包
+	cSendRedPacket	= 8,--发红包 PPlayer.CSendRedPacket
+	cOpenRedPacket	= 9,--打开红包 PPlayer.COpenRedPacket
+
+	cOpenChangeHead = 10,--打开换头界面	
+	cLiveHead       = 11,--兑换头像 PPlayer.CLiveHead
+	cChangeHead     = 12,--修改头像 PPlayer.CLiveHead
+
+	sCommonError 	= 1, --通用提示协议 PPlayer.SCommonError
+	sDailyReset 	= 2, --跨天消息
+	sNotice 		= 3, --公告 PPlayer.SNotice
+	sInit 			= 4, --自己信息的初始化 PPlayer.SPlayer
+	sUpdateAttr 	= 5, --发送角色属性数据 PPlayer.SUpdateAttr
+	sUpdateExp 		= 6, --发送角色属性数据 PPlayer.SUpdateExp
+	sUpdateVip 		= 7, --发送角色属性数据 PPlayer.SUpdateVip
+	sUpdateAvatar 	= 8, --发送角色属性数据 PPlayer.PAvatar
+	sLookPlayer 	= 9, --查看其他玩家的回包 PPlayer.SPlayer
+	sUpdateName 	= 10,--名字变更 PPlayer.SUpdateName
+	sHeartBeat 		= 11,--心跳回包, 客户端同步服务器时间 PPlayer.SHeartBeat
+	sQuitGame 		= 12,--退出游戏  PPlayer.SQuitGame
+	sGetGift		= 14,--获取礼包返回 PPlayer.SGetGift
+
+	sTest           = 15, --测试专用 PPlayer.STest
+
+	sNoticeID       = 16, --读取Notice表的公告方式 PPlayer.SNoticeID
+	sChangeDress    = 17, --更改装扮 PPlayer.SChangeDress
+	sDisconnect		= 18, --断开连接 PPlayer.SDisconnect
+
+	--红包
+	sSendRedPacket	= 19,--发红包 PPlayer.SSendRedPacket
+	sOpenRedPacket	= 20,--打开红包 PPlayer.SOpenRedPacket
+	sRedPacketList	= 21,--红包列表 PPlayer.SRedPacketList
+	sNewRedPacket	= 22,--新红包 PPlayer.SNewRedPacket
+	sRedPacketAllReceived	= 23,--红包派完了 PPlayer.SRedPacketAllReceived
+
+	sOpenChangeHead   = 24, --打开换头界面 PPlayer.SOpenChangeHead
+	sLiveHead         = 25, --兑换头像 PPlayer.SLiveHead
+	sChangeHead       = 26, --修改头像 PPlayer.SChangeHead
+}
+
+function _M.ModuleClean()
+	MPlayer.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local send = {
+		[CmdId.cLookPlayer] = "PPlayer.CLookPlayer",
+		[CmdId.cHeartBeat] = "PPlayer.CHeartBeat",
+		[CmdId.cRename] = "PPlayer.CRename",
+		[CmdId.cGetGift] = "PPlayer.CGetGift",
+		[CmdId.cChangeDress] = "PPlayer.CChangeDress",
+
+		[CmdId.cSendRedPacket] = "PPlayer.CSendRedPacket",
+		[CmdId.cOpenRedPacket] = "PPlayer.COpenRedPacket",
+
+		[CmdId.cOpenChangeHead] = "",
+		[CmdId.cLiveHead] = "PPlayer.CLiveHead",
+		[CmdId.cChangeHead] = "PPlayer.CLiveHead",
+	}
+	--接收消息协议注册
+	local recv = {
+		[CmdId.sCommonError] = {	proto = "PPlayer.SCommonError", 	handle = _P.OnCommonError},
+		[CmdId.sDailyReset] = {											handle = _P.OnDailyReset},
+		[CmdId.sNotice] = {			proto = "PPlayer.SNotice", 			handle = _M.OnNotice},
+		[CmdId.sNoticeID] = {		proto = "PPlayer.SNoticeID", 		handle = _M.OnNoticeID},
+
+		[CmdId.sInit] = {			proto = "PPlayer.SPlayer", 			handle = _P.OnInit},
+		[CmdId.sUpdateAttr] = {		proto = "PPlayer.SUpdateAttr", 		handle = _P.OnUpdateAttr},
+		[CmdId.sUpdateExp] = {		proto = "PPlayer.SUpdateExp", 		handle = _P.OnUpdateExp},
+		[CmdId.sUpdateVip] = {		proto = "PPlayer.SUpdateVip", 		handle = _P.OnUpdateVip},
+		[CmdId.sUpdateAvatar] = {	proto = "PAvatar", 			handle = _P.OnUpdateAvatar},
+		[CmdId.sLookPlayer] = {		proto = "PPlayer.SPlayer", 			handle = _P.OnLookPlayer},
+		[CmdId.sUpdateName] = {		proto = "PPlayer.SUpdateName", 		handle = _P.OnUpdateName},
+		[CmdId.sHeartBeat] = {		proto = "PPlayer.SHeartBeat",		handle = _P.OnHeartBeat}, 
+		[CmdId.sQuitGame] = {		proto = "PPlayer.SQuitGame",		handle = _P.OnQuitGame},
+		[CmdId.sGetGift] = {		proto = "PPlayer.SGetGift",			handle = _P.OnExchangeBack},	
+		[CmdId.sDisconnect] = {		proto = "PPlayer.SDisconnect", 		handle = _P.OnDisconnect},
+
+		[CmdId.sTest] = {			proto = "PPlayer.STest",			handle = _P.OnTest},
+
+		[CmdId.sChangeDress] = {	proto = "PPlayer.SChangeDress",			handle = _P.OnChangDress},
+
+		[CmdId.sSendRedPacket] = {	proto = "PPlayer.SSendRedPacket",			handle = _P.RepSendRedPacket},
+		[CmdId.sOpenRedPacket] = {	proto = "PPlayer.SOpenRedPacket",			handle = _P.RepOpenRedPacket},
+		[CmdId.sRedPacketList] = {	proto = "PPlayer.SRedPacketList",			handle = _P.RepRedPacketList},
+		[CmdId.sNewRedPacket] = {	proto = "PPlayer.SNewRedPacket",			handle = _P.RepNewRedPacket},
+		[CmdId.sRedPacketAllReceived] = {proto = "PPlayer.SRedPacketAllReceived",			handle = _P.RepRedPacketAllReceived },
+
+		[CmdId.sOpenChangeHead] = {	proto = "PPlayer.SOpenChangeHead",			handle = _P.RepOpenChangeHead},
+		[CmdId.sLiveHead] = {	proto = "PPlayer.SLiveHead",					handle = _P.RepLiveHead},
+		[CmdId.sChangeHead] = {	proto = "PPlayer.SChangeHead",					handle = _P.RepChangeHead},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Player, send, recv, isReload)	
+end
+
+--请求升级
+function _M.LevelUpReq()
+	_M.Send(CmdId.cLevelUp)
+end
+
+--请求其他玩家
+function _M.LookPlayerReq(playerId, isNotOpenPop)
+	if GameSetting.IsiOSCommit then
+		return
+	end
+
+	-- if playerId == MPlayer.GetId() then
+	-- 	--WindowMgr.Create("UPlayer")
+	-- else
+		_M.Send(CmdId.cLookPlayer, {id = playerId})
+	-- end
+	MPlayer.IsNotOpenPop = isNotOpenPop or false
+end
+
+--请求其他玩家
+function _M.LookPlayerByServerID(playerId, serverID, isNotOpenPop)
+	if GameSetting.IsiOSCommit then
+		return
+	end
+
+	-- if playerId == MPlayer.GetId() then
+	-- 	--WindowMgr.Create("UPlayer")
+	-- else
+		_M.Send(CmdId.cLookPlayer, {id = playerId, serverid = serverID})
+	-- end
+	MPlayer.IsNotOpenPop = isNotOpenPop or false
+end
+
+--心跳消息
+function _M.HeartBeatReq(clientTime, serverTime)
+	_M.Send(CmdId.cHeartBeat, {sendTime = clientTime, servTime = serverTime})
+end
+
+--改名
+function _M.Rename(id,Name)
+	_M.Send(CmdId.cRename, {itemid = id, name = Name})
+end
+
+-- 兑换码获取奖励
+function _M.GetGift(giftid)
+	_M.Send(CmdId.cGetGift, {giftid = giftid})
+end
+
+--功能开放列表
+function _P.OnCommonError(msg)
+	local textStr	
+	if msg.params ~= nil then
+		local params = {}
+		for _,kv in pairs(msg.params) do
+			params[kv.key] = kv.value
+		end
+		textStr = Csv.Text(msg.errorcode, params)
+	else
+		textStr = Csv.Text(msg.errorcode)
+	end
+	if msg.right then
+		CCommon.ShowRight(textStr)
+	else
+		CCommon.ShowError(textStr)
+	end
+
+	if msg.sysId ~= nil and msg.sysId > 0 then
+		EventCenter.CallEventTrigger(Define.EventListenId.ServerError, msg.sysId, msg.msgId)
+	end
+end
+
+--公告
+function _M.Notice(level, hierarchy, effectType, str, loop)
+	MPlayer.EnqueueNotice(level or 1, hierarchy or 1, effectType or 0, str, loop or 1)
+	CCommon.RefreshNotice()
+end
+--通知公告
+function _M.OnNotice(msg)
+	_M.Notice(msg.level, msg.hierarchy, msg.effectType, msg.str, msg.loop)
+end
+
+function _M.OnNoticeID(msg)
+	local id = msg.id
+	local csv = Csv.Notice[id]
+	assert(csv ~= nil, id)
+
+	local str = csv.str
+	if msg.params ~= nil then
+		local params = {}
+		for _,kv in pairs(msg.params) do
+			params[kv.key] = kv.value
+		end
+		str = LuaUtil.Format(str, params)
+	end
+
+	_M.Notice(csv.level, csv.hierarchy, csv.effectType, str, csv.loop)
+end
+
+-- 修改装扮
+function _M.ChangeDress(sysid,itemid)
+	_M.Send(CmdId.cChangeDress, {sysId = sysid,itemId = itemid})
+end
+
+--打开换头界面
+function _M.OpenChangeHead()
+	_M.Send(CmdId.cOpenChangeHead)
+end
+
+--激活头像
+function _M.LiveHead(Headid,Actid)
+	if Actid ~= nil then
+		_M.Send(CmdId.cLiveHead,{headid = Headid,actid = Actid})
+	else
+		_M.Send(CmdId.cLiveHead,{headid = Headid,actid = 0})
+	end
+end
+
+--更换头像
+function _M.ChangeHead(Headid,Actid)
+	_M.Send(CmdId.cChangeHead,{headid = Headid,actid = 0})
+end
+
+--功能开放刷新
+function _P.OnDailyReset(msg)
+	print("00:00 come on!!")
+	EventCenter.CallEventTrigger(Define.EventListenId.DailyReset)
+end
+
+function _P.CheckRedpoint()
+	local level = MPlayer.GetLevel()
+	local csv = Csv.Company[level]
+	local isRedpoint = false
+	if csv.cost ~= nil then
+		if csv ~= nil and csv.cost > 0 and MPlayer.GetExp() >= csv.cost then
+			isRedpoint = true
+		end
+	else
+		isRedpoint = false
+	end
+	if isRedpoint ~= MPlayer.PlayerLevelUpRedpoint then
+		MPlayer.PlayerLevelUpRedpoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Player)
+	end
+end
+
+function _P.OnInit(msg)
+	local info = MPlayer.PlayerInfo
+	info.id = msg.id
+	info.name = msg.name
+	info.power = msg.power
+	info.vip = msg.vip
+	info.level = msg.level
+	info.exp = msg.exp
+	info.serverId = msg.serverId
+	info.avatar.head = msg.avatar.head
+	info.avatar.body = msg.avatar.body
+
+	info.attr[Define.AttrType.Wuli] = msg.attr.Wuli
+	info.attr[Define.AttrType.Zhengzhi] = msg.attr.Zhengzhi
+	info.attr[Define.AttrType.Meili] = msg.attr.Meili
+	info.attr[Define.AttrType.Zhili] = msg.attr.Zhili
+
+	info.sex = msg.sex or 1
+
+	local dress = {}
+	if msg.dress ~= nil then
+		for k,v in pairs(msg.dress) do
+			dress[v.sysId] = v.itemId
+		end
+	end
+	info.dress = dress
+
+	CS.Utility.LogPoint.AddSystemParam("charname", info.name)
+	CS.Utility.LogPoint.AddSystemParam("charid", info.id)
+	CS.Utility.LogPoint.AddSystemParam("charlevel", info.level)
+
+	SDKMgr.ReqCollectData(SDKCollectType.LoginRole)
+	_P.CheckRedpoint()
+end
+
+function _P.OnUpdateAttr(msg)
+	local info = MPlayer.PlayerInfo
+	info.attr[Define.AttrType.Wuli] = msg.attr.Wuli
+	info.attr[Define.AttrType.Zhengzhi] = msg.attr.Zhengzhi
+	info.attr[Define.AttrType.Meili] = msg.attr.Meili
+	info.attr[Define.AttrType.Zhili] = msg.attr.Zhili
+	if info.power ~= nil and info.power > 0 and msg.fightpower ~= nil and msg.fightpower > 0 and GameSetting.IsOnGame then
+		if WindowMgr.IsCreated("UMain") and info.power ~= msg.fightpower then
+			local numTab = {}
+			numTab[1] = msg.fightpower
+			local cha = msg.fightpower - info.power
+			if cha > 0 then
+				numTab[2] = cha
+				numTab[3] = true
+			else
+				numTab[2] = -cha
+				numTab[3] = false
+			end
+			CCommon.ShowPower(numTab)
+		end
+	end
+	info.power = msg.fightpower
+
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAttrUpdate)
+end
+
+function _P.OnUpdateExp(msg)
+	local info = MPlayer.PlayerInfo
+	local lastLv = info.level
+	info.level = msg.level
+	info.exp = msg.exp
+	if lastLv ~= msg.level then
+		SDKMgr.ReqCollectData(SDKCollectType.LvUpRole)
+
+		CS.Utility.LogPoint.AddSystemParam("charlevel", info.level)
+	end
+	_P.CheckRedpoint()
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerExpUpdate)
+end
+
+function _P.OnUpdateVip(msg)
+	local info = MPlayer.PlayerInfo
+	info.vip = msg.vip
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerVipUpdate)
+end
+
+function _M.OnUpdateVip()
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerVipUpdate)
+end
+
+function _P.OnUpdateAvatar(msg)
+	local info = MPlayer.PlayerInfo
+	info.avatar.head = msg.head
+	info.avatar.body = msg.body
+
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAvatarUpdate)
+end
+
+function _P.OnUpdateName(msg)
+	local info = MPlayer.PlayerInfo
+	info.name = msg.name
+	CS.Utility.LogPoint.AddSystemParam("charname", info.name)
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerNameUpdate)
+end
+
+--心跳回包
+function  _P.OnHeartBeat(msg)
+	HeartBeat.OnHeartBeat(msg.sendTime, msg.servTime, msg.forcereset)
+end
+
+--退出游戏
+function  _P.OnQuitGame(msg)
+	local errorCode = msg.errorCode
+	error("踢出游戏, 错误码: " .. errorCode)
+
+	GameSetting.GameQuit()
+end
+
+-- 兑换兑换码返回
+function _P.OnExchangeBack(data)
+	if data.errCode == 0 then
+		WindowMgr.Call("USetting", "OnExchangeSuccess")
+		CCommon.ShowRight(Csv.Text("set_exchange_success"))
+	elseif data.errCode == 4 then -- 已经领取
+		CCommon.ShowRight(Csv.Text("set_exchange_error2"))
+	else
+		CCommon.ShowRight(Csv.Text("set_exchange_error1", {num = data.errCode}))
+	end
+end
+
+--断开连接
+function _P.OnDisconnect(data)
+	SocketMgr.Disconnect();
+	if data.errCode == 1 then
+		CCommon.ShowReloginBox(Csv.Text("kick_login_other_dev"), Csv.Text("common_sure"), function (isSure)
+			GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+		end)
+	else
+		CCommon.ShowReloginBox(Csv.Text("disconn_tips"), Csv.Text("common_sure"), function (isSure)
+			GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+		end)
+	end
+end
+
+function _P.OnLookPlayer(msg)
+	if not MPlayer.IsNotOpenPop then
+		WindowMgr.Create("UPlayerPop",msg)
+	else
+		if WindowMgr.IsCreated("UParliamentAwardPop") then
+			WindowMgr.Call("UParliamentAwardPop","FindPlayer",msg)
+		end
+	end
+	MPlayer.IsNotOpenPop = nil
+end
+
+local mLastIndex = nil
+local mLastServTime = nil
+function _P.OnTest(msg)
+	if mLastIndex == nil then
+		mLastIndex = msg.index
+		mLastServTime = msg.servTime
+	else
+		if mLastIndex + 1 ~= msg.index then
+			error("TEST::: lastIndex=" .. mLastIndex, "newIndex="..msg.index, "lastServTime="..mLastServTime, "newServTime="..msg.servTime)
+		end
+
+		mLastIndex = msg.index
+		mLastServTime = msg.servTime
+	end	
+end
+
+function _P.OnChangDress(data)
+	local dress = data.dress
+	if dress ~= nil then
+		local dressTable = MPlayer.GetDress()
+		if dressTable ~= nil and dressTable[dress.sysId] ~= nil then
+			MPlayer.PlayerInfo.dress[dress.sysId] = dress.itemId
+			if WindowMgr.IsCreated("UHomeMap") then
+				WindowMgr.Call("UHomeMap","RefreshDress",dress)
+			end
+		end
+	end
+end
+
+
+--红包---
+--_type，_packetNum是备用字段，暂时没有这个需求
+function _M.ReqSendRedPacket(_gold,_type,_packetNum)
+	_M.Send(CmdId.cSendRedPacket, {gold = _gold,type = 0,packetNum = _packetNum})
+end
+
+function _M.ReqOpenRedPacket(_id)
+	_M.Send(CmdId.cOpenRedPacket,{id = _id})
+end
+
+function _P.RepSendRedPacket(data)
+	--关闭红包发送UI
+	WindowMgr.Call("USendPacket","CloseView")
+	WindowMgr.Call("USendNormalPacket","CloseView")
+end
+
+function _P.RepOpenRedPacket(data)
+	MRedpacket.SetRedpacketInfo(data)
+	
+	WindowMgr.Call("URedpacketSplit","ShowRedpacket",data)
+	WindowMgr.Call("UTalk","ShowRedpacket",data)
+	WindowMgr.Call("UTalkTips1","ShowRedpacket",data)
+end
+function _P.RepRedPacketList(data)
+	MRedpacket.InitRedPacket(data)
+end
+function _P.RepNewRedPacket(data)
+	MRedpacket.GetNewRedPacket(data)
+end
+function _P.RepRedPacketAllReceived(data)
+	MRedpacket.RemoveRedPacket(data.id)
+end
+
+--换头---
+function _P.RepOpenChangeHead(data)
+	MPlayer.SetHeadTable(data)
+	if WindowMgr.IsCreated("UPlayerChangeHead") then
+		WindowMgr.Call("UPlayerChangeHead","RefreshList",data)
+	end
+end
+
+function _P.RepLiveHead(data)
+	MPlayer.UpdateHeadTable(data)
+	if WindowMgr.IsCreated("UPlayerChangeHead") then
+		WindowMgr.Call("UPlayerChangeHead","LiveHead",data)
+	end
+end
+
+function _P.RepChangeHead(data)
+	local info = MPlayer.PlayerInfo
+	info.avatar.head = data.headid
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAvatarUpdate)
+	if WindowMgr.IsCreated("UPlayerChangeHead") then
+		WindowMgr.Call("UPlayerChangeHead","ChangeHead")
+		CCommon.ShowRight(Csv.Text("player_change16"))
+	end
+end
+
+return _M

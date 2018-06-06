@@ -1,0 +1,318 @@
+local MVote = JRequire "Dev.Vote.MVote"
+local EventCenter = JRequire "Dev.EventCenter"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cReqVoteInit		= 1,--请求初始化数据
+	cReqVoteJoin		= 2,--请求参加竞选 PVote.CJoin
+	cReqVoteTicket		= 3,--请求投票 PVote.CTicket
+	cReqVoteTicketRef	= 4,--请求某个职位投票信息 PVote.CTicketRef
+	cReqVoteJoinRef		= 5,--请求某个职位参选信息 PVote.CTicketRef
+	----------------职位特权---------------
+	cReqVoteParInit		= 6,--请求初始化数据PVote.CParInit
+	cVoteSendRedPacket	= 7,--发红包 PVote.CSendRedPacket
+	cVoteOpenInstance	= 8,--开启副本 PVote.COpenInstance
+	cVoteGetGift		= 9,--领取礼包 PVote.CGetGift
+	cVoteOpenStudy		= 10,--开启商会学习 PVote.COpenStudy
+------------------商会学习---------------
+	cVoteStudyInit		= 11,--商会学习
+	cVoteStudyUp		= 12,--商会学习员工上场 PVote.CStudyUp
+----------------选举信息---------------
+	cVoteOpen			= 13,--打开选举信息推送接口
+	cVoteClose			= 14,--关闭选举信息推送接口
+	
+	sRepVoteInit		= 1,--初始化竞选数据 PVote.SInit
+	sRepVoteJoin		= 2,--返回参加竞选(发送给所有玩家) PVote.SJoin
+	sRepVoteTicket		= 3,--返回请求投票数据 PVote.STicket
+	sVoteStateChange	= 4,--竞选状态变更 PVote.SStateChange
+	----------------职位特权---------------
+	sRepVoteParInit		= 5,--请求参加竞选 PVote.SVoteParInit
+	sVoteSendRedPacket	= 6,--发红包 PVote.SSendRedPacket
+	sVoteOpenInstance	= 7,--开启副本 PVote.SOpenInstance
+	sVoteGetGift		= 8,--领取礼包 PVote.SGetGift
+	sVoteOpenStudy		= 9,--开启商会学习 PVote.SOpenStudy
+------------------商会学习---------------
+	sVoteStudyInit		= 10,--商会学习 PVote.SVoteStudyInit
+	sVoteStudyUp		= 11,--商会学习员工上场 PVote.SVoteStudyInit
+----------------选举信息---------------
+	sVoteOpen			= 12,--打开选举信息 PVote.SVoteOpen
+	sVoteMessageUpdate	= 13,--选举信息推送 PVote.SVoteMessageUpdate
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cReqVoteInit] = "",
+		[ECmdId.cReqVoteJoin] = "PVote.CJoin",
+		[ECmdId.cReqVoteTicket] = "PVote.CTicket",
+		[ECmdId.cReqVoteTicketRef] = "PVote.CTicketRef",
+		[ECmdId.cReqVoteJoinRef] = "PVote.CTicketRef",
+		[ECmdId.cReqVoteParInit] = "PVote.CParInit",
+		[ECmdId.cVoteSendRedPacket] = "PVote.CSendRedPacket",
+		[ECmdId.cVoteOpenInstance] = "PVote.COpenInstance",
+		[ECmdId.cVoteGetGift] = "PVote.CGetGift",
+		[ECmdId.cVoteOpenStudy] = "PVote.COpenStudy",
+		[ECmdId.cVoteStudyInit] = "",
+		[ECmdId.cVoteStudyUp] = "PVote.CStudyUp",
+		[ECmdId.cVoteOpen] = "",
+		[ECmdId.cVoteClose] = "",
+	}
+	local recv = {
+		[ECmdId.sRepVoteInit]		=		{proto = "PVote.SInit",			handle = _P.OnInit},
+		[ECmdId.sRepVoteJoin]		=		{proto = "PVote.SJoin",			handle = _P.OnJoin},
+		[ECmdId.sRepVoteTicket]		=		{proto = "PVote.STicket",		handle = _P.OnTicket},
+		[ECmdId.sVoteStateChange]	=		{proto = "PVote.SStateChange",	handle = _P.OnChangeState},
+		[ECmdId.sRepVoteParInit]	=		{proto = "PVote.SVoteParInit",	handle = _P.OnParInit},
+		[ECmdId.sVoteSendRedPacket]	=		{proto = "PVote.SSendRedPacket",handle = _P.OnSendRedPacket},
+		[ECmdId.sVoteOpenInstance]	=		{proto = "PVote.SOpenInstance",	handle = _P.OnOpenInstance},
+		[ECmdId.sVoteGetGift]		=		{proto = "PVote.SGetGift",		handle = _P.OnGetGift},
+		[ECmdId.sVoteOpenStudy]		=		{proto = "PVote.SOpenStudy",	handle = _P.OnOpenStudy},
+		[ECmdId.sVoteStudyInit]		=		{proto = "PVote.SVoteStudyInit",handle = _P.OnStudyInit},
+		[ECmdId.sVoteStudyUp]		=		{proto = "PVote.SVoteStudyInit",handle = _P.OnStudyInit},
+		[ECmdId.sVoteOpen]			=		{proto = "PVote.SVoteOpen",		handle = _P.OnMessageInit},
+		[ECmdId.sVoteMessageUpdate]	=		{proto = "PVote.SVoteMessageUpdate",handle = _P.OnMessageUpdate},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Vote, send, recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+function _P.OnDayout()
+	_M.ReqVoteParInit(1,nil,true)
+	_M.ReqVoteParInit(2,nil,true)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MVote.Clean()
+end
+
+--C
+function _M.ReqInit()
+	_M.Send(ECmdId.cReqVoteInit)
+end
+
+function _M.ReqJoin(voteID)
+	_M.Send(ECmdId.cReqVoteJoin,{voteid = voteID})
+end
+
+function _M.ReqTicket(voteID,playerID,num)
+	_M.Send(ECmdId.cReqVoteTicket,{voteid = voteID,playerid = playerID,count = num})
+end
+
+function _M.ReqTicketRef(voteID)
+	_M.Send(ECmdId.cReqVoteTicketRef,{voteid = voteID})
+end
+
+function _M.ReqJoinRef(voteID)
+	_M.Send(ECmdId.cReqVoteJoinRef,{voteid = voteID})
+end
+
+function _M.ReqVoteParInit(TYPE,selectVoteID,IsRefresh)
+	MVote.SelectVoteID = selectVoteID
+	MVote.NowParType = TYPE
+	if IsRefresh ~= nil then
+		_M.Send(ECmdId.cReqVoteParInit,{type = TYPE,isRefresh = IsRefresh})
+	else
+		_M.Send(ECmdId.cReqVoteParInit,{type = TYPE,isRefresh = false})
+	end
+end
+
+function _M.ReqVoteParRedPackage(voteID,Gold)
+	_M.Send(ECmdId.cVoteSendRedPacket,{voteid = voteID,gold = Gold})
+end
+
+function _M.ReqVoteParBoss(voteID)
+	_M.Send(ECmdId.cVoteOpenInstance,{voteid = voteID})
+end
+
+function _M.ReqVoteParGift(voteID)
+	_M.Send(ECmdId.cVoteGetGift,{voteid = voteID})
+end
+
+function _M.ReqVoteParStudy(voteID,Players)
+	_M.Send(ECmdId.cVoteOpenStudy,{voteid = voteID,players = Players})
+end
+
+function _M.ReqVoteStudyInit()
+	_M.Send(ECmdId.cVoteStudyInit)
+end
+
+function _M.ReqStudyUp(Index,Staffid)
+	_M.Send(ECmdId.cVoteStudyUp,{index = Index,staffid = Staffid})
+end
+
+function _M.ReqVoteOpen()
+	_M.Send(ECmdId.cVoteOpen)
+end
+
+function _M.ReqVoteClose()
+	_M.Send(ECmdId.cVoteClose)
+end
+
+--S
+function _P.OnInit(data)
+	MVote.OnInit(data)
+	if WindowMgr.IsCreated("UVote") then
+		WindowMgr.Call("UVote","RefreshView")
+	end
+end
+
+function _P.OnJoin(data)
+	MVote.OnJoin(data)
+	if WindowMgr.IsCreated("UVote") then
+		WindowMgr.Call("UVote","RefreshMyVote")
+		WindowMgr.Call("UVote","RefreshView")
+	end
+	if WindowMgr.IsCreated("UVoteJoin") then
+		WindowMgr.Call("UVoteJoin","RefreshView",data)
+	end
+end
+
+function _P.OnTicket(data)
+	if WindowMgr.IsCreated("UVoteTicket") then
+		WindowMgr.Call("UVoteTicket","RefreshView",data)
+	end
+end
+
+function _P.OnChangeState(data)
+	if data.status ~= nil then
+		_M.ReqInit()
+	end
+	if data.status == MVote.StatusEnum.Join then
+		MVote.OnMessageClear()
+		if WindowMgr.IsCreated("UVote") then
+			WindowMgr.Call("UVote","RefreshMessage")
+		end
+	end
+end
+
+function _P.OnParInit(data)
+	if not data.isRefresh then
+		if WindowMgr.IsCreated("UVotePar") then
+			WindowMgr.Call("UVotePar","RefreshView",data)
+		else
+			WindowMgr.Create("UVotePar",data)
+		end
+	end
+	_P.CheckRedPoint(data)
+end
+
+function _P.OnSendRedPacket(data)
+	if data.isSuccess then
+		CCommon.ShowRight(Csv.Text("vote_41"))
+		_M.ReqVoteParInit(MVote.NowParType)
+		WindowMgr.Call("USendPacket","CloseView")
+	end
+end
+
+function _P.OnOpenInstance(data)
+	if data.isSuccess then
+		CCommon.ShowRight(Csv.Text("vote_42"))
+		_M.ReqVoteParInit(MVote.NowParType)
+		if WindowMgr.IsCreated("UVotePar") then
+			WindowMgr.Call("UVotePar","ShowOpenBossAward",data)
+		end
+		if WindowMgr.IsCreated("UVoteOpenBattle") then
+			WindowMgr.Call("UVoteOpenBattle","CloseView")
+		end
+	end
+end
+
+function _P.OnGetGift(data)
+	if data.isSuccess then
+		_M.ReqVoteParInit(MVote.NowParType)
+		if WindowMgr.IsCreated("UVotePar") then
+			WindowMgr.Call("UVotePar","ShowGift",data)
+		end
+	end
+end
+
+function _P.OnOpenStudy(data)
+	if data.isSuccess then
+		_M.ReqVoteParInit(MVote.NowParType)
+		CCommon.ShowRight(Csv.Text("vote_54"))
+	end
+end
+
+function _P.OnStudyInit(data)
+	if WindowMgr.IsCreated("UVoteStudy") then
+		WindowMgr.Call("UVoteStudy","RefreshView",data)
+	end
+end
+
+function _P.OnMessageInit(data)
+	MVote.OnMessageInit(data)
+	if WindowMgr.IsCreated("UVote") then
+		WindowMgr.Call("UVote","RefreshMessage")
+	end
+end
+
+function _P.OnMessageUpdate(data)
+	MVote.OnMessageUpdateAll(data)
+	local value = data.value
+	if (value.firstid ~= nil and value.firstid == MPlayer.GetId()) or 
+		(value.secondid ~= nil and value.secondid == MPlayer.GetId()) then
+		MVote.OnMessageUpdateMy(data)
+		if WindowMgr.IsCreated("UVote") then
+			WindowMgr.Call("UVote","AddMessage",data.value,2)
+		end
+	end
+	if WindowMgr.IsCreated("UVote") then
+		WindowMgr.Call("UVote","AddMessage",data.value,1)
+	end
+end
+
+--local
+function _P.CheckRedPoint(data)
+	local isTownRedPoint = false
+	local isMemberRedPoint = false
+	local type = 1
+	if data.info ~= nil then
+		for k,v in pairs(data.info) do
+			local csvVote = Csv.Vote[v.voteID]
+			local csvVotePer = Csv.VotePermition[v.voteID]
+			local packageValue = _P.GetPar(v.parList,4)
+			if csvVote ~= nil and csvVotePer ~= nil and packageValue ~= nil then
+				if v.playerID ~= nil and v.playerID == MPlayer.GetId() and packageValue < csvVotePer.GiftCount then
+					if csvVote.type == 1 then
+						isTownRedPoint = true
+					elseif csvVote.type == 2 then
+						isMemberRedPoint = true
+					end
+				end
+			end
+			type = csvVote.type
+		end
+	end
+	if isTownRedPoint ~= MVote.IsTownRedPoint and type == 1 then
+		MVote.IsTownRedPoint = isTownRedPoint
+		CMain.UpdateRedpoint(isTownRedPoint,Define.SysId.Vote_Town)
+		CMain.UpdateRedpoint(isTownRedPoint,Define.SysId.Vote_Town_Par)
+	end
+	if isMemberRedPoint ~= MVote.IsMemberRedPoint and type == 2 then
+		MVote.IsMemberRedPoint = isMemberRedPoint
+		CMain.UpdateRedpoint(isMemberRedPoint,Define.SysId.Vote_Member)
+		CMain.UpdateRedpoint(isMemberRedPoint,Define.SysId.Vote_Member_Par)
+	end
+end
+
+function _P.GetPar(list,type)
+	if list ~= nil then
+		for k,v in pairs(list) do
+			if v.key == type then
+				return v.value
+			end
+		end
+	end
+	return nil
+end
+
+return _M

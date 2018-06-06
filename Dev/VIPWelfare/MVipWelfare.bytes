@@ -1,0 +1,299 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+
+_M.WELFARE_VIPROUND = Csv.Const(11008)
+_M.VIPREWARD_STATE = {noEnough = 0,get = 1,got = 2}
+
+_M.vipRedPoint = false
+_M.selectToggle = 0
+_M.vipRewardInfo = {}
+
+_M.vipActivityID = 0
+_M.vipDailyRewards = {}
+_M.vipDiscountGifts = {}
+
+_M.WaitShows = {}
+
+function _M.Clean()
+	_M.vipRewardInfo = {}
+	_M.vipRedPoint = false
+	_M.vipActivityID = 0
+
+	_M.vipDailyRewards = {}
+	_M.vipDiscountGifts = {}
+
+	_M.WaitShows = {}
+end
+
+function _M.OnDayout()
+
+	local vipLv = MPlayer.GetVip()
+
+	for k,v in pairs(_M.vipDailyRewards)do
+		if v == vipLv then
+			table.remove(_M.vipDailyRewards,k)
+		end
+	end
+	for k,v in pairs(_M.vipDiscountGifts)do
+		if v == vipLv then
+			table.remove(_M.vipDiscountGifts,k)
+		end
+	end
+	WindowMgr.Call("UVipWelfare","RefreshView")
+	_M.CheckVipRedPoint()
+end
+
+
+function _M.SetVipDiscountGift(data)
+	_M.vipDiscountGifts = {}
+	if data.list ~= nil then
+		_M.vipDiscountGifts = data.list
+	end
+	_M.vipActivityID = data.actid
+	WindowMgr.Call("UVipWelfare","RefreshDiscont")
+end
+
+function _M.SetVipDiscountGiftGot(data)
+	_M.vipDiscountGifts = {}
+	if data.list ~= nil then
+		_M.vipDiscountGifts = data.list
+	end
+	_M.vipActivityID = data.actid
+	WindowMgr.Call("UVipWelfare","ShowBuyDiscont")
+end
+
+function _M.SetVipDayGifts(data)
+	_M.vipDailyRewards = {}
+	if data.viplist ~= nil then
+		_M.vipDailyRewards = data.viplist
+	end
+
+	--刷新界面
+	WindowMgr.Call("UVipWelfare","ShowDayReward")
+	_M.CheckVipRedPoint()
+end
+
+function _M.GetVipInfo(data)
+	_M.vipRewardInfo = {}
+	if data.rewardedLevels ~= nil then
+		_M.vipRewardInfo = data.rewardedLevels
+	end
+
+	WindowMgr.Call("UVipWelfare","RefreshView")
+	_M.CheckVipRedPoint()
+end
+
+------工具----------
+function _M.CheckDailyRewardGot(viplv)
+	if _M.vipDailyRewards ~= nil then
+		for k,v in pairs(_M.vipDailyRewards)do
+			if v == viplv then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.CheckDisconts(viplv)
+	if _M.vipDiscountGifts ~= nil then
+		for k,v in pairs(_M.vipDiscountGifts)do
+			if v == viplv then
+				return false
+			end
+		end
+	end
+	return true
+end
+------------------------------------------------------------
+
+function _M.CheckVipTopOpen()
+
+	--[[
+	--用于关闭顶部入口
+	local vipLv =  MPlayer.GetVip()
+	local maxVip = _M.WELFARE_VIPROUND[2]
+
+	if vipLv >= maxVip then
+		if _M.CheckVipReward(maxVip) then
+			return false
+		end
+	end
+	--]]
+	return  true
+end
+
+--返回VIP状态 0未达到 1可领取 2已领取
+-- {noEnough = 0,get = 1,got = 2}
+function _M.GetVipState(level)
+	local vipLv =  MPlayer.GetVip()
+	if vipLv >= level then
+		if _M.CheckVipReward(level)then
+			return _M.VIPREWARD_STATE.got
+		else
+			return _M.VIPREWARD_STATE.get
+		end
+	else
+		return _M.VIPREWARD_STATE.noEnough
+	end
+end
+
+
+function _M.CheckVipRedPoint()
+	_M.vipRedPoint = false
+
+	local vipLv =  MPlayer.GetVip()
+	local minVip = _M.WELFARE_VIPROUND[1]
+	if vipLv >= minVip then
+		for i = minVip,vipLv,1 do 
+			--首次礼包
+			local isRed = false
+			local vipSysId = _M.GetVipSysID(i)
+			
+			if _M.CheckVipReward(i) == false then
+				isRed = true
+				_M.vipRedPoint = true
+			end
+			--每日礼包
+			if not _M.CheckDailyRewardGot(i) then
+				isRed = true
+				_M.vipRedPoint = true
+			end
+			CMain.UpdateRedpoint(isRed,vipSysId)
+		end
+	end
+	CMain.UpdateRedpoint(_M.vipRedPoint,Define.SysId.VIPWelfare)
+end
+
+--检测是否已领取(包括等级未达到)
+function _M.CheckVipReward(viplv)
+	for k,v in pairs(_M.vipRewardInfo)do
+		
+		if v == viplv then
+			return true
+		end
+	end
+	--vip1特殊处理
+	if MPlayer.GetVip() >= 1 then
+		if viplv == 1 then
+			return true
+		end
+	end
+	return false
+end
+
+--返回当前未领取vip系统id
+function _M.GetVipRewardSysID()
+	local minVip = _M.WELFARE_VIPROUND[1]
+	local maxVip = _M.WELFARE_VIPROUND[2]
+	for i = minVip,maxVip,1 do 
+		if _M.CheckVipReward(i) == false then
+			return _M.GetVipSysID(i)
+		end
+	end
+	return nil
+end
+
+--返回当前未领取vip（小于自身vip等级）
+function _M.GetCanRewardVip()
+	local minVip = _M.WELFARE_VIPROUND[1]
+	local maxVip = _M.WELFARE_VIPROUND[2]
+
+	local vipLv =  MPlayer.GetVip()
+	for i = minVip,maxVip,1 do 
+		if vipLv >= i then
+			if _M.CheckVipReward(i) == false then
+				return i
+			end
+		end
+	end
+	return -1
+end
+
+-------------------------剧情--------------------------------------------------
+--type 美女1 员工2 座驾3 飞机4
+function _M.EnqueueWaitShow(storyType,objId,storyId,callBack,info)
+	table.insert(_M.WaitShows, {storyType = storyType, objId = objId,storyId = storyId,callBack = callBack,data = info})
+end
+
+function _M.DequeueWaitShow()
+	if #_M.WaitShows > 0 then
+		local ret = _M.WaitShows[1]
+		table.remove(_M.WaitShows, 1)
+		return ret
+	end
+	return nil
+end
+
+-----------------------工具----------------------------------------------------------------
+function _M.GetVipSysID(lv)
+	if lv == 1 then
+		return Define.SysId.Welfare_Vip1
+	elseif lv == 2 then
+		return Define.SysId.Welfare_Vip2
+	elseif lv == 3 then
+		return Define.SysId.Welfare_Vip3
+	elseif lv == 4 then
+		return Define.SysId.Welfare_Vip4
+	elseif lv == 5 then
+		return Define.SysId.Welfare_Vip5
+	elseif lv == 6 then
+		return Define.SysId.Welfare_Vip6
+	elseif lv == 7 then
+		return Define.SysId.Welfare_Vip7
+	elseif lv == 8 then
+		return Define.SysId.Welfare_Vip8
+	elseif lv == 9 then
+		return Define.SysId.Welfare_Vip9
+	elseif lv == 10 then
+		return Define.SysId.Welfare_Vip10
+	elseif lv == 11 then
+		return Define.SysId.Welfare_Vip11
+	elseif lv == 12 then
+		return Define.SysId.Welfare_Vip12
+	elseif lv == 13 then
+		return Define.SysId.Welfare_Vip13
+	elseif lv == 14 then
+		return Define.SysId.Welfare_Vip14
+	elseif lv == 15 then
+		return Define.SysId.Welfare_Vip15
+	elseif lv == 16 then
+		return Define.SysId.Welfare_Vip16
+	elseif lv == 17 then
+		return Define.SysId.Welfare_Vip17
+	elseif lv == 18 then
+		return Define.SysId.Welfare_Vip18
+	elseif lv == 19 then
+		return Define.SysId.Welfare_Vip19
+	elseif lv == 20 then
+		return Define.SysId.Welfare_Vip20
+	elseif lv == 21 then
+		return Define.SysId.Welfare_Vip21
+	elseif lv == 22 then
+		return Define.SysId.Welfare_Vip22
+	elseif lv == 23 then
+		return Define.SysId.Welfare_Vip23
+	elseif lv == 24 then
+		return Define.SysId.Welfare_Vip24
+	elseif lv == 25 then
+		return Define.SysId.Welfare_Vip25
+	elseif lv == 26 then
+		return Define.SysId.Welfare_Vip26
+	elseif lv == 27 then
+		return Define.SysId.Welfare_Vip27
+	elseif lv == 28 then
+		return Define.SysId.Welfare_Vip28
+	elseif lv == 29 then
+		return Define.SysId.Welfare_Vip29
+	elseif lv == 30 then
+		return Define.SysId.Welfare_Vip30
+	else
+		print("找不到该VIP系统id_______",lv)
+	end
+end
+
+return _M

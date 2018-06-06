@@ -1,0 +1,94 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Bag_Synthetic", WindowType.UI, 0)
+	self.mMoudle = moudle
+	local contentTransform = moudle:Get("Content")
+	self.mItems = {}
+	for k,v in pairs(MBag.MergeItems) do
+		local merge = {}
+		local csvMerge = Csv.Merge[v.mergeid]
+		local mergeMoudle = JGuiManager.GetMoudle(contentTransform,"M_Bag_SyntheticItem", WindowType.UI, 0)
+
+		local Btn = mergeMoudle:Get("Btn")
+		Btn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickBtn(v.mergeid)
+			end, nil, 0.9)
+
+		local BtnText = mergeMoudle:Get("C_text")
+		BtnText.Text = Csv.Text("bag_syn")
+
+		local ImgIcon = mergeMoudle:Get("Icon")
+		ImgIcon.SpriteName = Csv.Item[csvMerge.itemid].icon
+		ImgIcon:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickIcon(csvMerge.itemid)
+			end, nil, 1)
+		
+		local ImgColor = mergeMoudle:Get("IconColor")
+		ImgColor.SpriteName = Csv.Item[csvMerge.itemid].colorIcon
+
+		local TextName = mergeMoudle:Get("Name")
+		TextName.Text = Csv.Item[csvMerge.itemid].name
+
+		merge.moudle = mergeMoudle
+		self.mItems[v.mergeid] = merge
+
+		_P.CheckRedPoint(self,v.mergeid)
+	end
+end
+
+function _P.CheckRedPoint(self,mergeid)
+	local mergeItem = self.mItems[mergeid]
+	if mergeItem ~= nil then
+		local moudle = mergeItem.moudle
+		moudle:Get("redPoint").Activity = _P.GetRedPointState(mergeid)
+	end
+end
+
+function _P.GetRedPointState(mergeid)
+	local csvMerge = Csv.Merge[mergeid]
+	if csvMerge ~= nil then
+		local state,str = MBag.GetCostState(csvMerge.cost_item)
+		return state
+	end
+	return false
+end
+
+function _M:BagMergeSuccess()
+	local items = self.mItems
+	for k,v in pairs(items) do
+		_P.CheckRedPoint(self,k)
+	end
+end
+
+function _P.OnClickBtn(id)
+	if id ~= nil then
+		WindowMgr.Create("UBagSyntheticPop",id)
+	end
+end
+
+function _P.OnClickIcon(id)
+	if id ~= nil then
+		WindowMgr.Create("UBagDetailPop",id)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

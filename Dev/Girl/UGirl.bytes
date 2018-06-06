@@ -1,0 +1,273 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Girl.MGirl.bytes#_M]
+local MGirl = JRequire"Dev.Girl.MGirl"
+--@RefType [Dev.Girl.CGirl.bytes#_M]
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local UGirlUnlock = JRequire"Dev.Girl.GirlUnlockTab"
+local UGirlLock = JRequire"Dev.Girl.GirlLockTab"
+--local UGirlBaby= JRequire"Dev.Girl.GirlBaby"
+--local UGirlMarried = JRequire"Dev.Girl.GirlMarried"
+local UGirlOperation = JRequire"Dev.Girl.GirlOperation"
+local UFriendsRound = JRequire"Dev.Girl.UFriendsRound"
+local UGirlLast = JRequire"Dev.Girl.UGirlLast"
+
+local _M  = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local DefaultColor = Color(89/255,127/255,195/255,1)
+local LightColor = Color(89/255,127/255,195/255,1)
+
+local TOGGLE_NAME = Csv.Const(10207)
+local TOGGLE_SHEET={{id = MGirl.TOGGLE_ID.KNOWN,name = TOGGLE_NAME[2]},
+					{id = MGirl.TOGGLE_ID.FUJIN,name = TOGGLE_NAME[3]},{id = MGirl.TOGGLE_ID.FRIENDROUND,name = TOGGLE_NAME[4]}}
+
+
+
+
+function _M:BeforeDestroy()
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:delete()
+		self.mTabHandle = nil
+	end
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.SelectUnlockTag(self)
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:Choose(Define.SysId.Girl_Unlock)
+	end
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+function _M:OnCreate(chooseFuncId)
+	--手机提示
+	MGirl.isShowPhoneActor = false
+	WindowMgr.Call("UMain","ShowPhoneAnim")
+
+	--请求数据
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_UGirl")
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+
+	self.mGirlItems = {}
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Phone)
+	end, nil, 1.2)
+	local sendRed = moudle:Get("selfFriendRed")
+	local sendBtn = moudle:Get("sendBtn")
+	moudle:Get("sendText").Text = Csv.Text("girl_friendround_send")
+	sendBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		--传给friend
+		_P.ClickSendBtn(self)
+	end)
+	sendBtn.Activity = false
+	sendRed.Activity = false
+	self.mSendBtn = sendBtn
+	self.mSendRed = sendRed
+
+	local funcs = TOGGLE_SHEET --MMain.GetOpenedFuncs(self._SysId, true) -- ----
+	local count = #funcs
+	if count > 0 then
+		local lastChoose = chooseFuncId
+		local isHave = false
+
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "", "Floor_alpha", DefaultColor, LightColor)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("sheet_"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+			--注册小红点
+			self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end	
+	
+	local titleText = moudle:Get("C_Text")
+	titleText.Text = Csv.Text("Girl_Title")
+
+	local toggleContent = moudle:Get("Content")
+	self.mToggelContent = toggleContent
+end
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	self.mSendBtn.Activity = false
+	self.mSendRed.Activity = false
+	if funcId == Define.SysId.Girl_Known then
+		self.ChooseMoudle = UGirlLast.new(self.PageNode)
+	elseif funcId == Define.SysId.Girl_Lock then
+		self.ChooseMoudle = UGirlLock.new(self.PageNode)
+	elseif funcId == Define.SysId.Girl_FriendRound then
+		self.ChooseMoudle = UFriendsRound.new(self.PageNode)
+		self.mSendBtn.Activity = true
+		self.mSendRed.Activity = MGirl.selfFriendRed
+	end
+	MGirl.selectToggle = funcId
+end
+
+function _P.ClickSendBtn(self)
+	if MGirl.selectToggle == Define.SysId.Girl_FriendRound then
+		self.ChooseMoudle:ClickSend()
+	end
+end
+
+
+-----------------
+---子嗣---
+
+function _R.UpdateBaby(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		self.ChooseMoudle:UpdateBabyData(data.baby)
+	end
+end
+
+function _R.NewBaby(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		self.ChooseMoudle:UpdateItemIntimacy(_girlid,_intimacy)
+	end
+end
+
+--UpdateBabySeats
+function _R.UpdateBabySeats(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		self.ChooseMoudle:UpdateSeats()
+	end
+end
+
+function _R.ChangeBabyName(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		self.ChooseMoudle:UpdateBabyName(data.isSuccess)
+	elseif MGirl.selectToggle == Define.SysId.Girl_Marry then
+		self.ChooseMoudle:UpdateBabyName(data.isSuccess)
+	end
+end
+
+function _R.BabyGraduate(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		self.ChooseMoudle:BabyGraduate(data.babyid)
+	end
+end
+
+function _R.UnmarriedBabyUpdate(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Marry then
+		self.ChooseMoudle:ResfrehBabyType(data.babyid)
+	end
+end
+
+function _R.RefreshUnmarriedList(self)
+	if MGirl.selectToggle == Define.SysId.Girl_Marry then
+		self.ChooseMoudle:RefreshToggle()
+	end
+end
+--TerminateTiQin
+function _R.TerminateTiQin(self,itemData)
+	if MGirl.selectToggle == Define.SysId.Girl_Marry then
+		self.ChooseMoudle:TerminateTiQin(itemData)
+	end
+end
+
+function _R.RefreshTiqinRed(self)
+	if MGirl.selectToggle == Define.SysId.Girl_Marry then
+		self.ChooseMoudle:CheckTiqinRed()
+	end
+end
+
+function _R.BabyTeachOptional(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Baby then
+		if data.crits ~= nil then
+			SoundMgr.PlaySystem(10003)
+		end
+	end
+end
+
+---------------------------------------------------------
+--认识美女----------
+function _R.UpdateKnowGirl(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Known then
+		self.ChooseMoudle:UpdateLastGirl(data)
+	end
+end
+
+function _R.RefuseKnowGirl(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Known then
+		self.ChooseMoudle:RefuseLastGirl(data)
+	end
+end
+
+function _R.RefreshGirlTalk(self,data)
+	if MGirl.selectToggle == Define.SysId.Girl_Known then
+		self.ChooseMoudle:RefreshGirlTalk(data)
+	end
+end
+
+---朋友圈---
+function _R.ShowPosItem(self,id)
+	if MGirl.selectToggle == Define.SysId.Girl_FriendRound then
+		self.ChooseMoudle:CreatPosItem(id)
+	end
+end
+
+function _R.RefreshSelfFriendRed(self)
+	if MGirl.selectToggle == Define.SysId.Girl_FriendRound then
+		self.mSendRed.Activity = MGirl.selfFriendRed
+	end
+end
+
+--------------------
+function _R.CloseView(self)
+	self:Destroy()
+end
+
+function _R.LockView(self)
+	self:Lock()
+end
+
+function _R.UnlockView(self)
+	self:Unlock()
+end
+
+return _M

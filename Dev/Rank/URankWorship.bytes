@@ -1,0 +1,107 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local _M = Class(WindowBase)
+local _P = {}
+
+local EFFECT_ID = 18
+local EFFECT_BODY = "T_Effect_Worship1"
+local TALK_LIST = Csv.Const(Define.Const.RankWorshipTalk)
+
+--界面构建
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Ranking_Worship")
+	self.mMoudle = moudle
+	self.mIsShowEnd = false
+
+	moudle:Get("name_text").Text = data.name
+	local talk = _P.GetTalk()
+	self.mEventText = moudle:Get("dialogue_text"):AddOnTime(function(...)
+		self.mTweenText = moudle:Get("dialogue_text"):DOText(talk, 1.5)
+		self.mTweenText:OnComplete(function()
+			SoundMgr.Play(11000)
+			moudle:Get("icon").Activity = true
+			moudle:Get("number").Activity = true
+			self.mIsShowEnd = true
+		end)
+	end,nil,1.5)
+
+	local headPrefab = MPlayer.GetPrefabID(data.avatar.head, data.sex)
+    local bodyPrefab = MPlayer.GetPrefabID(data.avatar.body, data.sex)
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        CCommon.CreateRole(moudle:Get("BSX_body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.rank)
+    else
+        moudle:Get("head").SpriteName = MPlayer.GetSpFromSex(data.avatar.head, data.sex)
+		moudle:Get("BSX_body").SpriteName = MPlayer.GetSpFromSex(data.avatar.body, data.sex)
+    end
+	
+	local gold = data.gold
+	if data.exgold ~= nil and data.exgold > 0 then
+		gold = gold + data.exgold
+		self.mEvent = moudle.SelfRect:AddOnTime(function(...)
+			if self.mIsShowEnd then
+				--CCommon.ShowRight(Csv.Text("rank_awardtips",{num = data.exgold}))
+				SoundMgr.Play(11000)
+			end
+		end,nil,3)
+		_P.PlayGodEffect(self)
+	end
+	moudle:Get("number").Text = Csv.Text("rank_gold",{num = gold})
+	local transBody = self.mMoudle.SelfRect.CachedTran
+	self.mTweenBody = transBody:GetJTweener(EFFECT_BODY)
+	self.mTweenBody:Play()
+
+	moudle:Get("BG_0"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if self.mIsShowEnd then
+			self:Destroy()
+		else
+			self.mIsShowEnd = true
+			if self.mEvent ~= nil then
+				self.mEvent:Destroy()
+			end
+			if self.mEventText ~= nil then
+				self.mEventText:Destroy()
+			end
+			if self.mTweenText ~= nil then
+				moudle:Get("dialogue_text"):DOKill()
+			end
+			if self.mTweenBody ~= nil then
+				self.mTweenBody:Restore()
+			end
+			moudle:Get("dialogue_text").Text = talk
+			moudle:Get("icon").Activity = true
+			moudle:Get("number").Activity = true
+			moudle:Get("BSX_body").Alpha = 1
+			moudle:Get("head").Alpha = 1
+			moudle:Get("dialogue").Alpha = 1
+			moudle:Get("name").Alpha = 1
+			moudle:Get("name_border1").Alpha = 1
+			moudle:Get("name_border2").Alpha = 1
+			moudle:Get("name_text").Alpha = 1
+			if data.exgold ~= nil and data.exgold > 0 then
+				--CCommon.ShowRight(Csv.Text("rank_awardtips",{num = data.exgold}))
+				SoundMgr.Play(11000)
+			end
+		end
+	end,nil,1)
+end
+
+function _P.PlayGodEffect(self)
+	SoundMgr.Play(10004)
+	local nodeTrans = self.mMoudle:Get("EffectNode")
+	nodeTrans:AddOnTime(function()
+		CCommon.PlayEffectGod(nodeTrans,Define.SysId.Rank)
+	end,nil,0.5)
+end
+
+function _P.GetTalk()
+	local talks = TALK_LIST
+	local length = #talks
+	local random = math.random(1,length)
+	local talkid = talks[random]
+	return Csv.Talk[talkid].str
+end
+
+return _M

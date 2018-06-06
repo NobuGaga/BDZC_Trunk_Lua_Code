@@ -1,0 +1,152 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Academy_Skin_Overview"
+local textTitle = "textTitle"
+local csvTitleText = "aircraft_skin_all"
+local btnClose = "btnClose"
+
+--属性表索引
+local PowerCsv = "Girl_skill_type"
+--皮肤加成buff每行文字高度
+local BuffTextRowHeight = 42
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitView(self)
+	_R.RefreshView(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+--初始化窗口
+function _P.InitView(self)
+	self.textCollect = self.moudle:Get("textCollect")
+	self.moudle:Get("textAllInfoTitle").Text = Csv.Text("Girl_married_allAttr")
+	for _, type in pairs(Define.AttrType) do
+		local prefabName = "textAllAttr" .. type
+		self[prefabName] = self.moudle:Get(prefabName)
+	end
+	
+	self.moudle:Get("textSubInfoTitle").Text = Csv.Text("aircraft_skin_effect")
+	self.textSubInfo = self.moudle:Get("textSubInfo")
+	local allBackground = {}
+	allBackground["background"] = self.moudle:Get("background")
+	allBackground["SubInfo"] = self.moudle:Get("SubInfo")
+	self.allBackground = allBackground
+end
+
+--刷新窗口
+function _R.RefreshView(self)
+	local skinOwnNum = 0
+	local skinList = MAircraft.GetActivateSkinList()
+	local num = 0
+	for _, __ in pairs(skinList) do
+		num = num + 1
+	end
+	if nil ~= skinList then
+		skinOwnNum = skinOwnNum + num
+	end
+	if nil ~= MAircraft.BaseSkinList then
+		skinOwnNum = skinOwnNum + #MAircraft.BaseSkinList
+	end		
+	self.textCollect.Text = Csv.Text("aircraft_skin_collect", {own = skinOwnNum, max = MAircraft.MaxSkinNum})
+
+	_P.RefreshAllAttr(self)
+	_P.RefreshSubAttr(self)
+end
+
+--刷新总属性数据
+function _P.RefreshAllAttr(self)
+	for _, type in pairs(Define.AttrType) do
+		local prefabName = "textAllAttr" .. type
+		local buff = 0
+		if nil ~= MAircraft.PowerBuff then
+			buff = MAircraft.PowerBuff[type] or buff
+		end
+		self[prefabName].Text = Csv.Text(PowerCsv .. type) .. Csv.Text("aircraft_skin_attr_color", {num = buff})
+	end
+end
+
+--刷新每个皮肤加成信息
+function _P.RefreshSubAttr(self)
+	local row = 0
+	local skinList = MAircraft.GetActivateSkinList()
+	if nil ~= skinList and "table" == type(skinList) then
+		for _, __ in pairs(skinList) do
+			row = row + 1
+		end
+	end
+	if 0 < row then
+		local height = row * BuffTextRowHeight
+		for _, rect in pairs(self.allBackground) do
+			rect.SizeDelta = Vector2(rect.SizeDelta.x, rect.SizeDelta.y + height)
+		end
+		self.textSubInfo.SizeDelta = Vector2(self.textSubInfo.SizeDelta.x, height)
+		self.textSubInfo.Text = ""
+		local csvAircraftSkin = Csv.AircraftSkin
+		for skinID, _  in pairs(skinList) do
+			local csvValue = csvAircraftSkin[skinID]
+			if nil ~= csvValue then
+				if nil ~= csvValue.name then
+					if nil ~= csvValue.get then
+						for index, value in pairs(csvValue.get) do
+							if nil ~= value[1] and nil ~= value[2] then
+								if MAircraft.SchoolSysID == value[1] then
+									local csvColor = Csv.ItemColor[csvValue.type]
+									self.textSubInfo.Text = self.textSubInfo.Text .. Csv.Text("aircraft_skin_effect_sub", 
+																					 {color = csvColor.str, name = csvValue.name, 
+																					  num = math.modf(value[2] / 100)}) .. "\n"
+								end
+							else
+								error("皮肤ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
+							end
+						end
+					else
+						error("皮肤ID " .. skinID .. " 字段 get 错误")
+					end
+				else
+					error("皮肤ID " .. skinID .. " 字段 name 错误")
+				end
+			else
+				error("没有对应的皮肤ID " .. skinID)
+			end
+		end
+	end
+end
+
+return _M

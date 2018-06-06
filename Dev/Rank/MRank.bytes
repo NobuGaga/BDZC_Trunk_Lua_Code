@@ -1,0 +1,115 @@
+local _M = {}
+local MMain = JRequire "Dev.Main.MMain"
+
+_M.LastChoose = nil
+_M.RankTable = {}					--本服数据
+_M.AllRankTable = {}				--全服数据
+_M.IsAllPage = false				--记录当前是否打开的是全服排名（暂留）
+_M.ChapterIndexName = nil
+_M.ActivityRankType = nil
+_M.RankRedPointTable = {}
+_M.AllRankRedPointTable = {}
+_M.RankRedPoint = false
+
+function _M.GetNumText(num)
+	if _M.ChapterIndexName == nil then
+		_M.ChapterIndexName = {}
+		for i=1,9,1 do
+			_M.ChapterIndexName[i] = Csv.Text("numText_"..i)
+		end
+	end
+	return _M.ChapterIndexName[num]
+end
+
+
+function _M.Clean( ... )
+	_M.LastChoose = nil
+	_M.RankTable = {}
+	_M.AllRankTable = {}
+	_M.IsAllPage = false
+	_M.ChapterIndexName = nil
+	_M.ActivityRankType = nil
+	_M.RankRedPointTable = {}
+	_M.AllRankRedPointTable = {}
+	_M.RankRedPoint = false
+end
+
+function _M.CreateList(data)
+	local rankTable
+	if data.islocal then
+		rankTable = _M.RankTable
+	else
+		rankTable = _M.AllRankTable
+	end
+	rankTable[data.rankid] = data
+end
+
+function _M.GetAward(data)
+	if data.islocal then
+		local rankinfo = _M.RankTable[data.rankid]
+		if rankinfo ~= nil then
+			rankinfo.isworshiped = true
+		end
+		_M.RankRedPointTable[data.rankid] = true
+	else
+		local rankinfo = _M.AllRankTable[data.rankid]
+		if rankinfo ~= nil then
+			rankinfo.isworshiped = true
+		end
+		_M.AllRankRedPointTable[data.rankid] = true
+	end
+end
+
+--[[
+function _M.GetActivityRankList()
+	if _M.ActivityRankType == nil then
+		_M.ActivityRankType = {}
+		local csvActivityRank = Csv.ActivityRank
+		if csvActivityRank ~= nil then
+			for _, csvValue in pairs(csvActivityRank) do
+				if csvValue.rankType ~= nil then
+					_M.ActivityRankType[csvValue.rankType] = true
+				end
+			end
+		end
+		local csvActivityTimeLimit = Csv.ActivityTimeLimit
+		if csvActivityTimeLimit ~= nil then
+			for _, csvValue in pairs(csvActivityTimeLimit) do
+				if csvValue.rankType ~= nil then
+					_M.ActivityRankType[csvValue.rankType] = true
+				end
+			end
+		end
+		local csvSevenDayTarget = Csv.SevenDayTarget
+		if csvSevenDayTarget ~= nil then
+			for _, csvValue in pairs(csvSevenDayTarget) do
+				if csvValue.rankType ~= nil then
+					_M.ActivityRankType[csvValue.rankType] = true
+				end
+			end
+		end
+	end
+	return _M.ActivityRankType
+end
+--]]
+
+function _M.GetRedState()
+	if MMain.FuncIsOpen(Define.SysId.Rank) then
+		local redTable = _M.RankRedPointTable
+		for k,v in pairs(redTable) do
+			if not v then
+				return true
+			end
+		end
+
+		redTable = _M.AllRankRedPointTable
+		for k,v in pairs(redTable) do
+			if not v then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+return _M

@@ -1,0 +1,338 @@
+
+local MFriend = JRequire "Dev.Friend.MFriend"
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MLogin = JRequire "Dev.Login.MLogin"
+local CTalk = JRequire "Dev.Talk.CTalk"
+local MTalk = JRequire "Dev.Talk.MTalk"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local rapidjson = require "rapidjson"
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+local VoiceChat = CS.Speaker.VoiceChat
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+-- Friend = 114,
+local CMD_ID = 
+{
+	cAdd				=	1,--请求添加关系 PFriend.CAdd
+	cAddList 			= 	2,--请求添加多个玩家到关系 PFriend.CAddList
+	cDelete				=	3,--删除某个关系 PFriend.CDelete
+	cFeedback			= 	4,--好友请求反馈(同意/拒绝) PFriend.CFeedback
+	cLook 				= 	5,--查看关系列表 PFriend.CLook
+	cFindIds 			= 	6,--搜索玩家 PFriend.CFindIds
+	cAddFriendList 		= 	7,--点击好友请求按钮 无消息体
+	cRecommend 			= 	8,--请求推荐好友 无消息体
+	cFind				= 	9,--查找某个玩家信息 PFriend.CFind
+
+	sInit				=	1,--初始化关系列表 PFriend.SInit
+	sUpdate				=	2,--更新关系 PFriend.SUpdate
+	sAddFriendNum 		= 	3,--刷新好友请求数(收到好友请求的时候, 只同步数量) PFriend.SAddFriendNum
+	sLook 				= 	4,--关系列表返回 PFriend.SLook
+	sFindIds 			= 	5,--查到玩家返回 PFriend.PPlayerList
+	sAddFriendList		= 	6,--点击好友请求按钮返回 PFriend.PPlayerList
+	sRecommend			= 	7,--推荐好友列表返回 PFriend.PPlayerList
+	sFind				= 	8,--搜索好友 PFriend.PPlayerInfo
+}
+
+function _M.ModuleClean()
+	MFriend.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cAdd] = "PFriend.PPlayerRelation",
+		[CMD_ID.cAddList] = "PFriend.CAddList",
+		[CMD_ID.cDelete] = "PFriend.PPlayerRelation",
+		[CMD_ID.cFeedback] = "PFriend.CFeedback",
+		[CMD_ID.cLook] = "PFriend.CLook",
+		[CMD_ID.cFindIds] = "PFriend.CFindIds",
+		[CMD_ID.cAddFriendList] = "",
+		[CMD_ID.cRecommend] = "",	
+		[CMD_ID.cFind] = "PFriend.CFind",	
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sInit] = {proto = "PFriend.SInit", handle = _P.OnInit},
+		[CMD_ID.sUpdate] = {proto = "PFriend.SUpdate", handle = _P.OnUpdate},
+		[CMD_ID.sAddFriendNum] = {proto = "PFriend.SAddFriendNum", handle = _P.OnAddFriendNum},
+		[CMD_ID.sLook] = {proto = "PFriend.PPlayerList", handle = _P.OnLook},
+		[CMD_ID.sFindIds] = {proto = "PFriend.PPlayerList", handle = _P.OnFindIds},
+		[CMD_ID.sAddFriendList] = {proto = "PFriend.PPlayerIdsList", handle = _P.OnAddFriendList},
+		[CMD_ID.sRecommend] = {proto = "PFriend.PPlayerIdsList", handle = _P.OnRecommend},
+		[CMD_ID.sFind] = {proto = "PFriend.PPlayerInfo", handle = _P.OnFind},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Friend, func_send, func_recv, isReload)	
+end
+
+--Client --> Server
+	function _M.ReqAdd(id, relation)
+		_M.Send(CMD_ID.cAdd, {id = id, relation = relation})
+	end
+	function _M.ReqAddList(relation, ids)
+		_M.Send(CMD_ID.cAddList, {relation = relation, ids = ids})
+	end
+	function _M.ReqDelete(id, relation)
+		_M.Send(CMD_ID.cDelete, {id = id, relation = relation})
+	end
+	function _M.ReqFeedback(id_state_array)
+		_M.Send(CMD_ID.cFeedback, {list = id_state_array})
+	end
+	function _M.ReqLook(relation)
+		_M.Send(CMD_ID.cLook, {relation = relation})
+	end
+	function _M.ReqFindIds(ids)
+		_M.Send(CMD_ID.cFindIds, {ids = ids})
+	end
+	function _M.ReqFind(nameOrId)
+		_M.Send(CMD_ID.cFind, {nameOrId = nameOrId})
+	end
+	function _M.ReqAddFriendList()
+		_M.Send(CMD_ID.cAddFriendList)
+	end
+	function _M.ReqRecommend()
+		_M.Send(CMD_ID.cRecommend)
+	end
+
+--逻辑接口
+
+	function _M.CheckPrivateTalkRedpoint()
+		local haveRedpoint = MFriend.CheckPrivateTalkNoRead()
+		CMain.UpdateRedpoint(haveRedpoint, Define.SysId.Friend_Recent)
+	end
+	--当打开聊天界面的时候, 清理掉对应玩家的未读条数
+	function _M.OpendPrivateTalk(playerId)
+		MFriend.PrivateTalkSetRead(playerId)
+		MFriend.SaveRecentMessages()
+
+		WindowMgr.Call("UFriend", "OnRefreshRecentNoRead", playerId)
+		_M.CheckPrivateTalkRedpoint()
+	end
+	--聊天消息
+	function _M.OnPrivateTalk(msg)
+		SoundMgr.Play(10040)
+
+		local newMsg, isNew = MFriend.AddPrivateTalk(msg)
+		WindowMgr.Call("UPrivateTalk", "OnPrivateTalk", msg.sender, newMsg)
+		MFriend.SaveRecentMessages()
+		if isNew then
+			WindowMgr.Call("UFriend", "OnPrivateTalk", msg.sender)
+		else
+			WindowMgr.Call("UFriend", "OnRefreshRecentNoRead", msg.sender)
+		end
+		_M.CheckPrivateTalkRedpoint()		
+	end
+	--发送语音
+	function _M.SendVoiceChat(channel, clipData, clipLen, playerID)
+		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.SendVoiceUrl)
+		session:AppendParam("playerId", MPlayer.GetId())
+		session:AppendParamBytes("voice", clipData)
+		session:SetCallBack(function (isOk, param1, param2)
+			if isOk then
+				CTalk.SendNewTalk(channel,nil, playerID, param2, clipLen)
+				MFriend.SaveVioce(MPlayer.GetId(), param2, clipData)
+			else
+				error("SendVoiceChat error, info:", param2)
+			end
+		end)
+		HttpHelper.Request(session)
+	end
+	--播放语音(点击语音组件)
+	function _M.PlayVoiceChat(playerId, voiceIndex)
+		local clipData = MFriend.GetVoice(playerId, voiceIndex)
+		if clipData ~= nil then
+			local clip = VoiceChat.Inst:BytesToAudioClip(clipData)
+			if clip ~= nil then
+				SoundMgr.PlayVoice(10000, clip)
+			end
+		else
+			local url = GameSetting.PlayVoiceUrl .. "/" .. voiceIndex % 1000 .. "/" .. voiceIndex
+			local session = HttpSession(CS.Utility.HttpRequestType.None, url)
+			session:SetCallBack(function (isOk, param1, param2)
+				if isOk then
+					local clip = VoiceChat.Inst:BytesToAudioClip(param1)
+					if clip ~= nil then
+						SoundMgr.PlayVoice(10000, clip)
+						MFriend.SaveVioce(playerId, voiceIndex, param1)						
+					end
+				else
+					error("PlayVoiceChat error, info:", param2)
+				end
+			end)
+			HttpHelper.Request(session)
+		end		
+	end
+
+--Server --> Client
+
+	--刷新最近联系人列表
+	function _P.UpdateRecent()
+		if MFriend.UpdateRecent() then
+			MFriend.SaveRecentMessages()
+
+			WindowMgr.Call("UFriend", "OnRefreshRecent")
+			WindowMgr.Call("UPrivateTalk", "OnCheckBlacklist")
+		end
+	end	
+
+	function _P.OnInit(msg)
+		MFriend.RelationCached = {}
+		MFriend.RecvAddFriendNum = msg.addNum
+		MFriend.InitRecentMessages()
+		local info = msg.info
+		if info ~= nil then
+			for _,list in pairs(info) do
+				local players = {}
+				MFriend.RelationCached[list.relation] = players
+				if list.list ~= nil then
+					for _,id in pairs(list.list) do
+						players[id] = true
+					end
+				end
+			end
+		end	
+		_P.UpdateRecent()	
+		WindowMgr.Call("UFriend", "OnLookBack", false)
+		WindowMgr.Call("UFriend", "OnRecvFriendAddNum")
+		--小红点
+		if MFriend.RecvAddFriendNum > 0 then
+			MFriend.IsHaveNewReq = true
+		else
+			MFriend.IsHaveNewReq = false
+		end
+		CMain.UpdateRedpoint(MFriend.IsHaveNewReq, Define.SysId.Friend_Friend)
+		_M.CheckPrivateTalkRedpoint()
+	end
+	function _P.OnUpdate(msg)
+		local playerId = msg.id
+		local name = msg.name
+		local relation = msg.relation
+		local state = msg.state
+		local players = MFriend.RelationCached[relation]
+		if players == nil then
+			players = {}
+			MFriend.RelationCached[relation] = {}
+		end
+		if state == 1 then
+			if not players[playerId] then
+				players[playerId] = true
+				--新加入
+				if relation == MFriend.RelationType.Friend then
+					CCommon.ShowError(Csv.Text("Friend_22", {name = name}))
+				elseif relation == MFriend.RelationType.BlackList then
+					CCommon.ShowError(Csv.Text("Friend_24", {name = name}))
+
+					_P.UpdateRecent()
+					_M.CheckPrivateTalkRedpoint()
+				elseif relation == MFriend.RelationType.Qinjia then
+					CCommon.ShowError(Csv.Text("Friend_23", {name = name}))
+				end
+			end			
+		else
+			if players[playerId] then
+				players[playerId] = nil
+				--新删除
+				if relation == MFriend.RelationType.Friend then
+					CCommon.ShowError(Csv.Text("Friend_25", {name = name}))
+				elseif relation == MFriend.RelationType.BlackList then
+					CCommon.ShowError(Csv.Text("Friend_26", {name = name}))
+				end
+			end			
+		end
+		WindowMgr.Call("UFriend", "OnRelationUpdate", playerId, relation, state)
+		WindowMgr.Call("UFriendRecommend", "OnUpdate")
+	end
+	function _P.OnAddFriendNum(msg)
+		local lastNum = MFriend.RecvAddFriendNum
+		MFriend.RecvAddFriendNum = msg.num
+		if lastNum < MFriend.RecvAddFriendNum then
+			MFriend.IsHaveNewReq = true
+		end
+		--小红点
+		if MFriend.RecvAddFriendNum > 0 then
+			CMain.UpdateRedpoint(MFriend.IsHaveNewReq, Define.SysId.Friend_Friend)
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.Friend_Friend)
+		end
+		WindowMgr.Call("UFriend", "OnRecvFriendAddNum")
+	end
+	function _P.TrackPlayerInfo(info)
+		return {
+			id = info.id,
+			name = info.name,
+			power = info.power,
+			vip = info.vip,
+			level = info.level,
+			headId = info.headId,
+			sex = info.sex,
+			leaveTime = info.leaveTime,
+			relation = info.relation,
+			commerceId = info.commerceId,
+			commerceName = info.commerceName,
+			marryNum = info.marryNum,
+		}
+	end
+	function _P.OnLook(msg)
+		if msg.list ~= nil then
+			for _,v in pairs(msg.list) do
+				MFriend.PlayerInfoCached[v.id] = _P.TrackPlayerInfo(v)
+			end
+		end
+
+		WindowMgr.Call("UFriend", "OnLookBack", false)
+
+		if WindowMgr.IsCreated("UParliamentAwardPop") then
+			WindowMgr.Call("UParliamentAwardPop", "SetFriend", msg)
+		end
+	end
+	function _P.OnFindIds(msg)
+		if msg.list ~= nil then
+			for _,v in pairs(msg.list) do
+				MFriend.PlayerInfoCached[v.id] = _P.TrackPlayerInfo(v)
+			end
+		end
+		WindowMgr.Call("UFriend", "OnRefreshRecent")
+	end
+	function _P.OnFind(msg)
+		local info = _P.TrackPlayerInfo(msg)
+		MFriend.PlayerInfoCached[info.id] = info
+
+		if WindowMgr.IsCreated("UFriendRecommend") then
+			WindowMgr.Create("UFriendFindInfo", info)
+		end
+	end
+	function _P.OnAddFriendList(msg)
+		if msg.list ~= nil then
+			for _,v in pairs(msg.list) do
+				MFriend.PlayerInfoCached[v.id] = _P.TrackPlayerInfo(v)
+			end
+		end
+		WindowMgr.Call("UFriendAddList", "OnAddFriendList", msg.ids)
+	end
+	function _P.OnRecommend(msg)
+		if msg.list ~= nil then
+			for _,v in pairs(msg.list) do
+				MFriend.PlayerInfoCached[v.id] = _P.TrackPlayerInfo(v)
+			end
+		end
+		WindowMgr.Call("UFriendRecommend", "OnRecommend", msg.ids)
+	end
+
+function _M.OpenedAddUI()
+	MFriend.IsHaveNewReq = false
+	--小红点
+	CMain.UpdateRedpoint(false, Define.SysId.Friend_Friend)
+end
+
+return _M

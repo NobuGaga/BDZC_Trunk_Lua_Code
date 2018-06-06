@@ -1,0 +1,198 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local MMain = JRequire "Dev.Main.MMain"
+--
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshName(self)
+	self.mGirlName.Text = MGirl.GetGirlName(self.data.id)
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Info")
+	self.mMoudle = moudle
+	local girlsData = Csv.Girl[data.id]
+
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		SoundMgr.DestroySystem()
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.ShowHelp()
+	end, nil, 1.2)
+
+	local titleText = moudle:Get("C_Text")
+	local dateText = moudle:Get("C_text")
+	local giftText = moudle:Get("C_text_0")
+	local skillText = moudle:Get("C_text_1")
+	local initimacyText = moudle:Get("initimacyText")
+	local charmText = moudle:Get("charmText")
+	local childrenText = moudle:Get("childrenText")
+	local friendText = moudle:Get("friendText")
+	local giftRedPoint = moudle:Get("giftPoint")
+	local skillRedPoint = moudle:Get("skillPoint")
+	local talkText = moudle:Get("DHKtext")
+	local girlName = moudle:Get("nameText")
+
+	titleText.Text = Csv.Text("Girl_detailTitle")
+	dateText.Text = Csv.Text("Girl_date")
+	giftText.Text = Csv.Text("Girl_gift")
+	skillText.Text = Csv.Text("Girl_skill")
+	initimacyText.Text = Csv.Text("Girl_initimacy")
+	charmText.Text = Csv.Text("Girl_charm")
+	childrenText.Text = Csv.Text("Girl_children")
+	friendText.Text = Csv.Text("Girl_friend")
+
+	local descText = moudle:Get("desc")
+	--local nameText = moudle:Get("name")
+	local iconSp = moudle:Get("bsx")
+	local sceneSp = moudle:Get("bg")
+	local initimacy = moudle:Get("initimacy")
+	local charm = moudle:Get("charm")
+	local children = moudle:Get("children")
+	local friend = moudle:Get("friend")
+
+	descText.Text = girlsData.tips
+	--nameText.Text = girlsData.name
+	sceneSp.SpriteName = girlsData.homebg
+	initimacy.Text = data.intimacy
+	charm.Text = data.charm
+	children.Text = data.children
+	friend.Text = data.friend
+
+	if girlsData.prefab ~= nil and girlsData.prefab > 0 then
+		CCommon.CreateActor(moudle:Get("bsx_mask"), girlsData.prefab, CCommon.ActorFieldMap.girl)
+	else
+		iconSp.SpriteName = girlsData.homeicon
+	end
+
+	talkText.Text = girlsData.storyTalk
+	girlName.Text = MGirl.GetGirlName(data.id)--girlsData.name
+
+	self.data = data
+	self.mGirlName = girlName
+	
+	if girlsData.sound ~= nil then
+		SoundMgr.PlaySystem(girlsData.sound)--播放语音
+	end
+
+	local dateBtn = moudle:Get("Btn_a")
+	dateBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local cost = MGirl.GetGirlDateCost(data.id)
+		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+		CCommon.CheckTips(function(isSure,rg)self:OnClickDateBtn(isSure, arg)
+		end,{items = {[1] = GoldCount},content = Csv.Text("common_buyEnergy",{num = cost})})
+	end, nil, 0.9)
+
+	local giftBtn = moudle:Get("Btn_b")
+	giftBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.ShowGiftPop(data)
+	end)
+
+	local skillBtn = moudle:Get("Btn_c")
+	skillBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.ShowSkillPop(data)
+	end)
+
+	moudle:Get("C_text_0_0").Text = Csv.Text("gril_unlock_changename")
+	local changeName = moudle:Get("Btn_d")
+	changeName:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UGirlChangeName",data.id)
+	end)
+
+	if MMain.FuncIsOpen(Define.SysId.Girl_ChangeName) then
+		changeName.Activity = true
+	else
+		changeName.Activity = false
+	end
+
+	self.mGiftRedPoint = giftRedPoint
+	self.mSkillRedPoint = skillRedPoint
+	self.mInitimacy = initimacy
+	self.mCharm = charm
+	self.mFriend = friend
+	self.mChildren = children
+
+	_P.CheckRedPoint(self)
+end
+
+function _M:OnClickDateBtn(isSure, arg)
+	if isSure == true then
+		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+		local cost = MGirl.GetGirlDateCost(self.data.id)
+		local itemDate = Csv.Item[Define.AssetsType.Gold]
+
+		if cost > GoldCount then
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		else
+			CGirl.ReqDate(self.data.id)
+			MGirl.isRandomDate = false
+		end
+	end
+end
+
+function _P.ShowHelp()
+	SoundMgr.Play(10001)
+	WindowMgr.Create("URuleTips",Define.SysId.Girl)
+end
+
+function _P.ShowGiftPop(data)
+	WindowMgr.Create("UGirlGiftPop",data)
+end
+
+function _P.ShowSkillPop(data)
+	WindowMgr.Create("UGirlSkillPop",data)
+end
+
+function _P.CheckRedPoint(self)
+	self.mGiftRedPoint.Activity = MGirl.CheckUnlockGift()
+	self.mSkillRedPoint.Activity = MGirl.CheckSkillByGirl(self.data.id)
+end
+
+function _R.RefreshIntimacy(self,_intimacy,_intimacyChange)
+	self.mInitimacy.Text = _intimacy
+	_P.CheckRedPoint(self)
+end
+
+function _R.RefreshCharm(self,_charm,_charmChange)
+	self.mCharm.Text = _charm
+	_P.CheckRedPoint(self)
+end
+
+function _R.RefreshFriend(self,_friend,_friendChange)
+	self.mFriend.Text = _friend
+	_P.CheckRedPoint(self)
+end
+
+function _R.RefreshBaby(self)
+	local babayData = MGirl.GetGirlData(self.data.id)
+	self.mChildren.Text = babayData.children
+end
+
+function _R.RefreshRedPoint(self)
+	_P.CheckRedPoint(self)
+end
+
+return _M

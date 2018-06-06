@@ -1,0 +1,187 @@
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+local MMain = JRequire "Dev.Main.MMain"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(chooseFuncId)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Wghej_Enemy")
+	
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	helpBtn:AddOnButton(function()
+		
+	end)
+
+	moudle:Get("C_Text_0").Text = Csv.Text("siege_boss_title")
+
+	self.mContent = moudle:Get("Content")
+
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Siege_UBoss, true) --{{id = 1,name = "全服boss"},{id = 2,name = "商会boss"}}
+	local countToggle = #funcs
+	if countToggle > 0 then
+		local isHave = false
+		
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("toggle_"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end
+end
+
+function _P.OnChoose(self, funcId)
+	if self.selectFun ~= nil then
+		if self.selectFun == funcId then
+			return
+		else
+			self.selectFun = funcId
+		end
+	end
+	self.mContent:DestroyChildren()
+
+	local bossItems = {}
+	local bossList = _P.GetBossByType(funcId)
+	for k,v in pairs(bossList)do
+		bossItems[v.indexID] = {moudle = _P.CreateBossItem(self,v),data = v}
+	end
+	self.mBossItems = bossItems
+
+	_P.CheckBigBoss(self)
+end
+
+function _P.GetBossByType(type)
+	local bossList = MSiege.BossList
+
+	local list = {}
+	for k,v in pairs(bossList)do
+		local bossData = Csv.SiegeBoss[v.id]
+		if bossData.start >= 7 then --7星boss除外
+			table.insert(list,v)
+		else
+			if type == Define.SysId.Siege_Boss_Server then
+				if MCommerce.MyCommerceId ~= 0 then
+					if v.commerceId ~= MCommerce.MyCommerceId then
+						table.insert(list,v)
+					end
+				else
+					table.insert(list,v)
+				end
+				
+			elseif type == Define.SysId.Siege_Boss_Commerce then
+				if MCommerce.MyCommerceId ~= 0 then
+					if v.commerceId == MCommerce.MyCommerceId then
+						table.insert(list,v)
+					end
+				else
+					print("你还没加入商会！")
+				end
+			end
+		end
+	end
+	return list
+end
+
+function _P.CreateBossItem(self,data)
+	local content = self.mContent
+	local moudle = JGuiManager.GetMoudle(content,"M_Wghej_Enemy_Item", WindowType.UI, 10)
+
+	local headIcon = moudle:Get("Head")
+	local name = moudle:Get("NameText")
+	local JinDu = moudle:Get("JinDu")
+	local FinderText = moudle:Get("Finder")
+	local FinderName = moudle:Get("FinderName")
+	local buffIcon = moudle:Get("buff")
+	local line = moudle:Get("Line")
+	local fightBtn = moudle:Get("C_Btn_a")
+	local fightText = moudle:Get("C_text")
+	local starts = {}
+	for i = 1,7,1 do
+		starts[i] = moudle:Get("Star"..i)
+	end
+
+	local bossData = Csv.SiegeBoss[data.id]
+	local jindu = math.ceil((data.bossBlood.ncur*100) /data.bossBlood.nmax)
+
+	headIcon.SpriteName = bossData.icon
+	name.Text = bossData.name
+	JinDu.Text = ""..jindu.."%"
+	FinderText.Text = Csv.Text("siege_boss_finder")
+	FinderName.Text = data.discoverer
+	
+	if MSiege.Buffs ~= nil then
+		buffIcon.Activity = true
+	else
+		buffIcon.Activity = false
+	end
+
+	line.Activity = false
+	
+	for k,v in pairs(starts)do
+		if k <= bossData.start then
+			v.Activity = true
+		else
+			v.Activity = false
+		end
+	end
+
+	fightText.Text = Csv.Text("siege_boss_fight")
+	fightBtn:AddOnButton(function()
+		print("挑战boss__________",data.indexID)
+		WindowMgr.Create("USiegeBattle",data)
+	end)
+
+	return moudle
+end
+
+function _P.CheckBigBoss(self)
+	local bossItems = self.mBossItems
+	for k,v in pairs(bossItems)do
+		local bossData = Csv.SiegeBoss[v.data.id]
+		local line = v.moudle:Get("Line")
+		if bossData.start >= 7 then
+			line.Activity = true
+			v.moudle.SelfRect.CachedTran:SetSiblingIndex(0)
+		end
+	end
+end
+
+return _M

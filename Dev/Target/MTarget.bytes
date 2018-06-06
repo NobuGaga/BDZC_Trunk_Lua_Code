@@ -1,0 +1,142 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+local _M = {}
+
+_M.TargetTable = {}       -- 目标数据
+_M.ShowTargetRed = false
+
+_M.TargetTypeEnum = {
+	CompanyUp = 1,
+	PowerUp = 2,
+	VipUp = 3
+}
+
+function _M.Clean()
+	_M.TargetTable = {}
+	_M.ShowTargetRed = false
+end
+
+
+function _M.IsShowBtn( ... )
+	local maxNum = 0
+	local targetNum = 3
+	for k,v in pairs(_M.TargetTable) do
+		local type = v.type
+		local index = v.index
+		if type == _M.TargetTypeEnum.CompanyUp then
+			local maxLevel = #Csv.GoalTitlePromote
+			if index == maxLevel then
+				maxNum = maxNum + 1
+			end
+		elseif type == _M.TargetTypeEnum.PowerUp then
+			local maxLevel = #Csv.GoalPowerPromote
+			if index == maxLevel then
+				maxNum = maxNum + 1
+			end
+		elseif type == _M.TargetTypeEnum.VipUp then
+			local maxLevel = #Csv.GoalVipPromote
+			if index == maxLevel then
+				maxNum = maxNum + 1
+			end
+		end
+	end
+
+	return maxNum < targetNum
+end
+
+
+-- 设置初始化数据
+function _M.OnSetData(data)
+	if data and data.target then
+		for k,v in pairs(data.target) do
+			if v.type == _M.TargetTypeEnum.VipUp then -- vip特权的index是当前下一级能领的，其他都是当前领到那个，所以要-1
+				v.index = v.index - 1
+			end
+			_M.TargetTable[k] = v
+		end
+	end
+end
+
+
+-- 获取指定类型、id的下一个数据
+function _M.GetNextData(targetType, targetId)
+	if targetType == _M.TargetTypeEnum.CompanyUp then
+		local titleUpConf = Csv.GoalTitlePromote
+		local nextId = math.min(targetId + 1, #titleUpConf)
+		return titleUpConf[nextId]
+	elseif targetType == _M.TargetTypeEnum.PowerUp then
+		local powerUpConf = Csv.GoalPowerPromote
+		local nextId = math.min(targetId + 1, #powerUpConf)
+		return powerUpConf[nextId]
+	elseif targetType == _M.TargetTypeEnum.VipUp then
+		local vipUpConf = Csv.GoalVipPromote
+		local nextId = math.min(targetId + 1, #vipUpConf)
+		return vipUpConf[nextId]
+	end
+end
+
+
+-- 获取指定类型、id数据
+function _M.GetCurData(targetType, targetId)
+	if targetType == _M.TargetTypeEnum.CompanyUp then
+		return Csv.GoalTitlePromote[targetId]
+	elseif targetType == _M.TargetTypeEnum.PowerUp then
+		return Csv.GoalPowerPromote[targetId]
+	elseif targetType == _M.TargetTypeEnum.VipUp then
+		return Csv.GoalVipPromote[targetId]
+	end
+end
+
+
+-- 判断当前目标是否达成
+function _M.ThisTargetIsAchieve(targetType, targetId, lastGetId)
+	if targetType == _M.TargetTypeEnum.CompanyUp then
+		local maxLevel = #Csv.GoalTitlePromote
+		local titleUpConf = Csv.GoalTitlePromote[targetId] -- 公司规模经验
+		if not titleUpConf then
+			return false
+		else
+			local companyConf = Csv.Company[titleUpConf.companyId]
+			if not companyConf then return false end
+			-- 头衔达到就可以领取
+			local nowLevel = MPlayer.GetLevel()
+			return lastGetId ~= maxLevel and nowLevel >= titleUpConf.companyId
+		end
+	elseif targetType == _M.TargetTypeEnum.PowerUp then
+		local maxLevel = #Csv.GoalPowerPromote
+		local powerUpConf = Csv.GoalPowerPromote[targetId] -- 玩家实力
+		if not powerUpConf then
+			return false
+		else
+			local nowPower = MPlayer.GetPower()
+			return nowPower >= powerUpConf.power and lastGetId ~= maxLevel
+		end
+	elseif targetType == _M.TargetTypeEnum.VipUp then
+		local maxLevel = #Csv.GoalVipPromote
+		local vipLv =  MPlayer.GetVip()
+		local vipUpConf = Csv.GoalVipPromote[targetId]
+		if not vipUpConf then
+			return false
+		else
+			return vipLv >= vipUpConf.vipId and lastGetId ~= maxLevel
+		end
+	end
+end
+
+
+-- 判断是否是最后一个
+function _M.IsTheLastOne(targetType, targetId)
+	if targetType == _M.TargetTypeEnum.CompanyUp then
+		local titleUpConf = Csv.GoalTitlePromote
+		return targetId >= #titleUpConf
+	elseif targetType == _M.TargetTypeEnum.PowerUp then
+		local powerUpConf = Csv.GoalPowerPromote
+		return targetId >= #powerUpConf
+	elseif targetType == _M.TargetTypeEnum.VipUp then
+		local vipUpConf = Csv.GoalVipPromote
+		return targetId >= #vipUpConf
+	end
+end
+
+
+return _M

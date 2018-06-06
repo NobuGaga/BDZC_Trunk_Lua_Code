@@ -1,0 +1,107 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local STAFFLEVEL = Csv.Const(Define.Const.RelationsNormal)[2]
+local COST1 = Csv.Const(Define.Const.RelationsCost)[2]
+local COST2 = Csv.Const(Define.Const.RelationsCost)[3]
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseView(self)
+	self:Destroy()
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_tips3")
+	self.mMoudle = moudle
+
+	moudle:Get("BackBtn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("title").Text = Csv.Text("battle_chooseTitle")
+	moudle:Get("condition").Text = Csv.Text("relations_tiaojian",{num = STAFFLEVEL})
+
+	local csvItem1 = Csv.Item[COST1]
+	local num1 = MBag.GetItemNum(COST1)
+	moudle:Get("Challenge").Text = Csv.Text("relations_cost",{name = csvItem1.name})
+	moudle:Get("ChallengeText").Text = num1
+
+	local csvItem2 = Csv.Item[COST2]
+	local num2 = MBag.GetItemNum(COST2)
+	moudle:Get("Challenge2").Text = Csv.Text("relations_cost",{name = csvItem2.name})
+	moudle:Get("ChallengeText_0").Text = num2
+
+	local content = moudle:Get("content")
+	local sortStaffTable = _P.GetSortStaffTable()
+	local upingTable = MRelations.StaffTable
+	for k,v in ipairs(sortStaffTable) do
+		local staffMoudle = JGuiManager.GetMoudle(content, "M_Dispatch_Item")
+		local csvStaff = Csv.Personnel[v.id]
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[v.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset
+		staffMoudle:Get("textName").Text = MStaff.GetStaffName(v.id)--csvStaff.name
+		staffMoudle:Get("textLevel").Text = Csv.Text("school_level",{num = v.level})
+		staffMoudle:Get("textExp").Text = Csv.Text("relations_powerZ",{num = MStaff.GetAllAttr(v.id)})
+		staffMoudle:Get("C_text").Text = Csv.Text("school_select")
+		local ImgUping = staffMoudle:Get("Dispatched")
+		local BtnUp = staffMoudle:Get("C_Btn_b")
+		if upingTable[v.id] then
+			ImgUping.Activity = true
+			BtnUp.Activity = false
+		else
+			ImgUping.Activity = false
+			BtnUp.Activity = true
+		end
+		BtnUp:AddOnButton(function()
+			SoundMgr.Play(10001)
+			MRelations.SelectStaffID = v.id
+			if MRelations.FightType == 2 then
+				WindowMgr.Create("URelationsCostSingle")
+			else
+				WindowMgr.Create("URelationsCost")
+			end
+		end,nil,0.9)
+	end
+end
+
+function _P.GetSortStaffTable()
+	local sortTable = {}
+	for k,v in pairs(MStaff.StaffTable) do
+		if v.level >= STAFFLEVEL then
+			table.insert(sortTable,v)
+		end
+	end
+	table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	local upingTable = MRelations.StaffTable
+	if upingTable[a.id] and not upingTable[b.id] then
+		return false
+	elseif not upingTable[a.id] and upingTable[b.id] then
+		return true
+	end
+	if a.power == b.power then
+		return a.id < b.id
+	end
+	return a.power > b.power
+end
+
+return _M

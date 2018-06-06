@@ -1,0 +1,46 @@
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = {}
+
+_M.VipData = 
+{
+	level = 0,
+	exp = 0,
+}
+
+function _M.SetVipData(level, exp)
+	if nil ~= MPlayer and nil ~= MPlayer.PlayerInfo then
+		MPlayer.PlayerInfo.vip = level
+	end
+	_M.VipData.level = level
+	_M.VipData.exp = exp
+end
+
+function _M.SetProductData(data)
+	_M.ProductData = {}
+	for key, value in pairs(data) do
+		if nil ~= value.productId and nil ~= value.buyTimes then
+			_M.ProductData[value.productId] = value.buyTimes
+	    end
+	end
+end
+
+function _M.GetProductBuyTime(productId)
+	if nil ~= _M.ProductData and nil ~= _M.ProductData[productId] then
+		return _M.ProductData[productId] 
+	end
+	return 0
+end
+
+function _M.IsFirstBuy(productId)
+	return 0 == _M.GetProductBuyTime(productId)
+end
+
+function _M.Clean()
+	_M.VipData.level = 0
+	_M.VipData.exp = 0
+	_M.ProductData = {}
+end
+
+return _M

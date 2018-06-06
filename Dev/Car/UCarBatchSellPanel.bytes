@@ -1,0 +1,73 @@
+-- 一键出售成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local matId = 20
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(showList, sellList)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Sell_Batch")
+	self.mModule = module
+
+	module:Get("C_text").Text = Csv.Text("car_openSeat_quxiao")
+	local cancelBtn = module:Get("C_Btn_e")
+	cancelBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	module:Get("C_text_0").Text = Csv.Text("car_openSeat_ok")
+	local sellBtn = module:Get("C_Btn_b")
+	sellBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		
+		CCar.CarTotalSellReq(sellList)
+		MCar.SellGetData = {id = matId, count = self.TotalNum}
+		self:Destroy()
+	end, nil, 0.9)
+
+	module:Get("Title").Text = Csv.Text("car_garage_sell")
+	module:Get("Tips1").Text = Csv.Text("car_batch_sellGetShow")
+
+	_P.SetCarData(self, showList)
+end
+
+
+function _P.SetCarData(self, showList)
+	local itemContent = self.mModule:Get("content")
+
+	if showList then
+		self.TotalNum = 0
+		for k,v in pairs(showList) do
+			CCommon.CreateItem(itemContent, k, nil, {num = v})
+
+			if k == matId then
+				self.TotalNum = self.TotalNum + v
+			end
+		end
+	end
+end
+
+
+return _M

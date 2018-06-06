@@ -1,0 +1,195 @@
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType  [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Common.CCommon.bytes]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local UnityTime = CS.UnityEngine.Time
+local TimeDelay = CS.Utility.TimeDelay
+
+local MAX_WAIT_TIME = 20
+
+local _M = {}
+
+--是否运行心跳
+_M.IsRunning = false
+--客户端时间
+_M.DateTimeTicks = 0
+--服务器时间
+_M.ServerTime = 0
+--延迟时间
+_M.DelayTime = 9999999999999
+--调试模式(不开启心跳超时检查)
+_M.IsDebugMode = false
+_M.LastSendTime = 0
+
+_M.UpdateHandle = 0
+_M.WaitSendHandle = 0
+
+EventCenter.RegistCallEvent(Define.EventListenId.DisconnectServer, function () 
+	_M.Stop()
+end, true)
+
+EventCenter.RegistCallEvent(Define.EventListenId.ToReLogin, function () 
+	_M.Stop()
+end, true)
+
+EventCenter.RegistCallEvent(Define.EventListenId.OnApplicationFocus, function (handle, focus) 
+	if _M.IsRunning and focus then
+		_M.Stop()
+		_M.IsRunning = true
+		_M.Send(6)
+	end
+end, true)
+
+--初始化服务器时间
+function _M.InitServTime(servTime, debugMode)
+	_M.ServerTime = servTime
+	_M.IsDebugMode = debugMode
+	_M.DateTimeTicks = CS.Utility.Utils.Ticks
+end
+
+function _M.Send(timeOutTime)
+	if timeOutTime == nil then
+		timeOutTime = MAX_WAIT_TIME
+	end
+	if _M.IsRunning then
+		_M.LastSendTime = CS.Utility.Utils.Ticks
+		CPlayer.HeartBeatReq(_M.LastSendTime, _M.ServMilliSecond())
+
+		if _M.WaitSendHandle ~= 0 then
+			TimeDelay.SetValid(_M.WaitSendHandle, false)
+			_M.WaitSendHandle = 0
+		end
+		--设置30秒超时
+		_M.WaitSendHandle = TimeDelay.DelayCall(timeOutTime, false, function (handle)
+			-- print("TimeOut::", CS.Utility.Utils.Ticks, _M.WaitSendHandle, handle, CS.Net.LuaConnect.IsConnect(), CS.Net.LuaConnect.IsConnecting())
+
+			_M.WaitSendHandle = 0
+			if not _M.IsDebugMode then
+				_M.OnTimeOut()
+			else
+				CCommon.CheckTips(function(isSure,rg)
+					end, {content = Csv.Text("net_timeout_debug_tips"), isNoCancel = true})
+			end
+		end)
+
+		-- print("Send HeartBeat", CS.Utility.Utils.Ticks, _M.WaitSendHandle)
+	end -- end if
+end
+
+--开始心跳
+function _M.Start()
+	-- print("HeartBeat Start::", CS.Utility.Utils.Ticks, CS.Net.LuaConnect.IsConnect(), CS.Net.LuaConnect.IsConnecting())
+
+	_M.Stop()
+
+	_M.IsRunning = true
+	_M.Send(MAX_WAIT_TIME)
+end
+
+--结束心跳
+function _M.Stop()
+	-- print("HeartBeat Stop::", CS.Utility.Utils.Ticks, CS.Net.LuaConnect.IsConnect(), CS.Net.LuaConnect.IsConnecting())
+
+	_M.IsRunning = false
+
+	if _M.UpdateHandle ~= 0 then
+		TimeDelay.SetValid(_M.UpdateHandle, false)
+		_M.UpdateHandle = 0
+	end
+	if _M.WaitSendHandle ~= 0 then
+		TimeDelay.SetValid(_M.WaitSendHandle, false)
+		_M.WaitSendHandle = 0
+	end
+end
+
+--客户端时间
+function _M.ClientSecond()
+	return math.floor(CS.Utility.Utils.Ticks / 10000000)
+end
+function _M.ClientMilliSecond()
+	return math.floor(CS.Utility.Utils.Ticks / 10000)
+end
+--服务器时间
+function _M.ServSecond()
+	return math.floor(_M.ServerTime / 1000) + math.floor((CS.Utility.Utils.Ticks - _M.DateTimeTicks) / 10000000)
+end
+function _M.ServMilliSecond()
+	return _M.ServerTime + math.floor((CS.Utility.Utils.Ticks - _M.DateTimeTicks) / 10000)
+end
+
+--超时
+function _M.OnTimeOut()
+	CS.Utility.LogPoint.LogPost(11, 1, tostring(_M.ClientMilliSecond()), tostring(_M.ServMilliSecond()))
+	
+	_M.Stop()
+
+	CCommon.ShowReloginBox(Csv.Text("heartBeat_tips"), Csv.Text("common_sure"), function (isSure)
+		GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+	end)
+
+	error("心跳超时!!")
+end
+
+--心跳回包
+function  _M.OnHeartBeat(sendTime, servTime, forcereset)
+	-- print("Recv HeartBeat", CS.Utility.Utils.Ticks, _M.WaitSendHandle)
+
+	if sendTime ~= _M.LastSendTime then
+		return
+	end
+	--去掉超时检测
+	if _M.WaitSendHandle ~= 0 then
+		TimeDelay.SetValid(_M.WaitSendHandle, false)
+		_M.WaitSendHandle = 0
+	end
+	if _M.IsRunning then
+		local now = CS.Utility.Utils.Ticks
+		--发送到接收的延迟时间
+		local passTime = now - sendTime
+		if passTime < 0 then
+			error("这是不可能的!!! " .. passTime)
+			passTime = 0
+		end
+		--使用延迟最小的, 或者时间超过30分钟并且延迟在0.5秒以内的
+		if _M.DelayTime > passTime or (passTime < 5000000 and (now - _M.DateTimeTicks) > 18000000000) or forcereset then
+			_M.DelayTime = passTime
+
+			--重新赋值客户端时间
+			_M.DateTimeTicks = now
+			--重新赋值服务器时间
+			_M.ServerTime = servTime
+
+			-- print(string.format("reset serverTime:%s, clientTime:%s, passTime:%s", tostring(_M.ServerTime), tostring(_M.DateTimeTicks / 10000), tostring(passTime)))
+		end
+
+		local sendSpace = 100000000
+			
+		if _M.DelayTime < 1000000 then
+			--0.1秒延迟 15秒发一次心跳
+			sendSpace = 150000000
+		elseif _M.DelayTime < 5000000 then
+			--0.5秒延迟 8秒发一次心跳
+			sendSpace = 80000000
+		elseif _M.DelayTime < 10000000 then
+			--1秒延迟 5秒发一次心跳
+			sendSpace = 50000000
+		else
+			--大于1秒延迟 3秒发一次心跳
+			sendSpace = 30000000
+		end
+		local nextSendTicks = sendTime + sendSpace
+		if nextSendTicks <= now then
+			_M.Send(MAX_WAIT_TIME)
+		else
+			_M.UpdateHandle = TimeDelay.DelayCall((nextSendTicks - now) / 10000000, false, function ()
+				_M.UpdateHandle = 0
+				_M.Send(MAX_WAIT_TIME)
+			end)
+		end
+	end
+end
+
+return _M

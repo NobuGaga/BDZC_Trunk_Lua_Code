@@ -1,0 +1,337 @@
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local rapidjson = require "rapidjson"
+
+----------------------CS类引用--------------------------
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+----------------------常量定义--------------------------
+local LastLoginSrvFilePath = "log/last_login_server.txt"
+
+--外部接口模块 *** 只放置公共接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--回调函数模块 *** 只放置回调函数, 禁止放变量
+local _R = {}
+
+function _M.Init()
+	--渠道id
+	local platform = GameSetting.Platform
+	--注册SDK回调
+	CS.Utility.ISDKManager.SetSdkCallBack(_M.OnSdkCallBack)
+	--创建SDK对象
+	_M.SdkObj = _P.CreateSdk[platform](GameSetting.Spid)
+	if not _M.SdkObj then
+		local BaseSDK = JRequire "SDK.BaseSDK"
+		_M.SdkObj = BaseSDK.new()
+	end
+end
+
+function _M.OnSdkCallBack(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	local funcName = jsonTab.func
+	local func = _R[funcName]
+	if func ~= nil then
+		func(jsonStr)
+	else
+		error(funcName)
+	end
+end
+
+------------------------------请求接口------------------------------
+--登录请求
+function _M.ReqLogin()
+	CS.Utility.LogPoint.LogPost(16, 1)
+	_M.SdkObj.ReqLogin()
+end
+
+--登录请求
+function _M.ReqSwitchAccount()
+	CS.Utility.LogPoint.LogPost(17, 1)
+	_M.SdkObj.ReqSwitchAccount()
+end
+
+--登出请求
+function _M.ReqLogout()
+	CS.Utility.LogPoint.LogPost(18, 1)
+	_M.SdkObj.ReqLogout()
+	MLogin.Status = MLogin.ELoginStatus.NotLogin
+end
+
+--收集数据
+function _M.ReqCollectData(type, roleID, roleName, roleLevel)
+	if nil == MLogin or nil == MLogin.SelectServer or nil == MLogin.SelectServer.id
+	   or nil == MLogin.SelectServer.name then
+		return
+	end
+	CS.Utility.LogPoint.LogPost(19, 1)
+	if nil == roleID then
+		roleID = MPlayer.GetId()
+	end
+	if nil == roleName then
+		roleName = MPlayer.GetName()
+	end
+	if nil == roleLevel then
+		roleLevel = MPlayer.GetLevel()
+	end
+	_M.SdkObj.ReqCollectData(type, MLogin.SelectServer.id, MLogin.SelectServer.name, roleID, roleName, roleLevel)
+end
+
+function _M.ReqPay(productID, price, gold, productName, param, callback)
+	local num = 1
+	if nil == productName then
+		productName = Csv.Text("recharge_coin", {num = ""})
+		num = gold
+	end
+	if nil ~= callback then
+		_M.PayCallBack = callback
+	end
+	CS.Utility.LogPoint.LogPost(12, 1)
+	_M.SdkObj.ReqPay(productID, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, GameSetting.Sbid, param)
+end
+
+function _M.ReqExit()
+	CS.Utility.LogPoint.LogPost(20, 1)
+	_M.SdkObj.ReqExit()
+end
+
+--复制文本到粘贴板
+function _M.CopyText(text)
+	_M.SdkObj.CopyText(tostring(text))
+end
+
+--获取粘贴板上的文本
+function _M.PasteText(callback)
+	if nil == _M.PasteCallBack then
+		_M.PasteCallBack = callback
+	end
+	_M.SdkObj.PasteText()
+end
+
+--获取粘贴板上的文本回调
+function _R.OnPaste(jsonStr)
+	local text = _M.SdkObj.OnPaste(jsonStr)
+	if nil ~= _M.PasteCallBack and "function" == type(_M.PasteCallBack) then
+		_M.PasteCallBack(text)
+		_M.PasteCallBack = nil
+	end
+end
+
+------------------------------通用方法------------------------------
+-- 初始化服务器列表
+function _P.InitServerList()
+	CS.Net.LuaConnect.AutoReconnect = false
+	local lastLoginCtx = CS.Loader.LoadAccessor.ReadText(LastLoginSrvFilePath);
+	if lastLoginCtx then
+		local lastTmp = rapidjson.decode(lastLoginCtx)
+
+		MLogin.LastLoginServer = nil
+		MLogin.SelectServer = nil
+		if MLogin.ServerList then
+			for k,v in ipairs(MLogin.ServerList) do
+				if v.server then
+					for k1, v1 in ipairs(v.server) do
+						if v1.id == lastTmp.id then
+							MLogin.LastLoginServer = v1
+							MLogin.SelectServer = MLogin.LastLoginServer
+							break
+						end
+					end
+					if MLogin.LastLoginServer then
+						break
+					end
+				end
+			end
+		end
+	end
+
+	local defaultSelectSrv = nil
+	if MLogin.ServerList then
+		for k,v in ipairs(MLogin.ServerList) do
+			if v.server then
+				for k1, v1 in ipairs(v.server) do
+					defaultSelectSrv = v1
+					if v1.status == 2 then
+						break
+					end
+				end
+				if defaultSelectSrv then
+					break
+				end
+			end
+		end -- end for
+	end
+	if not MLogin.SelectServer then
+		MLogin.SelectServer = defaultSelectSrv
+	end
+	if not MLogin.LastLoginServer then
+		MLogin.LastLoginServer = defaultSelectSrv
+	end
+	if nil == defaultSelectSrv then
+		_P.OnGetServerlistFail()
+	else
+		MLogin.Status = MLogin.ELoginStatus.Login
+		WindowMgr.Call("ULogin", "RefreshLoginState")
+	end
+end
+
+--获取服务器列表失败
+function _P.OnGetServerlistFail()
+	CCommon.ShowReloginBox(Csv.Text("login_get_srv_err_content"), Csv.Text("common_sure"), function (isSure)
+		if isSure then
+			GameSetting.GameQuit()
+		end
+	end, Csv.Text("common_cancel"), -10)
+end
+
+--Http请求获取服务器里列表
+function _M.GetServerList()
+	MLogin.ServerList = {}
+	local cached_test_serverlist = CS.Loader.LoadAccessor.ReadText("test_serverlist.txt")
+	if cached_test_serverlist ~= nil and cached_test_serverlis ~= "" then
+		print("test_serverlist:", cached_test_serverlist)
+		local retTable = rapidjson.decode(cached_test_serverlist)
+		if nil ~= retTable and nil ~= retTable.data and nil ~= retTable.data.ServerGroup then
+			MLogin.ServerList = retTable.data.ServerGroup
+			_P.InitServerList()
+		else
+			_P.OnGetServerlistFail()
+			error("test_serverlist error!!!")
+		end
+	else
+		CS.Utility.LogPoint.LogPost(5, 1, luaUtil.TransToYearMonthDayHMS(os.time()), GameSetting.ServListUrl)
+		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.ServListUrl)
+		session:AppendParam("spid", GameSetting.Spid)
+		session:AppendParam("sbid", GameSetting.Sbid)
+		session:AppendParam("areaid", GameSetting.AreaId or "")
+		if GameSetting.IsiOSCommit and GameSetting.initServerIdList ~= nil then
+			session:AppendParam("serverId", GameSetting.initServerIdList)
+		end
+		print("-------AREAID : " .. GameSetting.AreaId)
+		session:AppendParam("clientVersion", GameSetting.ClientVersion)
+		session:SetCallBack(function (isOk, param1, param2)
+			if isOk then
+				local retTable = rapidjson.decode(param1)
+				if nil ~= retTable then
+					local state = retTable.errorno
+					if 0 == state then
+						if nil ~= retTable.data and nil ~= retTable.data.ServerGroup then
+							MLogin.ServerList = retTable.data.ServerGroup
+							if MLogin.ServerList then
+								for k,v in ipairs(MLogin.ServerList) do
+									if v.server then
+										for k1, v1 in ipairs(v.server) do
+											v1.id = tonumber(v1.id)
+										end
+									end
+								end
+							end
+							local length = luaUtil.StringLenght(param1)
+							CS.Utility.LogPoint.LogPost(5, 2, luaUtil.TransToYearMonthDayHMS(os.time()), tostring(length))
+							_P.InitServerList()
+						end
+					else
+						_P.OnGetServerlistFail()
+						CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), retTable.errormsg)
+						error("get server list error, state = " .. state .. "  errormsg = " .. retTable.errormsg)
+					end
+				else
+					_P.OnGetServerlistFail()
+					CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
+					error("GetServerList --> HttpSession retTable is empty!! url:" .. GameSetting.ServListUrl .. ", info:" .. param2)
+				end
+			else
+				_P.OnGetServerlistFail()
+				CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
+				error("GetServerList --> HttpSession error!! url:" .. GameSetting.ServListUrl .. ", info:" .. param2)
+			end
+		end)
+		HttpHelper.Request(session)
+	end	
+end
+
+------------------------------回调接口------------------------------
+--登录回调
+function _R.OnSDKLogin(jsonStr)
+	CS.Utility.LogPoint.LogPost(16, 2)
+	_M.SdkObj.OnLogin(jsonStr)
+	_M.GetServerList()
+end
+
+--切换账号回调
+function _R.OnSDKSwitchAccount(jsonStr)
+	CS.Utility.LogPoint.LogPost(17, 2)
+	_M.ReqCollectData(SDKCollectType.ExitRole)
+	_M.SdkObj.OnSwitchAccount(jsonStr)
+	_M.GetServerList()
+end
+
+--登出账号回调
+function _R.OnSDKLogout()
+	CS.Utility.LogPoint.LogPost(18, 2)
+	_M.ReqCollectData(SDKCollectType.ExitRole)
+	MLogin.Status = MLogin.ELoginStatus.NotLogin
+	GameSetting.ToReLogin(GameSetting.ReLoginType.ToLogin)
+end
+
+--支付回调
+function _R.OnSDKPay(jsonStr)
+	CS.Utility.LogPoint.LogPost(13, 1)
+	_M.SdkObj.OnPay(jsonStr)
+	if nil ~= _M.PayCallBack then
+		_M.PayCallBack(jsonStr)
+		_M.PayCallBack = nil
+	end
+end
+
+--退出游戏回调
+function _R.OnSDKExit()
+	CS.Utility.LogPoint.LogPost(20, 2)
+	GameSetting.OnGameEscapePress()
+end
+
+------------------------------  构造  ------------------------------
+_P.CreateSdk = 
+{
+	[Define.PlatformType.Editor] = function(spid)
+		local BaseSDK = JRequire "SDK.BaseSDK"
+		return BaseSDK.new()
+	end,
+	[Define.PlatformType.AndroidPhone] = function(spid)
+		if Define.PlatformType.DEVELOP ~= spid then
+			local AndroidSDK = JRequire "SDK.AndroidYiWanSDK"
+			return AndroidSDK.new()
+		end
+		return nil
+	end,
+	[Define.PlatformType.AndroidPad] = function(spid)
+		if Define.PlatformType.DEVELOP ~= spid then
+			local AndroidSDK = JRequire "SDK.AndroidYiWanSDK"
+			return AndroidSDK.new()
+		end
+		return nil
+	end,
+	[Define.PlatformType.iPhone] = function(spid)
+		if Define.PlatformType.iOSYiWan == spid then
+			local iOSSDK = JRequire "SDK.iOSYiWanSDK"
+			return iOSSDK.new()
+		elseif Define.PlatformType.iOSDefault == spid then
+			local iOSSDK = JRequire "SDK.iOSDefaultSDK"
+			return iOSSDK.new()
+		end
+		return nil
+	end,
+}
+
+return _M

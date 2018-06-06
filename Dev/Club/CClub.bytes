@@ -1,0 +1,374 @@
+local MClub = JRequire "Dev.Club.MClub"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local EventCenter = JRequire "Dev.EventCenter"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = {}
+local _P = {}
+
+_M.Handle = nil
+
+local ECmdId = 
+{
+	cClubHost = 1,         -- 个人举办宴会 PClub.CHost
+	cClubJoin = 2,         -- 参与他人宴会 PClub.CJoin
+	cClubRefreshList = 3,  -- 刷新宴会列表 
+	cClubEnter = 4,        -- 进入宴会 PClub.CEnter
+	cClubShopRefresh = 5,  -- 刷新商城 PClub.CRefreshShop
+	cClubShopBuy = 6,      -- 宴会商城购买（兑换） PClub.CShopBuy
+	cClubGainAward = 7,    -- 领取宴会结算奖励
+	cClubRefer = 8,        -- 根据编号查询宴会信息 PClub.CRefer
+	
+	sClubInit = 1,         -- 宴会初始化 PClub.SInit
+	sClubJoin = 2,         -- 参加宴会 PClub.SJoin
+	sClubEnter = 3,        -- 进入宴会 PClub.SEnter
+	sClubFinish = 4,       -- 宴会完成 PClub.SClubFinish
+	sClubHost = 5,         -- 举办宴会 PClub.SHost
+	sClubShopRefresh = 6,  -- 刷新宴会商城 PClub.PShop
+	sClubShopBuy = 7,      -- 宴会商城购买 PClub.SShopBuy
+	sClubRefreshList = 8,  -- 刷新宴会列表 PClub.SSRefreshList
+	sClubGainAward = 9,    -- 领取宴会结算奖励回调 PClub.SGainAaward
+	sClubRefer = 10,       -- 查询返回 PClub.SRefer
+}
+
+
+function _M.ModuleClean()
+	MClub.Clean()
+	if _M.Handle ~= nil then
+		EventCenter.UnRegistCallEvent(_M.Handle)
+		_M.Handle = nil
+	end
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cClubHost] = "PClub.CHost",
+		[ECmdId.cClubJoin] = "PClub.CJoin",
+		[ECmdId.cClubRefreshList] = "",
+		[ECmdId.cClubEnter] = "PClub.CEnter",
+		[ECmdId.cClubShopRefresh] = "PClub.CRefreshShop",
+		[ECmdId.cClubShopBuy] = "PClub.CShopBuy",
+		[ECmdId.cClubGainAward] = "",		
+		[ECmdId.cClubRefer] = "PClub.CRefer",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sClubInit]        = { proto = "PClub.SInit",        handle = _P.OnInitData},
+		[ECmdId.sClubJoin]        = { proto = "PClub.SJoin",        handle = _P.OnJoinCallBack},
+		[ECmdId.sClubEnter]       = { proto = "PClub.SEnter",       handle = _P.OnEnterCallBack},
+		[ECmdId.sClubFinish]      = { proto = "PClub.SClubFinish",  handle = _P.OnFinishCallBack},
+		[ECmdId.sClubHost]        = { proto = "PClub.SHost",        handle = _P.OnHostCallBack},
+		[ECmdId.sClubShopRefresh] = { proto = "PClub.PShop",        handle = _P.OnShopRefreshBack},
+		[ECmdId.sClubShopBuy]     = { proto = "PClub.SShopBuy",     handle = _P.OnBuyCallBack},		
+		[ECmdId.sClubRefreshList] = { proto = "PClub.SSRefreshList",handle = _P.OnRefreshListBack},
+		[ECmdId.sClubGainAward]   = { proto = "PClub.SGainAaward",  handle = _P.OnGetRewardBack},
+		[ECmdId.sClubRefer]       = { proto = "PClub.SRefer",  		handle = _P.OnReferBack},		
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Club, func_send, func_recv, isReload)
+end
+
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+
+-- 创建计时器
+function _P.OnStartTimer(time)
+	_P.OnClearTimer()
+	if time <= 0 then return end
+
+	if _M.Handle == nil then
+		_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+			_M.AddTimeUpdate()
+		end)
+	end
+end
+
+
+function _M.AddTimeUpdate()
+	local exchangeTable = MClub.ExchangeTable
+	if exchangeTable.nextRefreshLeftTime == nil then return end
+	
+	local time = exchangeTable.nextRefreshLeftTime - HeartBeat.ServSecond()
+	if time < 0 then
+		_P.OnClearTimer()
+		_M.RefreshShopReq(false) -- 自动更新请求
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer()
+	if _M.Handle ~= nil then
+		EventCenter.UnRegistCallEvent(_M.Handle)
+		_M.Handle = nil
+	end
+end
+
+
+-- C2S
+-- 请求刷新积分兑换商店
+function _M.RefreshShopReq(isPay)
+	_M.Send(ECmdId.cClubShopRefresh, {pay = isPay})
+end
+
+
+-- 请求兑换商品
+function _M.ExchangeItemReq(index, count)
+	_M.Send(ECmdId.cClubShopBuy, {index = index, count = count})
+end
+
+
+-- 请求举办聚会
+function _M.OpenPartyReq(typeId, isOpen)
+	_M.Send(ECmdId.cClubHost, {clubtype = typeId, openClub = isOpen})
+end
+
+
+-- 请求加入他人宴会(赴宴)
+function _M.JoinPartyReq(playerId, seatIndex, joinId)
+	_M.Send(ECmdId.cClubJoin, {playerid = playerId, seatindex = seatIndex, joinType = joinId})
+end
+
+
+-- 请求刷新宴会列表
+function _M.RefreshListReq()
+	_M.Send(ECmdId.cClubRefreshList)
+end
+
+
+-- 进入宴会
+function _M.OnEnterReq(playerId)
+	_M.Send(ECmdId.cClubEnter, {playerid = playerId})
+end
+
+
+-- 宴会结束，请求领取宴会结算奖励
+function _M.OnGetRewardReq()
+	_M.Send(ECmdId.cClubGainAward)
+end
+
+
+-- 请求查询
+function _M.OnReferPartyReq(playerId)
+	_M.Send(ECmdId.cClubRefer, {playerid = playerId})
+end
+
+
+-- S2C
+-- 游艇会初始化
+function _P.OnInitData(data)
+	MClub.OnInitClubData(data)
+
+	if data.shop == nil then return end
+	if data.shop.nextRefreshLeftTime == 0 then -- 自动刷新商店列表
+		_M.RefreshShopReq(false)
+	else --开启计时器
+		MClub.ExchangeTable.nextRefreshLeftTime = data.shop.nextRefreshLeftTime + HeartBeat.ServSecond()
+		_P.OnStartTimer(data.shop.nextRefreshLeftTime)
+	end
+end
+
+
+-- 加入宴会回调
+function _P.OnJoinCallBack(data)
+	_P.OnAddPlayerNum(data.gainPoint, data.gainScore)
+
+	if MClub.ClubTable.joinCount ~= nil then
+		 MClub.ClubTable.joinCount =  MClub.ClubTable.joinCount + 1
+		 WindowMgr.Call("UClubMainPanel", "OnUpdateJoinCount")
+	end
+
+	-- 关闭赴宴界面
+	if WindowMgr.IsCreated("UClubJoinPanel") then 
+		WindowMgr.Destroy("UClubJoinPanel")
+	end
+	
+	-- 打开获得奖励界面
+	if WindowMgr.IsCreated("UClubIngPanel") then
+		WindowMgr.Create("UClubThanksPanel", data, MClub.curPartyName)
+	end
+
+	-- 更新当前party信息
+	WindowMgr.Call("UClubIngPanel", "OnJoinCallBack", data)
+end
+
+
+-- 玩家积分、分数相加
+function _P.OnAddPlayerNum(point, score)
+	MClub.ExchangeTable.point = MClub.ExchangeTable.point + point
+
+	MClub.ClubTable.point = MClub.ClubTable.point + point
+	MClub.ClubTable.score = MClub.ClubTable.score + score
+end
+
+
+-- 进入宴会回调
+function _P.OnEnterCallBack(data)
+	MClub.CurJoinPartyId = data.playerid
+	-- 如果点击的是当前已经加入的party，不需要打开loading界面，否则打开loading界面
+	if data.errcode == 1 then
+		CCommon.ShowError(Csv.Text("club_ing_finishError"))
+		return
+	elseif data.errcode == 2 then
+		CCommon.ShowError(Csv.Text("club_ing_WebError"))
+		return
+	end
+
+	if WindowMgr.IsCreated("UClubMainPanel") then
+		if _M.IsOwnParty(data) then -- 进入自己的party
+			MClub.isShowGoPanel = false
+			WindowMgr.Create("UClubIngPanel", data)
+		else
+			local isHas = _M.IsInThisParty(data.msgList)
+			MClub.isShowGoPanel = not isHas
+			WindowMgr.Create("UClubIngPanel", data)
+		end
+	end
+end
+
+
+-- 宴会完成推送
+function _P.OnFinishCallBack(data)
+	if WindowMgr.IsCreated("UClubIngPanel") and MClub.CurJoinPartyId == MPlayer.GetId() then
+		MClub.rewardPanelData = nil
+		WindowMgr.Create("UClubRewardPanel", data)
+	else
+		MClub.rewardPanelData = data
+	end
+end
+
+
+-- 举办宴会回调
+function _P.OnHostCallBack(data)
+	MClub.ClubTable.openFlag = true
+	WindowMgr.Call("UClubMainPanel", "OnRefreshOwnText", data)
+
+	if WindowMgr.IsCreated("UClubChoosePanel") then 
+		WindowMgr.Destroy("UClubChoosePanel")
+	end
+
+	local enterPartyData = {}
+	local playerId = MPlayer.GetId()
+	enterPartyData.errcode = 0
+	enterPartyData.leftTime = data.leftTimer
+	enterPartyData.playerid = playerId
+	enterPartyData.name = MPlayer.GetName()
+	enterPartyData.totalScore = 0
+	enterPartyData.msgList = {}
+	enterPartyData.clubtype = data.clubtype
+	MClub.CurJoinPartyId = playerId
+
+	MClub.isShowSuccessPanel = true
+	if WindowMgr.IsCreated("UClubMainPanel") then
+		WindowMgr.Create("UClubIngPanel", enterPartyData)
+	end
+end
+
+
+-- 刷新商城回调
+function _P.OnShopRefreshBack(data)
+	MClub.OnSetShopData(data)
+
+	if data.nextRefreshLeftTime > 0 then
+		MClub.ExchangeTable.nextRefreshLeftTime = data.nextRefreshLeftTime + HeartBeat.ServSecond()
+		_P.OnStartTimer(data.nextRefreshLeftTime)
+	end
+
+	WindowMgr.Call("UClubExchangePanel", "OnRefreshShopData", data)
+end
+
+
+-- 兑换商品回调
+function _P.OnBuyCallBack(data)
+	MClub.ClubTable.point = MClub.ClubTable.point - data.costpoint
+	MClub.OnUpdateShopData(data)
+
+	WindowMgr.Call("UClubExchangePanel", "OnExchangeCallBack", data)
+end
+
+
+-- 刷新列表回调
+function _P.OnRefreshListBack(data)
+	-- 缓存船列表数据
+	MClub.OnSaveShipData(data)
+
+	-- 创建主界面船列表
+	WindowMgr.Call("UClubMainPanel", "OnCreateShipList", data)
+end
+
+
+-- 领取宴会结算奖励回调
+function _P.OnGetRewardBack(data)
+	if WindowMgr.IsCreated("UClubMainPanel") and WindowMgr.IsCreated("UClubIngPanel") then 
+		WindowMgr.Destroy("UClubIngPanel")
+	end
+
+	MClub.ClubTable.openFlag = false
+	_P.OnAddPlayerNum(data.gainPoint, data.gainScore)
+	WindowMgr.Call("UClubMainPanel", "OnRefreshOwnText", data)
+end
+
+
+-- 查询返回
+function _P.OnReferBack(data)
+	WindowMgr.Call("UClubNumJoinPanel", "OnGetInfoBack", data)
+end
+
+
+-- 每日12点重置
+function _P.OnDayout()
+	if MClub.ClubTable ~= nil and MClub.ClubTable.joinCount ~= nil then
+		MClub.ClubTable.joinCount = 0
+		MClub.ExchangeTable.todayRefreshCount = 0
+
+		if WindowMgr.IsCreated("UClubExchangePanel") then 
+			WindowMgr.Call("UClubExchangePanel", "OnUpdateRefreshCount")
+		end
+		if WindowMgr.IsCreated("UClubMainPanel") then
+			WindowMgr.Call("UClubMainPanel", "OnUpdateJoinCount")
+		end
+	end
+end
+
+
+-- other
+-- 是否是自己的party
+function _M.IsOwnParty(data)
+	local playerid = MPlayer.GetId()
+	local playerName = MPlayer.GetName()
+	
+	if data.playerid == playerid and data.name == playerName then
+		return true
+	end
+
+	return false
+end
+
+
+-- 判定自己是否在该party内
+function _M.IsInThisParty(list)
+	if list == nil then return false end
+
+	local playerid = MPlayer.GetId()
+	local playerName = MPlayer.GetName()
+
+	for k,v in pairs(list) do
+		if v.playerid == playerid and v.name == playerName then
+			return true
+		end
+	end
+
+	return false
+end
+
+
+return _M

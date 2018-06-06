@@ -1,0 +1,88 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local _M = Class(WindowBase)
+local _P = {}
+
+local winActorId = 10040
+local Interval = 3
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Success")
+	self.mMoudle = moudle
+
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	-- 播放战斗胜利特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), winActorId)
+
+	local data = MRelations.ReportData
+	if data.award ~= nil then
+		local content = moudle:Get("Items")
+		for k,v in pairs(data.award) do
+			if v.key == Define.AssetsType.Bookexp or v.key == Define.AssetsType.Gongzhang then
+				-- local awardMoudle = JGuiManager.GetMoudle(content, "M_Common_Item")
+				-- local csvItem = Csv.Item[v.key]
+				-- awardMoudle:Get("M_Common_Item").SpriteName = csvItem.colorIcon
+				-- awardMoudle:Get("Icon").SpriteName = csvItem.icon
+				-- awardMoudle:Get("Num").Text = v.value
+				CCommon.CreateItem(content,v.key,nil,{num = v.value},Define.SysId.Relations)
+			end
+		end
+	end
+	moudle:Get("RewardText1").Text = Csv.Text("relations_point")
+	moudle:Get("text1").Text = Csv.Text("relations_addnum",{num = data.point})
+
+	local liansheng = data.liansheng
+	for i=1, 10 do
+		local node = moudle:Get("LsNum"..i)
+		if node == nil then break end
+		local ten = math.modf(liansheng / 10)
+		local rest = liansheng % 10
+		node.SpriteName = "vip_"..rest
+		if ten == 0 then
+			break
+		else
+			liansheng = ten
+		end
+	end
+
+	local remainNum = Interval - data.liansheng % Interval
+	moudle:Get("closeText").Text = Csv.Text("relations_wintimesget",{num = remainNum})
+
+	local textTip = moudle:Get("closeText1")
+	if data.liansheng%3 == 0 then
+		textTip.Text = Csv.Text("relations_tip13")
+	else
+		textTip.Text = Csv.Text("relations_tip14",{num = 3 - data.liansheng%3})
+	end
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		local csvAward = Csv.RelationsBox[data.liansheng]
+		if csvAward ~= nil and csvAward.type == 2 then
+			WindowMgr.Create("URelationsStraight")
+		else
+			if data.allpoint ~= nil then
+				WindowMgr.Call("URelations","OnFightEnd")
+				WindowMgr.Destroy("URelationsFight")
+			else
+				CRelations.CFightRefresh()
+			end
+			WindowMgr.Destroy("URelationsReport")
+			if self.mMoudle ~= nil then
+				self:Destroy()
+			end
+		end
+	end, nil)
+end
+
+return _M

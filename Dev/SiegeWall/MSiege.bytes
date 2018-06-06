@@ -1,0 +1,328 @@
+
+local EventCenter = JRequire "Dev.EventCenter"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+
+local _M = {}
+local _P = {}
+
+_M.MaxPoint = 10
+
+_M.TreasureEnum = {
+	None = 0,
+	Mine = 1,
+	Disk = 2,
+	Order = 3,
+}
+_M.RankTypeEnum = {
+	Personal = 1,
+	Gang = 2,
+	Killed = 3,
+}
+
+_M.ActivityId = 1 --活动id
+_M.Phase = 2 --阶段
+_M.OpenTime = 1800 --开启CD(等待中开始)
+_M.PointCD = 1800
+_M.Progress = {} --进度，列表，第二阶段有3个进度
+_M.LastUdisk = {ncur = 99,nmax = 100} --nil --剩余U盘数量，总数
+_M.Buffs = {{key = 3,value = 1},{key = 1,value = 2},{key = 2,value = 3}}
+_M.lastEnmey = 0 --剩余敌人数量，第三阶段
+_M.BigBoss = {} --第二阶段3只
+_M.Teams = {{type = 1,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
+			{type = 2,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
+			{type = 3,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}}} --阵营信息
+_M.RecoveStaffs = {} --已使用过复活的员工（策划说同一阶段同个员工只能复活一次）
+_M.BossList = {}
+
+_M.ActionPoint = 0--行动点
+_M.RecoveTime = 0 --恢复时间
+_M.isRecoveTick = false
+_M.RecoveHandle = nil 
+_M.SelectHero = nil
+
+_M.BossList = {{indexID = 1,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "1",commerceId = 1},
+				{indexID = 2,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "2",commerceId = MCommerce.MyCommerceId},
+				{indexID = 3,id = 3,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "3",commerceId = 1},
+				{indexID = 4,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "4",commerceId = 1},
+				{indexID = 5,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "5",commerceId = MCommerce.MyCommerceId},
+				{indexID = 6,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "6",commerceId = 1},
+				{indexID = 7,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "7",commerceId = MCommerce.MyCommerceId},
+				{indexID = 8,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "8",commerceId = 1},
+				{indexID = 9,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "9",commerceId = 1},
+				{indexID = 10,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "10",commerceId = 1},}
+
+_M.isFighting = false
+_M.selectBossId = 0
+_M.StaffStateTab = {} 
+_M.StaffLifeNum = {}
+_M.BossPower = {}
+_M.AllStageData = {}
+
+function _M.Clean()
+	_M.OpenTime = 0
+	_M.selectBossId = 0
+	_M.RecoveTime = 0
+	_M.isRecoveTick = false
+	_M.RecoveHandle = nil 
+	_M.ActionPoint = 0
+	_M.SelectHero = nil
+	_M.isFighting = false
+
+	_M.StaffStateTab = {} 
+	_M.StaffLifeNum = {}
+	_M.BossPower = {}
+	_M.AllStageData = {}
+	_M.BossList = {}
+	_M.LastUdisk = nil
+end
+
+
+function _M.SetAcitvityPhase(_acitvityId,_phase)
+	_M.ActivityId = _acitvityId --活动id
+	_M.Phase = _phase --阶段
+
+	_M.MaxPoint = Csv.Siege[_acitvityId].maxTimes
+	_M.PointCD = Csv.Siege[_acitvityId].CD
+	_M.OpenTime = 1800 + HeartBeat.ServSecond()
+	if _phase ~= nil then
+		CSiege.ReqSiegeStage() --请求阶段
+	end
+end
+
+function _M.SetSiegeStageMsg(data)
+	_M.Phase = data.phase --阶段
+	
+	_M.Progress = {}
+	if data.progress ~= nil then
+		for k,v in pairs(data.progress)do
+			local _progress = {type = v.type,progressCur = v.progressCur,progressMax = v.progressMax}
+			table.insert(_M.Progress,_progress)
+		end
+	end
+
+	_M.LastUdisk = nil
+	if data.lastUdisk ~= nil then
+		_M.LastUdisk = {ncur = data.lastUdisk.ncur,nmax = data.lastUdisk.nmax}
+	end
+	
+	_M.Buffs = {}
+	if data.buffs ~= nil then
+		for k,v in pairs(data.buffs)do
+			table.insert(_M.Buffs,{key = v.key,value = v.value})
+		end
+	end
+
+	_M.lastEnmey = 0
+	if data.enemy ~= nil then
+		_M.lastEnmey = data.enemy
+	end
+
+	_M.BigBoss = {}
+	if data.boss ~= nil then
+		for k,v in pairs(data.boss)do
+			local boss = _P.BossMsg(v)
+			table.insert(_M.BigBoss,boss)
+		end
+	end
+
+	_M.RecoveStaffs  = {}
+	if data.staffs ~= nil then
+		for k,v in pairs(data.staffs)do
+			table.insert(_M.RecoveStaffs,v)
+		end
+	end
+
+	_M.Teams = {}
+	if data.teams ~= nil then
+		for k,v in pairs(data.teams)do
+			local type = v.type
+			local bossId = v.bossId
+			local commerce = {}
+			if v.commerce ~= nil then
+				for k2,v2 in pairs(v.commerce)do
+					table.insert(commerce,{id = v2.key,name = v2.value})
+				end
+			end
+		end
+	end
+end
+
+function _M.SetActionPoint(data)
+	_M.ActionPoint = data.action
+
+	_M.RecoveTime = 0
+	if data.lastTime ~= nil then
+		_M.RecoveTime = data.lastTime
+	end
+	_P.ReduceTime()
+end
+
+function _M.SetBossList(data)
+	_M.BossList = {}
+	if data.bossList ~= nil then
+		for k,v in pairs(data.bossList)do
+			local boss = _P.BossMsg(v)
+			table.insert(_M.BossList,boss)
+		end
+	end
+end
+
+function _M.SetNewBuff(data)
+	if data.buff ~= nil then
+		for k,v in pairs(_M.Buffs)do
+			if v.key == data.buff.key then
+				v.value = v.value + data.buff.value
+			end
+		end
+	end
+end
+
+function _P.ReduceTime()
+	local tick = _M.RecoveTime
+	if tick > 0 then
+		_M.isRecoveTick = true
+		_M.RecoveHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+			local _tick = _M.RecoveTime
+			if _tick > 0 then
+				local leftTime = _tick - HeartBeat.ServSecond()
+				if leftTime < 0 then
+					_M.ActionPoint = _M.ActionPoint +1 
+					if _M.ActionPoint < _M.MaxPoint then
+						_M.RecoveTime = _M.PointCD + HeartBeat.ServSecond()
+					else
+						_M.RecoveTime = 0
+					end
+				end
+			else
+				_M.isRecoveTick = false
+				_M.RecoveHandle = nil
+				EventCenter.UnRegistCallEvent(eventHandle)
+			end
+		end)
+	end
+end
+
+function _P.DieStaffsInBoss(staffs)
+	local _staffs = {}
+	if staffs ~= nil then
+		for k,v in pairs(staffs)do
+			table.insert(_staffs,v)
+		end
+	end
+	return _staffs
+end
+
+function _P.BossMsg(msg)
+	local boss = {}
+
+	local _staffId = {}
+	if msg.staffId ~= nil then
+		for k,v in pairs(msg.staffId)do
+			table.insert(_staffId,v)
+		end
+	end
+	
+	boss = {indexID = msg.indexID,
+			id = msg.id,
+			bossBlood = {ncur = msg.bossBlood.ncur,nmax = msg.bossBlood.nmax},
+			discoverer = msg.discoverer,
+			commerceId = msg.commerceId,
+			type = msg.type,
+			staffId = _staffId}
+	return boss
+end
+
+-------------
+function _M.UnlockStaff(staffID, staffLifeNum)
+	if _M.StaffStateTab[staffID] then
+		_M.StaffStateTab[staffID] = nil
+	end
+
+	if staffLifeNum ~= nil then
+		_M.StaffLifeNum[staffLifeNum.id] = staffLifeNum.count
+	end
+end
+
+function _M.GetStaffList(staffList, staffLifeNum)
+	_M.StaffStateTab = {}
+	_M.StaffLifeNum = {}
+	if staffList ~= nil then
+		for k,v in pairs(staffList)do
+			_M.StaffStateTab[v] = true
+		end
+	end
+	if staffLifeNum ~= nil then
+		for k,v in pairs(staffLifeNum)do
+			_M.StaffLifeNum[v.id] = v.count
+		end
+	end
+end
+
+--v={state:1派遣，2恢复,3,无效，times}
+function _M.SelectStaff()
+	local staffList = MStaff.StaffTable
+	
+	local biggerMods = {}
+	local smallerMods = {}
+	local _mod = 0
+	for k,v in pairs(staffList) do
+		if _M.StaffStateTab[k] then
+			
+		else
+			_mod = v.power-_M.BossPower.ncur
+			if _mod >= 0 then
+				table.insert(biggerMods,{id = k,mod = _mod})
+			else
+				table.insert(smallerMods,{id = k,mod = _mod})
+			end
+		end
+	end
+		
+	local a_csv
+	local b_csv
+	if #biggerMods > 0 then
+		table.sort(biggerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod < b.mod
+		end)
+	
+		return MStaff.GetStaffDataByID(biggerMods[1].id)
+	end
+	if #smallerMods > 0 then
+		table.sort(smallerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod > b.mod
+		end)
+
+		return MStaff.GetStaffDataByID(smallerMods[1].id)
+	end
+	return nil
+end
+
+function _M.GetTreasureListByStage(stageId)
+	local listData = {}
+	for k,v in pairs(Csv.SiegeTreasury) do
+		if v.stage == nil or v.stage == 0 or v.stage == stageId then
+			listData[#listData + 1] = v
+		end
+	end
+
+	return listData
+end
+
+-- 设置各阶段兑换商店、排行版领取状态数据
+function _M.SetAllStageData(stageList)
+	local listData = {}
+	for k,v in pairs(stageList) do
+		listData[v.stage] = v
+	end
+	_M.AllStageData = listData
+end
+
+return _M

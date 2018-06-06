@@ -1,0 +1,48 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MVote = JRequire "Dev.Vote.MVote"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_SecondWait_Info")
+	self.Moudle = moudle
+
+	local headIcon = moudle:Get("Head1")
+	local test = moudle:Get("text111")
+	local content = moudle:Get("Content")
+
+	local bossData = Csv.SiegeBoss[data.bossId]
+	if bossData ~= nil then
+		headIcon.SpriteName = bossData.iconRound
+		test.Text = bossData.teamDesc
+	end
+
+	local content = moudle:Get("Content")
+	if data.commerce ~= nil then
+		for k,v in pairs(data.commerce)do
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_SecondWait_InfoItem", WindowType.UI, 10)
+			local name = itemMoudle:Get("Name")
+			name.Text = v.name
+		end
+	end
+end
+
+return _M

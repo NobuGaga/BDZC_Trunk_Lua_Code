@@ -1,0 +1,289 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CParliament = JRequire "Dev.Parliament.CParliament"
+local MParliament = JRequire "Dev.Parliament.MParliament"
+local luaUtil = JRequire"Libs.LuaUtil"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = Class()
+local _P = {}
+
+local EMPTY_BACK = "ty_018"
+
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Bag_Fashion", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mImgSelect = moudle:Get("H")
+
+	local timeText = moudle:Get("Time")
+	self.mTimeText = timeText
+
+	local TextUse = moudle:Get("C_text")
+	TextUse.Text = Csv.Text("bag_puton")
+	local TextUnload = moudle:Get("C_text_0")
+	TextUnload.Text = Csv.Text("bag_unload")
+
+	local BtnUse = moudle:Get("BtnUse")
+	BtnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse(self)
+	end, nil, 0.9)
+
+	local BtnUnload = moudle:Get("BtnUnload")
+	BtnUnload:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUnload(self)
+	end, nil, 0.9)
+	self.mBtnUse = BtnUse
+	self.mBtnUnload = BtnUnload
+
+	local sortFashions = _P.GetSortFashions(MBag.FashionItems)
+	self.mRawTableItems = {}
+	self.mEmptyTableItems = {}
+
+	local itemTable = {}
+	for k,v in ipairs (sortFashions) do
+		local itemMoudle = _P.OnCreateItem(self,v,false)
+		itemTable[v.itemid] = {moudle = itemMoudle,data = v}
+	end
+	self.mItemTable = itemTable
+
+	local length = #sortFashions
+	local emptyNum = 0
+	if length < 24 then
+		emptyNum = 24 - length
+	else
+		if length%4 > 0 then
+			emptyNum = 4 - length%4
+		end
+	end
+	for i=1,emptyNum do
+		_P.OnCreateItem(self,nil,true)
+	end
+	self.mSortFashions = sortFashions
+	if MBag.LastChooseFashion == nil then		MBag.LastChooseFashion = sortFashions[1]
+	end
+	_P.OnClickItem(self,MBag.LastChooseFashion)
+end
+
+function _P.OnCreateItem(self,itemData,isEmpty)
+	local contentTransform = self.mMoudle:Get("Content")
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Bag_GoodsItem", WindowType.UI, 0)
+
+	_P.SetFashionItem(self,itemMoudle,itemData,isEmpty)
+
+	return itemMoudle
+end
+
+function _P.SetFashionItem(self,itemMoudle,itemData,isEmpty)
+	local fashions = {}
+	local ImgIcon = itemMoudle:Get("Icon")
+	local ImgColor = itemMoudle:Get("Color")
+	local TextNum = itemMoudle:Get("Num")
+
+	fashions.moudle = itemMoudle
+	fashions.data = itemData
+	if isEmpty then
+		ImgIcon.gameObject:SetActive(false)
+		ImgColor.gameObject:SetActive(true)
+		ImgColor.SpriteName = EMPTY_BACK
+		TextNum.Text = ""
+		fashions.ShowItem = function(data)
+			ImgIcon.gameObject:SetActive(true)
+			ImgColor.gameObject:SetActive(true)
+			local csv = Csv.Item[data.itemid]
+			ImgIcon.SpriteName = csv.icon
+			ImgColor:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				_P.OnClickItem(self,data)
+				end, nil, 0.9)
+			ImgColor.SpriteName = csv.colorIcon
+			TextNum.Text = data.itemcount
+			goods.data = data
+			self.mRawTableItems[data.itemid] = fashions
+		end
+		table.insert(self.mEmptyTableItems,fashions)
+	else
+		local csv = Csv.Item[itemData.itemid]
+		local time = MParliament.GetTitleTime(itemData.itemid)
+		ImgIcon.SpriteName = csv.icon
+		ImgColor:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(self,itemData)
+			end, nil, 0.9)
+		ImgColor.SpriteName = csv.colorIcon
+		if itemData.count > 0 and time and time > 0 then
+			TextNum.Text = itemData.count
+			ImgIcon.IsGray = false
+			ImgColor.IsGray = false
+		else
+			TextNum.Text = ""
+			ImgIcon.IsGray = true
+			ImgColor.IsGray = true
+		end
+		fashions.Destroy = function()
+			itemMoudle:Destroy()
+		end
+		self.mRawTableItems[itemData.itemid] = fashions
+	end
+
+end
+
+function _P.OnClickItem(self,data)
+	local moudle = self.mMoudle
+	local TextGoodsName = moudle:Get("GoodsName")
+	local TextGoodsNum = moudle:Get("GoodsNum")
+	local TextGoodsDescTitle = moudle:Get("GoodsDescTitle")
+	local TextGoodsDesc = moudle:Get("GoodsDesc")
+	local ImgIcon = moudle:Get("Icon")
+	local ImgColor = moudle:Get("IconColor")
+	local BtnUse = moudle:Get("BtnUse")
+	
+	local csv = Csv.Item[data.itemid]
+	local colorStr = Csv.ItemColor[csv.color].str
+	TextGoodsName.Text = Csv.Text("common_color",{num=colorStr,name=csv.name})
+	TextGoodsNum.Text = Csv.Text("bag_num",{num = data.count})
+	TextGoodsDesc.Text = csv.tips
+	TextGoodsDescTitle.Text = Csv.Text("bag_desc")
+	ImgIcon.SpriteName = csv.icon
+	ImgColor.SpriteName = csv.colorIcon
+
+	_P.ChangeBtnState(self,data)
+	MBag.LastChooseFashion = data
+
+	_P.UpdateFashionTime(self)
+	self.mMoudle.SelfRect:AddOnUpdate(function(...)
+		_P.UpdateFashionTime(self)
+	end,nil,1)
+
+	if self.mImgSelect ~= nil then
+		local item = self.mRawTableItems[data.itemid]
+		if item ~= nil and item.moudle ~= nil then
+			local itemMoudle = item.moudle
+			self.mImgSelect:SetParent(itemMoudle.SelfRect.CachedTran)
+			self.mImgSelect.CachedTran:SetSiblingIndex(1)
+			self.mImgSelect.LocalPosition = Vector2(0,0)
+			self.mImgSelect.Activity = true
+		end
+	end
+end
+
+
+
+function _P.GetSortFashions(fashions)
+	local sortFashions = {}
+	for k,v in pairs(fashions) do
+		table.insert(sortFashions,v)
+	end
+	table.sort( sortFashions, function(a,b)return _P.SortID(a,b)end )
+	return sortFashions
+end
+
+function _P.SortID(a,b)
+	local csvA = Csv.Item[a.itemid]
+	local csvB = Csv.Item[b.itemid]
+	if csvA.sort == csvB.sort then
+		return a.itemid < b.itemid
+	end
+	return csvA.sort < csvB.sort
+end
+
+function _P.ChangeBtnState(self,data)
+	local usingFashionID = MPlayer.GetTitleID()
+	local fashionTime = MParliament.GetTitleTime(data.itemid)
+
+	if data.count > 0 and fashionTime - HeartBeat.ServSecond() > 0 then
+		if data.itemid == usingFashionID then
+			self.mBtnUse.gameObject:SetActive(false)
+			self.mBtnUnload.gameObject:SetActive(true)
+		else
+			self.mBtnUse.gameObject:SetActive(true)
+			self.mBtnUnload.gameObject:SetActive(false)
+		end
+	else
+		self.mBtnUse.gameObject:SetActive(false)
+		self.mBtnUnload.gameObject:SetActive(false)
+	end
+end
+
+function _P.OnClickUse(self)
+	local id = MBag.LastChooseFashion.itemid
+	CParliament.UseTitleItem(id, true)
+end
+
+function _P.OnClickUnload(self)
+	local id = MBag.LastChooseFashion.itemid
+	CParliament.UseTitleItem(id, false)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+function _M:UpdateFashionState(data)
+	local itemTable = self.mItemTable
+	local id = data.title.titleID
+
+	if data.type == 1 then	--穿上
+		_P.ChangeBtnState(self,itemTable[id].data)
+	elseif data.type == 2 then--卸下
+		_P.ChangeBtnState(self,itemTable[id].data)
+	elseif data.type == 3 then--添加
+		_P.SetFashionItem(self,itemTable[id].moudle,itemTable[id].data,false)
+	elseif data.type == 4 then--过期（删除）
+		itemTable[id].data = MBag.GetFashionData(id)
+		_P.SetFashionItem(self,itemTable[id].moudle,itemTable[id].data,false)
+		_P.OnClickItem(self,itemTable[id].data)
+	else
+		--没有这个类型
+	end
+end
+
+function _P.UpdateFashionTime(self)
+	local itemTable = self.mItemTable
+	local id = MBag.LastChooseFashion.itemid
+	local fashionTime = MParliament.GetTitleTime(id)
+
+	if itemTable[id] ~= nil and fashionTime > 0 then
+		self.mTimeText.Text = Csv.Text("bag_fashionTime", 
+									   {time = luaUtil.GetTimeHMS(fashionTime - HeartBeat.ServSecond())})
+	else
+		self.mTimeText.Text = ""
+	end
+
+	-- 检测所有有倒计时的时装
+	_P.UpdateAllInTime(self)
+end
+
+
+function _P.UpdateAllInTime(self)
+	local itemId = 0
+	for k, v in pairs(MParliament.TitleList) do
+		if v.time - HeartBeat.ServSecond() <= 0 then
+			itemId = v.titleID
+			local fashionData = MBag.FashionItems[itemId]
+			if fashionData then fashionData.count = 0 end
+
+			MParliament.RemoveTitle(itemId)
+			break
+		end
+	end
+
+	for k,v in pairs(MParliament.TitleList) do
+		if v.titleID == itemId then
+			table.remove(MParliament.TitleList, k)
+			break
+		end
+	end
+end
+
+return _M

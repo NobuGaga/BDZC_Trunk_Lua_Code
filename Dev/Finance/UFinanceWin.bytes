@@ -1,0 +1,58 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local winActorId = 10019
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		WindowMgr.Call("UFinanceBattle","RefreshFight")
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PKSuccess")
+	self.Moudle = moudle
+
+	-- 播放战斗胜利特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), winActorId)
+
+	local winText = moudle:Get("RewardText")
+	local jifenText = moudle:Get("RewardText1")
+	local jifenValue = moudle:Get("text1")
+	local fenshuText = moudle:Get("RewardText2")
+	local fenshuValue = moudle:Get("text2")
+
+	
+
+	winText.Text = Csv.Text("finance_diyuWaves",{wave = MFinance.Waves})--"防御【第"..MFinance.Waves.."波】"
+	jifenText.Text = Csv.Text("finance_win_jifenFb1")--"副本积分："
+	fenshuText.Text = Csv.Text("finance_win_scoreFb1")--"副本分数："
+
+	jifenValue.Text = "+"..data.jifen
+	fenshuValue.Text = "+"..data.score
+
+	local itemContent = moudle:Get("Items")
+	if data.items ~= nil then
+		for k,v in pairs(data.items) do
+			CCommon.CreateItem(itemContent, v.id, nil, {num = v.count})
+		end
+	end
+end
+
+return _M

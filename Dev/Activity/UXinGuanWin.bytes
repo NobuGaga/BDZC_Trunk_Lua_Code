@@ -1,0 +1,67 @@
+--（新官上任）获得奖励界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local winActorId = 10019
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(data, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Success")
+	if data == nil or module == nil then return end
+
+	-- 播放战斗胜利特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(module:Get("ActorPanel"), winActorId)
+
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	self.mModule = module
+	self.OnCloseCall = onClose
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	module:Get("Point").Text = Csv.Text("xinguan_get_point")
+	module:Get("PointNum").Text = string.format("%s%d", ' +', data.point)
+	module:Get("Score").Text = Csv.Text("xinguan_rank_point")
+	module:Get("ScoreNum").Text = string.format("%s%d", ' +', data.point)
+
+	_P.OnCreateList(self, data.rewards)
+end
+
+
+function _P.OnCreateList(self, listData)
+	if listData == nil or next(listData) == nil then return end
+
+	local itemRoot = self.mModule:Get("Items")
+	for _,v in pairs(listData) do
+		CCommon.CreateItem(itemRoot, v.key, nil, {num = v.value})
+	end
+end
+
+return _M

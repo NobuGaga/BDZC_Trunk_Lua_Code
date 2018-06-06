@@ -1,0 +1,239 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MAchieve = JRequire "Dev.Achieve.MAchieve"
+local CAchieve = JRequire "Dev.Achieve.CAchieve"
+local JGuiManager = CS.JGui.JGuiManager
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
+-- local IMG_SELECT = "cj_027"
+-- local IMG_NORMAL = "cj_027"
+local EFFECTID = 24
+
+local itemWidth = 676
+local itemHeight = 143
+local space = 4
+local pageNum = 10
+local pageHeight = 868
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--删除界面前调用
+function _M:BeforeDestroy( ... )
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+--界面构建
+function _M:OnCreate(questid)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Achievement_Details")
+	self.mMoudle = moudle
+	local data = MAchieve.AchieveTable[questid]
+	self.mQuestID = questid
+
+	self.mAchieveTable = {}
+	self.mIndexTable = {}
+	moudle:Get("title").Text = Csv.Text("achieve_titleD")
+	local content = moudle:Get("content")
+	local quests = Csv.Achievement[questid].levelNum
+	local list = _P.GetSortTable(data,quests)
+
+	self.mList = list
+	local scroll = self.mMoudle:Get("scrollView")
+	local scrollController = ScrollVertical.new(scroll,content,"M_Achievement_Details_Item1",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+	self.scrollController = scrollController
+	moudle:Get("backBtn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if self.mNowMoudle ~= nil then
+			CCommon.ShowFlyItem(self._RootNode,itemid,itemcount,nil,self.mNowMoudle:Get("Node").RootCanvasPos,true)
+		end
+	end)
+end
+
+function _P.ScrollCallBack(self,index,value,moudle)
+	local data = MAchieve.AchieveTable[self.mQuestID]
+	local csvAchievement = Csv.Achievement[self.mQuestID]
+	local desc = csvAchievement.descIn
+	local TextTask = moudle:Get("taskText")
+	local TextReward = moudle:Get("reward")
+	-- local ImgBack = moudle:Get("back")
+	local TextIng = moudle:Get("Btn_1")
+	TextIng.Text = Csv.Text("achieve_jinxingzhong")
+	local ImgGeted = moudle:Get("Btn_2")
+	local ImgBtn = moudle:Get("C_Btn_b")
+	local TextNoFinish = moudle:Get("Text")
+	TextNoFinish.Text = Csv.Text("achieve_nofinish")
+	moudle:Get("C_text").Text = Csv.Text("quest_get")
+	-- ImgBack.SpriteName = IMG_SELECT
+	ImgBtn.Activity = false
+	TextNoFinish.Activity = false
+	ImgGeted.Activity = false
+	TextIng.Activity = false
+	if data.pro <= 0 then
+		ImgGeted.Activity = true
+		_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+		-- ImgBack.SpriteName = IMG_NORMAL
+	else
+		if data.pro >= value.id then
+			if data.pro == value.id then
+				if data.val >= value.max then
+					ImgBtn.Activity = true
+					_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+				else
+					TextIng.Activity = true
+					_P.SetTask(TextTask,2,value.index,csvAchievement.type,desc,data.val,value.max)
+				end
+				self.mNowPro = data.pro
+				-- ImgBack.SpriteName = IMG_SELECT
+			else
+				ImgGeted.Activity = true
+				_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+				-- ImgBack.SpriteName = IMG_NORMAL
+			end
+		else
+			-- ImgBack.SpriteName = IMG_SELECT
+			--ImgBack.IsGray = true
+			TextNoFinish.Activity = true
+			if data.val >= value.max then
+				_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+			else
+				_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+			end
+		end
+	end
+
+	local tableAward = {}
+	local leng = #value.item
+	for k,v in pairs(value.item) do
+		local itemName = Csv.Item[v[1]].name
+		local str
+		if k == 1 then
+			str = Csv.Text("achieve_award",{name = itemName,num = v[2]})
+		else
+			str = Csv.Text("staff_aptiadd",{name = itemName,num = v[2]})
+		end
+		tableAward[k] = str
+	end
+	local strAward = table.concat( tableAward, "、")
+	TextReward.Text = strAward
+	
+	ImgBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		self.mNowMoudle = moudle
+		CAchieve.GetAward(self.mQuestID)
+	end,nil,0.9)
+	self.mAchieveTable[value.id] = moudle
+	moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _P.SetTask(widget,color,Index,Type,Desc,Value,Max)
+	if Type ~= nil and Type == 1 then
+		local csvCompanyVal = Csv.Company[Value].name
+		local csvCompanyMax = Csv.Company[Max].name
+		if color == 1 then
+			widget.Text = Csv.Text("achieve_taskGreenC",{index = Index,name = Desc,num = csvCompanyVal,max = csvCompanyMax})
+		elseif color == 2 then
+			widget.Text = Csv.Text("achieve_taskRedC",{index = Index,name = Desc,num = csvCompanyVal,max = csvCompanyMax})
+		else
+			widget.Text = Csv.Text("achieve_taskNormalC",{index = Index,name = Desc,num = csvCompanyVal,max = csvCompanyMax})
+		end
+	else
+		if color == 1 then
+			widget.Text = Csv.Text("achieve_taskGreen",{index = Index,name = Desc,num = Value,max = Max})
+		elseif color == 2 then
+			widget.Text = Csv.Text("achieve_taskRed",{index = Index,name = Desc,num = Value,max = Max})
+		else
+			widget.Text = Csv.Text("achieve_taskNormal",{index = Index,name = Desc,num = Value,max = Max})
+		end
+	end
+end
+
+function _P.GetSortTable(data,quests)
+	local sortTable = {}
+	local length = #quests
+	for k,v in pairs(quests) do
+		if k < length then
+			local csvAchieveLv = Csv.AchieveLevel[v]
+			local achieve
+			if data.pro > v then
+				achieve = {id = v,index = csvAchieveLv.index,max = csvAchieveLv.value,item = csvAchieveLv.item,sortNum = 1}
+			else
+				achieve = {id = v,index = csvAchieveLv.index,max = csvAchieveLv.value,item = csvAchieveLv.item,sortNum = 0}
+			end
+			table.insert(sortTable,achieve)
+		end
+	end
+	table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	if a.sortNum == b.sortNum then
+		return a.index < b.index
+	end
+	return a.sortNum < b.sortNum
+end
+
+function _R.GetAward(self,data)
+	if data.questid ~= self.mQuestID then
+		return 
+	end
+	if data.pro <= self.mNowPro and data.pro > 0 then
+		return
+	end
+	if self.mNowPro ~= nil and self.mAchieveTable[self.mNowPro] ~= nil then
+		local lastMoudle = self.mAchieveTable[self.mNowPro]
+		local now = self.mAchieveTable[data.pro]
+		local nowMoudle
+		if now ~= nil then
+			nowMoudle = now
+		end
+		if lastMoudle ~= nil then
+			lastMoudle:Get("C_Btn_b").Activity = false
+			local effectMoudle = CCommon.CreateEffect(lastMoudle:Get("back"),EFFECTID,Vector2(201,-15),function()
+				lastMoudle:Get("Btn_2").Activity = true
+			end,{M_Effect_Achieve_Get = "fl_030"})
+			effectMoudle.SelfRect.SizeDelta = Vector2(138,138)
+			SoundMgr.PlaySystem(10004)
+			--lastMoudle:Get("back").IsGray = true
+		end
+		if nowMoudle ~= nil then
+			nowMoudle:Get("Text").Activity = false
+			local csvAchieveLv = Csv.AchieveLevel[data.pro]
+			local need = csvAchieveLv.value
+			if data.val >= need then
+				nowMoudle:Get("C_Btn_b").Activity = true
+			else
+				nowMoudle:Get("Btn_1").Activity = true
+				local csvAchievement = Csv.Achievement[self.mQuestID]
+				_P.SetTask(nowMoudle:Get("taskText"),2,csvAchieveLv.index,csvAchievement.type,csvAchievement.descIn,MAchieve.AchieveTable[self.mQuestID].val,csvAchieveLv.value)
+			end
+			-- nowMoudle:Get("back").SpriteName = IMG_SELECT
+			--nowMoudle:Get("back").IsGray = false
+		end
+		self.mNowPro = data.pro
+	end
+end
+
+return _M

@@ -1,0 +1,109 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local CVote = JRequire "Dev.Vote.CVote"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local CBag = JRequire "Dev.Bag.CBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseView(self)
+	CCommon.ShowRight(Csv.Text("vote_41"))
+	self:Destroy()
+end
+
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function ()
+		--SoundMgr.Play(10001)
+		--self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Normal_Red")
+	self.mMoudle = moudle
+	local closeBtn = moudle:Get("closeBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local tips = moudle:Get("Tips1")
+
+	local inputRect = moudle:Get("inputRect")
+	local allNum = moudle:Get("allNum")
+	local sysNum = moudle:Get("text2")
+	local tips2 = moudle:Get("Tips2")
+	local input = moudle:Get("input")
+	local placeholder = moudle:Get("Placeholder")
+
+	local noinputRect = moudle:Get("noInputRect")
+	local allNum2 = moudle:Get("allNum2")
+	local tips3 = moudle:Get("Tips3")
+
+	inputRect.Activity = false
+	noinputRect.Activity = false
+
+	local itemData = Csv.Item[id]
+	if itemData ~= nil then
+		if itemData.useParam ~= nil and #itemData.useParam >= 5 then
+			if itemData.useParam[3] == 1 then
+				inputRect.Activity = true
+
+				allNum.Text = Csv.Text("redpacket_allnum")
+				sysNum.Text = itemData.useParam[1]
+				tips2.Text = Csv.Text("redpacket_sysnum")
+				placeholder.Text = Csv.Text("redpacket_input")
+				
+				input.OnValueChanged:RemoveAllListeners()
+				input.OnValueChanged:AddListener(function(value)
+					if value == '-' then
+						input.Text = ""
+					end
+				end)
+			else
+				noinputRect.Activity = true
+				allNum2.Text = Csv.Text("redpacket_allnum2",{num = itemData.useParam[1]})
+				tips3.Text = Csv.Text("redpacket_sysnum")
+			end
+
+			tips.Text = Csv.Text("redpacket_tips1",{num = itemData.useParam[2]})
+			
+			moudle:Get("BtnText").Text = Csv.Text("talk_sendText")
+			moudle:Get("Btn"):AddOnButton(function()
+				SoundMgr.Play(10001)
+
+				local inputGold = 0
+				if itemData.useParam[3] == 1 then
+					if input.Text ~= "" then
+						inputGold = tonumber(input.Text)
+						if inputGold > itemData.useParam[4] then
+							CCommon.ShowError(Csv.Text("talk_redpacket_moregold",{num = itemData.useParam[4]}))
+							return
+						end
+					end
+				end
+				CBag.OnUseItem(id,1,{inputGold})
+			end)
+		else
+			print("道具使用方式参数不足，id___________",id)
+		end
+	else
+		print("找不到道具id__________",id)
+	end
+	
+end
+
+
+return _M

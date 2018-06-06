@@ -1,0 +1,506 @@
+-- 排行版
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CRank = JRequire "Dev.Rank.CRank"
+local MRank = JRequire "Dev.Rank.MRank"
+
+local GTE_EFFECT_ID = 5
+local SelectImgName = "yth_023"
+local DefaultImgName = "yth_023_2"
+local DefaultNoReward = "ty_023" --默认无奖励底图
+local BLACKCOLOR = Color(99/255, 99/255, 99/255, 1)
+local WHITECOLOR = Color(1, 1, 1, 1)
+local DefaultImgSize = Vector2(178,57)
+local LightImgSize = Vector2(178,70)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(activityData, stageId)
+	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Ranking")
+	self.mModule = module
+
+	local closeBtn = module:Get("Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local personText = module:Get("C_text1")
+	local gangText = module:Get("C_text2")
+	local killShowText = module:Get("C_text3")
+	personText.Text = Csv.Text("xinguan_rank_mine_title")
+	gangText.Text = Csv.Text("xinguan_rank_gang_title")
+	killShowText.Text = Csv.Text("siege_rank_title3")
+	self.personText = personText
+	self.gangText = gangText
+	self.killShowText = killShowText
+	self.getImg = module:Get("GetPos")
+	self.StageId = stageId
+
+	local siegeConf = Csv.Siege[activityData.actId]
+	if siegeConf then
+		self.selfRankType = siegeConf.rankType[self.StageId]
+		self.gangRankType = self.selfRankType + 1
+	end
+
+	_P.GetRankData(self, activityData.actId, stageId)
+	CRank.GetRankList(self.selfRankType, true)
+
+	self.curSelectToggle = MSiege.RankTypeEnum.Personal
+	self.activityData = activityData
+
+	-- local curStageData = MSiege.AllStageData[stageId]
+	-- self.curStageData = curStageData
+	
+	module:Get("textSelfRank").Text = Csv.Text("xinguan_rank_selfRank")
+	self.timeRect = module:Get("Time")
+	self.timeRect.Text = Csv.Text("xinguan_rank_time")
+	self.timeText = module:Get("TimeNum")
+	self.rankBtnText = module:Get("textBtnRank")
+	self.rankBtnText.Text = Csv.Text("xinguan_rank_bangdan")
+	module:Get("textBtnGet").Text = Csv.Text("xinguan_rank_get")
+	self.getBtnText = module:Get("noneText")
+	local personBtn = module:Get("btnRank")
+	personBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		local isPerson =(self.curSelectToggle == MSiege.RankTypeEnum.Personal)
+		if isPerson then
+			WindowMgr.Create("UXinGuanRankDetail", self.selfRankType, true)
+		else
+			WindowMgr.Create("UXinGuanRankDetail", self.gangRankType, false)
+		end
+	end, nil, 0.95)
+
+	self.getBtn = module:Get("btnGet")
+	self.getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local isPerson =(self.curSelectToggle == MSiege.RankTypeEnum.Personal)
+		-- CSiege.GetRankResReq(activityData.actId, self.stageId, (isPerson and 1) or 2)
+		_R.OnGetRewardBack(self, {actId = 1, stage = 2, index = 10001})
+	end, nil, 0.95)
+
+	local state = activityData.state
+	local time = state.lefttime - HeartBeat.ServSecond()
+	self.time = state.lefttime
+
+	_P.RefreshTime(self)
+	if time > 0 then
+		self.countTime = self.timeText:AddOnUpdate(function() 
+			if _P.RefreshTime(self) then
+				if self.countTime then
+					self.countTime:Destroy()
+					self.countTime = nil
+				end
+			end
+		end, nil, 1)
+	end
+
+	_P.InitPageData(self)
+	_P.OnSetListData(self)
+end
+
+
+function _P.RefreshTime(self)
+	local time = self.time - HeartBeat.ServSecond() 
+	local isFinish = time <= 0
+	if isFinish then
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
+	else
+		self.timeText.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
+	end
+	return isFinish
+end
+
+
+function _P.InitPageData(self)
+	self.personSelectImg = self.mModule:Get("Btn_c1")
+	self.gangSelectImg = self.mModule:Get("Btn_c2")
+	self.killerSelectImg = self.mModule:Get("Btn_c3")
+
+	_P.OnSetPageText(self)
+
+	self.personSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.RankTypeEnum.Personal)
+	end, nil, 0.95)
+	self.gangSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.RankTypeEnum.Gang)
+	end, nil, 0.95)
+	self.killerSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.RankTypeEnum.Killed)
+	end, nil, 0.95)
+end
+
+
+function _P.OnSetListData(self)
+	local rankList = _P.GetSortList(self.mData[self.curSelectToggle])
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	if not rankList then return end
+	for k,v in pairs(rankList) do
+		if self.curSelectToggle == MSiege.RankTypeEnum.Personal then
+			_P.OnCreatePersonItem(v, itemGrid)
+		elseif self.curSelectToggle == MSiege.RankTypeEnum.Gang then
+			_P.OnCreateGangItem(v, itemGrid)
+		elseif self.curSelectToggle == MSiege.RankTypeEnum.Killed then
+			_P.OnCreateKilledItem(v, itemGrid)
+		end
+	end
+end
+
+
+function _P.OnSetPageText(self)
+	local isPerson = self.curSelectToggle == MSiege.RankTypeEnum.Personal
+	local isGang = self.curSelectToggle == MSiege.RankTypeEnum.Gang
+	local isKiller = self.curSelectToggle == MSiege.RankTypeEnum.Killed
+
+	self.personSelectImg.SpriteNameAutoScale = ((isPerson and SelectImgName) or DefaultImgName)
+	self.personSelectImg.SizeDelta = ((isPerson and LightImgSize) or DefaultImgSize)
+	self.gangSelectImg.SpriteNameAutoScale = ((isGang and SelectImgName) or DefaultImgName)
+	self.gangSelectImg.SizeDelta = ((isGang and LightImgSize) or DefaultImgSize)
+	self.killerSelectImg.SpriteNameAutoScale = ((isKiller and SelectImgName) or DefaultImgName)
+	self.killerSelectImg.SizeDelta = ((isKiller and LightImgSize) or DefaultImgSize)
+
+	self.personText.Color = ((isPerson and BLACKCOLOR) or WHITECOLOR)
+	self.gangText.Color = ((isGang and BLACKCOLOR) or WHITECOLOR)
+	self.killShowText.Color = ((isKiller and BLACKCOLOR) or WHITECOLOR)
+
+	_P.SetRankData(self)
+end
+
+
+function _P.OnClickPage(self, curSelect)
+	if self.curSelectToggle == curSelect then return end
+	self.curSelectToggle = curSelect
+
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+
+function _P.GetRankData(self, actId, stageId)
+	local personConf = Csv.SiegePersonRank[actId * 100 + stageId]
+	local gangConf = Csv.SiegeGangRank[actId * 100 + stageId]
+	local killerConf = Csv.SiegeKillShow[actId * 100 + stageId]
+	if personConf == nil or gangConf == nil or killerConf == nil then return {} end
+
+	self.mData = {}
+	local personList = {}
+	local gangList = {}
+	local killList = {}
+	for i,v in ipairs(personConf.from) do
+		local itemData = {
+			index = i,
+			from = personConf.from[i],
+			to = personConf.to[i],
+			rewardTitle = personConf.rewardTitle[i],
+			memberReward = personConf.reward[i]
+		}
+
+		personList[i] = itemData
+	end
+	self.mData[MSiege.RankTypeEnum.Personal] = personList
+
+	for i,v in ipairs(gangConf.from) do
+		local itemData = {
+			index = i,
+			from = gangConf.from[i],
+			to = gangConf.to[i],
+			rewardTitle = gangConf.rewardTitle[i],
+			memberReward = gangConf.memberReward[i],
+			gangReward = gangConf.gangReward[i]
+		}
+
+		gangList[i] = itemData
+	end
+	self.mData[MSiege.RankTypeEnum.Gang] = gangList
+
+	for i,v in ipairs(killerConf.name) do
+		local itemData = {
+			index = i,
+			name = killerConf.name[i],
+			point = killerConf.point[i],
+			score = killerConf.score[i],
+			rewards = killerConf.rewards[i],
+		}
+
+		killList[i] = itemData
+	end
+	self.mData[MSiege.RankTypeEnum.Killed] = killList
+end
+
+
+function _P.GetSortList(rankData)
+	if not rankData then return {} end
+	
+	local sortList = rankData
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+-- 个人排名item
+function _P.OnCreatePersonItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Ranking_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("textTitle").Text = data.rewardTitle
+	local bgHeight = itemModule.SelfRect.SizeDelta.y
+	
+	local content = itemModule:Get("GoodsItem")
+	content:DestroyChildren()
+
+	local layout = content:AddGridLayoutGroup()
+	local columnLimitNum = layout.constraintCount
+	local oneItemHeight = layout.cellSize.y + layout.spacing.y
+
+	local num = 0
+	for k, v in pairs(data.memberReward) do
+		CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.XinGuan1)
+		num = num + 1
+	end
+
+	local remNum = num % columnLimitNum
+	if remNum ~= 0 then
+		for i=1, (columnLimitNum - remNum) do
+			local rewardItem = CCommon.CreateItem(content, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num = num + 1
+		end
+	end
+
+	local row, rest = math.modf(num / columnLimitNum)
+	itemModule.SelfRect.SizeDelta = Vector2(itemModule.SelfRect.SizeDelta.x, bgHeight + (row - 1) * oneItemHeight) -- 默认有一行不需要计算进去
+end
+
+
+-- 联盟排名item
+function _P.OnCreateGangItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Ranking_Item1", WindowType.UI, 0)
+	if not itemModule then return end
+
+	local bgHeight = itemModule.SelfRect.SizeDelta.y
+	itemModule:Get("textTitle").Text = data.rewardTitle
+	itemModule:Get("huizhang").Text = Csv.Text("xinguan_rank_mengzhu")
+	itemModule:Get("huiyuan").Text = Csv.Text("xinguan_rank_member")
+
+	local gangContent = itemModule:Get("GoodsItem1")
+	local memberContent = itemModule:Get("GoodsItem2")
+	gangContent:DestroyChildren()
+	memberContent:DestroyChildren()
+
+	local memberRect = itemModule:Get("huiyuan")
+	local memberRectPos = memberRect.LocalPosition
+	local selfLayout = memberContent:AddGridLayoutGroup()
+	local columnLimitNum1 = selfLayout.constraintCount
+	local selfItemHeight = selfLayout.cellSize.y + selfLayout.spacing.y
+
+	local gangLayout = gangContent:AddGridLayoutGroup()
+	local columnLimitNum2 = gangLayout.constraintCount
+	local gangItemHeight = gangLayout.cellSize.y + gangLayout.spacing.y
+
+	local num1 = 0
+	for k, v in pairs(data.memberReward) do
+		CCommon.CreateItem(memberContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.XinGuan1)
+		num1 = num1 + 1
+	end
+
+	local remNum1 = num1 % columnLimitNum1
+	if remNum1 ~= 0 then
+		for i=1, (columnLimitNum1 - remNum1) do
+			local rewardItem = CCommon.CreateItem(memberContent, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num1 = num1 + 1
+		end
+	end
+
+	local num2 = 0
+	for k, v in pairs(data.gangReward) do
+		CCommon.CreateItem(gangContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.XinGuan1)
+		num2 = num2 + 1
+	end
+	local remNum2 = num2 % columnLimitNum2
+	if remNum2 ~= 0 then
+		for i=1, (columnLimitNum2 - remNum2) do
+			local rewardItem = CCommon.CreateItem(gangContent, 1)
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
+			rewardItem:Get("Icon").Activity = false
+			num2 = num2 + 1
+		end
+	end
+
+	local row1, rest1 = math.modf(num1 / columnLimitNum1)
+	local row2, rest2 = math.modf(num2 / columnLimitNum2)
+	
+	local rowHeight2 = (row2 - 1) * gangItemHeight
+	memberRect.LocalPosition = Vector2(memberRectPos.x, memberRectPos.y - rowHeight2)
+	itemModule.SelfRect.SizeDelta = Vector2(itemModule.SelfRect.SizeDelta.x, bgHeight + (row1 - 1) * selfItemHeight + rowHeight2) -- 默认有一行不需要计算进去
+end
+
+
+function _P.OnCreateKilledItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Wghej_Ranking_SkilItem", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("Title").Text = data.name
+	itemModule:Get("Title2").Text = Csv.Text("siege_rank_get")
+	itemModule:Get("Jfjl1").Text = Csv.Text("siege_rank_point") .. data.point
+	itemModule:Get("Jfjl2").Text = Csv.Text("siege_rank_score") .. data.score
+	itemModule:Get("Title3").Text = Csv.Text("siege_rank_show")
+
+	local rewardGrid = itemModule:Get("GoodsItem")
+	for k, v in pairs(data.rewards) do
+		CCommon.CreateItem(rewardGrid, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.SiegeWall)
+	end
+end
+
+
+function _P.SetRankData(self)
+	local rankText = self.mModule:Get("rankNum")
+	local bottomRect = self.mModule:Get("bottomRect")
+	if self.curSelectToggle == MSiege.RankTypeEnum.Personal then
+		bottomRect.Activity = true
+		if self.selfRankNum and self.selfRankNum > 0 then
+			rankText.Text = self.selfRankNum
+		else
+			rankText.Text = "10000+"
+		end
+		self.rankBtnText.Text = Csv.Text("xinguan_rank_bangdan")
+	elseif self.curSelectToggle == MSiege.RankTypeEnum.Gang then
+		bottomRect.Activity = true
+		if self.gangRankNum and self.gangRankNum > 0 then
+			rankText.Text = self.gangRankNum
+		else
+			rankText.Text = "10000+"
+		end
+		self.rankBtnText.Text = Csv.Text("xinguan_rank_gangBang")
+	elseif self.curSelectToggle == MSiege.RankTypeEnum.Killed then
+		bottomRect.Activity = false
+	end
+
+	_P.SetGetBtnData(self)
+end
+
+
+-- 设置是否可以领取
+function _P.SetGetBtnData(self)
+	local text
+	local isFinish = self.time - HeartBeat.ServSecond() <= 0
+	local isPerson = (self.curSelectToggle == MSiege.RankTypeEnum.Personal)
+	-- local getState = (isPerson and self.curStageData.selfGetState) or self.curStageData.gangGetState
+	local getState = (isPerson and self.activityData.selfGetState) or self.activityData.gangGetState	
+	local isCanNotGet = getState == MActivity.RewardGetState.CanNotGet
+	local isGeted = getState == MActivity.RewardGetState.Geted
+	local isCanGet = getState == MActivity.RewardGetState.CanGet
+	self.timeRect.Activity = not isFinish
+	self.getBtnText.Activity = isFinish
+	self.mModule:Get("redpoint").Activity = isCanGet
+	if isFinish then
+		if isCanNotGet then
+			text ="rankreward_can_not_get"
+		end
+	else
+		if isCanNotGet then
+			text ="rankreward_not_get_time"
+		end
+	end
+	if text then
+		self.getBtnText.Text = Csv.Text(text)
+	else
+		self.getBtnText.Text = ""
+	end
+	
+	local isLight = isFinish and isCanGet
+	self.getBtn.IsGray = not isLight
+	self.getBtn.RaycastTarget = isLight
+	self.getBtn.Activity = not isGeted
+	self.getImg.Activity = isGeted
+end
+
+
+-- 自己活动排行版回调后
+function _R.OnGetSelfRankData(self, data)
+	CRank.GetRankList(self.gangRankType, true)
+	self.selfRankNum = data.selfrank
+
+	_P.SetRankData(self)
+end
+
+
+function _R.OnGetGangRankData(self, data)
+	self.gangRankNum = data.selfrank
+end
+
+
+function _R.OnGetRankStatePush(self, data)
+	self.curStageData.selfGetState = data.selfGetState
+	self.curStageData.gangGetState = data.gangGetState
+	_P.SetGetBtnData(self)
+end
+
+
+-- 新官上任活动奖励返回(与后端约好，/10000得到的是真正排行，%10000得到的是1个人、2商会会员、3商会会长)
+function _R.OnGetRewardBack(self, data)
+	-- 播放奖励动画
+	self.getBtn.Activity = false
+	self.mModule:Get("redpoint").Activity = false
+	SoundMgr.Play(10004)
+
+	local animRect = self.mModule:Get("GetAnim")
+	CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
+		local rankType = data.index % 10000
+		local realIndex = math.floor(data.index / 10000)
+		local rankList = {}
+		if rankType == 1 then
+			local rankConf = Csv.SiegePersonRank[data.actId * 100 + self.StageId]
+			rankList = rankConf.reward
+			-- _R.OnGetRankStatePush(self, {selfGetState = 1, gangGetState = self.curStageData.gangGetState})
+		elseif rankType == 2 then
+			local rankConf = Csv.SiegeGangRank[data.actId * 100 + self.StageId]
+			rankList = rankConf.memberReward
+			-- _R.OnGetRankStatePush(self, {selfGetState = self.curStageData.selfGetState, gangGetState = 1})
+		elseif rankType == 3 then
+			local rankConf = Csv.SiegeGangRank[data.actId * 100 + self.StageId]
+			rankList = rankConf.gangReward
+			-- _R.OnGetRankStatePush(self, {selfGetState = self.curStageData.selfGetState, gangGetState = 1})
+		end
+		
+		if rankList == nil then return end
+		
+		local rewardList = rankList[realIndex] or {}
+		local delayCount = 0
+		for k,v in pairs(rewardList) do
+			CCommon.ShowFlyItem(animRect, v[1], v[2], delayCount)
+			delayCount = delayCount + 0.3
+		end
+	end)
+end
+
+return _M

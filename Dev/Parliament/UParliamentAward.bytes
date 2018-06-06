@@ -1,0 +1,59 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MParliament = JRequire "Dev.Parliament.MParliament"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(titleId,isSelf)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Parliament_Privilege")
+	self.mMoudle = moudle
+	self.TitleId = titleId
+
+	moudle:Get("text1").Text = Csv.Text("parliament_tip1")
+	moudle:Get("Text2").Text = Csv.Text("parliament_tip2")
+	moudle:Get("C_text").Text = Csv.Text("parliament_tip4")
+
+	local csvTitle = Csv.Title[titleId]
+	if csvTitle ~= nil then
+		moudle:Get("Title").Text = csvTitle.name
+		moudle:Get("Banner").SpriteName = csvTitle.bgImg
+		moudle:Get("TitleText").Text = csvTitle.giveDesc
+	end
+
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		WindowMgr.Create("UParliamentAwardPop",titleId)
+	end,nil,0.9)
+
+	moudle:Get("BackBtn"):AddOnButton(function()
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("text3").Activity = isSelf
+	moudle:Get("C_Btn_b").Activity = isSelf
+
+	_R.ResetTimes(self)
+end
+
+function _R.ResetTimes(self)
+	local moudle = self.mMoudle
+	moudle:Get("text3").Text = Csv.Text("parliament_tip3",{num = MParliament.GetLessGiveTimes()})
+	if MParliament.GetLessGiveTimes() <= 0 then
+		local btn = moudle:Get("C_Btn_b")
+		btn.RaycastTarget = false
+		btn.IsGray = true
+	end
+end
+
+return _M

@@ -1,0 +1,139 @@
+local MLectures = JRequire "Dev.Lectures.MLectures"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cLecturesBattle = 1,      	-- 演讲 PLectures.CLecturesBattle
+	cLecturesTotalBattle = 2,   -- 一键演讲 PLectures.cLecturesBattle
+	cLecturesOpen = 3,			-- 打开一键演讲界面
+	
+	sLecturesInit = 1,         	-- 初始化 PLectures.SLecturesInit
+	sLecturesResult = 2,      	-- 演讲结果返回 PLectures.SLecturesResult
+	sLecturesReset = 3,			-- 零点重置PLectures.SLecturesInit
+	sLecturesOpen = 4,			-- 一键演讲请求获取数据PLectures.SLecturesChapterList
+}
+
+
+function _M.ModuleClean()
+	MLectures.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cLecturesBattle] = "PLectures.CLecturesBattle",
+		[ECmdId.cLecturesTotalBattle] = "PLectures.CLecturesTotalBattle",
+		[ECmdId.cLecturesOpen] = "",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sLecturesInit]         = { proto = "PLectures.SLecturesInit",          handle = _P.OnInitData},
+		[ECmdId.sLecturesResult]       = { proto = "PLectures.SLecturesResult",        handle = _P.OnLecturesResult},
+		[ECmdId.sLecturesReset]        = { proto = "PLectures.SLecturesInit",          handle = _P.OnDailyUpdatePush},
+		[ECmdId.sLecturesOpen]         = { proto = "PLectures.SLecturesChapterList",   handle = _P.OnGetChapterList},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Lecture, func_send, func_recv, isReload)
+end
+
+
+-- C2S
+-- 请求单次演讲
+function _M.OneLectureReq(id)
+	MLectures.LastBossBlood = MLectures.CurBossBlood
+	_M.Send(ECmdId.cLecturesBattle, {id = id})
+end
+
+
+-- 一键演讲
+function _M.OneKeyLectureReq(id, num)
+	_M.Send(ECmdId.cLecturesTotalBattle, {id = id, num = num})
+end
+
+
+-- 请求获取一键演讲总关数
+function _M.GetOneKeyDataReq()
+	_M.Send(ECmdId.cLecturesOpen)
+end
+
+
+-- S2C
+function _P.OnInitData(data)
+	MLectures.OnSaveRewardList(data.showReward)
+	MLectures.CurBattleId = data.id
+	MLectures.CurBossBlood = data.bossBlood
+	MLectures.IsOpenOneKey = data.isOpen
+end
+
+
+function _P.OnLecturesResult(data)
+	MLectures.OnSaveRewardList(data.showReward)
+	if data.state == MLectures.ResultState.Win then
+		local test = (WindowMgr.IsCreated("ULecturesOneKeyBattle") and 10) or 1
+		data.type = test
+		if data.type == 1 then -- 一次演讲
+			MLectures.CurBattleId = data.nextId
+		else -- 多次演讲
+			MLectures.CurBattleId = data.id
+		end
+
+		local lectureConf = Csv.LecturesBattle[MLectures.CurBattleId]
+		if lectureConf then
+			MLectures.CurBossBlood = lectureConf.cityXp
+		else
+			MLectures.CurBossBlood = 0
+		end
+	elseif data.state == MLectures.ResultState.Fail then
+		MLectures.CurBattleId = data.id
+		MLectures.CurBossBlood = data.bossBlood
+	end
+	MLectures.IsOpenOneKey = data.isOpen
+
+	if WindowMgr.IsCreated("ULecturesCityPanel") then
+		WindowMgr.Call("ULecturesCityPanel", "OnBattleResult", data, function ()
+			WindowMgr.Call("ULecturesMainPanel", "OnBattleResult", data)
+		end)
+	end
+
+	if WindowMgr.IsCreated("ULecturesOneKeyBattle") then
+		WindowMgr.Call("ULecturesOneKeyBattle", "OnBattleResult", data, function ()
+			WindowMgr.Call("ULecturesMainPanel", "OnAutoBttleResult", data)
+		end)
+	end
+end
+
+
+-- 每日12点重置
+function _P.OnDailyUpdatePush(data)
+	if WindowMgr.IsCreated("ULecturesCityPanel") then
+		WindowMgr.Destroy("ULecturesCityPanel")
+	end
+
+	if WindowMgr.IsCreated("ULecturesOneKeyBattle") then
+		WindowMgr.Destroy("ULecturesOneKeyBattle")
+	end
+
+	if WindowMgr.IsCreated("ULecturesMainPanel") then
+		WindowMgr.Destroy("ULecturesMainPanel")
+	end
+
+	MLectures.OnSaveRewardList(data.showReward)
+	MLectures.CurBattleId = data.id
+	MLectures.CurBossBlood = data.bossBlood
+	MLectures.IsOpenOneKey = data.isOpen
+end
+
+
+function _P.OnGetChapterList(data)
+	if WindowMgr.IsCreated("ULecturesMainPanel") then
+		WindowMgr.Call("ULecturesMainPanel", "GetOneKeyDataBack", data)
+	end
+end
+
+
+return _M

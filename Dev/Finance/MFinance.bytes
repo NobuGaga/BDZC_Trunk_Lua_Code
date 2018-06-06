@@ -1,0 +1,191 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = {}
+
+_M.FinaceType ={
+	FinaceRank_1 = 1,
+	FinaceRank_2 = 2,
+}
+
+_M.isReward = false
+_M.RewardData = {}
+
+_M.fightType = 0
+_M.isFighting = false
+_M.SelectHero = {}
+_M.isBattle = false
+_M.FightTime = 0 
+_M.Jifen = 0 --积分
+
+_M.KillerName = "" 
+_M.GiftItems = {}
+_M.BossPower = {}
+
+--------
+--直接拿后端数据
+_M.Waves = 0 --波数
+_M.StaffStateTab = {} 
+_M.StaffLifeNum = {}
+_M.FinanceState = {}
+_M.ResistRankList = {}
+
+--存储后端数据
+_M.InvadeListData = {}
+_M.InvadeUpdateData = {}
+_M.ResistRankData = {}
+
+function _M.Clean()
+	_M.isReward = false
+	_M.RewardData = {}
+	
+	_M.fightType = 0
+	_M.isFighting = false
+	_M.SelectHero = {}
+	_M.isBattle = false
+	_M.FightTime = 0 
+	_M.Jifen = 0 --积分
+	
+	_M.KillerName = "" 
+	_M.GiftItems = {}
+	_M.BossPower = {}
+	
+	--------
+	--直接拿后端数据
+	_M.Waves = 0 --波数
+	_M.StaffStateTab = {} 
+	_M.StaffLifeNum = {}
+	_M.FinanceState = {}
+	_M.ResistRankList = {}
+
+	_M.InvadeListData = {}
+	_M.InvadeUpdateData = {}
+	_M.ResistRankData = {}
+
+	--断线重连刷新数据先关闭特效
+	WindowMgr.Call("UWorldMap", "SetBuildEffectActive", false)
+end
+
+function _M.OnDayout()
+	_M.GiftItems = {}
+	_M.StaffStateTab = {} 
+	_M.StaffLifeNum = {}
+end
+
+function _M.InitFinance(data)
+
+	_M.Jifen = data.jifen
+	if data.skiller ~= nil then
+		_M.KillerName = data.skiller
+	end
+
+	if data.items ~= nil then
+		for k,v in pairs(data.items) do
+			_M.GiftItems[v.id] = v.count
+		end
+	else
+		_M.GiftItems = {}
+	end
+end
+
+function _M.GetFinanceStateNotify(data)
+	_M.FinanceState = {
+		type = data.type, --1金融入侵 2反恶意收购
+		state = data.state, --1开启 0关闭
+		openTime = data.openTime,
+		closeTime = data.closeTime
+	}
+end
+
+function _M.GetOwnRankData(rank)
+	if rank ~= nil then
+		for k,v in pairs(rank) do
+			if v.Name == MPlayer.GetName() then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.GetExchangeItem(data)
+	_M.GiftItems[data.id] = data.num
+end
+------------
+function _M.UnlockStaff(staffID, staffLifeNum)
+	if _M.StaffStateTab[staffID] then
+		_M.StaffStateTab[staffID] = nil
+	end
+
+	if staffLifeNum ~= nil then
+		_M.StaffLifeNum[staffLifeNum.id] = staffLifeNum.count
+	end
+end
+
+function _M.GetStaffList(staffList, staffLifeNum)
+	_M.StaffStateTab = {}
+	_M.StaffLifeNum = {}
+	if staffList ~= nil then
+		for k,v in pairs(staffList)do
+			_M.StaffStateTab[v] = true
+		end
+	end
+	if staffLifeNum ~= nil then
+		for k,v in pairs(staffLifeNum)do
+			_M.StaffLifeNum[v.id] = v.count
+		end
+	end
+end
+
+--v={state:1派遣，2恢复,3,无效，times}
+function _M.SelectStaff()
+	local staffList = MStaff.StaffTable
+	
+	local biggerMods = {}
+	local smallerMods = {}
+	local _mod = 0
+	for k,v in pairs(staffList) do
+		if _M.StaffStateTab[k] then
+			
+		else
+			_mod = v.power-_M.BossPower.ncur
+			if _mod >= 0 then
+				table.insert(biggerMods,{id = k,mod = _mod})
+			else
+				table.insert(smallerMods,{id = k,mod = _mod})
+			end
+		end
+	end
+		
+	local a_csv
+	local b_csv
+	if #biggerMods > 0 then
+		table.sort(biggerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod < b.mod
+		end)
+	
+		return MStaff.GetStaffDataByID(biggerMods[1].id)
+	end
+	if #smallerMods > 0 then
+		table.sort(smallerMods, function( a, b )
+			a_csv = a
+			b_csv = b
+			return a.mod > b.mod
+		end)
+
+		return MStaff.GetStaffDataByID(smallerMods[1].id)
+	end
+	return nil
+end
+
+function _M.GetFinanceState()
+	if _M.FinanceState.state ~= nil then
+		return _M.FinanceState.state == 1
+	else
+		return false
+	end
+end
+
+return _M

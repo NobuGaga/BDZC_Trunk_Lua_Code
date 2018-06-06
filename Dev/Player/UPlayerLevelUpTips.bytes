@@ -1,0 +1,66 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local levelUpActorId = 10012
+local companyActorId = 10005
+local bodyActorId = 10011
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:OnCreate(lastLevel)
+	self.isClose = false
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		if self.isClose then
+			self:Destroy()
+		end
+	end, nil)
+
+	local nowLevel = MPlayer.GetLevel()
+	local nowCsv = Csv.Company[nowLevel]
+	local lastCsv = Csv.Company[lastLevel]
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Role_Scale_Success")
+
+	local headPrefab = MPlayer.GetHeadPrefabID()
+    local bodyPrefab = MPlayer.GetPrefabID(nowCsv.body, MPlayer.GetSex())
+
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        CCommon.CreateRole(moudle:Get("Body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.playerLevelUp_show)
+    else
+        moudle:Get("Body").SpriteName = MPlayer.GetSpFromSex(nowCsv.body, MPlayer.GetSex())
+		moudle:Get("Head").SpriteName = MPlayer.GetHeadSp()
+    end	
+
+	moudle.SelfRect:AddOnTime(function()
+		self.isClose = true
+	end, nil, 2.5)
+
+	local title = moudle:Get("Title")
+	title.Text = Csv.Text("palyer_upOk",{name = lastCsv.name})
+	moudle:Get("InfoTitle").Text = Csv.Text("palyer_infoTitle")
+	moudle:Get("text1").Text = nowCsv.showText
+
+	-- 升官成功特效
+	SoundMgr.PlaySystem(10016)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), levelUpActorId)
+	CCommon.CreateEffect(moudle:Get("TitleActorPanel"), companyActorId, nil, function( ... )
+		if title ~= nil then
+			title.Text = Csv.Text("palyer_upOk", {name = nowCsv.name})
+		end
+	end)
+	CCommon.CreateEffect(moudle:Get("BodyActorPanel"), bodyActorId)
+end
+
+return _M

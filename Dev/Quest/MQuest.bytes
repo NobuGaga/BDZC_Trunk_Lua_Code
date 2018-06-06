@@ -1,0 +1,70 @@
+local _M = {}
+
+_M.State = 
+{
+	Doing = 1,	--未完成
+	Done = 2, 	--已完成
+	Finish = 3, --已领奖
+}
+
+--主线
+_M.MainQuest = 
+{
+	questid = 0,
+	pro = 0,
+	maxval = 0,
+}
+--日常任务按钮小红点
+_M.DailyQuestRedpoint = false
+--日常任务
+_M.DailyQuest = {}
+--已经领取的活跃度列表
+_M.ActiveAwardRewards = {}
+--当前活跃度
+_M.ActiveAward = 0
+
+
+function _M.Clean()
+	_M.MainQuest.questid = 0
+	_M.MainQuest.pro = 0
+	_M.MainQuest.maxval = 0
+
+	_M.DailyQuestRedpoint = false
+	_M.DailyQuest = {}
+	_M.ActiveAwardRewards = {}
+	_M.ActiveAwards = {}
+	_M.ActiveAward = 0
+end
+
+function _M.MainTaskIsEnd()
+	local taskId = _M.MainQuest.questid
+	if taskId <= 0 then
+		return true
+	end
+	local csv = Csv.MainQuest[taskId]
+	if csv == nil then
+		return true
+	end
+	if csv.next == nil or csv.next <= 0 then
+		return true
+	end
+	if Csv.MainQuest[csv.next] == nil then
+		return true
+	end
+	return false
+end
+
+function _M.ActiveAwardIsGeted(actId)
+	return _M.ActiveAwardRewards[actId] == true
+end
+
+function _M.GetDailyQuest(id)
+	return _M.DailyQuest[id]
+end
+
+--主线任务是否完成
+function _M.TaskIsDone(taskId)
+	return _M.MainQuest.questid > taskId
+end
+
+return _M

@@ -1,0 +1,372 @@
+local EventCenter = JRequire "Dev.EventCenter"
+local MBag = JRequire "Dev.Bag.MBag"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MGirl = JRequire"Dev.Girl.MGirl"
+
+local _M = {}
+local _P = {}
+
+local WHARF_GIRL = Csv.Const(16001)
+
+_M.EnergyCD = Csv.WharfConst[90].energyRecoverCD--1800--cd
+_M.FortuneCD = Csv.WharfConst[90].luckRecoverCD--1800--cd
+_M.autoFortuneMax = 90
+_M.fortuneValue = 40
+_M.fortuneTick = 0
+_M.energyTimes = 3
+_M.energyTick = 0
+_M.xiaozaiTimes = 0
+_M.zhuanyunTimes = 0
+
+_M.isSelectPro = false
+_M.isSelectGoods = false
+_M.autoThreshold = 80
+
+_M.VisitData = {}
+_M.VisitDataList = {}
+_M.isRefreshTime = false --是否在倒计时
+_M.redPoint = false
+_M.meetList = {} --寻访亲密度列表
+
+_M.isEnergyHandle = false
+_M.isFortuneHandle = false
+
+------------------------------------
+_M.Prestige = 0 --威望
+_M.WharfGirls = {} --已触发美女
+_M.GirlEventStorys = {} --美女事件剧情列表
+_M.GirlPictorials = {} --已激活美女图鉴
+---------------------------------
+
+--_M.IntimacyAdd = 0--亲密度加成
+
+function _M.Clean()
+	_M.isSelectPro = false
+	_M.isSelectGoods = false
+	_M.VisitData = {}
+	_M.VisitDataList = {}
+	_M.meetList = {}
+
+	_M.isRefreshTime = false --是否在倒计时
+	_M.redPoint = false
+
+	_M.isEnergyHandle = false
+	_M.isFortuneHandle = false
+
+	_M.Prestige = 0 --威望
+	_M.WharfGirls = {} --已触发美女
+	_M.GirlEventStorys = {} --美女事件剧情列表
+	_M.GirlPictorials = {} --已激活美女图鉴
+end
+
+function _M.OnDayout()
+	_M.xiaozaiTimes = 0
+	_M.zhuanyunTimes = 0
+end
+
+function _M.SetBaseInfo(data)
+	_M.fortuneValue = data.luck
+	_M.xiaozaiTimes = data.xiaozaiTimes
+	_M.zhuanyunTimes = data.zhuanyunTimes
+	_M.energyTimes = data.energy
+	if  data.energyRecoverCD ~= nil then
+		_P.SetEnergyTick(data.energyRecoverCD)
+	end
+	if data.luckRecoverCD ~= nil then
+		_P.SetFortuneTick(data.luckRecoverCD)
+	end 
+	if data.meetList ~= nil then
+		_M.meetList = {}
+		for k,v in pairs(data.meetList)do
+			table.insert(_M.meetList,{girlId = v.girlId,meet = v.meet})
+		end
+	end
+	_P.CheckRedPoint()
+	WindowMgr.Call("UWharf","RefreshTili",data.energy)
+	WindowMgr.Call("UWharf","ResetFortune",data.luck)
+	WindowMgr.Call("UWharfFortunePop","RefreshXiaozai",data.xiaozaiTimes)
+	WindowMgr.Call("UWharfFortunePop","RefreshZhuanyun",data.zhuanyunTimes)
+	WindowMgr.Call("UWharfFortunePop","RefreshFortuneValue",data.luck)
+
+	--------
+	_M.Prestige = data.prestige
+	WindowMgr.Call("UWharf","RefreshPrestige",data.prestige)
+end
+
+function _P.CheckRedPoint()
+	_M.redPoint = false
+	local maxEnergyMax = Csv.Vip[MPlayer.GetVip()].wharfEnergt
+	if _M.fortuneValue >= 2 and _M.energyTimes >= 1 then
+		_M.redPoint = true
+	end
+	CMain.UpdateRedpoint(_M.redPoint,Define.SysId.Wharf)
+end
+
+------------------
+
+function _M.SetEnergyTimes(data)
+	_M.energyTimes = data
+end
+-----------------------------
+
+function _P.SetFortuneTick(data)
+	_M.fortuneTick = HeartBeat.ServSecond() + data
+	if data > 0 then
+		if _M.isFortuneHandle == false then
+			_M.isFortuneHandle = true
+			local handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local tick = _M.fortuneTick - HeartBeat.ServSecond()
+				if tick <= 0 then
+					_M.fortuneTick = 0
+					local fortuneValue = _M.fortuneValue
+					local fortuneMax = _M.autoFortuneMax
+					if fortuneValue < fortuneMax then
+						fortuneValue = fortuneValue+1
+						_M.fortuneValue = fortuneValue
+						WindowMgr.Call("UWharfFortunePop","RefreshFortuneValue",fortuneValue)
+
+						_M.fortuneTick = HeartBeat.ServSecond() + _M.FortuneCD
+						tick = _M.fortuneTick
+					end
+					
+					if fortuneValue >= fortuneMax then
+						EventCenter.UnRegistCallEvent(eventHandle)
+						_M.isFortuneHandle = false
+					end
+				end
+			end)
+		end
+	end 
+end
+
+function _P.SetEnergyTick(data)
+	_M.energyTick = HeartBeat.ServSecond() + data
+	if data > 0 then
+		if _M.isEnergyHandle == false then
+			_M.isEnergyHandle = true
+			local handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local tick = _M.energyTick - HeartBeat.ServSecond()
+				if tick <= 0 then
+					_M.energyTick = 0
+
+					local energyTimes = _M.energyTimes
+					local energyMax =Csv.Vip[MPlayer.GetVip()].wharfEnergt
+
+					if energyMax ~= nil then
+						if energyTimes < energyMax then
+							energyTimes = energyTimes+1
+							_M.energyTimes = energyTimes
+							_P.CheckRedPoint()
+							WindowMgr.Call("UWharf","RefreshTili",energyTimes)
+
+							_M.energyTick = HeartBeat.ServSecond() + _M.EnergyCD
+							tick = _M.energyTick
+						end 
+						if energyTimes >= energyMax then
+							EventCenter.UnRegistCallEvent(eventHandle)
+							_M.isEnergyHandle = false
+						end
+					end
+				end
+			end)
+		end
+	end 
+end
+
+-------------------------------
+function _M.GetMeetByID(id)
+	local datas = _M.meetList
+	if datas ~= nil then
+		for k,v in pairs(datas)do
+			if v.girlId == id then
+				return v.meet
+			end
+		end
+	end
+	return 0
+end
+---------------------------------------------
+function _M.VisitResule(data)
+	local resList = data.resList
+
+	if data.onekey then
+		_M.VisitDataList = resList
+		WindowMgr.Call("UWharf","ShowAwardOnekey",resList)
+	else
+		_M.VisitData = resList
+		WindowMgr.Call("UWharf","ShowAward",data)
+	end
+end
+
+function _M.SetAutoThreshold(value)
+	_M.autoThreshold = value
+end
+
+function _M.SetSelectPro()
+	_M.isSelectPro =  not _M.isSelectPro
+end
+
+function _M.SetSelectGoods()
+	_M.isSelectGoods = not _M.isSelectGoods
+end
+
+----------------------------------------
+--判断选择自动消灾方式
+function _M.GetAuto()
+	if _M.isSelectGoods == false and
+		_M.isSelectPro == false then
+		return 0 --无自动消灾
+	
+	elseif _M.isSelectGoods == false and
+		_M.isSelectPro == true then
+		return 1 --业绩消灾
+	elseif _M.isSelectGoods == true and
+		_M.isSelectPro == false then
+		return 2 --商品消灾
+	elseif _M.isSelectGoods == true and
+		_M.isSelectPro == true then
+			--优先业绩消灾
+		local cost = _M.xiaozaiTimes*2000
+		if cost > MBag.GetItemNum(Define.AssetsType.Coin) then
+			if cost > MBag.GetItemNum(Define.AssetsType.Food) then
+				return 0
+			else
+				return 2
+			end
+		else
+			return 1
+		end
+	end
+end
+
+--------------------------------------------------------------------------------------------
+----
+-----------------------------------------------------------------------------------------------
+
+function _M.SetGirlList(data)
+	_M.WharfGirls = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list)do
+			local data = {id = v.id,peopleId = v.peopleId,state = v.state}
+			table.insert(_M.WharfGirls,data)
+		end
+	end
+	
+end
+
+function _M.SetEventList(data)
+	_M.GirlEventStorys = {}
+	if data.list ~= nil then
+		_M.GirlEventStorys = data.list
+	end
+end
+
+function _M.RemoveGirl(id)
+	for k,v in pairs(_M.WharfGirls)do
+		if v.id == id then
+			table.remove(_M.WharfGirls,k)
+		end
+	end
+	WindowMgr.Call("UWharf","UpDateTopGirl")
+	WindowMgr.Call("UWharfGirlRelation","UpDateTopGirl")
+end
+
+function _M.NewEvent(data)
+	table.insert(_M.GirlEventStorys,data.event)
+
+	WindowMgr.Call("UWharf","RefreshNews")
+end
+
+function _M.ReadEvent(data)
+	for k,v in pairs(_M.GirlEventStorys)do
+		if v.id == data.eventId then
+			table.remove(_M.GirlEventStorys,k)
+		end
+	end
+	WindowMgr.Call("UWharf","RefreshNews")
+end
+
+function _M.NewGirl(data)
+	table.insert(_M.WharfGirls,{id = data.id,peopleId = data.peopleId,state = data.state})
+	WindowMgr.Call("UWharfGirlRelation","UpDateTopGirl")
+	WindowMgr.Call("UWharf","UpDateTopGirl")
+end
+
+function _M.SetGirlPictorial(data)
+	_M.GirlPictorials = {}
+	if data.girlList ~= nil then
+		for k,v in pairs(data.girlList)do
+			table.insert(_M.GirlPictorials,v)
+		end
+	end
+end
+
+function _M.NewGirlPictorial(data)
+	table.insert(_M.GirlPictorials,data.girlId)
+
+	WindowMgr.Call("UWharfPokedex","NewGirlPictorial",data)
+	WindowMgr.Call("UWharf","UpdatePokeRed")
+end
+
+function _M.GetWharfGirl(id)
+	for k,v in pairs(_M.WharfGirls)do
+		if v.id == id then
+			return v
+		end
+	end
+	return nil
+end
+
+function _M.GetLastPeople()
+	for k,v in pairs(WHARF_GIRL)do
+		local wharfPeople = Csv.WharfPeople[v]
+		local isGet = false
+		if MGirl.GetKnowGirlData(wharfPeople.girlId) ~= nil then
+			isGet = true
+		end
+		if MGirl.GetGirlData(wharfPeople.girlId) ~= nil then
+			isGet = true
+		end 
+		if _M.GetWharfGirl(wharfPeople.girlId) ~= nil then
+			isGet = true
+		end 
+
+		if not isGet then
+			return v
+		end
+	end
+	return nil
+end
+
+--检测美女激活红点
+function _M.CheckPictorialsRed()
+	local unlockGirl = MGirl.UnlockGirls
+	if unlockGirl ~= nil then
+		for k,v in pairs(unlockGirl)do
+			if not _M.IsGirlActivated(v.id) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+--已激活
+function _M.IsGirlActivated(id)
+	local pictorialsGirl = _M.GirlPictorials
+	if pictorialsGirl ~= nil then
+		for k,v in pairs(pictorialsGirl)do
+			if v == id then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+
+
+return _M

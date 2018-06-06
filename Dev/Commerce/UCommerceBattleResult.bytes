@@ -1,0 +1,65 @@
+--商会副本战斗结果
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+local failTalkActorId = 10046
+
+function _M:EndDestroy( ... )
+	if self.CallBack ~= nil then
+		self.CallBack()
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(data, callBack)
+	self.CallBack = callBack
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_FbPk_Result")
+	self.Moudle = moudle
+	local csv = Csv.CommerceBattle[data.info.id]
+	moudle:Get("RewardText1").Text = Csv.Text("commerce_battle33", {name = csv.name, num = data.hurt})
+	moudle:Get("RewardText2").Text = Csv.Text("commerce_battle32", {num = data.contribution})
+
+	-- 播放战斗失败特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), failTalkActorId)
+
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+end
+
+return _M

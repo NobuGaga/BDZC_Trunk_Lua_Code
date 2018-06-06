@@ -1,0 +1,70 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local failActorId = 10004
+local failTalkActorId = 10022
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall(table.unpack(self.OnCloseCallParam))
+	end
+end
+
+--界面构建
+function _M:OnCreate(battleId, hurt, onClose, isShowText, ...)
+	self.OnCloseCall = onClose
+	self.OnCloseCallParam = {...}
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local csv = Csv.Battle[battleId]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Fail")
+
+	-- 播放战斗失败特效
+	local noneText = moudle:Get("noneText")
+	if not isShowText then
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), ((csv.type == 2 and failActorId) or failTalkActorId))
+		noneText.Activity = false
+
+		self:Lock()
+		moudle.SelfRect:AddOnTime(function()
+			self:Unlock()
+		end, nil, 0.5)
+	else
+		noneText.Text = Csv.Text("battle_noneErr")
+		noneText.Activity = true
+	end
+
+	if csv.type == MBattle.BattleType.BOSS then
+		moudle:Get("text2").Text = Csv.Text("battle_BassFail", {name = Csv.BattleName[csv.name].str, num = hurt or 0})
+		moudle:Get("Btn").Activity = false
+	else
+		moudle:Get("text1").Text = Csv.Text("battle_fail")
+		moudle:Get("text2").Text = Csv.Text("battle_fail_go")
+		moudle:Get("text3").Text = Csv.Text("battle_clickShow")
+		moudle:Get("C_text").Text = Csv.Text("quest_go")
+
+		moudle:Get("Btn"):AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowOpen.Open(Define.SysId.Manage)
+		end, nil, 0.9)
+	end
+end
+
+
+return _M

@@ -1,0 +1,420 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+--@RefType [Dev.Questionnaire.CQuestionnaire.bytes#_M]
+local CQuestionnaire = JRequire "Dev.Questionnaire.CQuestionnaire"
+--@RefType [Dev.Questionnaire.MQuestionnaire.bytes#_M]
+local MQuestionnaire = JRequire "Dev.Questionnaire.MQuestionnaire"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local GTE_EFFECT_ID = 5
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local _R = {}
+
+function _R.OnTaskUpdate(self)
+
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Questionnaire")
+	self.mModule = module
+
+	module:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.SaveInputText(self)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	module:Get("C_Text").Text = Csv.Text("questionnaire_title")
+
+	_P.SetData(self)
+	self.mModule.SelfRect:AddOnTime(function()
+		_P.CheckSubmitAnswer(self, true)
+	end, nil, 0.2)
+end
+
+
+function _P.SetData(self)
+	local data = MQuestionnaire.GetCurVersonData()
+	if data == nil then return end
+
+	self.mData = data
+	_P.SetListData(self)
+	_P.SetDescData(self)
+end
+
+
+function _P.SetListData(self)
+	local contentTransform = self.mModule:Get("content")
+	contentTransform:DestroyChildren() -- 先移除所有的子item
+
+	local listData = _P.GetSortQuestion(self.mData.questionList)
+	if not listData then return end
+
+	self.mQuestionDatas = {}
+	for i,v in ipairs(listData) do
+		if v.type == MQuestionnaire.AnswerType.Input then -- 问答
+			self.mQuestionDatas[i] = _P.OnCreateInputItem(self, v, contentTransform, i)
+		else
+			self.mQuestionDatas[i] = _P.OnCreateChooseItem(self, v, contentTransform, i)
+		end
+	end
+
+	contentTransform:AddContentSizeFitter():SetLayoutVertical()
+end
+
+
+-- 列表排序
+function _P.GetSortQuestion(questionList)
+	if questionList == nil then return end
+	
+	local sortTable = {}
+	for k,v in pairs(questionList) do
+		sortTable[#sortTable + 1] = v
+	end
+
+	table.sort(sortTable, function(a, b)return a.id < b.id end)
+	return sortTable
+end
+
+
+function _P.OnCreateChooseItem(self, data, itemGrid, index)
+	local questionItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Questionnaire_Item1", WindowType.UI, 0)
+	if itemModule == nil then return end
+	
+	local questionText = itemModule:Get("Question")
+	questionText.Text = Csv.Text("questionnaire_chooseDesc", {num = index, desc = data.title, 
+		chooseDesc = ((data.type == MQuestionnaire.AnswerType.OneChoose and Csv.Text("questionnaire_single")) or Csv.Text("questionnaire_mult"))})
+
+	for i,v in ipairs(data.choose) do
+		local chooseModule = JGuiManager.GetMoudle(itemModule.SelfRect, "M_Questionnaire_Item1_Item", WindowType.UI, 0)
+		if chooseModule then
+			local lightImg = chooseModule:Get("choose3_1")
+			local lightBg = chooseModule:Get("xuanzhong3")
+
+			local selectData = MQuestionnaire.AnswerData
+			if selectData and selectData[data.id] and selectData[data.id].choosed and selectData[data.id].choosed[i] then
+				lightImg.Activity = true
+				lightBg.Activity = true
+
+				local curData = MQuestionnaire.AnswerData[data.id]
+				curData.lightImg = lightImg
+				curData.lightBg = lightBg
+			else
+				lightImg.Activity = false
+				lightBg.Activity = false
+			end
+
+			local chooseText = chooseModule:Get("A2_1text")
+			chooseModule.SelfRect:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				lightImg.Activity = not lightImg.Activity
+				lightBg.Activity = not lightBg.Activity
+
+				if data.type == MQuestionnaire.AnswerType.OneChoose then -- 单选
+					local curData = MQuestionnaire.AnswerData[data.id]
+					if curData == nil or curData.choosed == nil then
+						curData = {}
+					end
+
+					if lightImg.Activity == false or lightBg.Activity == false then
+						MQuestionnaire.AnswerData[data.id] = nil
+						return
+					end
+
+					if (curData.lightImg and curData.lightImg.Activity) then curData.lightImg.Activity = false end
+					if (curData.lightBg and curData.lightBg.Activity) then curData.lightBg.Activity = false end
+
+					curData.choosed = {}
+					curData.choosed[i] = true
+					curData.lightImg = lightImg
+					curData.lightBg = lightBg
+					MQuestionnaire.AnswerData[data.id] = curData
+				elseif data.type == MQuestionnaire.AnswerType.MultChoose then -- 多选
+					local curData = MQuestionnaire.AnswerData[data.id]
+					if curData == nil or curData.choosed == nil then
+						curData = {}
+						curData.choosed = {}
+					end
+
+					if lightImg.Activity == false or lightBg.Activity == false then
+						curData.choosed[i] = nil
+						MQuestionnaire.AnswerData[data.id] = curData
+						return
+					end
+
+					if not curData.choosed[i] then
+						curData.choosed[i] = true
+						MQuestionnaire.AnswerData[data.id] = curData
+					end
+				end
+			end)
+
+			chooseText.Text = v
+		end
+	end
+
+	questionText:AddContentSizeFitter():SetLayoutVertical()
+	itemModule.SelfRect:AddContentSizeFitter():SetLayoutVertical()
+	questionItem.data = data
+	questionItem.module = itemModule
+	return questionItem
+end
+
+
+function _P.OnCreateInputItem(self, data, itemGrid, index)
+	local questionItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Questionnaire_Item2", WindowType.UI, 0)
+	if itemModule == nil then return end
+	
+	itemModule:Get("Placeholder").Text = Csv.Text("questionnaire_clickInput")
+	local questionText = itemModule:Get("Question")
+	questionText.Text = index .. '.' .. data.title
+	questionText:AddContentSizeFitter():SetLayoutVertical()
+	itemModule.SelfRect:AddContentSizeFitter():SetLayoutVertical()
+
+	local oneData = MQuestionnaire.AnswerData[data.id]
+	if oneData and oneData.text and oneData.text ~= "" then
+		local input = itemModule:Get("input")
+		input.Text = oneData.text
+	end
+
+	questionItem.data = data
+	questionItem.module = itemModule
+	return questionItem
+end
+
+
+function _P.SetDescData(self)
+	local descData = _P.GetRandomDescData(self)
+	if not descData then return end
+	local module = self.mModule
+
+	module:Get("titletext").Text = descData.desc
+	module:Get("TimeText").Text = Csv.Text("questionnaire_countTime") .. LuaUtil.TransToYMD(MQuestionnaire.EndTime)
+	module:Get("title").Text = Csv.Text("questionnaire_reward")
+	module:Get("C_text").Text = Csv.Text("questionnaire_submit")
+
+	local submitBtn = module:Get("C_Btn_b")
+	submitBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.CheckSubmitAnswer(self)
+	end, nil, 0.95)
+
+	-- 创建奖励列表
+	local rewardContent = module:Get("RewardContent")
+	rewardContent:DestroyChildren()
+
+	for k,v in pairs(descData.reward) do
+		CCommon.CreateItem(rewardContent, v[1], function ( ... )
+			WindowMgr.Create("UBagDetailPop", v[1])
+		end, {num = v[2]}, Define.SysId.Questionnaire)
+	end
+end
+
+
+-- 随机拿到该版本问卷调查描述
+function _P.GetRandomDescData(self)
+	if not self.mData.descList then return end
+	local descCount = #self.mData.descList
+	if descCount > 0 then
+		local index = math.random(1, descCount)
+		return self.mData.descList[index]
+	end
+end
+
+
+-- 得到当前玩家答案
+function _P.GetPlayerAnswer(self)
+	local answerList = {}
+	for i,v in ipairs(self.mQuestionDatas) do
+		local oneData = v.data
+		if oneData and oneData.type == MQuestionnaire.AnswerType.OneChoose or
+			oneData and oneData.type == MQuestionnaire.AnswerType.MultChoose
+		then
+			local chooseList = {}
+			local selectData = MQuestionnaire.AnswerData
+			if selectData and selectData[oneData.id] and selectData[oneData.id].choosed then
+				for k,v in pairs(selectData[oneData.id].choosed) do
+					chooseList[#chooseList + 1] = k
+				end
+			end
+			answerList[i] = {id = oneData.id, choosed = chooseList, text = nil}
+		elseif oneData and oneData.type == MQuestionnaire.AnswerType.Input then
+			local module = v.module
+			local inputText = module:Get("Text")
+			answerList[i] = {id = oneData.id, choosed = nil, text = inputText.Text}
+		end
+	end
+
+	return answerList
+end
+
+
+function _P.CheckSubmitAnswer(self, isScroll)
+	local answerList = _P.GetPlayerAnswer(self)
+
+	for i,v in ipairs(answerList) do
+		local text = v.text
+		if (v.choosed and #v.choosed == 0) or (text and text == "") then
+			-- 移动列表位置
+			_P.ScrollThisPos(self, i)
+			if not isScroll then
+				CCommon.ShowError(Csv.Text("questionnaire_submitErr"))
+			end
+			return
+		end
+
+		if text and text ~= "" then
+			local questionConf = Csv.Questionnaire[v.id]
+			if questionConf then
+				local minChar = questionConf.textLimit[1] * 2
+				local maxChar = questionConf.textLimit[2] * 2
+				
+				local textNum = CS.Utility.Utils.UnicodeStringLength(text)
+				if textNum < minChar or textNum > maxChar then
+					_P.ScrollThisPos(self, i)
+					if not isScroll then
+						CCommon.ShowError(Csv.Text("questionnaire_charNumFail"))
+					end
+					return
+				end
+			end
+		end
+	end
+
+	if not isScroll then
+		CQuestionnaire.GetRewardReq(_P.SetRightData(answerList))
+	end
+end
+
+
+-- 移动到指定位置
+function _P.ScrollThisPos(self, index)
+	if index <= 1 then return end
+	
+	local scrollView = self.mModule:Get("scrollView")
+	local content = self.mModule:Get("content")
+	local layout = content:AddVerticalLayoutGroup()
+	local maxHeight = content.SizeDelta.y - scrollView.SizeDelta.y
+	local spacing = layout.spacing
+	local allHeight = 0
+	for i,v in ipairs(self.mQuestionDatas) do
+		if i < index then
+			allHeight = allHeight + v.module.SelfRect.SizeDelta.y + spacing
+		end
+	end
+
+	content:DOAnchorPosY(math.min(allHeight, maxHeight), 0.5)
+end
+
+
+function _P.SaveInputText(self)
+	for i,v in ipairs(self.mQuestionDatas) do
+		local oneData = v.data
+		if oneData and oneData.type == MQuestionnaire.AnswerType.Input then
+			local module = v.module
+			local inputText = module:Get("Text")
+			local answerData = MQuestionnaire.AnswerData
+			local inputStr = inputText.Text
+			if inputStr ~= "" then
+				if answerData and answerData[oneData.id] then
+					MQuestionnaire.AnswerData[oneData.id].text = inputText.Text
+				else
+					if not MQuestionnaire.AnswerData then
+						MQuestionnaire.AnswerData = {}
+					end
+					MQuestionnaire.AnswerData[oneData.id] = {id = oneData.id, choosed = nil, text = inputText.Text}
+				end
+			end
+		end
+	end
+end
+
+
+-- 后端不允许不传参数过去
+function _P.SetRightData(list)
+	local changeList = {}
+	for i,v in ipairs(list) do
+		local oneItem = {}
+		oneItem.id = v.id
+		if v.choosed then
+			oneItem.choosed = v.choosed
+		else
+			oneItem.choosed = {}
+		end
+
+		if v.text then
+			oneItem.text = v.text
+		else
+			oneItem.text = ""
+		end
+
+		changeList[i] = oneItem
+	end
+
+	return changeList
+end
+
+
+-- 领取奖励返回
+function _R.OnGetReward(self, data)
+	if data and data.list then
+		local submitBtn = self.mModule:Get("C_Btn_b")
+		submitBtn.IsGray = true
+		submitBtn.RaycastTarget = false
+
+		CCommon.ShowRight(Csv.Text("questionnaire_submitSuccess"))
+
+		local delayCount = 0
+		for k,v in pairs(data.list) do
+			CCommon.ShowFlyItem(submitBtn, v.key, v.value, delayCount)
+			delayCount = delayCount + 0.5
+		end
+
+		self.mModule.SelfRect:AddOnTime(function()
+			MQuestionnaire.IsGetRewardBack = false
+			self:Destroy()
+		end, nil, delayCount + 1)
+	end
+end
+
+
+-- 状态更新
+function _R.OnUpdateSate(self, data)
+	if data.state == 2 then
+		if not MQuestionnaire.IsGetRewardBack then
+			self:Destroy()
+		end
+	elseif data.state == 1 then
+		_P.SetData(self)
+	end
+end
+
+
+return _M

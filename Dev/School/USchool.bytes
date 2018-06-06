@@ -1,0 +1,377 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire"Libs.LuaUtil"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Aircraft.CAircraft.bytes#_M]
+local CAircraft = JRequire "Dev.Aircraft.CAircraft"
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+local JGuiManager = CS.JGui.JGuiManager
+
+----------------------常量定义--------------------------
+local SECOND_ALIVE = Csv.Const(Define.Const.SchoolAliveSecond)
+local SECOND_RANDOM_MIN = Csv.Const(Define.Const.SchoolRandomSecond)[1]
+local SECOND_RANDOM_MAX = Csv.Const(Define.Const.SchoolRandomSecond)[2]
+
+--皮肤加成buff每行文字高度
+local BuffTextRowHeight = 25
+
+local _M = Class(WindowBase)
+
+local _P = {}
+
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Academy")
+	self.moudle = moudle
+	
+	moudle:Get("textTitle").Text = Csv.Text("school_title")
+	moudle:Get("rightText").Text = Csv.Text("school_rightText")
+	moudle:Get("btnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		_R.OnClose(self)
+	end)
+
+	_P.InitSeatInfo(self)
+	_P.InitStartEndButton(self)
+	_P.InitSeatView(self)
+end
+
+--初始化位置信息
+function _P.InitSeatInfo(self)
+	local moudle = self.moudle
+	self.textSeat = moudle:Get("textSeat")
+	self.textBuff = moudle:Get("textBuff")
+	_P.RefreshSeatInfo(self)
+
+	self.buffPopup = moudle:Get("buffPopup")
+	self.buffPopup.Activity = false
+	self.textAllBuff = moudle:Get("textAllBuff")
+	self.textSubBuff = self.moudle:Get("textSubBuff")
+	_P.RefreshBuffPopup(self)
+
+	local textBuffCloseBox = moudle:Get("textBuffCloseBox")
+	textBuffCloseBox.Activity = false
+	textBuffCloseBox:AddOnButton(function()
+		self.buffPopup.Activity = false
+		textBuffCloseBox.Activity = false
+	end, nil, 1)
+
+	self.textBuff:AddOnButton(function()
+		self.buffPopup.Activity = true
+		textBuffCloseBox.Activity = true
+	end)
+end
+
+--刷新座位信息
+function _P.RefreshSeatInfo(self)
+	self.textSeat.Text = Csv.Text("school_seatNum", {num = MAircraft.SeatNum, max = MAircraft.MaxSeatNum})
+	self.textBuff.Text = Csv.Text("school_buff", {num = MAircraft.SkinSchoolAllBuff})
+end
+
+--刷新皮肤加成信息
+function _P.RefreshBuffPopup(self)
+	self.textAllBuff.Text = Csv.Text("school_buffPop",  {num = MAircraft.SkinSchoolAllBuff})
+	local row = 0
+	local skinList = MAircraft.GetActivateSkinList()
+	if nil ~= skinList and "table" == type(skinList) then
+		for _, __ in pairs(skinList) do
+			row = row + 1
+		end
+	end
+	if 0 < row then
+		local height = row * BuffTextRowHeight
+		self.buffPopup.SizeDelta = Vector2(self.buffPopup.SizeDelta.x, self.buffPopup.SizeDelta.y + height)
+		self.textSubBuff.SizeDelta = Vector2(self.textSubBuff.SizeDelta.x, height)
+		self.textSubBuff.Text = ""
+		local csvAircraftSkin = Csv.AircraftSkin
+		for skinID, _ in pairs(skinList) do
+			local csvValue = csvAircraftSkin[skinID]
+			if nil ~= csvValue then
+				if nil ~= csvValue.name then
+					if nil ~= csvValue.get then
+						for index, value in pairs(csvValue.get) do
+							if nil ~= value[1] and nil ~= value[2] then
+								if MAircraft.SchoolSysID == value[1] then
+									local csvColor = Csv.ItemColor[csvValue.type]
+									self.textSubBuff.Text = self.textSubBuff.Text .. Csv.Text("aircraft_skin_effect_sub", 
+																					 {color = csvColor.str, name = csvValue.name, 
+																					  num = math.modf(value[2] / 100)}) .. "\n"
+								end
+							else
+								error("皮肤ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
+							end
+						end
+					else
+						error("皮肤ID " .. skinID .. " 字段 get 错误")
+					end
+				else
+					error("皮肤ID " .. skinID .. " 字段 name 错误")
+				end
+			else
+				error("没有对应的皮肤ID " .. skinID)
+			end
+		end
+	end
+end
+
+--初始化一键开始完成
+function _P.InitStartEndButton(self)
+	local moudle = self.moudle
+	self.textBtnStartEnd = moudle:Get("textBtnStartEnd")
+
+	self.btnStartEnd = moudle:Get("btnStartEnd")
+	self.btnStartEnd:AddOnButton(function()
+		SoundMgr.Play(10001)
+		if MAircraft.IsHaveCompleted then
+			CAircraft.AircraftComplete()
+		elseif not MAircraft.IsStuding then
+			if MAircraft.IsNotDispatch then
+				CCommon.ShowError(Csv.Text("school_no_seat"))
+			else
+				if MAircraft.IsHaveEmpty then
+					CCommon.CheckTips(function(isSure, arg)
+						if isSure then
+							CAircraft.AircraftStartLearn()
+						end
+					end, {content = Csv.Text("school_no_enough_seat")})
+				else
+					CAircraft.AircraftStartLearn()
+				end
+			end
+		end
+	end)
+
+	self.textStuding = moudle:Get("textStuding")
+	self.textTime = moudle:Get("textTime")
+	_P.RefreshBottomInfoState(self)
+end
+
+--刷新底部游学状态
+function _P.RefreshBottomInfoState(self)
+	self.textStuding.Activity = MAircraft.IsStuding
+	self.btnStartEnd.Activity = not MAircraft.IsStuding
+	
+	if MAircraft.IsStuding then
+		self.textTween = LuaUtil.TextAddThreePoint(self.textStuding, Csv.Text("school_studingAnim"))
+		_P.OnUpdateTime(self)
+		self.tween = self.moudle.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	elseif MAircraft.IsHaveCompleted then
+		self.textBtnStartEnd.Text = Csv.Text("school_complete")
+	else
+		self.textBtnStartEnd.Text = Csv.Text("school_startlearn")
+	end
+
+	if not MAircraft.IsStuding and nil ~= self.textTween then
+		self.textTween:Destroy()
+	end
+end
+
+--初始化座位列表
+function _P.InitSeatView(self)
+	self.content = self.moudle:Get("content")
+	self.seatData = {}
+	_P.RefreshSeatView(self)
+end
+
+--刷新座位列表
+function _P.RefreshSeatView(self)
+	for index = 1, MAircraft.MaxSeatNum do
+		_P.CreateSeatItem(self, index)
+		_P.RefreshSeatItem(self, index)
+	end
+end
+
+--创建座位Item
+function _P.CreateSeatItem(self, index)
+	if nil ~= self.seatData[index] then 
+		return 
+	end
+	local seat = {}
+	seat.moudle = JGuiManager.GetMoudle(self.content, "M_Academy_Item")
+
+	seat.body = seat.moudle:Get("Body")
+	seat.body:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickSeatItem(index)
+	end)
+
+	seat.textRect = seat.moudle:Get("TextRect")
+	seat.textRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickSeatItem(index)
+	end, nil, 0.9)
+	seat.textInfo = seat.moudle:Get("textInfo")
+
+	seat.book = seat.moudle:Get("Book")
+	
+	seat.talkBox = seat.moudle:Get("TalkBG")
+	seat.textTalk = seat.moudle:Get("textTalk")
+	
+	self.seatData[index] = seat
+end
+
+--刷新座位Item信息
+function _P.RefreshSeatItem(self, index)
+	local seat = self.seatData[index]
+	local data = MAircraft.GetSchoolSeatData(index)
+	local isEmpty = nil == data
+	local isThisSeatStudy = MAircraft.IsStuding and not isEmpty
+	seat.body.Activity = not isEmpty
+	if not isEmpty then
+		seat.body.SpriteName = Csv.Personnel[data.staffid].asset
+	end
+	seat.book.Activity = isThisSeatStudy
+	seat.talkBox.Activity = isThisSeatStudy
+	if isThisSeatStudy then
+		_P.ShowTalk(self, seat, index)
+	end
+	if isEmpty and not MAircraft.IsStuding then
+		seat.textRect.Activity = true
+		seat.textInfo.Text = Csv.Text("school_empty")
+	elseif nil ~= data and data.finish and not MAircraft.IsStuding then
+		seat.textRect.Activity = true
+		seat.textInfo.Text = Csv.Text("school_end")
+	elseif not MAircraft.IsStuding then
+		seat.textRect.Activity = true
+		seat.textInfo.Text = Csv.Text("school_select_staff")
+	else
+		seat.textRect.Activity = false
+	end
+end
+
+--点击座位Item事件
+function _P.OnClickSeatItem(index)
+	local data = MAircraft.GetSchoolSeatData(index)
+	if MAircraft.IsStuding then
+		CCommon.ShowError(Csv.Text("school_studing"))
+	else
+		if nil ~= data then
+			if data.finish then
+				CAircraft.AircraftComplete(index)
+			else
+				WindowMgr.Create("USchoolSelect", index)
+			end
+		else
+			WindowMgr.Create("USchoolSelect", index)
+		end
+	end
+end
+
+--显示对话
+function _P.ShowTalk(self, seat, index)
+	local seatData = MAircraft.GetSchoolSeatData(index)
+	if MAircraft.IsStuding and nil ~= seatData then
+		local randomShow = math.random(1, 2)
+		local isShow = 1 == randomShow
+		seat.talkBox.Activity = isShow
+		seat.textTalk.Text = _P.GetStaffTalk(seatData.staffid)
+		seat.talkBox.SizeDelta = Vector2(220, seat.textTalk.PreferredHeight + 12)
+		local randomSecond = math.random(SECOND_RANDOM_MIN, SECOND_RANDOM_MAX)
+		if MAircraft.SchoolTime > randomSecond then
+			seat.moudle.SelfRect:AddOnTime(function()
+				_P.ShowTalk(self, seat, index)
+				seat.moudle:Get("mask"):AddOnTime(function()
+					seat.talkBox.Activity = false
+				end, nil, SECOND_ALIVE)
+			end, nil, randomSecond)
+		end
+	end
+end
+
+--获取员工对话
+function _P.GetStaffTalk(staffid)
+	if nil ~= staffid then
+		local talks = Csv.Personnel[staffid].schoolTalk
+		local length = #talks
+		local random = math.random(1, length)
+		local talkid = talks[random]
+		return Csv.Talk[talkid].str
+	end
+	return ""
+end
+
+--更新游学时间
+function _P.OnUpdateTime(self)
+	local lessTime = MAircraft.SchoolTime - HeartBeat.ServSecond()
+	self.textTime.Text = luaUtil.GetTimeHMS(lessTime)
+	if 0 >= lessTime and nil ~= self.tween then
+		self.tween:Destroy()
+	end
+end
+
+--刷新整个界面
+function _R.RefreshView(self)
+	_P.RefreshSeatInfo(self)
+	_P.RefreshBuffPopup(self)
+	_P.RefreshBottomInfoState(self)
+	_P.RefreshSeatView(self)
+end
+
+function _R.RefreshSchoolState(self)
+	_P.RefreshBottomInfoState(self)
+	_P.RefreshSeatView(self)
+end
+
+function _R.OnClose(self)
+	self:Destroy()
+	if MAircraft.IsPlayStartLearn then
+		WindowMgr.Call("UAircraft", "JudgePlayStartFly")
+		MAircraft.IsPlayStartLearn = false
+	end
+end
+
+function _R.OnGetReward(self, data)
+	for _, rewardData in pairs(data) do
+		local index = rewardData.airplanes.index
+		local seat = self.seatData[index]
+		if nil ~= seat then
+			CCommon.ShowFlyText(seat.moudle.SelfRect, Csv.Text("school_skill", {num = rewardData.skillexp}))
+			SoundMgr.Play(11000)
+			moudle.SelfRect:AddOnTime(function()
+				CCommon.ShowFlyText(seat.moudle.SelfRect, Csv.Text("school_book", {num = rewardData.bookexp}))
+				SoundMgr.Play(11000)
+			end, nil, 0.5)
+			seat.body:AddOnTime(function()
+				_P.RefreshSeatItem(self, index)
+			end, nil, 1)
+			if rewardData.isGod then
+				SoundMgr.Play(11000)
+				local nodeTrans = self.moudle:Get("EffectNode")
+				CCommon.PlayEffectGod(nodeTrans, Define.SysId.Aircraft)
+			end
+		else
+			error("系统ID " .. Define.SysId.Aircraft .. " 接口游学世界获取奖励没有对应的位置 " .. index)
+		end
+	end
+	_P.RefreshBottomInfoState(self)
+end
+
+--刷新座位列表信息并判断是否直接开始
+function _R.RefreshSeatViewAndJudge(self)
+	_P.RefreshSeatInfo(self)
+	_P.RefreshSeatView(self)
+end	
+
+return _M

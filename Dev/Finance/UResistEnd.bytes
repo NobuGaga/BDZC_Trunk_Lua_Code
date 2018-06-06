@@ -1,0 +1,59 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local resultActorId = 10065
+
+function _M:OnCreate(data,isVote)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		WindowMgr.Call("UFinanceBattle","CloseBattle")
+		WindowMgr.Call("UVoteBattlePop","CloseBattle")
+		
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PHHurt")
+	self.Moudle = moudle
+
+	local killer = moudle:Get("text2")
+	local killerName = moudle:Get("text3")
+	local join = moudle:Get("text4")
+	local joinNum = moudle:Get("text5")
+
+	if data.killer ~= nil then
+		killer.Text = Csv.Text("finance_killer")--"击杀者："
+		killerName.Text = data.killer
+	end
+	
+	if data.actorNum ~= nil then
+		join.Text = Csv.Text("finance_joinNum")--"参与人数："
+		joinNum.Text = data.actorNum
+	end
+
+	local killRank = moudle:Get("C_text")
+	killRank.Text = Csv.Text("finance_hurtRankText")--"伤害排行"
+	local rankBtn = moudle:Get("C_Btn_b")
+	rankBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UFinanceHurtRank",data,isVote)
+	end)
+
+	--播放结束特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
+end
+return _M

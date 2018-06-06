@@ -1,0 +1,110 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+local COST_NORMAL = Csv.Const(Define.Const.RelationsCost)[2]
+local COST_SUPER = Csv.Const(Define.Const.RelationsCost)[3]
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_tips1")
+	self.mMoudle = moudle
+
+	moudle:Get("title").Text = Csv.Text("relations_costT")
+
+	local csvItemNormal = Csv.Item[COST_NORMAL]
+	local icon1 = moudle:Get("IconBox")
+	icon1.SpriteName = csvItemNormal.colorIcon
+	moudle:Get("Icon").SpriteName = csvItemNormal.icon
+	moudle:Get("IconName").Text = csvItemNormal.name
+	icon1:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommon.ShowItemTips(COST_NORMAL)
+	end)
+
+	local csvItemSuper = Csv.Item[COST_SUPER]
+	local icon2 = moudle:Get("IconBox2")
+	icon2.SpriteName = csvItemSuper.colorIcon
+	moudle:Get("Icon_0").SpriteName = csvItemSuper.icon
+	moudle:Get("IconName_0").Text = csvItemSuper.name
+	icon2:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommon.ShowItemTips(COST_SUPER)
+	end)
+
+
+	self.mCostItem = COST_NORMAL
+
+	moudle:Get("ClickRect1"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if self.mCostItem ~= COST_NORMAL then
+			self.mCostItem = COST_NORMAL
+			_P.ChangeBtnState(self)
+		end
+	end,nil,1)
+
+	moudle:Get("ClickRect2"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if self.mCostItem ~= COST_SUPER then
+			self.mCostItem = COST_SUPER
+			_P.ChangeBtnState(self)
+		end
+	end,nil,1)
+
+	moudle:Get("TipsText").Text = Csv.Text("relations_costTip")
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if not MBag.CheckItemEnough(self.mCostItem,1) then
+			return
+		end
+		if self.mCostItem == COST_SUPER then
+			local costTable = {COST_SUPER,1}
+			local state,str = MBag.GetCostState(costTable,true)
+			if state then
+				WindowMgr.Call("URelationsSelectStaff","CloseView")
+				CRelations.CFightSuper(MRelations.PlayerID,MRelations.SelectStaffID,MRelations.FightType)
+			else
+				CCommon.ShowError(str)
+			end
+		else
+			local costTable = {COST_NORMAL,1}
+			local state,str = MBag.GetCostState(costTable,true)
+			if state then
+				WindowMgr.Call("URelationsSelectStaff","CloseView")
+				CRelations.CFightNormal(MRelations.PlayerID,MRelations.SelectStaffID,MRelations.FightType)
+			else
+				CCommon.ShowError(str)
+			end
+		end
+		
+		self:Destroy()
+	end,nil,0.9)
+
+	moudle:Get("C_text_0").Text = Csv.Text("common_cancel")
+	moudle:Get("C_Btn_e"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end,nil,0.9)
+end
+
+function _P.ChangeBtnState(self)
+	local moudle = self.mMoudle
+	local costItem = self.mCostItem
+	local ImgPointNormal = moudle:Get("choose")
+	local ImgPointSuper = moudle:Get("choose_0")
+	if costItem == COST_SUPER then
+		ImgPointNormal.Activity = false
+		ImgPointSuper.Activity = true
+	else
+		ImgPointNormal.Activity = true
+		ImgPointSuper.Activity = false
+	end
+end
+
+return _M

@@ -1,0 +1,35 @@
+-- 举办成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(playerid)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Success")
+	if playerid == nil or module == nil then return end
+
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	module:Get("desc").Text = Csv.Text("club_success_desc")
+	module:Get("playerDesc").Text  = Csv.Text("club_info_playerInfo")
+	module:Get("playerIdText").Text  = playerid
+end
+
+return _M

@@ -1,0 +1,649 @@
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = {}
+
+local _P = {}
+
+_M.AircraftID = 0
+_M.SkinID = nil
+_M.SchoolTime = nil
+_M.SkinList = nil			--table
+_M.UnActivateSkinList = nil	--table
+_M.ActivateSkinList = nil	--table
+_M.BaseSkinList = nil		--table
+_M.MaxLevel = 0
+_M.MaxSkinNum = 0
+
+_M.SeatList = nil			--table
+_M.SeatNum = 0
+_M.MaxSeatNum = 0
+
+_M.SkinSchoolAllBuff = 0
+_M.PowerBaseBuff = nil		--table
+_M.PowerSkinAllBuff = nil	--table
+_M.PowerBuff = nil			--table
+_M.UpCost = nil				--table
+
+_M.AllPower = 0
+--飞机总战力系统表
+_P.AllPowerArg = nil		--table
+_M.SkinScore = nil			--table
+_M.SkinPowerBuff = nil		--table
+
+_M.IsNotDispatch = false
+_M.IsHaveEmpty = false
+_M.IsStuding = false
+_M.IsHaveCompleted = false
+
+_M.IsPlayStartLearn = false
+_M.IsPlayEndLearn = false
+
+--是否刷新皮肤列表, 用来做缓存已激活飞机皮肤列表
+_M.IsUpdataSkinList = true
+
+--飞机飞行结束动画时间
+_M.FlyEndAnimTime = 0
+
+--游学世界加成ID
+_M.SchoolSysID = 1
+--飞机加成系数全局配置表ID
+_M.AircraftArg = 79
+--飞机皮肤加成系数全局配置表ID
+_M.AircraftSkinArg = 80
+
+function _M.Clean()
+	_M.AircraftID = 0
+	_M.SkinID = nil
+	_M.SchoolTime = nil
+	_M.SkinList = nil
+	_M.UnActivateSkinList = nil
+	_M.ActivateSkinList = nil
+	_M.BaseSkinList = nil
+	_M.MaxLevel = 0
+	_M.MaxSkinNum = 0
+
+	_M.SeatList = nil
+	_M.SeatNum = 0
+	_M.MaxSeatNum = 0
+
+	_M.SkinSchoolAllBuff = 0
+	_M.PowerBaseBuff = nil
+	_M.PowerSkinAllBuff = nil
+	_M.PowerBuff = nil
+	_M.UpCost = nil
+
+	_M.AllPower = 0
+	_P.AllPowerArg = nil		--table
+	_M.SkinScore = nil			--table
+	_M.SkinPowerBuff = nil 		--table
+
+	_M.IsNotDispatch = false
+	_M.IsHaveEmpty = false
+	_M.IsStuding = false
+	_M.IsHaveCompleted = false
+
+	_M.IsPlayStartLearn = false
+	_M.IsPlayEndLearn = false
+
+	_M.IsUpdataSkinList = true
+
+	_M.FlyEndAnimTime = 0
+end
+
+--初始化返回
+function _M.InitData(data)
+	_P.CalculateMaxLevel()
+	_P.CalculateMaxSkin()
+	_P.InitAllPowerArg()
+	_P.InitSkinScoreArg()
+	_M.RefreshAircraftData(data.airplane)
+	_P.CreateAircraftUnActivateSkinList(data.airplaneSkin)
+	_P.CreateAircraftSeatListData(data.airplaneSeats)
+end
+
+--刷新飞机基本数据
+function _M.RefreshAircraftData(data)
+	if nil ~= data then
+		_M.AircraftID = data.airplaneID
+		if 0 == data.airplaneSkinID then
+			data.airplaneSkinID = Csv.Aircraft[_M.AircraftID].id
+		end
+		_M.SkinID = data.airplaneSkinID
+		_P.RefreshBaseData()
+		_M.RefreshSchoolState(data.airplaneTime)
+	else
+		error("飞机数据为空")
+	end
+end
+
+--刷新飞机基本数据
+function _M.RefreshAircraftSkinData(data)
+	if nil ~= data then
+		if 0 == data then
+			data = Csv.Aircraft[_M.AircraftID].id
+		end
+		_M.SkinID = data
+	else
+		error("飞机皮肤数据为空")
+	end
+end
+
+--计算飞机最大等级
+function _P.CalculateMaxLevel()
+	local csvAircraft = Csv.Aircraft
+	if nil ~= csvAircraft then
+		for _, csvValue in pairs(csvAircraft) do
+			if nil == csvValue or 0 == csvValue.next_id then
+				_M.MaxLevel = csvValue.id
+				break
+			end
+		end
+	end
+end
+
+--计算飞机最大皮肤数
+function _P.CalculateMaxSkin()
+	local csvAircraftSkin = Csv.AircraftSkin
+	_M.MaxSkinNum = 0
+	if nil ~= csvAircraftSkin then
+		for _, __ in pairs(csvAircraftSkin) do
+			_M.MaxSkinNum = _M.MaxSkinNum + 1
+		end
+	end
+	local csvAircraft = Csv.Aircraft
+	if nil ~= csvAircraft then
+		for _, __ in pairs(csvAircraft) do
+			_M.MaxSkinNum = _M.MaxSkinNum + 1
+		end
+	end
+end
+
+--初始化飞机战力系数
+function _P.InitAllPowerArg()
+	local argList = Csv.Const(_M.AircraftArg)
+	if nil ~= argList then
+		_P.AllPowerArg = {}
+		for index, value in pairs(argList) do
+			_P.AllPowerArg[index - 1] = value
+		end
+	end
+end
+
+--初始化飞机皮肤评分系数
+function _P.InitSkinScoreArg()
+	local argList = Csv.Const(_M.AircraftSkinArg)
+	local skinScoreArg = nil
+	if nil ~= argList then
+		skinScoreArg = {}
+		for index, value in pairs(argList) do
+			skinScoreArg[index - 1] = value
+		end
+	end
+	local csvAircraftSkin = Csv.AircraftSkin
+	if nil ~= csvAircraftSkin then
+		_M.SkinScore = {}
+		_M.SkinPowerBuff = {}
+		for skinID, csvValue in pairs(csvAircraftSkin) do
+			if nil == _M.SkinScore[skinID] then
+				_M.SkinScore[skinID] = 0
+			end
+			if nil ~= csvValue.type then
+				_M.SkinScore[skinID] = _M.SkinScore[skinID] + csvValue.type * skinScoreArg[0]
+			else
+				error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 type 错误")
+			end
+
+			local attr = csvValue.attr
+			if nil ~= attr then
+				_M.SkinPowerBuff[skinID] = {}
+				for index, value in pairs(attr) do
+					if nil ~= value[1] and nil ~= value[2] then
+						if nil == _M.SkinPowerBuff[skinID][value[1]] then
+							_M.SkinPowerBuff[skinID][value[1]] = 0
+						end
+						_M.SkinScore[skinID] = _M.SkinScore[skinID] + value[2] * skinScoreArg[value[1]]
+						_M.SkinPowerBuff[skinID][value[1]] = _M.SkinPowerBuff[skinID][value[1]] + value[2]  
+					else
+						error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr " .. index .. " 位置配置错误")
+					end
+				end
+			else
+				error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr 错误")
+			end
+		end
+	end
+end
+
+--计算获取飞机战力
+function _M.CalculatePowerBase(aircraftID)
+	local powerBaseNum = 0
+	local powerBase = {}
+	local csvValue = Csv.Aircraft[aircraftID]
+	if nil ~= csvValue then
+		if nil ~= csvValue.level then
+			powerBaseNum = _P.AllPowerArg[0] * csvValue.level
+		else
+			error("表 Aircraft 对应的ID " .. aircraftID .. " 字段 level 错误")
+		end
+		local attr = csvValue.attr
+		if nil ~= attr then
+			for index, value in pairs(attr) do
+				if nil ~= value[1] and nil ~= value[2] then
+					powerBase[value[1]] = value[2]
+				else
+					error("表 Aircraft 对应的ID " .. aircraftID .. " 字段 attr " .. index .. " 位置配置错误")
+				end
+			end
+			
+			for index, value in pairs(powerBase) do
+				local arg = _P.AllPowerArg[index]
+				if nil ~= arg then
+					powerBaseNum = powerBaseNum + arg * value
+				end
+			end
+		else
+			error("表 Aircraft 对应的ID " .. aircraftID .. " 字段 attr 错误")
+		end
+	end
+	return powerBaseNum
+end
+
+--刷新飞机加成数据
+function _P.RefreshBaseData()
+	_M.PowerBaseBuff = {}
+	_M.UpCost = {}
+	local csvValue = Csv.Aircraft[_M.AircraftID]
+	if nil ~= csvValue then
+		local attr = csvValue.attr
+		if nil ~= attr then
+			for index, value in pairs(attr) do
+				if nil ~= value[1] and nil ~= value[2] then
+					_M.PowerBaseBuff[value[1]] = value[2]
+				else
+					error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 字段 attr " .. index .. " 位置配置错误")
+				end
+			end
+		else
+			error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 字段 attr 错误")
+		end
+
+		local cost = csvValue.cost
+		if nil ~= cost then
+			for index, value in pairs(cost) do
+				if nil ~= value[1] and nil ~= value[2] then
+					_M.UpCost[value[1]] = value[2]
+				else
+					error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 字段 cost " .. index .. " 位置配置错误")
+				end
+			end
+		else
+			error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 字段 cost 错误")
+		end
+
+		if nil ~= csvValue.seat_num then
+			_M.MaxSeatNum = csvValue.seat_num
+		else
+			error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 没有 seat_num 字段")
+		end
+	else
+		error("表 Aircraft 没有对应的ID " .. _M.AircraftID)
+	end
+	_P.RefreshPowerBuff()
+end
+
+--刷新飞机总战力
+function _P.RefreshAllPower()
+	_M.AllPower = 0
+	local csvValue = Csv.Aircraft[_M.AircraftID]
+	if nil ~= csvValue then
+		if nil ~= csvValue.level then
+			_M.AllPower = _P.AllPowerArg[0] * csvValue.level
+		else
+			error("表 Aircraft 对应的ID " .. _M.AircraftID .. " 字段 level 错误")
+		end
+		for index, value in pairs(_M.PowerBaseBuff) do
+			local arg = _P.AllPowerArg[index]
+			if nil ~= arg then
+				_M.AllPower = _M.AllPower + arg * value
+			end
+		end
+		if nil ~= _M.SkinList then
+			for _, skinID in pairs(_M.SkinList) do
+				local score = _M.SkinScore[skinID]
+				if nil ~= score then
+					_M.AllPower = _M.AllPower + score
+				end
+			end
+		end
+	end
+end
+
+--创建飞机皮肤数据
+function _M.CreateAircraftSkinList(skinList)
+	if nil ~= skinList then
+		_M.SkinList = {}
+		local index = 1
+		for _, skinID in pairs(skinList) do
+			_M.SkinList[index] = skinID
+			index = index + 1
+		end
+		table.sort(_M.SkinList)
+	else
+		_M.SkinList = nil
+	end
+	_P.RefreshSkinSchoolBuff()
+end
+
+--刷新飞机皮肤数据
+function _M.RefreshAircraftSkinList(skinList)
+	if nil ~= skinList then
+		_M.IsUpdataSkinList = true
+		if nil == _M.SkinList then
+			_M.CreateAircraftSkinList(skinList)
+		else
+			for _, skinID in pairs(skinList) do
+				_M.SkinList[#_M.SkinList + 1] = skinID
+			end
+			table.sort(_M.SkinList)
+		end
+	end
+	_P.RefreshSkinSchoolBuff()
+end
+
+--创建飞机基础皮肤数据
+function _M.CreateAircraftBaseSkinList(baseSkinList)
+	if nil ~= baseSkinList then
+		_M.BaseSkinList = {}
+		local index = 1
+		for _, itemID in pairs(baseSkinList) do
+			_M.BaseSkinList[index] = itemID
+			index = index + 1
+		end
+		table.sort(_M.BaseSkinList)
+	else
+		_M.BaseSkinList = nil
+	end
+end
+
+--刷新飞机基础皮肤数据
+function _M.RefreshAircraftBaseSkinList(baseSkinList)
+	if nil ~= baseSkinList then
+		if nil == _M.BaseSkinList or nil == _M.BaseSkinList then
+			_M.CreateAircraftBaseSkinList(baseSkinList)
+		else
+			for _, itemID in pairs(baseSkinList) do
+				_M.BaseSkinList[#_M.BaseSkinList + 1] = itemID
+			end
+			table.sort(_M.BaseSkinList)
+		end
+	end
+end
+
+--刷新飞机皮肤加成
+function _P.RefreshSkinSchoolBuff()
+	_M.SkinSchoolAllBuff = 0
+	_M.PowerSkinAllBuff = nil
+	if nil ~= _M.SkinList then
+		local csvAircraftSkin = Csv.AircraftSkin
+		_M.PowerSkinAllBuff = {}
+		for _, skinID in pairs(_M.SkinList) do
+			local csvValue = csvAircraftSkin[skinID]
+			if nil ~= csvValue then
+				local get = csvValue.get
+				if nil ~= get then
+					for index, value in pairs(get) do
+						if nil ~= value[1] and nil ~= value[2] then
+							if _M.SchoolSysID == value[1] then
+								_M.SkinSchoolAllBuff = _M.SkinSchoolAllBuff + math.modf(value[2] / 100)
+								break
+							end
+						else
+							error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
+						end
+					end
+				else
+					error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get 错误")
+				end
+
+				local attr = csvValue.attr
+				if nil ~= attr then
+					for index, value in pairs(attr) do
+						if nil ~= value[1] and nil ~= value[2] then
+							if nil == _M.PowerSkinAllBuff[value[1]] then
+								_M.PowerSkinAllBuff[value[1]] = 0
+							end
+							_M.PowerSkinAllBuff[value[1]] = _M.PowerSkinAllBuff[value[1]] + value[2]
+						else
+							error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr " .. index .. " 位置配置错误")
+						end
+					end
+				else
+					error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr 错误")
+				end
+			else
+				error("表 AircraftSkin 没有对应的ID " .. skinID)
+			end
+		end
+		_P.RefreshPowerBuff()
+	end
+end
+
+--刷新飞机面板总加成
+function _P.RefreshPowerBuff()
+	_M.PowerBuff = {}
+	if nil ~= _M.PowerBaseBuff then
+		for type, value in pairs(_M.PowerBaseBuff) do
+			if nil == _M.PowerBuff[type] then
+				_M.PowerBuff[type] = 0
+			end
+			_M.PowerBuff[type] = _M.PowerBuff[type] + value
+		end
+	end
+	if nil ~= _M.PowerSkinAllBuff then
+		for type, value in pairs(_M.PowerSkinAllBuff) do
+			if nil == _M.PowerBuff[type] then
+				_M.PowerBuff[type] = 0
+			end
+			_M.PowerBuff[type] = _M.PowerBuff[type] + value
+		end
+	end
+	_P.RefreshAllPower()
+end
+
+--创建飞机未激活皮肤数据
+function _P.CreateAircraftUnActivateSkinList(skinList)
+	if nil ~= skinList then
+		_M.UnActivateSkinList = {}
+		for _, skinID in pairs(skinList) do
+			_M.UnActivateSkinList[skinID] = true
+		end
+	else
+		_M.UnActivateSkinList = {}
+	end
+end
+
+--刷新飞机未激活皮肤数据
+function _M.RefreshAircraftUnActivateSkinList(skinList)
+	if nil ~= skinList then
+		_M.IsUpdataSkinList = true
+		if nil == _M.UnActivateSkinList then
+			_M.CreateAircraftUnActivateSkinList(skinList)
+		else
+			for _, skinID in pairs(skinList) do
+				_M.UnActivateSkinList[skinID] = true
+			end
+		end
+	end
+end
+
+--删除飞机未激活皮肤数据
+function _M.DeleteAircraftUnActivateSkin(skinID)
+	if nil ~= skinID and nil ~= _M.UnActivateSkinList then
+		_M.IsUpdataSkinList = true
+		_M.UnActivateSkinList[skinID] = false
+	end
+end
+
+--飞机皮肤是否已激活
+function _M.IsAircraftSkinUnActivative(skinID)
+	return _M.UnActivateSkinList[skinID]
+end
+
+--刷新已激活飞机皮肤列表
+function _P.RefreshAircraftActivateSkinList()
+	--使用标志位做缓存, 不用每次获取时都计算
+	_M.IsUpdataSkinList = false
+	if nil ~= _M.SkinList then
+		for _, skinID in pairs(_M.SkinList) do
+			if not _M.UnActivateSkinList[skinID] then
+				_M.ActivateSkinList[skinID] = true
+			end
+		end
+	end
+end
+
+--飞机已激活皮肤列表
+function _M.GetActivateSkinList()
+	if nil == _M.ActivateSkinList then
+		_M.ActivateSkinList = {}
+		_P.RefreshAircraftActivateSkinList()
+	elseif _M.IsUpdataSkinList then
+		_P.RefreshAircraftActivateSkinList()
+	end
+	return _M.ActivateSkinList
+end
+
+--创建飞机座位列表信息
+function _P.CreateAircraftSeatListData(data)
+	_M.SeatNum = 0
+	if nil == data or nil == data.airplaneSeat or 0 == #data.airplaneSeat then
+		_M.SeatList = nil
+	else
+		_M.SeatList = {}
+		for _, seatData in pairs(data.airplaneSeat) do
+			_M.CreateAircraftSeatData(seatData)
+		end
+	end
+	_P.CheckStateRedPoint()
+end
+
+--刷新飞机座位列表信息
+function _M.RefreshAircraftSeatListData(data)
+	if nil == _M.SeatList or 0 == #_M.SeatList then
+		_P.CreateAircraftSeatListData(data)
+	else
+		for _, seatData in pairs(data.airplaneSeat) do
+			_M.RefreshAircraftSeatData(seatData)
+		end
+		_P.CheckStateRedPoint()
+	end
+end
+
+--检查游学世界红点状态
+function _P.CheckStateRedPoint()
+	if nil ~= _M.SchoolTime and 0 ~= _M.SchoolTime then
+		_M.IsNotDispatch = false
+		_M.IsHaveEmpty = false
+		_M.IsStuding = true
+		_M.IsHaveCompleted = false
+	else
+		_M.IsStuding = false
+		if nil ~= _M.SeatList then
+			_M.IsNotDispatch = 0 == _M.SeatNum
+			_M.IsHaveEmpty = _M.MaxSeatNum > _M.SeatNum
+			local isFinish = false
+			for seatID, seatData in pairs(_M.SeatList) do
+				if seatData.finish then
+					isFinish = true
+					break
+				end
+			end
+			_M.IsHaveCompleted = isFinish
+		else
+			_M.IsNotDispatch = true
+		end
+	end
+end
+
+--创建单个座位数据
+function _M.CreateAircraftSeatData(seatData)
+	if nil == _M.SeatList then
+		_M.SeatList = {}
+	end
+	local temp = {}
+	for key, value in pairs(seatData) do
+		temp[key] = value
+	end
+	if nil == _M.SeatList[temp.index] then
+		_M.SeatNum = _M.SeatNum + 1
+	end	
+	_M.SeatList[temp.index] = temp
+	_M.IsHaveEmpty = _M.MaxSeatNum > _M.SeatNum
+	_M.IsNotDispatch = 0 == _M.SeatNum
+end
+
+--刷新单个座位数据
+function _M.RefreshAircraftSeatData(seatData)
+	if nil == _M.SeatList then
+		_M.CreateAircraftSeatData(seatData)
+	else
+		if nil == _M.SeatList[seatData.index] then
+			_M.CreateAircraftSeatData(seatData)
+		else
+			local temp = {}
+			for key, value in pairs(seatData) do
+				temp[key] = value
+			end
+			_M.SeatList[temp.index] = temp
+		end	
+	end
+end
+
+--刷新游学状态
+function _M.RefreshAircraftSeatListState(isComplete)
+	isComplete = isComplete or true
+	if isComplete then
+		_M.SchoolTime = 0
+	end
+	if nil ~= _M.SeatList then
+		for _, seatData in pairs(_M.SeatList) do
+			seatData.finish = isComplete
+		end
+	end
+	_M.IsStuding = not isComplete
+	_M.IsHaveCompleted = isComplete
+end
+
+function _M.RefreshStartLearnData(data)
+	_M.IsPlayStartLearn = true
+	_M.RefreshSchoolState(data)
+end
+
+--刷新游学时间
+function _M.RefreshSchoolState(time)
+	if nil ~= time then
+		_M.SchoolTime = time + HeartBeat.ServSecond()
+	end
+	_M.IsStuding = nil ~= time and 0 ~= time
+end
+
+--获取座位信息
+function _M.GetSchoolSeatData(seatID)
+	if nil ~= _M.SeatList then
+		local data = _M.SeatList[seatID]
+		if nil ~= data then
+			return data
+		end
+	end
+	return nil
+end
+
+--是否达到最大等级
+function _M.IsMaxLevel()
+	return _M.MaxLevel == _M.AircraftID
+end
+
+return _M

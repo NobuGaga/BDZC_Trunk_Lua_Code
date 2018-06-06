@@ -1,0 +1,280 @@
+local _M = {DelayHandle = 0}
+local _P = {}
+
+local rapidjson = require "rapidjson"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [Dev.Setting.MSetting.bytes#_M]
+local MSetting = JRequire "Dev.Setting.MSetting"
+--@RefType [Dev.Setting.CSetting.bytes#_M]
+local CSetting = JRequire "Dev.Setting.CSetting"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local Application = CS.UnityEngine.Application
+local UnityTime = CS.UnityEngine.Time
+local TimeDelay = CS.Utility.TimeDelay
+
+
+local CHEAT_DETECT_TIME = 30
+
+_P.GMCommond = {}
+
+_M.IsOnGame = false
+
+function _P.InitGM( ... )
+	local txt = CS.Loader.LoadAccessor.ReadText("GM.txt")
+	if txt ~= nil and txt ~= "" then
+		local tab = rapidjson.decode(txt)
+		if tab ~= nil then
+			for k,v in pairs(tab) do
+				_P.GMCommond[k](v)
+			end
+		end
+	end
+end
+
+function _M.InitCheatDetect()
+	--前段Ticks和Unity的RealtimeSinceStartup作弊校验
+	_M.DateTimeStart = CS.Utility.Utils.Ticks
+    _M.TimeScaleStart = UnityTime.timeScale
+    _M.RealTimeStart = UnityTime.realtimeSinceStartup
+end
+
+function _M.StartCheatDetect()
+	_M.StopCheatDetect()
+	_M.InitCheatDetect()
+	_M.DelayHandle = TimeDelay.DelayCall(CHEAT_DETECT_TIME, false, _M.CheatDetect)
+end
+
+function _M.StopCheatDetect()
+	if _M.DelayHandle ~= 0 then
+		TimeDelay.SetValid(_M.DelayHandle, false)
+		_M.DelayHandle = 0
+	end
+end
+
+function _M.CheatDetect()
+	_M.DelayHandle = TimeDelay.DelayCall(CHEAT_DETECT_TIME, false, _M.CheatDetect)
+	local passDateTime = (CS.Utility.Utils.Ticks - _M.DateTimeStart) / 10000000
+	local passRealTime = UnityTime.realtimeSinceStartup - _M.RealTimeStart
+	--修改为只检查加速
+	if (passRealTime - passDateTime) > 3 then
+	-- if math.abs(passDateTime - passRealTime) > 1 then
+		_M.OnAntiCheat(1)
+	elseif UnityTime.timeScale - _M.TimeScaleStart > 0.05 then
+	-- elseif math.abs(_M.TimeScaleStart - UnityTime.timeScale) > 0.05 then
+		_M.OnAntiCheat(2)
+	end
+	_M.InitCheatDetect()
+end
+
+function _M.Init()
+	print("GameSetting Init")
+	local GameManager = CS.GameManager.Inst
+	--设置GC频率
+	GameManager.UpdateGCSpace = 300
+
+	_M.IsEditor = CS.UnityEngine.Application.isEditor
+	_M.GameParam = rapidjson.decode(GameManager:GetJsonParam())
+	_M.IsFocus = true
+	-- LuaUtil.DumpTable(_M.GameParam, "----->>>")
+
+	local sdkParam = _M.GameParam.sdkParam
+	_M.Spid = sdkParam.spid
+	_M.AppID = sdkParam.appId
+	if _M.AppID == nil then
+		_M.AppID = 0
+	end
+	_M.Platform = tonumber(sdkParam.platform)
+	_M.DeviceID = sdkParam.deviceID
+	_M.DeviceMac = sdkParam.deviceMac
+	_M.DeviceName = sdkParam.deviceName
+	_M.Netmode = sdkParam.netMode
+	_M.isHasSwitchAccount = sdkParam.isHasSwitchAccount ~= 0 
+	_M.isHasExitAccount = (sdkParam.isHasExitAccount or 1) ~= 0
+	_M.AppName = sdkParam.appName
+	_M.PackageName = sdkParam.packageName
+
+	_M.ClientVersion = _M.GameParam.resVersion.ShowVersion
+	_M.CdnVersion = _M.GameParam.cdnVersion.ShowVersion
+
+	--子渠道id
+	_M.Sbid = ""
+	_M.Openid = ""
+	
+	--公告url
+	_M.NoticeUrl = _M.GameParam.cdnVersion.noticeUrl
+	--敏感词url
+	_M.CheckChatUrl = _M.GameParam.cdnVersion.checkChat
+	--名字
+	_M.CheckNameUrl = _M.GameParam.cdnVersion.checkName
+	--服务器列表url
+	_M.ServListUrl = _M.GameParam.cdnVersion.servListUrl
+	--发送语音url
+	_M.SendVoiceUrl = _M.GameParam.cdnVersion.voiceTalk
+	--播放语音url
+	_M.PlayVoiceUrl = _M.GameParam.cdnVersion.voiceSave
+
+	--区ID
+	_M.AreaId = "1,2,3,4,256"
+	if sdkParam.areaid ~= nil and sdkParam.areaid ~= "" then
+		_M.AreaId = sdkParam.areaid
+	end
+
+	--是否审核阶段
+	local isPass = _M.GameParam.cdnVersion.isPass
+	_M.IsiOSCommit = (tonumber(isPass) == 0)
+	_M.initServerIdList = _M.GameParam.cdnVersion.serverid
+	local isPrivacy = _M.GameParam.cdnVersion.isPrivacy
+	_M.IsShowPrivacy = (tonumber(isPrivacy) == 1)
+
+	--作弊检查
+	-- _M.StartCheatDetect()
+
+	--增加审核时的颜色差异
+	_M.FogColor = Color(1, 1, 1, 0.04)
+	if _M.IsiOSCommit then
+		_M.FogColor.r = math.random(1, 255) / 255
+		_M.FogColor.g = math.random(1, 255) / 255
+		_M.FogColor.b = math.random(1, 255) / 255
+		_M.ShowFog()
+		MSetting.SetiOSCommitData()
+		MSetting.OnSaveSetting()
+		CSetting.LoadSetting()
+	end
+
+	_P.InitGM()
+end
+
+function _M.ShowFog()
+	if _M.IsiOSCommit then
+		CCommon.ShowFog(_M.FogColor)
+	end
+end
+
+function _M.GetPngStreamAssetsPath(pngName, sysName)
+	local packageName = _M.PackageName or ""
+	if sysName then
+		sysName = packageName .. sysName .. "/"
+	else
+		sysName = ""
+	end
+	pngName = packageName .. pngName .. ".png"
+	return sysName .. pngName
+end
+
+function _M.SetSbid(sbid)
+	_M.Sbid = sbid
+
+	CS.Utility.LogPoint.AddSystemParam("sbid", sbid)
+end
+
+function _M.SetOpenid(openid)
+	_M.Openid = openid
+
+	CS.Utility.LogPoint.AddSystemParam("userid", openid)
+end
+
+--作弊处理
+function _M.OnAntiCheat(errorCode)
+
+	CCommon.CheckTips(function ()
+		_M.GameQuit()
+	end,{
+		isNoCancel = true,
+		content = Csv.Text("common_cheat")
+	})
+
+	error("健康游戏, 禁止作弊!!")
+	
+end
+
+--失去焦点
+function _M.OnApplicationFocus(focus)
+	-- print("OnApplicationFocus:", focus)
+	_M.IsFocus = focus
+	EventCenter.CallEventTrigger(Define.EventListenId.OnApplicationFocus, focus)
+end
+
+--暂停
+function _M.OnApplicationPause(pause)
+	-- print("OnApplicationPause:", pause)
+	EventCenter.CallEventTrigger(Define.EventListenId.OnApplicationPause, pause)
+end
+
+--退出回收
+function _M.OnApplicationQuit()
+	
+end
+
+--打开默认登录窗口
+function _M.OpenLoginInput()
+	MLogin.Status = MLogin.ELoginStatus.NotLogin
+	WindowMgr.Call("ULogin", "RefreshLoginState") 
+	WindowMgr.Create("ULoginInput")
+end
+
+function _M.GameQuit()
+	SDKMgr.ReqExit()
+	Application.Quit()
+end
+
+--退出按钮
+function _M.OnEscapePress()
+	SDKMgr.ReqLogout()
+end
+
+function _M.OnGameEscapePress()
+	CCommon.ShowReloginBox(Csv.Text("login_quit"), Csv.Text("common_sure"), function (isSure)
+		if isSure then
+			_M.GameQuit()
+		end
+	end, Csv.Text("common_cancel"), -10)
+end
+
+--秒定时器
+function _M.OnSecondUpdate(nowTime)
+	EventCenter.CallEventTrigger(Define.EventListenId.SecondUpdate, nowTime)
+end
+
+_M.ReLoginType = 
+{
+	NoChangeAccount = 1,	--不切换账号
+	ChangeAccount = 2,		--切换账号
+	ToLogin = 3,			--调用登陆
+}
+
+_M.OnReLoginCall = nil
+
+_M.InitSceneType = Define.SysId.Home
+function _M.ToReLogin(reloginType)
+	-- if WindowMgr.IsCreated("UWorldMap") then
+	-- 	_M.InitSceneType = Define.SysId.World
+	-- else
+	-- 	_M.InitSceneType = Define.SysId.Home
+	-- end
+
+	EventCenter.CallEventTrigger(Define.EventListenId.ToReLogin)
+	_M.IsOnGame = false
+	CS.Utility.LogPoint.LogPost(10, 1, tostring(reloginType))
+	if _M.OnReLoginCall ~= nil then
+		_M.OnReLoginCall()
+	end
+	CS.Net.LuaConnect.AutoReconnect = false
+	SocketMgr.Disconnect()
+	JRequireClean()
+	WindowMgr.DestroyRoot()
+	CS.Utility.TimeDelay.Clear()
+	EventCenter.OnReLogin()
+	JRequireClean()
+	CS.GameManager.Inst:GC()
+	_M.ShowFog()
+	WindowMgr.Create("ULogin", reloginType)
+end
+
+return _M

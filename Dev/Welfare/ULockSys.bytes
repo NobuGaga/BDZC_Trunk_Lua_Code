@@ -1,0 +1,94 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_UnlockView", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mlockValue = moudle:Get("content1")
+	self.munlockValue = moudle:Get("content2")
+	self.mlockView = moudle:Get("UnOpenBg")
+	self.munlockView = moudle:Get("OpenBg")
+
+	local lockTitle = moudle:Get("UnOpenTitle")
+	local unlockTitle = moudle:Get("OpenTitle")
+
+	lockTitle.Text = Csv.Text("welfare_1")
+	unlockTitle.Text = Csv.Text("welfare_2")
+
+	_P.ShowlockFunc(self)
+end
+
+function _P.ShowlockFunc(self)
+	local lockFuncs = Csv.WelfareFunc
+	local lockValue = self.mlockValue
+	local unlockValue = self.munlockValue
+	local lockView = self.mlockView
+	local unlockView = self.munlockView
+
+	local titleHeight = 100
+	local lockIndex = 0
+	local unlockIndex = 0
+
+	for k,v in pairs(lockFuncs) do
+		if MMain.FuncIsOpen(v.sysID) then
+			local openNode = _P.CreateUnlockItem(unlockValue,v)
+			unlockIndex = unlockIndex+1
+		else
+			local lockNode = _P.CreateLockItem(lockValue,v)
+			lockIndex = lockIndex +1
+		end
+	end
+	if lockIndex > 0 then
+		lockView.SizeDelta = Vector2(717,titleHeight+lockIndex*146)
+	else
+		lockView.Activity = false
+	end
+
+	if unlockIndex > 0 then
+		unlockView.SizeDelta = Vector2(717,titleHeight+unlockIndex*146)
+	else
+		unlockView.Activity = false
+	end
+end
+
+function _P.CreateLockItem(parent,data)
+	local moudle = JGuiManager.GetMoudle(parent,"M_Welfare_lockItem", WindowType.UI, 10)
+
+	local title = moudle:Get("SysName")
+	local unlock = moudle:Get("unlock")
+	local desc = moudle:Get("desc")
+
+	title.Text = data.name
+	unlock.Text = Csv.Text("welfare_unlocksys",{type = data.unluckType})--"系统条件：<color=#ff0000>"..data.unluckType.."</color>"
+	desc.Text = Csv.Text("welfare_descsys",{desc = data.desc})--"系统说明："..data.desc
+
+	return moudle
+end
+
+function _P.CreateUnlockItem(parent,data)
+	local moudle = JGuiManager.GetMoudle(parent,"M_Welfare_unlockItem", WindowType.UI, 10)
+
+	local title = moudle:Get("SysName")
+	local desc = moudle:Get("desc")
+
+	title.Text = data.name
+	desc.Text = Csv.Text("welfare_descsys",{desc = data.desc})--"系统说明："..data.desc
+
+	return moudle
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

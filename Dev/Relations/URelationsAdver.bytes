@@ -1,0 +1,77 @@
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Lobby_Adver")
+	self.mMoudle = moudle
+
+	_P.RefreshView(self)
+
+	moudle:Get("Tips1").Text = Csv.Text("relations_tip12")
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local adverData = MRelations.AdverData
+	if adverData ~= nil then
+		content:DestroyChildren()
+		local adverTable = _P.GetSortTable(adverData.list)
+		if adverTable ~= nil then
+			for k,v in pairs(adverTable) do
+				local adverMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Appeal_Item1")
+				adverMoudle:Get("name").Text = Csv.Text("relations_tip8",{name = v.name,num = v.playerid})
+				local companyMode = Csv.Company[v.level].name
+				adverMoudle:Get("dengji").Text = Csv.Text("relations_companyLv",{name = companyMode})
+				adverMoudle:Get("shili").Text = Csv.Text("club_info_force")
+				adverMoudle:Get("SlText").Text = v.power
+				adverMoudle:Get("time").Text = LuaUtil.GetTime(v.time)
+				adverMoudle:Get("C_text_1").Text = Csv.Text("relations_shangsu")
+				adverMoudle:Get("C_Btn_b"):AddOnButton(function()
+					SoundMgr.Play(10001)
+					MRelations.FightType = 1
+					MRelations.PlayerID = v.playerid
+					WindowMgr.Create("URelationsSelectStaff")
+				end,nil,0.9)
+			end
+		end
+		local tip = moudle:Get("Tips1")
+		if adverTable == nil or #adverTable <= 0 then
+			tip.Activity = true
+		else
+			tip.Activity = false
+		end
+	end
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	for k,v in pairs(rawTable) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	return a.time > b.time
+end
+
+function _M:Refresh()
+	_P.RefreshView(self)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

@@ -1,0 +1,786 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCompany = JRequire "Dev.Company.MCompany"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire "Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Aircraft.MAircraft.bytes#_M]
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+--@RefType [Dev.Notice.CNotice.bytes#_M]
+local CNotice = JRequire "Dev.Notice.CNotice"
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local MAP_WIDTH = 2250
+local MAP_HEIGHT = 1334
+
+local DRESS_NODE_COUNT = 2  -- 临时删除节点5（秘书换装）
+
+local DRESS_EFFECT = 10096
+
+local DRESSUP_TALK = Csv.Const(Define.Const.DressupTalk)
+
+local ComputerImgNone = "computer"
+local ComputerImgHave = "computer_2"
+local HomePopleImgSize = {['Girl_1'] = {107,331}, ['Girl_2'] = {403,421}, ['Girl_3'] = {194,479}, ['Girl_4'] = {88,294}, ['Child'] = {142,213}}
+
+local HomeBgImgSize = {
+	-- key 为预设节点名跟图片名, value 为图片尺寸
+	['iOSBg1'] = { width = 1024, height = 1024 }, 
+	['iOSBg2'] = { width = 1024, height = 1024 }, 
+}
+
+function _P.OnPressFunc(btn, funcId, data)
+	if data.isPress then
+		btn.Alpha = 1
+	else
+		btn.Alpha = 0
+	end	
+end
+
+function _P.OnPressFuncBlack(self,funcId,data)
+	local homeBtns = self.mHomeBtns
+	if homeBtns[funcId] ~= nil and  homeBtns[funcId].btn then
+		local img = homeBtns[funcId].btn
+		if data.isPress then
+			img.Color = Color(0.5,0.5,0.5,1)
+		else
+			img.Color = Color(1,1,1,1)
+		end
+	end
+end
+
+local DressListIconSize = 
+{
+	[Define.SysId.Yacht] = Vector2(228, 228),
+	[Define.SysId.Aircraft] = Vector2(100, 100)
+}
+
+local DressIconOffset = 
+{
+	[Define.SysId.Yacht] = Vector2(0, 0),
+	[Define.SysId.Aircraft] = Vector2(0, 100),
+	[Define.SysId.Car] = Vector2(0, 30),
+	[Define.SysId.Manage] = Vector2(0, 0)
+}
+
+local ClickSoundId =
+{
+	[Define.SysId.Aircraft] = 10031,
+	[Define.SysId.Patrol] = 10032
+}
+
+function _P.RefreshFunc(self, moudle)
+	local homeBtns = self.mHomeBtns
+
+	for k,v in pairs(homeBtns) do
+		local btn = v.btnClick
+		if btn then
+			if k == Define.SysId.DressUp then
+				if GameSetting.IsiOSCommit then
+					v.btn.Activity = false
+					btn.Activity = false
+				else
+					-- btn:AddOnPress(function(btn,funcId,data)	
+					-- 	_P.OnPressFuncBlack(self,funcId,data)
+					-- end, k)
+					btn:AddOnButton(function ( )
+						if self.DresingState then
+							if v.canChange then
+								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+							end
+						else
+							SoundMgr.Play(10001)
+							if MMain.FuncIsOpen(k) then
+								local root = self.Moudle:Get("StoryRoot")
+								root.SortingLayerName = "Tips3"
+								root.SortingOrder = 0
+								if self.StoryMoudle ~= nil then
+									self.StoryMoudle:Destroy()
+									self.StoryMoudle:delete()
+									self.StoryMoudle = nil
+								end
+								self.StoryMoudle = UStoryMoudle.new(self.Moudle:Get("StoryRoot"), DRESSUP_TALK, function()
+									if self.Moudle ~= nil then
+										CCommon.CheckTips(function(isSure,rg)
+											if isSure == true then
+												_P.ChangeDressingState(self,true)
+											end
+										end,{content = Csv.Text("Home_tip1")},nil)
+									end
+								end)
+							else
+								CCommon.ShowError(Csv.Func[k].conditionDesc)
+							end
+						end
+					end,nil,1)
+				end
+			else
+				if not v.isLight then
+					btn:AddOnPress(function(btn,funcId,data)
+						_P.OnPressFuncBlack(self,funcId,data)
+					end, k)
+					btn:AddOnButton(function ( )
+						if self.DresingState then
+							if v.canChange then
+								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+							end
+						else
+							if ClickSoundId[k] then
+								SoundMgr.Play(ClickSoundId[k])
+							elseif k ~= Define.SysId.Car then
+								SoundMgr.Play(10001)
+							end
+
+							if MMain.FuncIsOpen(k) then
+								WindowOpen.Open(k)
+							else
+								CCommon.ShowError(Csv.Func[k].conditionDesc)
+							end
+						end
+					end,nil,1)
+				else
+					v.btnLight:AddOnPress(_P.OnPressFunc, nil)
+					v.btnLight:AddOnClick(function ( )
+						if self.DresingState then
+							if v.canChange then
+								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+							end
+						else
+							SoundMgr.Play(10001)
+
+							if MMain.FuncIsOpen(k) then
+								WindowOpen.Open(k)
+							else
+								CCommon.ShowError(Csv.Func[k].conditionDesc)
+							end
+						end
+					end,nil)
+				end
+			end
+		end
+		local csvFunc = Csv.Func[k]
+		if csvFunc ~= nil and csvFunc.ifOpen == 0 then
+			if MMain.FuncIsOpen(k) then
+				v.btn.Activity = true
+				v.btnClick.Activity = true
+				if v.redpoint ~= nil then
+					v.redpoint.Activity = true
+				end
+			else
+				v.btn.Activity = false
+				v.btnClick.Activity = false
+				if v.redpoint ~= nil then
+					v.redpoint.Activity = false
+				end
+			end
+		end
+	end
+	_P.RefreshAllDress(self)
+end
+
+function _P.RefreshAllDress(self)
+	local homeBtns = self.mHomeBtns
+	local dress = MPlayer.GetDress()
+	if dress ~= nil then
+		for k,v in pairs(dress) do
+			if homeBtns[k] ~= nil then
+				local csvItem = Csv.Item[v]
+				if csvItem ~= nil and homeBtns[k].btn then
+					if not GameSetting.IsiOSCommit or (k ~= Define.SysId.Girl_Marry and k ~= Define.SysId.Girl_Unlock 
+														and k ~= Define.SysId.Manage and k ~= Define.SysId.Girl_Baby) then
+						homeBtns[k].btn.SpriteName = csvItem.asset
+					end
+					if k == Define.SysId.Aircraft then
+						local csvAirPos = Csv.AircraftAnimation[csvItem.asset]
+						if csvAirPos ~= nil then
+							local pos = csvAirPos.villa_pos
+							homeBtns[k].btn.LocalPosition = Vector2(pos[1],pos[2])
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function _P.NeedMoveToPos(self, btn)
+	local mapX = self.Map.SizeDelta.x  --* self.Map.LocalScale.x
+	local widthHalf = mapX / 2 - CS.JGui.JGuiManager.GuiRoot.Width / 2 - 2
+
+	local ret = Vector2.zero
+	local btnPos = btn.LocalPosition
+	-- btnPos.x = btnPos.x * self.Scale
+	ret.x = -btnPos.x
+	if ret.x > 0 then
+		if ret.x > widthHalf then
+			ret.x = widthHalf
+		end
+	else
+		if ret.x < - widthHalf then
+			ret.x = - widthHalf
+		end
+	end
+	return ret
+end
+
+--看向某个功能按钮
+function _R.LookAtFunc(self, funcId)
+	local tab = self.mHomeBtns[funcId]
+	if tab ~= nil then
+		local btn = tab.btnClick
+		if btn ~= nil and self.Map ~= nil then
+			self.Map.LocalPosition = _P.NeedMoveToPos(self, btn)
+		else
+			error("GetBtnPos error:"..funcId)
+		end
+		_P.OnScrollValueChange(self)
+	else
+		error("GetBtnPos error:"..funcId)
+	end
+end
+
+function _R.GetBtnPos(self, funcId, mapTran, retPos)
+	local tab = self.mHomeBtns[funcId]
+	if tab ~= nil then
+		local btn = tab.btnClick
+
+		if btn ~= nil and self.Map ~= nil then
+			self.Map.LocalPosition = _P.NeedMoveToPos(self, btn)
+			local btnPos = btn.CachedTran.position
+			local screenPos = CS.UnityEngine.RectTransformUtility.WorldToScreenPoint(self._CanvasNode.WorldCamera, btnPos)
+			local isOk, pos = CS.UnityEngine.RectTransformUtility.ScreenPointToLocalPointInRectangle(mapTran, screenPos, self._CanvasNode.WorldCamera)
+			if isOk then
+				retPos.x = pos.x
+				retPos.y = pos.y
+			end
+			_P.OnScrollValueChange(self)
+		else
+			error("GetBtnPos error:"..funcId)
+		end
+	else
+		error("GetBtnPos error:"..funcId)
+	end	
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy( ... )
+	local cachedTab = _Global._CachedObjects
+	local cachedParent = cachedTab.parent.transform
+	local cachedEffects = cachedTab.effects
+	cachedEffects.DB_MaidGirl:SetParent(cachedParent)
+	cachedEffects.DB_SecretaryGirl:SetParent(cachedParent)
+	cachedEffects.DB_Child:SetParent(cachedParent)
+	cachedEffects.DB_Girl:SetParent(cachedParent)
+	cachedEffects.DB_MatchMaker:SetParent(cachedParent)
+	cachedEffects.SkyActor:SetParent(cachedParent)
+	cachedEffects.SwimActor:SetParent(cachedParent)
+	SoundMgr.DestroyRound()
+
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:Destroy()
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end
+end
+
+function _M:OnCreate()
+	self:UnBlack()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Villa")
+	self.Moudle = moudle
+	local map = moudle:Get('content')
+	self.Map = map
+	-- map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+	-- local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
+	-- self.Scale = scale
+	--map.LocalScale = Vector3(scale, scale, 1)
+
+	local cachedEffects = _Global._CachedObjects.effects
+	local DB_MaidGirl = moudle:Get("DB_MaidGirl")
+	local DB_SecretaryGirl = moudle:Get("DB_SecretaryGirl")
+	local DB_Child = moudle:Get("DB_Child")
+	local DB_Girl = moudle:Get("DB_Girl")
+	local DB_MatchMaker = moudle:Get("DB_MatchMaker")
+	local videoActor = moudle:Get("VideoActor")
+	local penquanActor = moudle:Get("PenquanActor")
+	local skyActor = moudle:Get("SkyActor")
+	local swimActor = moudle:Get("SwimActor")
+
+	if cachedEffects.DB_MaidGirl ~= nil then
+		cachedEffects.DB_MaidGirl.Parent = DB_MaidGirl.Parent
+		cachedEffects.DB_SecretaryGirl.Parent = DB_SecretaryGirl.Parent
+		cachedEffects.DB_Child.Parent = DB_Child.Parent
+		cachedEffects.DB_Girl.Parent = DB_Girl.Parent
+		cachedEffects.DB_MatchMaker.Parent = DB_MatchMaker.Parent
+		cachedEffects.SkyActor.Parent = skyActor.Parent
+		cachedEffects.SwimActor.Parent = swimActor.Parent
+
+		local nodeCanvas = moudle:Get("nodeCanvas")
+		local SkyCanvas = moudle:Get("SkyCanvas")
+		local SwimCanvas = moudle:Get("SwimCanvas")
+		local nodeCanvasLayer = nodeCanvas.SortingLayerName
+		local nodeCanvasOrder = nodeCanvas.SortingOrder
+		cachedEffects.DB_MaidGirl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		cachedEffects.DB_SecretaryGirl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		cachedEffects.DB_Child:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		cachedEffects.DB_Girl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		cachedEffects.DB_MatchMaker:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		nodeCanvasLayer = SkyCanvas.SortingLayerName
+		nodeCanvasOrder = SkyCanvas.SortingOrder
+		cachedEffects.SkyActor:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+		nodeCanvasLayer = SwimCanvas.SortingLayerName
+		nodeCanvasOrder = SwimCanvas.SortingOrder
+		cachedEffects.SwimActor:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
+	else
+		if not GameSetting.IsiOSCommit then
+			CCommon.CreateEffect(DB_MaidGirl, 20002)
+			CCommon.CreateEffect(DB_SecretaryGirl, 20003)
+			CCommon.CreateEffect(DB_Child, 20004)
+			CCommon.CreateEffect(DB_Girl, 20005)
+			CCommon.CreateEffect(DB_MatchMaker, 20006)
+		end
+		CCommon.CreateEffect(skyActor,10084)
+		CCommon.CreateEffect(swimActor,10085)
+
+		_Global._CachedObjects.effects = 
+		{
+			DB_MaidGirl = DB_MaidGirl,
+			DB_SecretaryGirl = DB_SecretaryGirl,
+			DB_Child = DB_Child,
+			DB_Girl = DB_Girl,
+			DB_MatchMaker = DB_MatchMaker,
+			SkyActor = skyActor,
+			SwimActor = swimActor,
+		}
+	end
+
+	if GameSetting.IsiOSCommit then
+		for i=1, 3 do
+			local pictureName = 'Girl_' .. i
+			local pictureSize = HomePopleImgSize[pictureName]
+			if pictureSize ~= nil and #pictureSize == 2 then
+				CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(pictureName, "VillaGirl"),
+													pictureSize[1], pictureSize[2],
+													function (sp)
+														if moudle ~= nil then
+															local girlImg = moudle:Get(pictureName)
+															if girlImg ~= nil then
+																girlImg.Sprite = sp
+																girlImg.SizeDelta = Vector2(pictureSize[1], pictureSize[2])
+															end
+														end
+													end)
+			end
+		end
+
+		local childName = 'Child'
+		local childImgSize = HomePopleImgSize[childName]
+		if childImgSize ~= nil and #childImgSize == 2 then
+			CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(childName, "VillaGirl"),
+													childImgSize[1], childImgSize[2],
+													function (sp)
+														if moudle ~= nil then
+															local childImg = moudle:Get(childName)
+															if childImg ~= nil then
+																childImg.Sprite = sp
+																childImg.SizeDelta = Vector2(childImgSize[1], childImgSize[2])
+															end
+														end
+													end)
+		end
+
+		for name, size in pairs(HomeBgImgSize) do
+			CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(name, "VillaGirl"),
+															size.width, size.height,
+															function (sp)
+																if moudle ~= nil then
+																	local node = moudle:Get(name)
+																	if node ~= nil then
+																		node.Activity = true
+																		node.Sprite = sp
+																	end
+																end
+															end)
+		end
+	end
+
+	local homeBtns = {}
+	self.mHomeBtns = homeBtns
+	--homeBtns[Define.SysId.Girl_Unlock] = {btn = moudle:Get("Girl_2"),btnClick = moudle:Get("Girl_2_Click"),canChange = false,actor = moudle:Get("ActorGirl2")}
+	homeBtns[Define.SysId.Girl_Unlock] = {btn = moudle:Get("Girl_2"),btnClick = moudle:Get("Girl_2_Click"),canChange = false,actor = moudle:Get("ActorGirl2"),redpoint = moudle:Get("QP_3")}
+	homeBtns[Define.SysId.Verdict] = {btn = moudle:Get("Computer"),btnClick = moudle:Get("Computer2"),btnLight = moudle:Get("Computer2"),isLight = true,redpoint = moudle:Get("QP_1")}
+	-- homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = true,actor = moudle:Get("ActorGirl3")}
+	homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = false,actor = moudle:Get("ActorGirl3"),redpoint = moudle:Get("QP_4")}
+	homeBtns[Define.SysId.Patrol] = {btn = moudle:Get("Projector1"),btnClick = moudle:Get("Projector1")}
+	homeBtns[Define.SysId.Girl_Baby] = {btn = moudle:Get("Child"),btnClick = moudle:Get("Child_Click"),redpoint = moudle:Get("QP_2")}
+	local car = moudle:Get("Car")
+	homeBtns[Define.SysId.Car] = {btn = car,btnClick = moudle:Get("Car_Click"),canChange = true,actor = moudle:Get("ActorCar"),redpoint = moudle:Get("red1"),scale = moudle:Get("scale2"),tips = moudle:Get("tip2")}
+	local air = moudle:Get("Air")
+	homeBtns[Define.SysId.Aircraft] = {btn = air,btnClick = moudle:Get("Air_Click"),canChange = true,actor = moudle:Get("ActorAir"),redpoint = moudle:Get("red3"),scale = moudle:Get("scale1"),tips = moudle:Get("tip1")}
+	if GameSetting.IsiOSCommit then
+		moudle:Get("Girl_4").Activity = false
+	else
+		homeBtns[Define.SysId.DressUp] = {btn = moudle:Get("Girl_4"),btnClick = moudle:Get("Girl_4_Click")}
+	end
+	local yacht = moudle:Get("Yacht")
+	homeBtns[Define.SysId.Yacht] = {btn = yacht,canChange = false,actor = moudle:Get("ActorYacht")}
+	--homeBtns[Define.SysId.Girl_Marry] = {btn = moudle:Get("Girl_1"),btnClick = moudle:Get("Girl_1_Click")}
+	homeBtns[Define.SysId.Girl_Marry] = {btn = moudle:Get("Girl_1"),btnClick = moudle:Get("Girl_1_Click")}
+
+	--车的Material
+	CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Car", "Shaders/Car"), function(session, obj)
+		if obj == nil or session.Error ~= nil then
+			error("Load Shaders/Car error!!", session.Error)
+		else
+			car.Material = CS.UnityEngine.Object.Instantiate(obj)
+		end
+		CS.Loader.LoadSession.Push(session)
+	end)
+
+	--直升机的Material
+	CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Air", "Shaders/Air"), function(session, obj)
+		if obj == nil or session.Error ~= nil then
+			error("Load Shaders/Air error!!", session.Error)
+		else
+			air.Material = CS.UnityEngine.Object.Instantiate(obj)
+		end
+		CS.Loader.LoadSession.Push(session)
+	end)
+
+	--游艇的Material
+	CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Yacht", "Shaders/Yacht"), function(session, obj)
+		if obj == nil or session.Error ~= nil then
+			error("Load Shaders/Yacht error!!", session.Error)
+		else
+			yacht.Material = CS.UnityEngine.Object.Instantiate(obj)
+		end
+		CS.Loader.LoadSession.Push(session)
+	end)
+
+	_P.RefreshFunc(self,moudle)
+	
+	self:RegistCallEvent(Define.EventListenId.FuncOpenEvent, function (eventHandle, funcId, isOpen )
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			local funcCsv = Csv.Func[funcId]
+			_P.RefreshFunc(self,moudle)
+			if funcId == Define.SysId.Girl then
+				CGirl.CheckUnlockRedpoint()
+			end
+		end
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.GetGirl, function (eventHandle, girlID)
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			_P.RefreshPoolGirl(self)
+		end
+	end)
+
+	CNotice.HomeOpenNotice()
+
+	local scroll = moudle:Get("scrollView")
+	scroll.OnValueChanged:RemoveAllListeners()
+	scroll.OnValueChanged:AddListener(function(...) _P.OnScrollValueChange(self) end)
+	self.mGirl1 = moudle:Get("Girl_1")
+	self.mChild = moudle:Get("Child")
+	self.mGirl3 = moudle:Get("Girl_3")
+	self.mGirl4 = moudle:Get("Girl_4")
+
+	self.mContent = moudle:Get("content")
+	self.mScrollImg0 = moudle:Get("Sky")
+	self.mScrollImg1 = moudle:Get("Medium_1")
+	self.mScrollImgPoor = moudle:Get("Swimming")
+	self.mScrollImg2 = moudle:Get("Bg_2")
+	self.mScrollImg3 = moudle:Get("Prospect")
+	self.mScrollImg4 = moudle:Get("Bg_3_1")
+	self.mSkyCanvas = moudle:Get("SkyCanvas")
+	self.mYacht = moudle:Get("Yacht")
+	self.mYachtNode = moudle:Get("YachtNode")
+	_P.OnScrollValueChange(self)
+
+	moudle:Get("Btn"):AddOnButton(function()
+		_P.ChangeDressingState(self,false)
+	end,nil,0.9)
+
+	for i = 1,DRESS_NODE_COUNT do
+		local tip = moudle:Get("tip"..i)
+		local text = moudle:Get("text"..i)
+		local scale = moudle:Get("scale"..i)
+		if tip ~= nil then
+			local pos = tip.LocalPosition
+			local moveTween = tip:DOAnchorPosY(pos.y + 10,0.6)
+			moveTween:SetEase(CS.DG.Tweening.Ease.Linear)
+			moveTween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+		end
+		if text ~= nil then
+			text.Text = Csv.Text("Home_tip2")
+		end
+		if scale ~= nil then
+			local scaleTween = scale:DOScale(0.85,1)
+			scaleTween:SetEase(CS.DG.Tweening.Ease.Linear)
+			scaleTween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+		end
+	end
+	local posYachtY = yacht.LocalPosition.y
+	local tweenYacht = yacht:DOAnchorPosY(posYachtY + 5,0.8)
+	tweenYacht:SetEase(CS.DG.Tweening.Ease.Linear)
+	tweenYacht:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+
+	moudle:Get("textBtn").Text = Csv.Text("Home_tip3")
+
+	local langhuaActor = moudle:Get("LanghuaActor")
+	CCommon.CreateEffect(langhuaActor,10114)
+
+	_P.RefreshPoolGirl(self)
+
+	_R.RefreshAircraftRedPoint(self)
+	_P.RefreshComputer(self)
+
+	moudle:Get("GN_Text1").Text = Csv.Text("home_btn9")
+	moudle:Get("GN_Text2").Text = Csv.Text("home_btn10")
+	moudle:Get("GN_Text3").Text = Csv.Text("home_btn3")
+	moudle:Get("GN_Text4").Text = Csv.Text("home_btn11")
+	moudle:Get("GN_Text5").Text = Csv.Text("home_btn15")
+	moudle:Get("GN_Text6").Text = Csv.Text("home_btn4")
+	moudle:Get("GN_Text7").Text = Csv.Text("home_btn12")
+	moudle:Get("GN_Text8").Text = Csv.Text("home_btn13")
+	moudle:Get("GN_Text9").Text = Csv.Text("home_btn14")
+	moudle:Get("GN_Text10").Text = Csv.Text("home_btn16")
+
+	moudle:Get("text1_0").Text = Csv.Text("home_tip5")
+	if MPlayer.GetSex() == 1 then
+		moudle:Get("text2_0").Text = Csv.Text("home_tip2")
+	else
+		moudle:Get("text2_0").Text = Csv.Text("home_tip1")
+	end
+
+	moudle:Get("text4_0").Text = Csv.Text("home_tip3")
+	moudle:Get("text3_0").Text = Csv.Text("home_tip4")
+
+	local qp1 = moudle:Get("QP_1")
+	local qp2 = moudle:Get("QP_2")
+	local qp3 = moudle:Get("QP_3")
+	local qp4 = moudle:Get("QP_4")
+	self:RegistRedpoint(qp1, Define.SysId.Verdict)
+	self:RegistRedpoint(qp2, Define.SysId.Girl_Baby)
+	self:RegistRedpoint(qp3, Define.SysId.Girl_Unlock)
+	self:RegistRedpoint(qp4, Define.SysId.Manage)
+	self:RegistRedpoint(moudle:Get("red1"), Define.SysId.Car)
+
+	local tQp1 = qp1.CachedTran:GetJTweener("T_Villa_Verdict")
+	tQp1:Play()
+	local tQp2 = qp2.CachedTran:GetJTweener("T_Villa_Baby")
+	tQp2:Play()
+	local tQp3 = qp3.CachedTran:GetJTweener("T_Villa_Girl")
+	tQp3:Play()
+	local tQp4 = qp4.CachedTran:GetJTweener("T_Villa_Manage")
+	tQp4:Play()
+
+	-- local tCar = moudle:Get("IconboxCar").CachedTran:GetJTweener("T_Effect_Guodong")
+	-- tCar:Play()
+	CGirl.CheckUnlockRedpoint()
+
+	CCommon.CreateEffect(videoActor,10031)
+	self:RegistRedpoint(videoActor, Define.SysId.Patrol)
+
+	CCommon.CreateEffect(penquanActor,10149)
+
+	local shuActor = moudle:Get("ShuActor")
+	CCommon.CreateEffect(shuActor,10119)
+
+	moudle:Get("GN_9").Activity = false
+
+	--刷新称号特效
+	_P.RefreshPar(self)
+
+	-- 播放飞鸟环境音，初次进来10s后播放，后面每30s播放一次
+	self.mSkyCanvas:AddOnTime(function()
+		SoundMgr.Play(5000)
+	end, nil, 10)
+
+	self.Map:AddOnTime(function()
+		SoundMgr.Play(5001)
+	end, nil, 3)
+
+	self.mYacht:AddOnTime(function()
+		SoundMgr.Play(5002)
+	end, nil, 5)
+end
+
+function _P.RefreshPoolGirl(self)
+	local moudle = self.Moudle
+	if MGirl.UnlockGirls ~= nil then
+		local girlNum = #MGirl.UnlockGirls
+		for i = 1,girlNum do
+			local girl = moudle:Get("PoolGirl"..i)
+			if girl ~= nil then
+				girl.Activity = true
+			end
+		end
+	end
+end
+
+function _P.OnScrollValueChange(self)
+	local moudle = self.Moudle
+	local skyPos = self.mContent.LocalPosition
+	local x = skyPos.x
+	self.mScrollImg0.LocalPosition = Vector2(0.26 * x,430)
+	self.mScrollImg1.LocalPosition = Vector2(0.43 * x + 135,92)
+	self.mScrollImgPoor.LocalPosition = Vector2(x + 288,-108)
+	self.mScrollImg2.LocalPosition = Vector2(0.36 * x + 135,144)
+	self.mScrollImg3.LocalPosition = Vector2(x,skyPos.y)
+	self.mSkyCanvas.LocalPosition = Vector2(0.26 * x,0)
+	self.mScrollImg4.LocalPosition = Vector2(x,195)
+
+	local yachtPos = self.mYacht.LocalPosition
+	self.mYacht.LocalPosition = Vector2(0.43 * (x - 250),yachtPos.y)
+	self.mYachtNode.LocalPosition = self.mYacht.LocalPosition
+
+	-- if x > 195 then
+	-- 	self.mGirl1.Activity = true
+	-- end
+	-- if x < 155 then
+	-- 	self.mGirl1.Activity = false
+	-- end
+	-- if x > 75 then
+	-- 	self.mChild.Activity = true
+	-- end
+	-- if x < 35 then
+	-- 	self.mChild.Activity = false
+	-- end
+	-- if x < 170 then
+	-- 	self.mGirl3.Activity = true
+	-- end
+	-- if x > 210 then
+	-- 	self.mGirl3.Activity = false
+	-- end
+	-- if x < -220 and not GameSetting.IsiOSCommit then
+	-- 	self.mGirl4.Activity = true
+	-- end
+	-- if x > -180 then
+	-- 	self.mGirl4.Activity = false
+	-- end
+end
+
+function _P.ShowTalk(self,time)
+	local moudle = self.Moudle
+	moudle.SelfRect:AddOnTime(function()
+		if time == 3 then
+			_P.ShowTalk(self,10)
+			moudle:Get("redPoint2").Activity = true
+		else
+			_P.ShowTalk(self,3)
+			moudle:Get("redPoint2").Activity = false
+		end
+	end,nil,time)
+end
+
+function _P.RefreshComputer(self)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		if MCompany.Verdict ~= nil and MCompany.Verdict.times > 0 then
+			moudle:Get("Computer").SpriteName = ComputerImgHave
+		else
+			moudle:Get("Computer").SpriteName = ComputerImgNone
+		end
+	end
+end
+
+function _P.ChangeDressingState(self,state)
+	local moudle = self.Moudle
+	self.DresingState = state
+	local homeBtns = self.mHomeBtns
+	for k,v in pairs(homeBtns) do
+		if v.scale ~= nil and v.tips ~= nil then
+			local csvFunc = Csv.Func[k]
+			if MMain.FuncIsOpen(k) and csvFunc ~= nil then
+				v.scale.Activity = state
+				v.tips.Activity = state
+			end
+		end
+	end
+	moudle:Get("Btn").Activity = state
+	moudle:Get("Tips").Activity = not state
+	if WindowMgr.IsCreated("UMain") then
+		WindowMgr.Call("UMain","ChangeState",state)
+	end
+end
+
+function _P.RefreshPar(self)
+	local moudle = self.Moudle
+	local airActor = moudle:Get("AirActor")
+	local youtingActor = moudle:Get("YoutingActor")
+	airActor:DestroyChildren()
+	youtingActor:DestroyChildren()
+	local titleID = MPlayer.GetTitleID()
+	if titleID ~= nil and titleID > 0 then
+		local csvTitle = Csv.Title[titleID]
+		if csvTitle ~= nil then
+			local effectType = csvTitle.villaEffectType
+			if effectType ~= nil then
+				local playActor
+				if effectType == 1 then
+					playActor = airActor
+				elseif effectType == 2 then
+					playActor = youtingActor
+				end
+				if playActor ~= nil then
+					local effectID = csvTitle.villaEffectID
+					if effectID ~= nil then
+						CCommon.CreateEffect(playActor,effectID)
+					end
+				end
+			end
+		end
+	end
+end
+
+function _R.RefreshPar(self)
+	_P.RefreshPar(self)
+end
+
+function _R.RefreshDress(self,dress)
+	local homeBtns = self.mHomeBtns
+	if homeBtns[dress.sysId] ~= nil then
+		local csvItem = Csv.Item[dress.itemId]
+		if csvItem ~= nil and homeBtns[dress.sysId].btn then
+			homeBtns[dress.sysId].btn.SpriteName = csvItem.asset
+			if dress.sysId == Define.SysId.Aircraft then
+				local csvAirPos = Csv.AircraftAnimation[csvItem.asset]
+				if csvAirPos ~= nil then
+					local pos = csvAirPos.villa_pos
+					homeBtns[dress.sysId].btn.LocalPosition = Vector2(pos[1],pos[2])
+				end
+			end
+		end
+	end
+end
+
+--刷新飞机红点
+function _R.RefreshAircraftRedPoint(self)
+	self.Moudle:Get("red3").Activity = MMain.FuncIsOpen(Define.SysId.Aircraft) and not MAircraft.IsStuding
+end
+
+function _R.RefreshVerdictRed(self)
+	_P.RefreshComputer(self)
+end
+
+return _M

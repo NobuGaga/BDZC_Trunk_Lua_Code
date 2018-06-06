@@ -1,0 +1,170 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
+local CBuyLand = JRequire "Dev.BuyLand.CBuyLand"
+local CCommon = JRequire "Dev.Common.CCommon"
+local JTweenerManager = CS.JTween.JTweenerManager
+
+----------------------CS类引用--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+local BattleActorId = 10147
+local animDura = 2
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bidding_Ing")
+	self.Moudle = moudle
+
+	-- self.Moudle:Get("BackBtn"):AddOnButton(function ( ... )
+	-- 	SoundMgr.Play(10002)
+	-- 	self:Destroy()
+	-- end, nil, 1.2)
+
+	self.buyNameTitle = moudle:Get("text1")
+	self.buyName = moudle:Get("text11")
+	self.ggTitle = moudle:Get("text3") -- 买方公关实力
+	self.gg = moudle:Get("text33")
+	self.moneyTitle = moudle:Get("text5") -- 买方公关实力
+	self.money = moudle:Get("text55") -- 买方金钱
+	self.saleNameTitle = moudle:Get("text2")
+	self.saleName = moudle:Get("text22")
+	self.ggTitle2 = moudle:Get("text4") -- 卖方公关实力
+	self.gg2 = moudle:Get("text44")
+	self.moneyTitle2 = moudle:Get("text6") -- 买方公关实力
+	self.money2 = moudle:Get("text66") -- 卖方金钱
+
+	_P.RefreshBattleInfo(self)
+end
+
+function _P.RefreshBattleInfo(self)
+	self.buyNameTitle.Text = Csv.Text("buyland_battle_name")
+	self.buyName.Text = MPlayer.GetName()
+	self.ggTitle.Text = Csv.Text("buyland_battle_gg")
+	self.gg.Text = MPlayer.GetPower()
+	self.moneyTitle.Text = Csv.Text("buyland_battle_money")
+	self.money.Text = LuaUtil.NumberFormat(MBuyLand.myCurMoney)
+
+	self.saleNameTitle.Text = Csv.Text("buyland_battle_name")
+	self.saleName.Text = MBuyLand.GetCompanyName()
+	self.ggTitle2.Text = Csv.Text("buyland_battle_gg")
+	self.gg2.Text = MBuyLand.GetPower()
+	self.moneyTitle2.Text = Csv.Text("buyland_battle_money")
+	self.money2.Text = LuaUtil.NumberFormat(MBuyLand.GetMoney())
+end
+
+function _R.OnResult(self, data)
+	local actorNameId = (MBuyLand.isSuc and 'success') or 'fail'
+	SoundMgr.Play((MBuyLand.isSuc and 10050) or 10051)
+	local actorNode = self.Moudle:Get("ActorPanel")
+	CCommon.CreateEffect(actorNode, BattleActorId)
+	actorNode:SkeletonSetAnimation(actorNameId)
+
+	self:Lock()
+	local cNum = MBuyLand.myCurMoney
+	local cNum2 = MBuyLand.GetMoney()
+	if MBuyLand.isSuc then
+		local step1 = cNum - MBuyLand.money
+		self.money:AddOnTime(function()
+			local numberMineAnim = JTweenerManager.IntTween(cNum, step1, animDura, function(value)
+				if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(value) end
+			end, function()
+				if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(step1) end
+			end)
+			numberMineAnim:SetTarget(self.money.CachedTran)
+		end, nil, 0.1)
+		self.money2:AddOnTime(function()
+			local numberMineAnim = JTweenerManager.IntTween(cNum2, 0, animDura, function(value)
+				if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(value) end
+			end, function()
+				if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(0) end
+			end)
+			numberMineAnim:SetTarget(self.money2.CachedTran)
+		end, nil, 0.1)
+		-- local step2 = MBag.GetItemNum(Define.AssetsType.Soldier)
+		-- self.moneyTitle:AddOnTime(function()
+		-- 	local numberMineAnim = JTweenerManager.IntTween(step1, step2, animDura, function(value)
+		-- 		if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(value) end
+		-- 	end, function()
+		-- 		if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(step2) end
+		-- 	end)
+		-- 	numberMineAnim:SetTarget(self.money.CachedTran)
+		-- end, nil, animDura*3)
+	else
+		self.money2:AddOnTime(function()
+			local numberMineAnim = JTweenerManager.IntTween(cNum2, MBuyLand.boosBlood, animDura, function(value)
+				if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(value) end
+			end, function()
+				if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(MBuyLand.boosBlood) end
+			end)
+			numberMineAnim:SetTarget(self.money2.CachedTran)
+		end, nil, 0.1)
+		self.money:AddOnTime(function()
+			local numberMineAnim = JTweenerManager.IntTween(cNum, 0, animDura, function(value)
+				if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(value) end
+			end, function()
+				if self.money ~= nil then self.money.Text = LuaUtil.NumberFormat(0) end
+			end)
+			numberMineAnim:SetTarget(self.money.CachedTran)
+		end, nil, 0.1)
+		-- local step2 = cNum2 - MBuyLand.money
+		-- self.moneyTitle:AddOnTime(function()
+		-- 	local numberMineAnim = JTweenerManager.IntTween(step1, step2, animDura, function(value)
+		-- 		if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(value) end
+		-- 	end, function()
+		-- 		if self.money2 ~= nil then self.money2.Text = LuaUtil.NumberFormat(step2) end
+		-- 	end)
+		-- 	numberMineAnim:SetTarget(self.money2.CachedTran)
+		-- end, nil, animDura*3)
+	end
+	
+	self.Moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+		_P.OnGameOver(self, data)
+	end, nil, 2.5)
+end
+
+function _P.OnGameOver(self, data)
+	if MBuyLand.isSuc then
+		WindowMgr.Create("UBuyLandWin", function ()
+			_P.OnResultClose(self)
+		end, data)
+	else
+		WindowMgr.Create("UBuyLandFail", function ()
+			_P.OnResultClose(self)
+		end, 0)
+	end
+end
+
+-- 关闭战斗胜利界面后调用
+function _P.OnResultClose(self)
+	if MBuyLand.isSuc then
+		self:Destroy()
+		WindowMgr.Call("UBuyLandMain","OnWinRefreshLandInfo")
+		-- 请求一键所需金钱数据
+		local maxLvl = Csv.Const(18009)
+		local curBattleId = MBuyLand.GetNextID()
+		if maxLvl >= curBattleId then
+			CBuyLand.CInit()
+		end
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+return _M

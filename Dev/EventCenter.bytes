@@ -1,0 +1,80 @@
+
+local _CallEvents = {}
+local _CallEventsMap = {}
+local _EventIndex = -99999999999
+
+local _M = {}
+
+function _M.Clean( ... )
+	_CallEvents = {}
+	_CallEventsMap = {}
+	_EventIndex = -99999999999
+	_M.AlwaysCallEvent = nil
+end
+
+function _M.OnReLogin( ... )
+	for eventId,tab in pairs(_CallEvents) do
+		local isHave = false
+		for _EventIndex,v in pairs(tab) do
+			if v.isReloginNotClean ~= true then
+				tab[_EventIndex] = nil
+				_CallEventsMap[_EventIndex] = nil
+			else
+				isHave = true
+			end
+		end
+		if not isHave then
+			_CallEvents[eventId] = nil
+		end
+	end
+end
+
+function _M.RegistCallEvent(eventId, onEventCall, isReloginNotClean)
+	_EventIndex = _EventIndex + 1
+
+	local tab = _CallEvents[eventId]
+	if tab == nil then
+		tab = {}
+		_CallEvents[eventId] = tab
+	end
+	tab[_EventIndex] = {call = onEventCall, isReloginNotClean = isReloginNotClean}
+	_CallEventsMap[_EventIndex] = eventId
+	return _EventIndex
+end
+
+function _M.RegistAlwaysCallEvent(onEventCall)
+	_M.AlwaysCallEvent = onEventCall
+end
+
+function _M.UnRegistAlwaysCallEvent()
+	_M.AlwaysCallEvent = nil
+end
+
+function _M.UnRegistCallEvent(eventHandle)
+	local eventId = _CallEventsMap[eventHandle]
+	if eventId ~= nil then
+		_CallEventsMap[eventHandle] = nil
+		local tab = _CallEvents[eventId]
+		if tab ~= nil then
+			tab[eventHandle] = nil
+		end
+	end
+end
+
+function _M.CallEventTrigger(eventId, ...)
+	local tab = _CallEvents[eventId]
+	if tab ~= nil then
+		for handle,callInfo in pairs(tab) do
+			local r, err = pcall(callInfo.call, handle, ...)
+			if not r then
+				error("CallEventTrigger error::", eventId, "error info: ", err)
+			end
+		end
+	end
+
+	if _M.AlwaysCallEvent ~= nil then
+		_M.AlwaysCallEvent(eventId, ...)
+	end
+end
+
+return _M

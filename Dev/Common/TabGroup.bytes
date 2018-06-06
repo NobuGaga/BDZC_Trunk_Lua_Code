@@ -1,0 +1,249 @@
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class()
+local _P = {}
+local _DefaultColor = Color(1,1,1,1)
+local _LightColor = Color(99/255,99/255,99/255,1)
+
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+function _M:ctor(onChooseCall, defaultIcon, lightIcon, defaultColor, lightColor,turnLeft,turnRight,scroll,content,btnDefaultColor,btnLightColor,isBig)
+	self.OnChooseCall = onChooseCall
+	self.DefaultIcon = defaultIcon
+	self.LightIcon = lightIcon
+	self.DefaultColor = defaultColor
+	self.LightColor = lightColor
+	self.IsBig = isBig
+	self.Tabs = {}
+
+	self.LeftBtn = turnLeft
+	self.RightBtn = turnRight
+	self.Scroll = scroll
+	self.Content = content
+
+	self.BtnDefaultColor = btnDefaultColor
+	self.BtnLightColor = btnLightColor
+
+	self.TabsIndex = {}
+	self.LastChoose = 0
+	if turnLeft ~= nil then
+		turnLeft:AddOnButton(function(...)
+			local targetIndex = _P.OnClickTurnLeft(self)
+			if targetIndex ~= nil then
+				local key = self.TabsIndex[targetIndex]
+				if key ~= self.LastChoose then
+					if self:Choose(key) then
+						_P.RefreshContentPos(self,targetIndex)
+					end
+				end
+			end
+		end)
+	end
+	if turnRight ~= nil then
+		turnRight:AddOnButton(function(...)
+			local targetIndex = _P.OnClickTurnRight(self)
+			if targetIndex ~= nil then
+				local key = self.TabsIndex[targetIndex]
+				if key ~= self.LastChoose then
+					if self:Choose(key) then
+						_P.RefreshContentPos(self,targetIndex)
+					end
+				end
+			end
+		end)
+	end
+end
+
+function _M:Add(key, imageWidget, textWidget, title)
+	imageWidget.SpriteName = self.DefaultIcon
+	textWidget.Text = title
+	imageWidget:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Choose(key)
+	end, nil, 0.9)
+	self.Tabs[key] = {image = imageWidget, text = textWidget}
+
+	table.insert(self.TabsIndex,key)
+end
+
+function _M:Remove(key)
+	local tab = self.Tabs[key]
+	self.Tabs[key] = nil
+	_P.RemoveTabIndex(self, key)
+	return tab
+end
+
+function _M:Get(key)
+	return self.Tabs[key]
+end
+
+function _M:Choose(key)
+	if self.Tabs[key] ~= nil then
+		--[[
+		if self.Tabs[key].image.Activity == false then
+			return false
+		end
+		--]]
+		for k,v in pairs(self.Tabs) do
+			if v.image ~= nil then
+				if k == key then
+					v.image.SpriteName = self.LightIcon
+					v.text.Color = self.LightColor or _LightColor
+					v.image.RaycastTarget = false
+					if self.BtnLightColor ~= nil then
+						v.image.Color = self.BtnLightColor
+					end
+					if self.IsBig then
+						v.image.SizeDelta = _LightImgSize
+						v.text.FontSize = _LightFontSize
+					end
+				else
+					v.image.SpriteName = self.DefaultIcon
+					v.text.Color = self.DefaultColor or _DefaultColor
+					v.image.RaycastTarget = true
+					if self.BtnDefaultColor ~= nil then
+						v.image.Color = self.BtnDefaultColor
+					end
+					if self.IsBig then
+						v.image.SizeDelta = _DefaultImgSize
+						v.text.FontSize = _DefaultFontSize
+					end
+				end
+			end
+		end
+
+		self.LastChoose = key
+		self.OnChooseCall(key)
+		_P.RefreshContentByClick(self,key)
+	end
+	return true
+end
+
+function _M:JustChoose(key)
+	if self.Tabs[key] ~= nil then
+		for k,v in pairs(self.Tabs) do
+			if v.image ~= nil then
+				if k == key then
+					v.image.SpriteName = self.LightIcon
+					v.text.Color = self.LightColor or _LightColor
+					v.image.RaycastTarget = false
+					if self.BtnLightColor ~= nil then
+						v.image.Color = self.BtnLightColor
+					end
+				else
+					v.image.SpriteName = self.DefaultIcon
+					v.text.Color = self.DefaultColor or _DefaultColor
+					v.image.RaycastTarget = true
+					if self.BtnDefaultColor ~= nil then
+						v.image.Color = self.BtnDefaultColor
+					end
+				end
+			end
+		end
+
+		self.LastChoose = key
+		self.OnChooseCall(key)
+	end
+end
+
+function _P.RemoveTabIndex(self, key)
+	local tabs = self.TabsIndex
+	for k,v in ipairs(tabs)do
+		if v == key then
+			table.remove(tabs,k)
+		end
+	end
+	self.TabsIndex = tabs
+end
+
+function _P.OnClickTurnRight(self)
+	local tabs = self.TabsIndex
+	local lastChoose = self.LastChoose
+
+	local isGetLast = false
+	for k,v in ipairs(tabs)do
+		if isGetLast then
+			return k
+		end
+		if v == lastChoose then
+			isGetLast = true
+		end
+	end
+
+	return nil
+end
+
+function _P.OnClickTurnLeft(self)
+	local tabs = self.TabsIndex
+	local lastChoose = self.LastChoose
+
+	local beforeKey = 0
+	for k,v in pairs(tabs)do
+		if v == lastChoose then
+			if beforeKey ~= 0 then
+				return beforeKey
+			else
+				return k
+			end
+		end
+		beforeKey = k
+	end
+
+	return nil
+end
+
+--content按左对齐
+--子对象居中对齐
+function _P.RefreshContentPos(self,index)
+	local scroll = self.Scroll
+	local content = self.Content
+
+	if scroll == nil or content == nil then
+		return
+	end
+
+	local imgWidth = self.Tabs[self.TabsIndex[index]].image.SizeDelta.x
+	local imgPosx = self.Tabs[self.TabsIndex[index]].image.LocalPosition.x
+	local scrollWidth = scroll.SizeDelta.x
+	local contentPOSX = content.LocalPosition.x 
+
+	local targartPos = scrollWidth - imgPosx - imgWidth/2 
+	
+	if targartPos <= 1 then
+		content:DOAnchorPosX(targartPos,0.2)
+	else
+		content:DOAnchorPosX(0,0.2)
+	end
+end
+
+--点击计算显示位置
+function _P.RefreshContentByClick(self,key)
+	local scroll = self.Scroll
+	local content = self.Content
+
+	if scroll == nil or content == nil then
+		return
+	end
+
+	content:AddOnTime(function()
+		local imgWidth = self.Tabs[key].image.SizeDelta.x
+		local imgPosx = self.Tabs[key].image.LocalPosition.x
+		local scrollWidth = scroll.SizeDelta.x
+		local contentPOSX = content.LocalPosition.x 
+		local contentWidth = content.SizeDelta.x
+	
+		local targartPos = 0 
+		if contentPOSX-imgWidth/2 <= -imgPosx then 
+			targartPos = contentPOSX + (-imgPosx - (contentPOSX-imgWidth/2)) 
+			content:DOAnchorPosX(targartPos,0.2)
+		elseif imgPosx+imgWidth/2 >=  scrollWidth - contentPOSX then
+			targartPos = contentPOSX - (imgPosx+imgWidth/2 - (scrollWidth - contentPOSX)) 
+			content:DOAnchorPosX(targartPos,0.2)
+		end
+	end,nil,0.1)
+end
+
+return _M

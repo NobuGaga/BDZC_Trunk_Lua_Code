@@ -1,0 +1,308 @@
+----------------------文件引用--------------------------
+--@RefType [Dev.Parliament.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = {}
+local _P = {}
+
+_M.TitleList = {}
+_M.GiveList = {}
+_M.RestTimes = Csv.Const(Define.Const.ParliamentGiveTimes)
+
+--列表缓存
+function _M.SetListData(data)
+	_M.list = nil
+	_M.listTitleID = nil
+	if nil ~= data.list then
+		_M.list = {}
+		_M.listTitleID = {}
+		_M.firstOwnTitleID = nil
+		table.sort(data.list, function (left, right) 
+			return left.titleID < right.titleID 
+		end)
+		for index, value in ipairs(data.list) do
+			_M.SetShowOneData(value, index)
+		end
+	end
+	if nil ~= data.isGet then
+		_M.isGet = data.isGet
+	end
+end
+
+--设置单个殿堂数据
+function _M.SetShowOneData(data, index)
+	_M.list = _M.list or {}
+	_M.listTitleID = _M.listTitleID or {}
+	if nil ~= data and nil ~= data.titleID then
+		if nil == index then
+			index = #_M.list + 1
+		end
+		_M.list[index] = {}
+		_M.CreateListData(_M.list[index], data)
+		_M.listTitleID[data.titleID] = index
+		if MPlayer.GetId() == data.playerID then
+			_M.isSelfHasTitle = true
+			_M.SetSelfTitleID(data.titleID)
+		end
+	end
+end
+
+--设置穿戴的殿堂称号ID
+function _M.SetSelfTitleID(titleID)
+	if nil == _M.firstOwnTitleID then
+		_M.firstOwnTitleID = titleID
+	elseif titleID and _M.firstOwnTitleID > titleID then
+		_M.firstOwnTitleID = titleID
+	end
+	if MPlayer.PlayerInfo.titleID and 0 ~= MPlayer.PlayerInfo.titleID then
+		if MPlayer.PlayerInfo.titleID == titleID and titleID
+			and Csv.Title[titleID] and Csv.Title[titleID].isInParliament then
+			_M.SelfTitleID = titleID
+		end
+	else
+		_M.SelfTitleID = _M.firstOwnTitleID
+	end
+	if nil == _M.SelfTitleID or 0 == _M.SelfTitleID then
+		_M.SelfTitleID = _M.firstOwnTitleID
+	end
+end
+
+--创建复制数据子项
+function _M.CreateListData(copy, data)
+	copy.titleID = data.titleID
+	copy.playerID = data.playerID
+	copy.sex = data.sex
+	copy.head = data.head
+	copy.playerName = data.playerName
+	copy.msg = data.msg
+	copy.endTime = data.endTime
+end
+
+--获取称号列表信息
+function _M.GetListData(titleID)
+	if nil == _M.list or nil == _M.listTitleID then 
+		return nil 
+	end
+	return _M.list[_M.listTitleID[titleID]]
+end
+
+--留言缓存
+function _M.SetMessage(titleID, message)
+	if nil == _M.changeMsgInfo then
+		_M.changeMsgInfo = {}
+	end
+	_M.changeMsgInfo.message = message
+	_M.changeMsgInfo.titleID = titleID
+end
+
+--获取改变的留言
+function _M.GetMessage()
+	if nil == _M.changeMsgInfo then
+		return nil
+	end
+	return _M.changeMsgInfo.message
+end
+
+--设置自己所有官职称号
+function _M.SetSelfMessage()
+	local info = _M.changeMsgInfo
+	if nil ~= info and nil ~= info.titleID then
+		local dataIndex = _M.listTitleID[info.titleID]
+		if nil ~= dataIndex then
+			local posData = _M.list[dataIndex]
+			if nil ~= posData then
+				posData.msg = info.message
+			end
+		end
+	end
+end
+
+--获取自己是否拥有称号状态
+function _M.GetSelfTitleState()
+	return _M.isSelfHasTitle
+end
+
+------------------------------------------------------------------------
+--根据官职ID和性别获取头身
+function _M.GetBodyByTitleID(titleID, sex)
+	local titleData = Csv.Title[titleID]
+	if nil ~= titleData then
+		return _M.GetBodyByIDSex(titleData.avatarId, sex)
+	end
+end
+
+--根据头身ID和性别获取头身
+function _M.GetBodyByIDSex(avatarID, sex)
+	local avatar = Csv.Avatar[avatarID]
+	if nil ~= avatar then
+		if _M.IsGirl(sex) then
+			return avatar.asset_1
+		else
+			return avatar.asset_2
+		end
+	end
+end
+
+--是否是女号
+function _M.IsGirl(sex)
+	return Define.Sex.Female == sex
+end
+
+------------------------------------------------------------------------
+function _M.Clean()
+	_M.list = nil
+	_M.listTitleID = nil
+	_M.isSelfHasTitle = false
+	_M.SelfTitleID = 0
+	if nil == _M.changeMsgInfo then
+		_M.changeMsgInfo = {}
+	else
+		_M.changeMsgInfo.message = ""
+		_M.changeMsgInfo.titleID = 0
+	end
+	_M.GiveList = {}
+	_M.RestTimes = Csv.Const(Define.Const.ParliamentGiveTimes)
+end
+
+----------------------------------  时装  ------------------------------
+
+_M.TitleType = {
+	Wear = 1,
+	TakeOff = 2,
+	Add = 3,
+	Delete = 4
+}
+
+--设置称号数据
+function _M.SetTitleList(titleList)
+	_M.TitleList = {}
+	for index, titleData in pairs(titleList) do
+		local temp = {}
+		for key, value in pairs(titleData) do
+			temp[key] = value
+		end
+		temp.time = HeartBeat.ServSecond() + temp.time
+		_M.TitleList[index] = temp
+	end
+end
+
+--刷新称号倒计时, 删除过期称号
+function _M.RefreshTitleListData()
+	local isUpdate = false
+	for index, titleData in pairs(_M.TitleList) do
+		if HeartBeat.ServSecond() >= titleData.time then
+			_M.RemoveTitle(titleData)
+			isUpdate = true
+		end
+	end
+	return isUpdate
+end
+
+--增加称号数据
+function _M.AddTitle(title)
+	title.time = title.time + HeartBeat.ServSecond()
+	for _, titleData in pairs(_M.TitleList) do
+		if titleData.titleID == title.titleID then
+			titleData.time = title.time
+			MBag.BagAddFashion(title.titleID)
+			return
+		end
+	end
+	if 0 < title.time then
+		table.insert(_M.TitleList, title)
+	end
+	MBag.BagAddFashion(title.titleID)
+end
+
+--移除称号数据
+function _M.RemoveTitle(title)
+	if "table" ~= type(title) then
+		local titleID = title
+		title = {}
+		title.titleID = titleID
+	end
+	for index, titleData in pairs(_M.TitleList) do
+		if titleData.titleID == title.titleID then
+			table.remove(_M.TitleList, index)
+		end
+	end
+	MBag.BagRemoveFashion(title.titleID)
+	if title.titleID == MPlayer.GetTitleID() then
+		MPlayer.PlayerInfo.titleID = 0
+	end
+end
+
+--获取称号个数
+function _M.GetTitleCount(id)
+	for _, titleData in pairs(_M.TitleList) do
+		if titleData.titleID == id then
+			if HeartBeat.ServSecond() < titleData.time then
+				return 1
+			else
+				_M.RemoveTitle(id)
+				break
+			end
+		end
+	end
+	return 0
+end
+
+--获取称号时间
+function _M.GetTitleTime(id)
+	for _, titleData in pairs(_M.TitleList) do
+		if titleData.titleID == id then
+			if 0 >= titleData.time - HeartBeat.ServSecond() then
+				_M.RemoveTitle(id)
+				break 
+			else
+				return titleData.time
+			end
+		end
+	end 
+	return -1 --未拥有
+end
+
+--获取称号列表数据
+function _M.GetTitleList()
+	return _M.TitleList
+end
+
+----------------------------------  特权  ------------------------------
+
+function _M.GetLessGiveTimes()
+	return _M.RestTimes
+end
+
+function _M.CheckIsGive(playerid)
+	for k, v in pairs(_M.GiveList) do
+		if playerid == v then
+			return true
+		end
+	end
+	return false
+end
+
+function _M.SetGiftList(data)
+	_M.GiveList = {}
+	local giveList = _M.GiveList
+	if data.playerID ~= nil then
+		for k, v in pairs(data.playerID) do
+			table.insert(giveList, v)
+		end
+	end
+	_M.RestTimes = data.restTime
+end
+
+function _M.SetGift(data)
+	local giveList = _M.GiveList
+	if data.playerID ~= nil then
+		table.insert(giveList, data.playerID)
+	end
+	_M.RestTimes = data.restTime
+end
+
+return _M

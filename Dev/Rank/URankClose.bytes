@@ -1,0 +1,128 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MRank = JRequire "Dev.Rank.MRank"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local RANKID = Define.RankType.Intimacy
+
+local itemWidth = 735
+local itemHeight = 130
+local space = -18
+local pageNum = 8
+local pageHeight = 800
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Ranking_Close", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("TabText1").Text = Csv.Text("rank_rank")
+	moudle:Get("TabText2").Text = Csv.Text("rank_name")
+	moudle:Get("TabText3").Text = Csv.Text("rank_close")
+	_P.OnCreateList(self)
+end
+
+function _P.OnCreateList(self)
+	local rankinfo = MRank.RankTable[RANKID]
+	if rankinfo ~= nil then
+		local list = _P.GetSortList(rankinfo.ranklist)
+		self.mList = list
+		local content = self.mMoudle:Get("content")
+		content:DestroyChildren()
+		local scroll = self.mMoudle:Get("scrollView")
+		if self.scrollController ~= nil then
+			self.scrollController:delete()
+			self.scrollController = nil
+		end
+		local scrollController = RankVertical.new(scroll,content,"M_Ranking_Close",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+		scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+		self.scrollController = scrollController
+	end
+end
+
+function _P.ScrollCallBack(self,index,value,moudle)
+	local contentTransform = self.mMoudle:Get("content")
+	if moudle ~= nil then
+		if value.rank > 3 then
+			moudle:Get("rank").Text = value.rank
+		end
+		moudle:Get("name").Text = value.name
+		moudle:Get("value").Text = value.value
+
+		local vip = value.vip
+		local imgKuang = moudle:Get("VipBox")
+		local imgNum = moudle:Get("VipNum")
+		if vip ~= nil then
+			local csvVip = Csv.Vip[vip]
+			if vip <= 0 then
+				imgKuang.Activity = false
+				imgNum.Activity = false
+			else
+				imgKuang.Activity = true
+				imgNum.Activity = true
+				imgKuang.SpriteName = csvVip.imgBord
+				imgNum.SpriteName = csvVip.icon
+			end
+		else
+			imgKuang.Activity = false
+			imgNum.Activity = false
+		end
+
+		if value.sex ~= nil and value.headid ~= nil then
+			moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(value.headid,value.sex)
+		end
+
+		moudle.SelfRect:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			CPlayer.LookPlayerReq(value.playerid)
+		end,nil,1)
+
+		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _M:ResetList(data)
+	if data.rankid == RANKID then
+		_P.OnCreateList(self)
+	end
+end
+
+function _P.GetSortList(list)
+	local sortList = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			table.insert(sortList,v)
+		end
+		table.sort(sortList,function(a,b)return _P.SortRank(a,b)end)
+	end
+	return sortList
+end
+
+function _P.SortRank(a,b)
+	return a.rank < b.rank
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+		if self.scrollController ~= nil then
+			self.scrollController:delete()
+			self.scrollController = nil
+		end
+	end
+end
+
+return _M

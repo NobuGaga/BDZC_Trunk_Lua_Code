@@ -1,0 +1,52 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--删除界面前调用
+function _M:EndDestroy( ... )
+	if self.CallBack ~= nil then
+		self.CallBack()
+	end
+end
+
+function _M:BeforeDestroy( ... )
+	if self.MovieCom ~= nil then
+		self.MovieCom:Stop()
+	end
+	CS.JGuiMovie.DeleteAsset(self.AssetName)
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(movieName, doneCallBak)
+	self.CallBack = doneCallBak
+	self.AssetName = movieName
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_StartMovie")
+	self.mModule = moudle
+	moudle:Get("PassBG"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	moudle:Get("PassText").Text = Csv.Text("guide_pass")
+	local movieNode = moudle:Get("MovieNode")
+	self.MovieCom = CS.JGuiMovie.AddMovie(movieNode, 750, 1334)
+	self.MovieCom:LoadMovie(movieName)
+	movieNode:AddOnTime(function()
+		self:Destroy()
+	end, nil, self.MovieCom.Duration)
+	self.MovieCom:Play()
+end
+
+return _M

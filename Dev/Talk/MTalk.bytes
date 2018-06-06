@@ -1,0 +1,263 @@
+
+
+local _M = {}
+
+_M.ContentTop = 20 
+_M.isSending = false   -- 是否正在请求数据
+_M.selectToggle = 0		--1全服 2商会
+
+_M.MsgTab = {}
+_M.UnionsMsgTab = {}
+_M.SysMessageTab = {}
+_M.CrossMsgTab = {}
+
+--频道类型
+_M.Channel = 
+{
+	ServerMsg = 1, --全服
+	UnionsMsg = 2, --商会
+	PrivateMsg = 3,	--私聊
+	SystemMsg = 4,--系统
+	CrossMsg = 5,--跨服
+}
+
+
+function _M.Clean()
+	_M.isSending = false
+	_M.selectToggle = 0
+	_M.MsgTab = {}
+	_M.UnionsMsgTab = {}
+	_M.SysMessageTab = {}
+	_M.CrossMsgTab = {}
+	_M.MinIndex = 999999
+end
+
+function _M:HistoryTalkMsg(talkList)
+	for k,v in pairs(talkList) do
+		self:AddMsg(v)
+	end
+	--发送给U
+	--WindowMgr.Call("UTalk","ReHistroyMsg",talkList)
+	--WindowMgr.Call("UTalkTips1","ReHistroyMsg",talkList)
+end
+
+--新消息
+function _M:RefreshMsg(talkMsg)
+	self:AddMsg(talkMsg)
+	--发送给U
+	if talkMsg.channel == _M.Channel.SystemMsg then
+		WindowMgr.Call("UTalk","RefreshSysMsg",talkMsg)
+	else
+		WindowMgr.Call("UTalk","RefreshMsg",talkMsg)
+		WindowMgr.Call("UTalkTips1","RefreshMsg",talkMsg)
+	end
+
+end
+
+function _M:AddMsg(msg)
+	local datas = {}
+	if msg.channel == _M.Channel.ServerMsg then
+		datas = _M.MsgTab
+	elseif msg.channel == _M.Channel.UnionsMsg then
+		datas = _M.UnionsMsgTab
+	elseif msg.channel == _M.Channel.SystemMsg then
+		datas = _M.SysMessageTab
+	elseif msg.channel == _M.Channel.CrossMsg then
+		datas = _M.CrossMsgTab
+	end
+	
+	local minIndex = self.GetDatasMinIndex(datas)
+	local maxIndex = self.GetDatasMaxIndex(datas)
+
+	--处理重复消息问题
+	local sameKey = _M.GetMsgKey(datas,msg)
+	if sameKey == -1 then
+		if msg.index ~= 0 then
+			if msg.index <= minIndex then
+				table.insert(datas,msg)
+			else
+				if Csv.Const(17002) ~= nil and maxIndex >= Csv.Const(17002) then
+					table.remove(datas, #datas)
+				end
+				table.insert(datas,1,msg)
+			end
+		else 
+			--系统消息不加入消息列表
+			--table.insert(datas,msg)
+		end
+	else
+		datas[sameKey] = msg
+	end
+	
+	if msg.channel == _M.Channel.ServerMsg then
+		_M.MsgTab = datas
+	elseif msg.channel == _M.Channel.UnionsMsg then
+		_M.UnionsMsgTab = datas
+	elseif msg.channel == _M.Channel.SystemMsg then
+		_M.SysMessageTab = datas
+	elseif msg.channel == _M.Channel.CrossMsg then
+		_M.CrossMsgTab = datas
+	end
+end
+
+--获取消息在列表中的key
+function _M.GetMsgKey(msgList,msg)
+	for k,v in pairs(msgList)do
+		if v.index == msg.index then
+			return k
+		end
+	end
+	return -1
+end
+
+
+--请求获取消息列表
+--下拉，数据从大到小
+--上拉，数据从小到大
+--type 1上拉（index从大到小）-1下拉index从小到大
+function _M.GetDatas(_index,_count,_type)
+	local mMsgTab = {}
+	local _channel = _M.GetChannelbyTogID(_M.selectToggle)
+	if _channel == _M.Channel.ServerMsg then
+		mMsgTab = _M.MsgTab
+	elseif _channel == _M.Channel.UnionsMsg then
+		mMsgTab = _M.UnionsMsgTab
+	elseif _channel == _M.Channel.SystemMsg then
+		mMsgTab = _M.SysMessageTab
+	elseif _chanel == _M.CrossMsg then 
+		mMsgTab = _M.CrossMsgTab
+	end
+
+	local datas = {}
+	for k,v in pairs(mMsgTab) do
+		if _type == 1 then --从大到小
+			if v.index <= _index and v.index >(_index-_count) then
+				table.insert(datas,v)
+			end
+		else --从小到大
+			if v.index > _index and v.index <=(_index+_count) then
+				table.insert(datas,v)
+			end
+		end
+	end
+
+	table.sort(datas, function( a, b )
+		if a.index ~= b.index then
+			return a.index > b.index
+		end
+	end)
+
+	return datas
+end
+
+---工具
+function _M.CheckShowTime(data)
+	local _channel = data.channel
+
+	local dataTab = {}
+	if _channel == _M.Channel.ServerMsg then
+		dataTab = _M.MsgTab
+	elseif _channel == _M.Channel.UnionsMsg then
+		dataTab = _M.UnionsMsgTab
+	elseif _channel == _M.Channel.CrossMsg then 
+		dataTab = _M.CrossMsgTab
+	elseif _channel == _M.Channel.SystemMsg then
+		-- dataTab = _M.SysMessageTab
+		-- return false --系统消息关闭时间展示
+		return true --系统消息每条都带时间
+	end
+
+	if data.index == _M.GetDatasMinIndex(dataTab) then
+		return true
+	end
+	for k,v in pairs(dataTab) do
+		if data.index - v.index == 1 then
+			local day1 = os.date("%d",data.time)
+			local day2 = os.date("%d",v.time)
+			if day2 ~= day1 then
+				return true
+			end
+
+			if data.time - v.time >1800 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetChannelbyTogID(Togid)
+	if Togid == Define.SysId.Talk_Server then
+		return _M.Channel.ServerMsg
+	elseif Togid == Define.SysId.Talk_Unions then
+		return _M.Channel.UnionsMsg
+	elseif Togid == Define.SysId.Talk_System then
+		return _M.Channel.SystemMsg
+	elseif Togid == Define.SysId.Talk_Cross then
+		return _M.Channel.CrossMsg
+	end
+end
+
+function _M.GetDatasMinIndex(datas)
+
+	if datas ~= nil then
+		local minIndex = 999999
+		for k,v in pairs(datas) do
+			if v.index <= minIndex then
+				minIndex = v.index
+			end
+		end
+		return minIndex
+	end
+end
+function _M.GetDatasMaxIndex(datas)
+	if datas ~= nil then
+		local maxIndex = -1
+		for k,v in pairs(datas) do
+			if v.index >= maxIndex then
+				maxIndex = v.index
+			end
+		end
+		return maxIndex
+	end
+end
+
+--用来显示最新一条在主界面
+function _M.GetLastMsg(type)
+	local allMsgData = _M.MsgTab
+
+	table.sort(allMsgData,function(a,b)
+		return a.index > b.index
+	end)
+
+	if allMsgData ~= nil then
+		if #allMsgData >0 then
+			return allMsgData[1]
+		end
+	end
+	return nil
+end
+
+--用来显示最新一条在商会界面
+function _M.GetLastOfChannel(channel)
+	local allMsgData = {}
+	if channel == _M.Channel.ServerMsg then
+		allMsgData = _M.MsgTab
+	elseif channel == _M.Channel.UnionsMsg then
+		allMsgData = _M.UnionsMsgTab
+	elseif channel == _M.Channel.CrossMsg then
+		allMsgData = _M.CrossMsgTab
+	end
+
+	if allMsgData ~= nil and #allMsgData >0 then
+		for _,v in pairs(allMsgData) do
+			if v.channel == channel then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+
+return _M

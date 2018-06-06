@@ -1,0 +1,207 @@
+-- 选择员工驾乘界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local keyItemId = Csv.Const(76)
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(id, seatId, isChange)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_ChooseStaff")
+	self.mModule = module
+	self.seatId = seatId
+	self.carid = id
+	self.isChange = isChange
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local carData = MCar.GetCurCarData(id)
+	local carId = carData.carid
+	local carConf = Csv.Car[carId]
+	local itemConf = Csv.Item[carId]
+	module:Get("title").Text = Csv.Text("car_selectStaff_title")
+
+	if carConf and itemConf then
+		local strColor = Csv.ItemColor[itemConf.color].str
+		module:Get("Tips").Text = Csv.Text("car_selectStaff_cur", {name = Csv.Text("common_color", {num = strColor, name = "【" .. carConf.name .. '】'})})
+	end
+
+	local keyItemConf = Csv.Item[keyItemId]
+	if keyItemConf then
+		module:Get("KeyIcon").SpriteName = keyItemConf.icon
+		module:Get("KeyNum").Text = MBag.GetItemNum(keyItemId)
+	end
+
+	local staffData = _P.SetStaffData(self)
+	local staffList = _P.GetSortStaffTable(staffData)
+	if staffList == nil then return end
+
+	local itemGrid = module:Get("content")
+	for id, value in pairs(staffList) do
+		_P.CreateStaffItem(self, itemGrid, value)
+	end
+end
+
+
+-- 排除了当前座驾上的员工
+function _P.SetStaffData(self)
+	local staffData = {}
+	local staffList = {}
+	for k,v in pairs(MStaff.StaffTable) do
+		staffList[#staffList + 1] = v
+	end
+
+	for k,v in pairs(staffList) do
+		local carData = MCar.CheckIsInCar(v.id)
+		if not carData then
+			local oneItem = v
+			if oneItem.carId then oneItem.carId = nil end
+			staffData[#staffData + 1] = oneItem
+		elseif carData.carid ~= self.carid then
+			local oneItem = v
+			oneItem.carId = carData.carid
+			staffData[#staffData + 1] = oneItem
+		end
+	end
+
+	return staffData
+end
+
+
+function _P.GetSortStaffTable(staffList)
+	local sortTable = {}
+	for k,v in pairs(staffList) do
+		sortTable[#sortTable + 1] = v
+	end
+
+	table.sort(sortTable,function(a,b)
+		if not a.carId or a.carId == 0 then
+			if not b.carId or b.carId == 0 then
+				return _P.SortByAllAttr(a, b)
+			end
+			return true
+		else
+			if b.carId and b.carId > 0 then
+				return _P.SortByAllAttr(a, b)
+			end
+			return false
+		end
+	end)
+
+	return sortTable
+end
+
+
+-- 排序（无座驾-总属性高-id）
+function _P.SortByAllAttr(a, b)
+	local attrAll1 = MStaff.GetAllAttr(a.id)
+	local attrAll2 = MStaff.GetAllAttr(b.id)
+
+	if attrAll1 == attrAll2 then
+		return a.id < b.id
+	end
+
+	return attrAll1 > attrAll2
+end
+
+
+function _P.CreateStaffItem(self, itemGrid, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_Choose_Item", WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	local staffConf = Csv.Personnel[data.id]
+	local carData = MCar.GetCurCarData(data.carId)
+	local carConf
+	local itemConf
+	if carData and carData.carid then
+		carConf = Csv.Car[carData.carid]
+		itemConf = Csv.Item[carData.carid]
+	end
+	itemModule:Get("HeadBox").SpriteName = MStaff.Color3Image[data.color]
+	if staffConf then
+		itemModule:Get("head").SpriteName = staffConf.asset
+		itemModule:Get("name").Text = staffConf.name
+
+		for i = 1,4 do
+			local icon = itemModule:Get("icon" .. i)
+			if icon ~= nil then
+				icon.Activity = false
+			end
+		end
+
+		if staffConf.specialtyIcon ~= nil then
+			itemModule:Get("IconRect").Activity = true
+			for k,v in ipairs(staffConf.specialtyIcon) do
+				itemModule:Get("icon" .. k).Activity = true
+				itemModule:Get("icon" .. k).SpriteName = v
+			end
+		end
+	end
+	--itemModule:Get("Grade").Text = Csv.Text("car_main_level")
+	itemModule:Get("number1").Text = data.level
+	itemModule:Get("combat").Text = Csv.Text("bag_attrAll", {num = ''})
+	itemModule:Get("number2").Text = MStaff.GetAllAttr(data.id)
+
+	itemModule:Get("C_Text").Text = Csv.Text("car_selectStaff_ride")
+	local rideBtn = itemModule:Get("C_Btn_b")
+	rideBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnRideCar(self, data)
+	end, nil, 0.9)
+
+	itemModule:Get("C_text").Text = Csv.Text("car_main_change")
+	local changeBtn = itemModule:Get("C_Btn_e")
+	changeBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		-- 更换
+		CCar.CarRepalceStaffReq(self.carid, data.id, self.seatId)
+		self:Destroy()
+	end, nil, 0.9)
+
+	rideBtn.Activity = not self.isChange
+	changeBtn.Activity = self.isChange
+
+	local rideText = itemModule:Get("Comprehensive")
+	if carConf and itemConf then
+		local strColor = Csv.ItemColor[itemConf.color].str
+		rideText.Text = Csv.Text("car_selectStaff_rideShow", {name = Csv.Text("common_color", {num = strColor, name = '【' .. carConf.name .. '】'})})
+	else
+		rideText.Text = Csv.Text("car_selectStaff_none")
+	end
+end
+
+
+-- 驾乘
+function _P.OnRideCar(self, data)
+	if not MBag.CheckItemEnough(keyItemId, 1) then
+		return
+	end
+
+	-- 请求驾乘(员工id，车位置下标)
+	CCar.CarAddStaffReq(self.carid, data.id, self.seatId)
+	self:Destroy()
+end
+
+
+return _M

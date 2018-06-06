@@ -1,0 +1,207 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local JGuiManager = CS.JGui.JGuiManager
+local MBag = JRequire "Dev.Bag.MBag"
+local MVote = JRequire "Dev.Vote.MVote"
+local CVote = JRequire "Dev.Vote.CVote"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local LuaUtil = JRequire"Libs.LuaUtil"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(voteid)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Election_Campaign")
+	self.mMoudle = moudle
+	self.Voteid = voteid
+	self.VoteMoudleTable = {}
+	self.ShowItemCount = 0
+	moudle:Get("BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	moudle:Get("Title").Text = Csv.Text("vote_17")
+	moudle:Get("text1").Text = Csv.Text("vote_6")
+	moudle:Get("text2").Text = Csv.Text("vote_8")
+	moudle:Get("text3").Text = Csv.Text("vote_18")
+	moudle:Get("text4").Text = Csv.Text("vote_19")
+	self.Tips = moudle:Get("Tips")
+	self.Tips.Text = Csv.Text("vote_38")
+
+	local csvVote = Csv.Vote[voteid]
+	if csvVote ~= nil then
+		moudle:Get("text11").Text = csvVote.name
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		local csvItem = Csv.Item[itemid]
+		if csvItem ~= nil and isAdd then
+			CCommon.ShowFlyItem(moudle.SelfRect,itemid,itemcount,self.ShowItemCount * 0.2,nil,nil,function()
+				self.ShowItemCount = self.ShowItemCount - 1
+				if self.ShowItemCount < 0 then
+					self.ShowItemCount = 0
+				end
+			end)
+			self.ShowItemCount = self.ShowItemCount + 1
+		end
+	end)
+
+	CVote.ReqTicketRef(voteid)
+end
+
+function _P.OnClickTicket(self,playerid,index)
+	local info = self.Info
+	if info ~= nil and self.Voteid ~= nil then
+		local csvVote = Csv.Vote[self.Voteid]
+		if csvVote ~= nil then
+			local havenum = MBag.GetItemNum(csvVote.voteItemID)
+			local num = csvVote.voteCostNum[index]
+			if havenum >= num then
+				CVote.ReqTicket(self.Voteid,playerid,num)
+			else
+				CCommon.ShowError(Csv.Text("vote_24"))
+			end
+		end
+	end
+end
+
+function _R.RefreshView(self,data)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local csvVote = Csv.Vote[self.Voteid]
+	if data.isRefresh then
+		content:DestroyChildren()
+		if data.info ~= nil then
+			local sortTable = _P.GetSort(data.info)
+			for k,v in ipairs(sortTable) do
+				local voteMoudle = JGuiManager.GetMoudle(content,"M_Election_Campaign_Item")
+				voteMoudle:Get("Name").Text = v.playername
+				voteMoudle:Get("SL").Text = Csv.Text("vote_11",{num = v.fightpower})
+				if v.commercename ~= nil and v.commercename ~= "" then
+					voteMoudle:Get("SH").Text = Csv.Text("vote_12",{name = v.commercename})
+				else
+					voteMoudle:Get("SH").Text = Csv.Text("vote_12",{name = Csv.Text("staff_none")})
+				end
+
+				voteMoudle:Get("XP").Text = Csv.Text("vote_22",{num = v.ticketcount})
+
+				if v.currflag then
+					voteMoudle:Get("IngBg").Activity = true
+					if csvVote ~= nil then
+						voteMoudle:Get("IngText").Text = Csv.Text("vote_10",{name = csvVote.name})
+					end
+				else
+					voteMoudle:Get("IngBg").Activity = false
+				end
+
+				local csvVip = Csv.Vip[v.viplv]
+				if csvVip.imgBord ~= nil then
+					voteMoudle:Get("VipBox").SpriteName = csvVip.imgBord
+					voteMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.viplv
+				else
+					voteMoudle:Get("VipBox").Activity = false
+				end
+
+				voteMoudle:Get("bsx").SpriteName = MPlayer.GetOtherHeadIcon(v.avatar.head,v.sex)
+
+				if csvVote ~= nil then
+					voteMoudle:Get("C_text").Text = Csv.Text("vote_23",{num = csvVote.voteCostNum[1]})
+					voteMoudle:Get("C_text_0").Text = Csv.Text("vote_23",{num = csvVote.voteCostNum[2]})
+				end
+
+				voteMoudle:Get("C_Btn_a"):AddOnButton(function()
+					SoundMgr.Play(10002)
+					_P.OnClickTicket(self,v.playerid,1)
+				end,nil,0.9)
+			
+				voteMoudle:Get("C_Btn_b"):AddOnButton(function()
+					SoundMgr.Play(10002)
+					_P.OnClickTicket(self,v.playerid,2)
+				end,nil,0.9)
+
+				self.VoteMoudleTable[v.playerid] = voteMoudle
+			end
+		end
+	else
+		if data.info ~= nil then
+			for k,v in pairs(data.info) do
+				local voteMoudle = self.VoteMoudleTable[v.playerid]
+				if voteMoudle ~= nil then
+					voteMoudle:Get("XP").Text = Csv.Text("vote_22",{num = v.ticketcount})
+				end
+			end
+		end
+	end
+
+	local count = 0
+	if data.info ~= nil then
+		count = #data.info
+		self.Tips.Activity = false
+	else
+		self.Tips.Activity = true
+	end
+	if csvVote ~= nil then
+		moudle:Get("text33").Text = MBag.GetItemNum(csvVote.voteItemID)
+		moudle:Get("text44").Text = Csv.Text("vote_21",{num = count,max = csvVote.joinCount})
+	end
+
+	self.Info = data.info
+
+	moudle.SelfRect:AddOnUpdate(function()
+		_P.RefreshTime(self)
+	end,nil,1)
+	_P.RefreshTime(self)
+end
+
+function _P.GetSort(info)
+	local sortTable = {}
+	for k,v in pairs(info) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	-- if a.currflag then
+	-- 	return true
+	-- elseif b.currflag then
+	-- 	return false
+	-- else
+		return a.ticketcount > b.ticketcount
+	-- end
+end
+
+function _P.RefreshTime(self)
+	local moudle = self.mMoudle
+	local timeText = moudle:Get("text22")
+	if MVote.Time ~= nil then
+		if MVote.Time - HeartBeat.ServSecond() <= 0 then
+			timeText.Text = LuaUtil.GetTimeHMS(0)
+		else
+			timeText.Text = LuaUtil.GetTimeHMS(MVote.Time - HeartBeat.ServSecond())
+		end
+	end
+end
+
+return _M

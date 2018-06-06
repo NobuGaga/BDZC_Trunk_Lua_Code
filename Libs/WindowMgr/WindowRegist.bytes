@@ -1,0 +1,1579 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+local _M = {}
+
+---------------------------------------------------
+-------------------界面IO动画-----------------------
+---------------------------------------------------
+local _T = 
+{
+	Default_Create_Tween = {
+		name = "T_CreateTween",
+		func = function (win)
+			win._BlackNode.Alpha = 0
+			win._RootNode.LocalScale = Vector3(0.8, 0.8, 1)
+			win._RootNode:AddCanvasGroup().alpha = 0.1
+		end,
+		pass = function (win)
+			win._BlackNode.Alpha = 0.6
+			win._RootNode.LocalScale = Vector3.one
+			win._RootNode:AddCanvasGroup().alpha = 1
+		end
+	},
+	-- Default_Destory_Tween = {
+	-- 	name = "T_DestroyTween",
+	-- },
+
+	Default_Create_Box_Tween = {
+		name = "T_CreateTween_Box",
+		func = function (win)
+			win._BlackNode.Alpha = 0
+			win._RootNode.LocalScale = Vector3(0.4, 0.4, 1)
+			win._RootNode:AddCanvasGroup().alpha = 0.1
+		end,
+		pass = function (win)
+			win._BlackNode.Alpha = 0.6
+			win._RootNode.LocalScale = Vector3.one
+			win._RootNode:AddCanvasGroup().alpha = 1
+		end
+	},
+	Default_Destory_Box_Tween = {
+		name = "T_DestroyTween_Box",
+	},
+
+	Alpha_Create_Box_Tween = {
+		name = "T_CreateTween_Box_Alpha",
+		func = function (win)
+			win._BlackNode.Alpha = 0
+			win._RootNode:AddCanvasGroup().alpha = 0.1
+		end,
+		pass = function (win)
+			win._BlackNode.Alpha = 0.6
+			win._RootNode:AddCanvasGroup().alpha = 1
+		end
+	},
+	Alpha_Destory_Box_Tween = {
+		name = "T_DestroyTween_Alpha",
+	},
+
+	Patrol_Create_Tween =  {
+		name = "T_Patrol_window",
+		func = function (win)
+			win._BlackNode.Alpha = 0
+			win._RootNode.LocalPosition = Vector2(0, 120)
+			win._RootNode:AddCanvasGroup().alpha = 0.1
+		end,
+		pass = function (win)
+			win._BlackNode.Alpha = 0.6
+			win._RootNode.LocalPosition = Vector2.zero
+			win._RootNode:AddCanvasGroup().alpha = 1
+		end
+	},
+	
+	Patrol_Destory_Tween = {
+		name = "T_DestroyTween_Box",
+	},
+}
+
+---------------------------------------------------
+----------------------Scene------------------------
+---------------------------------------------------
+_M.UWorldMap = {
+		WinType = WindowType.Scene, 	
+		Moudle = "Dev.Main.UWorldMap", 	
+		SysId = Define.SysId.World,
+		MusicId = 100
+		}
+_M.UHomeMap = {
+		WinType = WindowType.Scene, 		
+		Moudle = "Dev.Main.UHomeMap", 		
+		SysId = Define.SysId.Home,
+		MusicId = 102
+		}
+
+---------------------------------------------------
+----------------------Main-------------------------
+---------------------------------------------------
+_M.UMain = {	
+		WinType = WindowType.Main, 		
+		Moudle = "Dev.Main.UMain", 		
+		SysId = Define.SysId.Main
+		}
+
+
+---------------------------------------------------
+----------------------UI---------------------------
+---------------------------------------------------
+_M.ULogin = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Login.ULogin", 	
+		SysId = Define.SysId.Login,
+		MusicId = 106
+		}
+_M.ULoginEstablish = {	
+		WinType = WindowType.UI,
+		Moudle = "Dev.Login.ULoginEstablish",
+		MusicId = 114,
+		SysId = Define.SysId.Login_NewPlayer
+		}
+_M.UStory = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Main.UStory",    	
+		SysId = Define.SysId.Story
+		}
+_M.UTalk = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Talk.UTalk", 		
+		SysId = Define.SysId.Talk, 		
+		}
+_M.UBag = {		
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Bag.UBag", 		
+		SysId = Define.SysId.Bag, 		
+		}
+_M.UGirl = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Girl.UGirl", 		
+		SysId = Define.SysId.Girl, 		
+		}
+--UGirlUnlock
+_M.UGirlUnlock = {		
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Girl.GirlUnlockTab"
+		}
+_M.UStaff = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Staff.UStaff", 	
+		SysId = Define.SysId.Staff, 	
+		}
+_M.UBattle = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Battle.UBattle", 
+		SysId = Define.SysId.Airport, 
+		-- IsCanPop = true,
+		MusicId = 103
+		}
+_M.UBuyLandMain = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.BuyLand.UBuyLandMain", 
+		SysId = Define.SysId.BuyLand, 
+		MusicId = 118
+		}
+_M.UCompany = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Company.UCompany",
+		SysId = Define.SysId.Company,  
+		MusicId = 102,
+		}
+_M.UMainQuest ={
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Quest.UMainQuest", 								
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UDailyQuest ={
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Quest.UDailyQuest",
+		SysId = Define.SysId.Quest, 	
+		}
+_M.UWharf = {	
+		WinType = WindowType.UI,		
+		Moudle = "Dev.Wharf.UWharf",	
+		SysId = Define.SysId.Wharf,
+		MusicId = 101
+		}
+_M.UPlayer = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Player.UPlayer", 	
+		SysId = Define.SysId.Player, 						
+		}
+_M.URank = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Rank.URank", 		
+		SysId = Define.SysId.Rank, 						
+		}
+_M.UShop = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Shop.UShop", 		
+		SysId = Define.SysId.Shop,						
+		}
+_M.UAchieve = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Achieve.UAchieve", 		
+		SysId = Define.SysId.Achievement,						 
+		}
+_M.UAircraft = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Aircraft.UAircraft", 		
+		SysId = Define.SysId.Aircraft,
+		MusicId = 108
+		}
+_M.UMailPanel = {	
+		WinType = WindowType.UI,    
+		Moudle = "Dev.Mail.UMailPanel", 
+		SysId = Define.SysId.Mail,                       
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.URecharge = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Recharge.URecharge", 		
+		SysId = Define.SysId.Recharge,
+		}
+_M.UCommerce = {
+		WinType = WindowType.UI,    
+		Moudle = "Dev.Commerce.UCommerce", 
+		MusicId = 110,
+		SysId = Define.SysId.Commerce
+		}
+_M.UCommerceNoJoin = {
+		WinType = WindowType.UI,    
+		MusicId = 110,
+		Moudle = "Dev.Commerce.UCommerceNoJoin"
+		}
+
+_M.USetting = {	
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Setting.USetting", 	
+		SysId = Define.SysId.Setting, 						
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+
+_M.UFinance = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Finance.UFinance", 
+		SysId = Define.SysId.Finance, 
+		MusicId = 107,
+		}
+_M.UClubMainPanel = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Club.UClubMainPanel", 
+		SysId = Define.SysId.Club, 
+		MusicId = 109,
+		}
+
+_M.UParliament = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Parliament.UParliament", 
+		SysId = Define.SysId.Parliament, 
+		MusicId = 113,
+		}
+_M.UWelfare = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Welfare.UWelfare", 
+		SysId = Define.SysId.Welfare
+		}
+_M.UVipWelfare = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.VIPWelfare.UVipWelfare", 
+		SysId = Define.SysId.VIPWelfare
+		}
+_M.JianChen = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Activity.JianChen", 
+		SysId = Define.SysId.JianChen, 
+		}
+_M.URelations = {
+		WinType = WindowType.UI,
+		Moudle = "Dev.Relations.URelations", 
+		SysId = Define.SysId.Relations, 
+		MusicId = 111,
+		}
+_M.UTimeLimit = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Activity.TimeLimit.UTimeLimit", 		
+		SysId = Define.SysId.TimeLimit,
+		}
+_M.USevenDayTarget = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Activity.SevenDayTarget.USevenDayTarget", 		
+		SysId = Define.SysId.SevenDayTarget,
+		}
+_M.UFourTraitorsActivity = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Activity.UFourTraitorsActivity", 		
+		SysId = Define.SysId.JianChen,
+		}
+_M.URankReward = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Activity.RankReward.URankReward", 		
+		SysId = Define.SysId.RankReward,
+		}
+_M.UCompanyPatrol = {
+		WinType = WindowType.UI, 		
+		Moudle = "Dev.Company.UCompanyPatrol", 		
+		SysId = Define.SysId.Patrol,
+		MusicId = 112,
+		}
+_M.UCompanyManage = {
+		WinType = WindowType.UI,
+		SysId = Define.SysId.Manage,
+		Moudle = "Dev.Company.UCompanyManage", 		
+		}
+_M.UCompanyFactoryPop = {
+		WinType = WindowType.UI, 
+		SysId = Define.SysId.Factory,		
+		Moudle = "Dev.Company.UCompanyFactoryPop", 		
+		}
+_M.UCompanyTrainPop = {
+		WinType = WindowType.UI, 
+		SysId = Define.SysId.Train,
+		Moudle = "Dev.Company.UCompanyTrainPop", 		
+		}
+_M.URechargeAward = {
+		WinType = WindowType.UI, 
+		SysId = Define.SysId.RechargeReward,
+		Moudle = "Dev.Activity.URechargeAward", 		
+		}
+_M.UXinGuanMain = {
+		WinType = WindowType.UI, 
+		SysId = Define.SysId.XinGuan1,
+		Moudle = "Dev.Activity.UXinGuanMain",
+		}
+_M.UQuestionnaire = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Questionnaire,
+	Moudle = "Dev.Questionnaire.UQuestionnaire", 		
+	}
+_M.UTargetPanel = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Target,
+	Moudle = "Dev.Target.UTargetPanel", 		
+	}
+_M.UCarMainPanel = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Car,
+	Moudle = "Dev.Car.UCarMainPanel", 		
+	}
+_M.UFriend = {
+		WinType = WindowType.UI, 
+		SysId = Define.SysId.Friend,
+		Moudle = "Dev.Friend.UFriend", 		
+		}
+_M.UBattleBigMap = {
+		WinType = WindowType.UI, 
+		Moudle = "Dev.Battle.UBattleBigMap", 		
+		}
+_M.ULottery = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Lottery,
+	Moudle = "Dev.Activity.ULottery", 		
+	}
+_M.UFirstRecharge = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.FirstRecharge,
+	Moudle = "Dev.Welfare.UFirstRecharge", 		
+	}
+_M.UVote = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Vote,
+	Moudle = "Dev.Vote.UVote", 		
+	}
+_M.UVoteBattle = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Vote.UVoteBattle", 		
+	}
+_M.ULecturesMainPanel = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.Lecture,
+	Moudle = "Dev.Lectures.ULecturesMainPanel",
+	MusicId = 117,
+	}
+_M.USuperStaffPanel = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.SuperStaff.USuperStaffPanel",
+	}
+_M.UCharitableMainPanel = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.Charitable.UCharitableMainPanel",
+	}
+_M.USiegeMain = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.SiegeWall.USiegeMain",
+	}
+_M.UAdventureMain = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.Adventure.UAdventureMain",
+}
+
+---------------------------------------------------
+----------------------Tips1------------------------
+---------------------------------------------------
+_M.UMoviePlay = {	
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Main.UMoviePlay"
+		}
+_M.UTestVoiceChat = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Talk.UTestVoiceChat"
+		}
+_M.USelectServer = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Login.USelectServer", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UStaffDetails = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Staff.UStaffDetails", 
+		SysId = Define.SysId.Staff_Staff, 
+		}
+_M.UStaffDetailsNotObtained = {	
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.Staff.UStaffDetailsNotObtained", 
+	SysId = Define.SysId.Staff_Staff_NotObtained, 
+	}
+_M.UGirlDetail = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.GirlDetail", 
+		}
+_M.UGirlBaby = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.GirlBaby", 
+		SysId = Define.SysId.Girl_Baby,
+		}
+_M.UGirlMarried = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.GirlMarried", 
+		SysId = Define.SysId.Girl_Marry,
+		}
+_M.UGirlLastTalk = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlLastTalk", 
+		}
+_M.UGirlUnlockTalk = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlUnlockTalk", 
+		}
+_M.UGirlLastGame = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlLastGame",
+		MusicId = 116
+		}
+_M.UGirlLastGameFail = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlLastGameFail", 
+		}
+_M.UGirlLastGameSuccess = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlLastGameSuccess", 
+		}
+_M.UGirlLastDate = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UGirlLastDate"
+		}
+_M.UFriendsRound = {		
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Girl.UFriendsRound"
+		}
+
+_M.UCompanyParPop = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Company.UCompanyParPop", 
+		}
+_M.UCompanyEntPop = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Company.UCompanyEntPop", 
+		}
+_M.UDailyActPreview = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Quest.UDailyActPreview", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UPlayerLevelUp = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Player.UPlayerLevelUp",
+		SysId = Define.SysId.Player_LevelUp, 
+		}
+_M.UWharfBuildPop = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Wharf.WharfBuild", 
+		}
+_M.UPlayerLevelUpTips ={
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Player.UPlayerLevelUpTips"
+		}
+_M.UWharfFortunePop = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Wharf.WharfFortune", 
+		}
+_M.UWharfAwardPop = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Wharf.WharfAward", 
+		}
+_M.UWharfOnekey = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Wharf.UWharfOnekey", 
+		}
+_M.UWharfGetGirl = {
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Wharf.WharfGetGirl", 
+		}
+--UWharfGirlRelation
+_M.UWharfGirlRelation = {
+		WinType = WindowType.Tips1,		
+		SysId = Define.SysId.Wharf_Relation,
+		Moudle = "Dev.Wharf.UWharfGirlRelation", 
+		}
+_M.URankTab = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Rank.URankTab", 
+		}
+_M.URankCross = {	
+	WinType = WindowType.Tips1, 		
+	Moudle = "Dev.Rank.URankCross", 		
+	}
+_M.UBattleFight = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Battle.UBattleFight",
+		MusicId = 104,
+		}
+_M.UBattleBoss = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Battle.UBattleBoss",
+		MusicId = 105,
+		}
+
+_M.UAchieveDetail = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Achieve.UAchieveDetail", 
+		}
+_M.USchool = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.School.USchool", 		
+		MusicId = 108
+		}
+_M.UAircraftUp = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Aircraft.UAircraftUp", 		
+		}
+_M.UAircraftSkin = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Aircraft.UAircraftSkin", 		
+	}
+_M.UMailDetailPanel = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Mail.UMailDetailPanel",   
+		}
+_M.USetService = {	
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Setting.USetService", 
+		}
+_M.UAntiAddiction = {	
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Setting.UAntiAddiction", 						
+		}	
+
+_M.UFinanceRanking = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Finance.UFinanceRanking", 
+		}
+_M.UFinanceExchange = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Finance.UFinanceExchange", 
+		}
+_M.UFinanceBattle = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Finance.UFinanceBattle", 
+		}
+_M.UClubRankPanel = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Club.UClubRankPanel",   
+		}
+_M.UClubExchangePanel = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Club.UClubExchangePanel",
+		}
+_M.UClubChoosePanel = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Club.UClubChoosePanel", 
+		}
+_M.UClubNumJoinPanel = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Club.UClubNumJoinPanel", 
+		}
+_M.UClubInfoPanel = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Club.UClubInfoPanel", 
+		}
+_M.UClubIngPanel = {	
+		WinType = WindowType.Tips1,			
+		Moudle = "Dev.Club.UClubIngPanel", 
+		}
+_M.UParliamentInput = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Parliament.UParliamentInput",   
+		}
+
+_M.UCommerceCreate = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Commerce.UCommerceCreate",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceCreateSuccess = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceCreateSuccess",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceManager = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceManager",   
+		}
+_M.UCommerceBuild = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceBuild",   
+		}
+_M.UCommerceMembers = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceMembers",   
+		}
+_M.UCommerceExchange = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceExchange",   
+		}
+_M.UCommerceBattleList = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceBattleList",   
+		}
+_M.UCommerceRank = {
+		WinType = WindowType.Tips1,    
+		Moudle = "Dev.Commerce.UCommerceRank",   
+		}
+_M.URelationsDaily = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsDaily",   
+		}
+_M.URelationsFight = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsFight",   
+		}
+_M.URelationsRankTab = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsRankTab",   
+		}
+_M.URelationsAdverTab = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsAdverTab",   
+		}
+_M.URelationsNews = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsNews",   
+		}
+_M.URelationsAward = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsAward",   
+		}
+_M.URelationsAwardNone = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Relations.URelationsAwardNone",   
+		}
+_M.UTimeLimitAct = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Activity.TimeLimit.UTimeLimitAct",   
+		}
+_M.UTalkTips1 = {
+		WinType = WindowType.Tips1,		
+		Moudle = "Dev.Talk.UTalk",
+		}
+_M.URankRewardAct = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Activity.RankReward.URankRewardAct",   
+		}
+_M.URechargeUp = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Recharge.URechargeUp", 		
+		}
+_M.UBagStaffChange = {	
+		WinType = WindowType.Tips1,		    
+		Moudle = "Dev.Bag.UBagStaffChange",   
+		}
+_M.UBagStaffPop = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Bag.UBagStaffPop", 		
+		}
+_M.UBagChangeName = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Bag.UBagChangeName", 		
+		}
+_M.UBagChangeHead = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Bag.UBagChangeHead", 		
+		}
+_M.UBagGirlChange = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Bag.UBagGirlChange", 		
+		}
+_M.UStaffFour = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Staff.UStaffFour", 		
+		}
+_M.UStaffFive = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Staff.UStaffFive", 		
+		}
+_M.UCompanyVerdict = {
+		WinType = WindowType.Tips1, 
+		SysId = Define.SysId.Verdict,		
+		Moudle = "Dev.Company.UCompanyVerdict", 		
+		}
+_M.UCompanyPatrolAward = {
+		WinType = WindowType.Tips1, 		
+		Moudle = "Dev.Company.UCompanyPatrolAward", 		
+		}
+_M.UXinGuanExchange = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Activity.UXinGuanExchange", 		
+		}
+_M.UXinGuanRank = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Activity.UXinGuanRank", 		
+		}
+_M.UXinGuanBattle = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Activity.UXinGuanBattle", 		
+		}
+_M.UComRecharge = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Activity.UComRecharge", 		
+		}
+_M.UCarGarageMain = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Car.UCarGarageMain", 
+		}
+_M.UCarGarageGive = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Car.UCarGarageGive", 
+		}
+_M.UCarRideDetail = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Car.UCarRideDetail", 
+		}
+_M.UCarSelectStaff = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Car.UCarSelectStaff", 
+		}
+_M.UFriendAddList = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Friend.UFriendAddList", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UFriendRecommend = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Friend.UFriendRecommend", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UPrivateTalk = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Friend.UPrivateTalk", 
+		SysId = Define.SysId.Talk_Private
+		}
+_M.UHomeDress = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Main.UHomeDress", 
+		}
+_M.UParliamentAward = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Parliament.UParliamentAward", 
+		}
+_M.VipPrivilege = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.VIPWelfare.VipPrivilege",
+		}
+_M.ULotteryMsg = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.ULotteryMsg", 		
+	}
+_M.ULotteryTenReward = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.ULotteryTenReward", 		
+	}
+_M.URechargeRewardDailyFreeGift = {	
+	WinType = WindowType.Tips1,			
+	Moudle = "Dev.Activity.URechargeRewardDailyFreeGift", 
+	}
+_M.UFourTraitorsAureoleSkill = {	
+	WinType = WindowType.Tips1,			
+	Moudle = "Dev.Activity.UFourTraitorsAureoleSkill", 
+	}
+
+_M.UVoteJoin = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Vote.UVoteJoin", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UVoteTicket = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Vote.UVoteTicket", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UVotePar = {	
+	WinType = WindowType.Tips1,	
+	Moudle = "Dev.Vote.UVotePar", 
+	}
+_M.UVoteBattlePop = {	
+	WinType = WindowType.Tips1,	
+	Moudle = "Dev.Vote.UVoteBattlePop", 
+	}
+_M.UVoteStudy = {	
+	WinType = WindowType.Tips1,	
+	Moudle = "Dev.Vote.UVoteStudy",
+	SysId = Define.SysId.Commerce_Study,
+	}
+_M.UBuyLandBattle = {	
+	WinType = WindowType.Tips1,			
+	Moudle = "Dev.BuyLand.UBuyLandBattle",
+	}
+_M.UBuyLandRank = {	
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.BuyLand.UBuyLandRank", 
+	}
+_M.UBuyLandWin = {	
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.BuyLand.UBuyLandWin", 
+	}
+_M.UBuyLandFail = {	
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.BuyLand.UBuyLandFail", 
+	}
+_M.UBuyLandAllInPop = {	
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.BuyLand.UBuyLandAllInPop", 
+	}
+_M.ULecturesCityPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesCityPanel",
+	}
+_M.ULecturesOneKeyBattle = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesOneKeyBattle",
+	}
+_M.ULecturesRankPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesRankPanel",
+	}
+_M.ULecturesBattlePanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesBattlePanel",
+	}
+_M.ULecturesFailPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesFailPanel",
+	}
+_M.ULecturesWinPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Lectures.ULecturesWinPanel",
+	}
+_M.UPlayerChangeHead = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Player.UPlayerChangeHead",
+	}
+_M.UCharitableRankPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Charitable.UCharitableRankPanel",
+	}
+_M.UCharitableFruitPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Charitable.UCharitableFruitPanel",
+	}
+
+_M.UCharitableActPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Charitable.UCharitableActPanel",
+	}
+_M.USiegeBattle = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.SiegeWall.USiegeBattle",
+	}
+_M.UGetUDisk = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.SiegeWall.UGetUDisk",
+	}
+_M.USiegeTreasurePanel = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.SiegeWall.USiegeTreasurePanel",
+	}
+_M.USiegeExchangePanel = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.SiegeWall.USiegeExchangePanel",
+	}
+_M.USiegeRankPanel = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.SiegeWall.USiegeRankPanel",
+	}
+_M.USiegeTeamMessage = {		
+	WinType = WindowType.Tips1,		
+	Moudle = "Dev.SiegeWall.USiegeTeamMessage"
+	}
+_M.UAdventureFollow = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Adventure.UAdventureFollow",
+}
+_M.UAdventureRank = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Adventure.UAdventureRank",
+}
+_M.UAdventureStaff = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Adventure.UAdventureStaff",
+}
+_M.UAdventureExchangePanel = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.Activity.Adventure.UAdventureExchangePanel",
+}
+---------------------------------------------------
+----------------------Tips2------------------------
+---------------------------------------------------
+_M.UBabyChangeName = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Girl.BabyChangeName", 
+	}
+_M.UBagSyntheticPop = {	
+	WinType = WindowType.Tips2,		
+	Moudle = "Dev.Bag.UBagSyntheticPop", 
+	}
+_M.UBabyGraduationShow = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Girl.BabyGraduationShow", 
+	}
+--
+_M.UMarriedTips = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Girl.GirlMarriedTips", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}	
+_M.UBabyMarriedShow = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Girl.BabyMarriedShow", 
+	}
+_M.UMarriedQingqiu = {	
+	 WinType = WindowType.Tips2,			
+	Moudle = "Dev.Girl.GirlMarriedQingqiu", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}	
+_M.UGirlGiftPop = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Girl.GirlGiftPop", 
+		}
+_M.UGirlSkillPop = {	
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Girl.GirlSkillPop", 
+		}
+_M.UGirlLastDetail = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Girl.UGirlLastDetail", 
+		}
+_M.UAircraftSkinAll = {
+		WinType = WindowType.Tips2, 		
+		Moudle = "Dev.Aircraft.UAircraftSkinAll", 		
+		}
+
+-- _M.UStaffAttributePop ={
+-- 		WinType = WindowType.Tips2,		
+-- 		Moudle = "Dev.Staff.UStaffAttributePop", 
+-- 		}
+_M.UStaffPromotePop = {	
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Staff.UStaffPromotePop", 
+		}
+_M.UStaffPromoteSucPop={
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Staff.UStaffPromoteSucPop", 
+		}
+_M.UStaffBookUpPop = {	
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Staff.UStaffBookUpPop", 
+		}
+_M.URankWorship = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Rank.URankWorship"
+		}
+_M.UBattleFail =  {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Battle.UBattleFail"
+		}
+_M.UBattleWin =  {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Battle.UBattleWin"}
+_M.UBattleGetPatrol =  {	
+		WinType = WindowType.Tips2,	
+		Moudle = "Dev.Battle.UBattleGetPatrol", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UBattleStaffChoose = {	
+		WinType = WindowType.Tips2,	
+		Moudle = "Dev.Battle.UBattleStaffChoose", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UPlayerPop = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Player.UPlayerPop", 
+		}
+_M.UMarriedZhaoqin = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Girl.GirlZhaoQinPop", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UMarriedTiqin = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Girl.GirlTiqinPop", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceQueryInput = {	
+		WinType = WindowType.Tips2,		    
+		Moudle = "Dev.Commerce.UCommerceQueryInput",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceDetail = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceDetail",   
+		}
+_M.UCommerceUpdateInfo = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceUpdateInfo",   
+		}
+_M.UCommerceTransfer = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceTransfer",   
+		}
+_M.UCommerceDisbandInput = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceDisbandInput",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceOperateApply = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceOperateApply",   
+		}
+_M.UCommerceBattleOpen = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceBattleOpen",   
+		}
+_M.UCommerceBattle = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceBattle",   
+		MusicId = 105,
+		}
+_M.UCommerceBattleReport = {
+		WinType = WindowType.Tips2,    
+		Moudle = "Dev.Commerce.UCommerceBattleReport",   
+		}
+_M.URelationsSelectStaff = {
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Relations.URelationsSelectStaff", 
+		}
+_M.URelationsBuyAdd = {
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Relations.URelationsBuyAdd", 
+		}
+_M.UTimeLimitActRank = {
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Activity.TimeLimit.UTimeLimitActRank", 
+		}
+_M.UFinanceReward = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UFinanceReward", 
+		}	
+_M.UFinanceWin = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UFinanceWin", 
+		}	
+_M.UFinanceResult = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UFinanceResult", 
+		}
+_M.UFinanceFail = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UFinanceFail", 
+		}
+_M.UFinanceSelectStaff = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UFinanceSelectStaff", 
+		}
+_M.UFinanceResistEnd = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Finance.UResistEnd", 
+		}
+
+_M.URankRewardActGet = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.Activity.RankReward.URankRewardActGet", 
+		}
+_M.UBagUsePop = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Bag.UBagUsePop",
+		}
+_M.URelationsShowAward = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Relations.URelationsShowAward",
+		}
+_M.UXinGuanRankDetail = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Activity.UXinGuanRankDetail",
+		}
+_M.UXinGuanWin = {		
+		WinType = WindowType.Tips2,		
+		Moudle = "Dev.Activity.UXinGuanWin",
+		}
+_M.UXinGuanShop = {
+		WinType = WindowType.Tips2, 
+		Moudle = "Dev.Activity.UXinGuanShop", 		
+		}
+_M.UComRechargePop = {
+		WinType = WindowType.Tips2, 
+		Moudle = "Dev.Activity.UComRechargePop", 		
+		}
+_M.USchoolSelect = {	
+		WinType = WindowType.Tips2,			
+		Moudle = "Dev.School.USchoolSelect", 
+		}
+_M.UCarDecomposePanel = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarDecomposePanel", 		
+	}
+_M.UCarDecomposeMat = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarDecomposeMat", 		
+	}
+_M.UCarRecastPanel = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarRecastPanel", 		
+	}
+_M.UCarDecomposeSuccess = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarDecomposeSuccess", 		
+	}
+_M.UCarRecastSuccess = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarRecastSuccess", 		
+	}
+_M.UCarBatchDecomposeSuccess = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarBatchDecomposeSuccess",	
+	}
+_M.UCarBatchSellPanel = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarBatchSellPanel",	
+	}
+_M.UCarSellMaterial = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarSellMaterial", 		
+	}
+_M.UCarSellMoreMaterial = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Car.UCarSellMoreMaterial", 		
+	}
+_M.UFriendFindInfo = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Friend.UFriendFindInfo", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UParliamentAwardPop = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Parliament.UParliamentAwardPop", 
+	}
+_M.UWharfDesc = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Wharf.UWharfDesc", 
+	}
+_M.UWharfBattle = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Wharf.UWharfBattle", 
+	}
+_M.UWharfBattling = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Wharf.UWharfBattling", 
+	}
+_M.UWharfBattleFail = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Wharf.UWharfBattleFail", 
+	}
+_M.UWharfBattleWin = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Wharf.UWharfBattleWin", 
+	}
+_M.UWharfPokedex = {
+		WinType = WindowType.Tips2, 
+		SysId = Define.SysId.Wharf_Pokedex,
+		Moudle = "Dev.Wharf.UWharfPokedex", 
+		}
+_M.UStaffQuickPromotion = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Staff.UStaffQuickPromotion", 
+	}
+_M.UVoteBattleSelectStaff = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Vote.UVoteBattleSelectStaff", 
+	}
+_M.URelationsReport = {
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Relations.URelationsReport", 
+	}
+_M.UVoteOpenBattle = {
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Vote.UVoteOpenBattle", 
+	}
+_M.UCarMergePanel = {
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Car.UCarMergePanel", 
+	}
+_M.UVoteStudySelect = {
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Vote.UVoteStudySelect", 
+	}
+_M.UVoteStudyAccess = {
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.Vote.UVoteStudyAccess", 
+	}
+_M.USendPacket = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.RedPacket.USendPacket", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.USendNormalPacket = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.RedPacket.USendNormalPacket", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+
+_M.URedpacketSplit = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.RedPacket.URedpacketSplit", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.URedpacketNo = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.RedPacket.URedpacketNo", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.URedpacketPass = {	
+	WinType = WindowType.Tips2,			
+	Moudle = "Dev.RedPacket.URedpacketPass", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.URedpacketLook = {	
+	WinType = WindowType.Tips2,	
+	Moudle = "Dev.RedPacket.URedpacketLook", 
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UCarGetNewShowPanel = {		
+	WinType = WindowType.Tips2,		
+	Moudle = "Dev.Car.UCarGetNewShowPanel"
+	}
+_M.USiegeBattleResult = {		
+	WinType = WindowType.Tips2,		
+	Moudle = "Dev.SiegeWall.USiegeBattleResult"
+	}
+_M.UGetItems = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.SiegeWall.UGetItems",
+	}
+_M.UOpenUdisk = {		
+	WinType = WindowType.Tips2,		
+	Moudle = "Dev.SiegeWall.UOpenUdisk"
+	}
+_M.USiegeBoss = {		
+	WinType = WindowType.Tips2,		
+	Moudle = "Dev.SiegeWall.USiegeBoss"
+	}
+_M.UAdventureRankDetail = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Activity.Adventure.UAdventureRankDetail",
+}
+
+_M.USiegeSelectStaff = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.SiegeWall.SiegeSelectStaff",
+}
+_M.UAdventureResult = {
+	WinType = WindowType.Tips2,
+	Moudle = "Dev.Activity.Adventure.UAdventureResult",
+}
+_M.UAdventureSendPlayer = {
+	WinType = WindowType.Tips2,
+	Moudle = "Dev.Activity.Adventure.UAdventureSendPlayer",
+}
+_M.UAdventurePlayerList = {
+	WinType = WindowType.Tips2,
+	Moudle = "Dev.Activity.Adventure.UAdventurePlayerList",
+}
+---------------------------------------------------
+----------------------Tips3------------------------
+---------------------------------------------------
+_M.URuleTips = {
+		WinType = WindowType.Tips3,
+		Moudle = "Dev.Common.URuleTips", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+
+_M.UGirlDate = {
+		WinType = WindowType.Tips3,
+		Moudle = "Dev.Girl.UGirlDate", 
+		SysId = Define.SysId.Girl_Date,
+		}
+--UGirlNewDate
+_M.UGirlNewDate = {
+		WinType = WindowType.Tips3,
+		Moudle = "Dev.Girl.UGirlNewDate", 
+		SysId = Define.SysId.Girl_Date,
+		}
+_M.UOnekeyDate = {
+		WinType = WindowType.Tips3,
+		Moudle = "Dev.Girl.UOnekeyDate", 
+
+		}
+_M.UMarriedSelectCost = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Girl.GirlSelectMarriedType", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UMarriedSelectBaby = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Girl.GirlMarriedSelectBaby", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UClubSuccessPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubSuccessPanel", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UClubRewardPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubRewardPanel", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UClubNewsPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubNewsPanel", 
+		}
+_M.UClubThanksPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubThanksPanel", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UClubJoinPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubJoinPanel", 
+		}
+_M.UClubGoPanel = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Club.UClubGoPanel", 
+		}
+_M.URelationsCost = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Relations.URelationsCost", 
+		}
+_M.URelationsCostSingle = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Relations.URelationsCostSingle", 
+		}
+_M.UCommerceNameInput = {	
+		WinType = WindowType.Tips3,		    
+		Moudle = "Dev.Commerce.UCommerceNameInput",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceAppoint = {	
+		WinType = WindowType.Tips3,		    
+		Moudle = "Dev.Commerce.UCommerceAppoint",   
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UCommerceBattleResult = {
+		WinType = WindowType.Tips3,    
+		Moudle = "Dev.Commerce.UCommerceBattleResult",   
+		}
+_M.UCommerceBattleKill = {
+		WinType = WindowType.Tips3,    
+		Moudle = "Dev.Commerce.UCommerceBattleKill",   
+		}
+_M.UCommerceBattleStaffChoose = {
+		WinType = WindowType.Tips3,    
+		Moudle = "Dev.Commerce.UCommerceBattleStaffChoose",   
+		}
+_M.UFinanceHurtRank = {	
+		WinType = WindowType.Tips3,			
+		Moudle = "Dev.Finance.UHurtRank", 
+		}
+_M.UBattlePartStart =  {	
+		WinType = WindowType.Tips3, 
+		Moudle = "Dev.Battle.UBattlePartStart", 
+		}
+_M.UItemCheckBox = {
+	WinType = WindowType.Tips3,
+	Moudle = "Dev.Common.UCheckBox",
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.UCarOpenSeat = {
+	WinType = WindowType.Tips3,
+	Moudle = "Dev.Car.UCarOpenSeat",
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.URelationsWin = {	
+	WinType = WindowType.Tips3,			
+	Moudle = "Dev.Relations.URelationsWin", 
+	}
+_M.URelationsStraight = {	
+	WinType = WindowType.Tips3,			
+	Moudle = "Dev.Relations.URelationsStraight", 
+	}
+_M.URelationsFail = {	
+	WinType = WindowType.Tips3,			
+	Moudle = "Dev.Relations.URelationsFail", 
+	}
+_M.ULoginInput = {		
+	WinType = WindowType.Tips3,		
+	Moudle = "Dev.Login.ULoginInput"
+	}
+--
+_M.UGirlChangeName = {		
+	WinType = WindowType.Tips3,	
+	Moudle = "Dev.Girl.GirlChangeName"
+	}
+
+_M.UStaffChaneName = {		
+	WinType = WindowType.Tips3,		
+	Moudle = "Dev.Staff.ChangeStaffName"
+	}
+_M.UCharitableShopPanel = {
+	WinType = WindowType.Tips3, 
+	Moudle = "Dev.Activity.Charitable.UCharitableShopPanel", 		
+	}
+_M.UCharitableSelfRankPanel = {
+	WinType = WindowType.Tips3,
+	Moudle = "Dev.Activity.Charitable.UCharitableSelfRankPanel", 		
+	}
+_M.UCharitableTenReward = {
+	WinType = WindowType.Tips3, 
+	Moudle = "Dev.Activity.Charitable.UCharitableTenReward", 		
+	}
+_M.UCharitableDonateResult = {
+	WinType = WindowType.Tips3, 
+	Moudle = "Dev.Activity.Charitable.UCharitableDonateResult", 		
+	}
+_M.UAdventureReward = {
+	WinType = WindowType.Tips3, 
+	Moudle = "Dev.Activity.Adventure.UAdventureReward", 		
+	}
+
+------------------------------------------------
+---------------Tips4-----------------------------
+------------------------------------------------
+_M.UBagDetailPop = {
+		WinType = WindowType.Tips4,		
+		Moudle = "Dev.Bag.UBagDetailPop", 
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UStoryPop = {
+		WinType = WindowType.Tips4,		
+		Moudle = "Dev.Main.UStoryPop"
+		}
+
+_M.UPrivacy = {
+	WinType = WindowType.Tips4, 
+	Moudle = "Dev.Login.UPrivacy",
+	}
+_M.UCharitableFruitTipPanel = {		
+	WinType = WindowType.Tips4,		
+	Moudle = "Dev.Activity.Charitable.UCharitableFruitTipPanel"
+	}
+---------------------------------------------------
+----------------------Box------------------------
+---------------------------------------------------
+_M.UCheckBox = {
+		WinType = WindowType.Box,
+		Moudle = "Dev.Common.UCheckBox",
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UGoPop = {
+		WinType = WindowType.Box,
+		Moudle = "Dev.Common.UGoPop",
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UItemTrack = {
+		WinType = WindowType.Box,
+		Moudle = "Dev.Bag.UItemTrack",
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+_M.UStaffTrack = {
+	WinType = WindowType.Box,
+	Moudle = "Dev.Staff.UStaffTrack",
+	CreateTween = _T.Default_Create_Box_Tween, 
+	DestroyTween = _T.Default_Destory_Box_Tween
+	}
+_M.USevenDayTargetJump = {
+		WinType = WindowType.Box,
+		Moudle = "Dev.Activity.SevenDayTarget.USevenDayTargetJump",
+		CreateTween = _T.Default_Create_Box_Tween, 
+		DestroyTween = _T.Default_Destory_Box_Tween
+		}
+---------------------------------------------------
+----------------------Message------------------------
+---------------------------------------------------
+_M.UMessage = {
+		WinType = WindowType.Message,
+		Moudle = "Dev.Common.UMessage"
+		}
+
+---------------------------------------------------
+----------------------Guide------------------------
+---------------------------------------------------
+_M.UGuide = {
+		WinType = WindowType.Guide,	
+		Moudle = "Dev.Main.UGuide", 
+		SysId = Define.SysId.Guide
+		}
+
+---------------------------------------------------
+----------------------Notice------------------------
+---------------------------------------------------
+_M.UNotice = {
+		WinType = WindowType.Notice, 
+		Moudle = "Dev.Notice.UNotice", 		
+		}
+
+---------------------------------------------------
+----------------------Loading------------------------
+---------------------------------------------------
+_M.ULoading = {
+		WinType = WindowType.Loading, 
+		Moudle = "Dev.Common.ULoading"
+		}
+
+
+
+return _M

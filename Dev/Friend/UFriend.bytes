@@ -1,0 +1,412 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local UPlayerMenuPop = JRequire "Dev.Friend.UPlayerMenuPop"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local CHOSS_BTN_ALPHA = 0.4
+local DIS_CHOOSE_BTN_ALPHA = 0
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+function _M:BeforeDestroy( ... )
+	if self.MenuPopObj ~= nil then
+		self.MenuPopObj:Destroy()
+		self.MenuPopObj:delete()
+		self.MenuPopObj = nil
+	end
+end
+
+--关系变更刷新
+function _R.OnRelationUpdate(self, playerId, relation, state)
+	if relation == MFriend.FuncToRelation[self.ChooseFunc] then
+		_R.OnLookBack(self, false)
+	end	
+end
+
+function _R.OnRecvFriendAddNum( self )
+	if self.ChooseFunc == Define.SysId.Friend_Friend then
+		local num = MFriend.GetRecvFriendAddNum()
+		if num > 0 then
+			self.RecvFriendRed.Activity = true
+			self.RecvFriendAddNum.Text = tostring(num)
+		else
+			self.RecvFriendRed.Activity = false
+		end
+	end
+end
+
+function _R.OnRefreshRecent( self )
+	if self.ChooseFunc == Define.SysId.Friend_Recent then
+		_R.OnLookBack(self, false)
+	end
+end
+
+function _R.OnRefreshRecentNoRead( self, playerId )
+	if self.ChooseFunc == Define.SysId.Friend_Recent then
+		_R.OnLookBack(self, false)
+	end
+end
+
+function _R.OnPrivateTalk( self, playerId )
+	if self.ChooseFunc == Define.SysId.Friend_Recent then
+		_R.OnLookBack(self, true)
+	end
+end
+
+function _P.SetPlayerInfo(self, playerMoudle, playerInfo, pressMenu)
+	playerMoudle:Get("bsx").SpriteName = MPlayer.HeadIconFromSex(playerInfo.headId,playerInfo.sex,true)
+	playerMoudle:Get("Name").Text = playerInfo.name
+	local companyCsv = Csv.Company[playerInfo.level]
+	playerMoudle:Get("zhiwei").Text = companyCsv.name
+	playerMoudle:Get("shili").Text = Csv.Text("Friend_9")
+	playerMoudle:Get("shiliNum").Text = tostring(playerInfo.power)
+	if playerInfo.commerceId > 0 then
+		playerMoudle:Get("shanghui").Text = Csv.Text("Friend_10")
+		playerMoudle:Get("shanghuiNum").Text = playerInfo.commerceName
+	else
+		playerMoudle:Get("shanghui").Text = Csv.Text("Friend_11")
+	end	
+	playerMoudle:Get("inline").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - playerInfo.leaveTime)
+	if pressMenu ~= nil and not GameSetting.IsiOSCommit then
+		local bg = playerMoudle:Get("bg")
+		bg:AddOnButton(function( ... )
+			if self.MenuPopObj ~= nil then
+				self.MenuPopObj:Destroy()
+				self.MenuPopObj:delete()
+				self.MenuPopObj = nil
+			end
+			self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, pressMenu, bg.RootCanvasPos + Vector2(100, -20), playerInfo.name)			
+		end)
+		playerMoudle.SelfRect:AddOnButton(function(obj, arg, data)
+			if self.MenuPopObj ~= nil then
+				self.MenuPopObj:Destroy()
+				self.MenuPopObj:delete()
+				self.MenuPopObj = nil
+			end
+			self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, pressMenu, playerMoudle.SelfRect.RootCanvasPos, playerInfo.name)	
+		end, nil, 0.96)
+	end
+
+	local csvVip = Csv.Vip[playerInfo.vip]
+	if csvVip ~= nil and csvVip.imgBord ~= nil then
+		playerMoudle:Get("VipBbx").SpriteName = csvVip.imgBord
+		playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
+	else
+		playerMoudle:Get("VipBbx").Activity = false
+	end
+end
+
+_P.ViewUpdate =
+{
+	[Define.SysId.Friend_Friend] = function (self, needSend)
+		local relation = MFriend.FuncToRelation[Define.SysId.Friend_Friend]
+		if needSend then CFriend.ReqLook(relation) end
+
+		self.TopBtns.Activity = true
+		_R.OnRecvFriendAddNum(self)
+		local playerNum = MFriend.GetRelationCurNum(relation)
+		self.FriendNum.Text = Csv.Text("Friend_3", {cur = playerNum, max = MFriend.GetRelationMaxNum(relation)})
+		self.FriendTips.Text = ""
+		if playerNum > 0 then
+			self.NoneText.Activity = false
+			self.NoneText.RaycastTarget = false
+			local players = MFriend.GetRelationPlayers(relation, true)
+			if players ~= nil and #players > 0 then
+				for _,playerInfo in pairs(players) do
+					local oneMoudle = self:CreateMoudle(self.ViewContent, "M_Friend_Item")
+					_P.SetPlayerInfo(self, oneMoudle, playerInfo, {
+						MFriend.PlayerMenu.Look,
+						MFriend.PlayerMenu.Talk,
+						MFriend.PlayerMenu.Copy,
+						MFriend.PlayerMenu.DelFriend,
+						MFriend.PlayerMenu.AddBlacklist
+					})
+				end
+			end
+		else
+			self.NoneText.Activity = true
+			self.NoneText.RaycastTarget = true
+			self.NoneText.Text = Csv.Text("Friend_7")
+			self.NoneLine.Activity = true
+			self.NoneText:AddOnButton(function( ... )
+				_P.OnPressToAddFriendReqBtn(self)
+			end)
+		end
+	end,
+	[Define.SysId.Friend_Blacklist] = function (self, needSend)
+		self.TopBtns.Activity = false
+		local relation = MFriend.FuncToRelation[Define.SysId.Friend_Blacklist]
+		if needSend then CFriend.ReqLook(relation) end
+
+		local playerNum = MFriend.GetRelationCurNum(relation)
+		self.FriendNum.Text = Csv.Text("Friend_5", {cur = playerNum, max = MFriend.GetRelationMaxNum(relation)})
+		self.FriendTips.Text = Csv.Text('Friend_50')
+		if playerNum > 0 then
+			self.NoneText.Activity = false
+			self.NoneText.RaycastTarget = false
+			local players = MFriend.GetRelationPlayers(relation, true)
+			if players ~= nil and #players > 0 then
+				for _,playerInfo in pairs(players) do
+					local oneMoudle = self:CreateMoudle(self.ViewContent, "M_Friend_Item")
+					_P.SetPlayerInfo(self, oneMoudle, playerInfo, {
+						MFriend.PlayerMenu.Look,
+						MFriend.PlayerMenu.Talk,
+						MFriend.PlayerMenu.Copy,
+						MFriend.PlayerMenu.DelBlacklist
+					})
+				end
+			end
+		else
+			self.NoneText.Activity = true
+			self.NoneText.RaycastTarget = false
+			self.NoneText.Text = Csv.Text("Friend_8")
+			self.NoneLine.Activity = false
+		end
+	end,
+	[Define.SysId.Friend_Qinjia] = function (self, needSend)
+		self.TopBtns.Activity = false
+		local relation = MFriend.FuncToRelation[Define.SysId.Friend_Qinjia]
+		if needSend then CFriend.ReqLook(relation) end
+
+		local playerNum = MFriend.GetRelationCurNum(relation)
+		self.FriendNum.Text = Csv.Text("Friend_4", {cur = playerNum, max = MFriend.GetRelationMaxNum(relation)})
+		self.FriendTips.Text = Csv.Text("Friend_49", {num = Csv.Const(Define.Const.FriendQinJia)})
+		if playerNum > 0 then
+			self.NoneText.Activity = false
+			self.NoneText.RaycastTarget = false
+			local players = MFriend.GetRelationPlayers(relation, true)
+			if players ~= nil and #players > 0 then
+				for _,playerInfo in pairs(players) do
+					local oneMoudle = self:CreateMoudle(self.ViewContent, "M_Friend_Item")
+					_P.SetPlayerInfo(self, oneMoudle, playerInfo, {
+						MFriend.PlayerMenu.Look,
+						MFriend.PlayerMenu.Talk,
+						MFriend.PlayerMenu.Copy,
+						MFriend.PlayerMenu.AddFriend,
+						MFriend.PlayerMenu.DelFriend,
+						MFriend.PlayerMenu.AddBlacklist,
+						MFriend.PlayerMenu.DelBlacklist,
+					})
+					oneMoudle:Get("lianYinNumIcon").Activity = true
+					oneMoudle:Get("lianYinNumText").Text = tostring(playerInfo.marryNum)
+				end
+			end
+		else
+			self.NoneText.Activity = true
+			self.NoneText.RaycastTarget = true
+			self.NoneText.Text = Csv.Text("Friend_14")
+			self.NoneLine.Activity = true
+			self.NoneText:AddOnButton(function( ... )
+				WindowOpen.Open(Define.SysId.Girl_Marry)
+			end)
+		end
+	end,
+	[Define.SysId.Friend_Recent] = function (self, needSend)
+		self.TopBtns.Activity = false
+		local relation = MFriend.FuncToRelation[Define.SysId.Friend_Recent]
+		local playerIds = MFriend.GetRelationIds(relation)
+		local playerNum = #playerIds
+		self.FriendNum.Text = Csv.Text("Friend_6", {cur = playerNum, max = MFriend.GetRelationMaxNum(relation)})
+		self.FriendTips.Text = ""
+
+		if playerNum > 0 then
+			if needSend then CFriend.ReqFindIds(playerIds) end
+
+			self.NoneText.Activity = false
+			self.NoneText.RaycastTarget = false
+			local players = MFriend.GetRelationPlayers(relation, false)
+			if players ~= nil and #players > 0 then
+				table.sort(players, function(a, b)
+					local leftTalkTime = MFriend.GetRecentTalkTime(a.id)
+					local rightTalkTime = MFriend.GetRecentTalkTime(b.id)
+					if leftTalkTime == rightTalkTime then
+						return MFriend.PlayerSort(a, b)
+					end
+					return leftTalkTime > rightTalkTime
+				end)
+
+				for _,playerInfo in pairs(players) do
+					local oneMoudle = self:CreateMoudle(self.ViewContent, "M_Friend_Item")
+					oneMoudle.SelfRect:AddOnButton(function( ... )
+						local isBlackList = MFriend.CheckRelation(playerInfo.id, MFriend.RelationType.BlackList)
+						if isBlackList then
+							CCommon.ShowError(Csv.Text("Friend_41"))
+						else
+							WindowOpen.Open(Define.SysId.Talk_Private, playerInfo.id, playerInfo.name)
+						end	
+					end)
+					_P.SetPlayerInfo(self, oneMoudle, playerInfo)
+					if not GameSetting.IsiOSCommit then
+						local bg = oneMoudle:Get("bg")
+						bg:AddOnButton(function( ... )
+							if self.MenuPopObj ~= nil then
+								self.MenuPopObj:Destroy()
+								self.MenuPopObj:delete()
+								self.MenuPopObj = nil
+							end
+							self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, {
+								MFriend.PlayerMenu.Look,
+								MFriend.PlayerMenu.Talk,
+								MFriend.PlayerMenu.Copy,
+								MFriend.PlayerMenu.AddFriend,
+								MFriend.PlayerMenu.DelFriend,
+								MFriend.PlayerMenu.AddBlacklist,
+								MFriend.PlayerMenu.DelBlacklist,
+							}, bg.RootCanvasPos + Vector2(100, -20), playerInfo.name)			
+						end)
+					end
+					oneMoudle.SelfRect:AddOnButton(function(obj, arg, data)
+						local isBlackList = MFriend.CheckRelation(playerInfo.id, MFriend.RelationType.BlackList)
+						if isBlackList then
+							CCommon.ShowError(Csv.Text("Friend_41"))
+						else
+							WindowOpen.Open(Define.SysId.Talk_Private, playerInfo.id, playerInfo.name)
+						end	
+					end, nil, 0.96)
+					local talkNum = MFriend.GetRecentTalkNum(playerInfo.id)
+					if talkNum > 0 then
+						if talkNum > 99 then
+							talkNum = 99
+						end
+						oneMoudle:Get("xinXiNumRed").Activity = true
+						oneMoudle:Get("xinXiNumText").Text = tostring(talkNum)
+					end
+				end
+			end
+		else
+			self.NoneText.Activity = true
+			self.NoneText.RaycastTarget = false
+			self.NoneText.Text = Csv.Text("Friend_13")
+			self.NoneLine.Activity = false
+		end
+	end,
+}
+
+--查看列表刷新
+function _R.OnLookBack(self, needSend)
+	self.ViewContent:DestroyChildren()
+	local func = _P.ViewUpdate[self.ChooseFunc]
+	if func ~= nil then
+		func(self, needSend)
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.OnPressTab(self, funcId)
+	if self.ChooseFunc ~= funcId then
+		for k,v in pairs(self.Btns) do
+			if k == funcId then
+				v.Alpha = CHOSS_BTN_ALPHA
+			else
+				v.Alpha = DIS_CHOOSE_BTN_ALPHA
+			end
+		end
+		self.ChooseFunc = funcId
+		_R.OnLookBack(self, true)
+	end		
+end
+--好友请求
+function _P.OnPressRecvAddFriendReqBtn(self)
+	WindowMgr.Create("UFriendAddList")
+end
+--添加好友
+function _P.OnPressToAddFriendReqBtn(self)
+	WindowMgr.Create("UFriendRecommend")
+end
+
+--界面构建
+function _M:OnCreate(chooseFunc)
+	self.ChooseFunc = nil
+	local moudle = self:CreateMoudle(self._RootNode, "M_Friend_Main")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local helpBtn = moudle:Get("helpBtn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	self.PlayPopCanvas = moudle:Get("PlayPopCanvas")
+	self.FriendNum = moudle:Get("FriendNum")
+	self.FriendTips = moudle:Get("Tips")
+	self.TopBtns = moudle:Get("TopBtns")
+	self.RecvFriendRed = moudle:Get("red1")
+	self.RecvFriendAddNum = moudle:Get("RedNum1")
+	self.ViewContent = moudle:Get("Content")
+	self.NoneText = moudle:Get("None")
+	self.NoneLine = moudle:Get("Line")
+	moudle:Get("Btn1"):AddOnButton(function()
+		_P.OnPressRecvAddFriendReqBtn(self)
+	end)
+	moudle:Get("Btn2"):AddOnButton(function()
+		_P.OnPressToAddFriendReqBtn(self)
+	end)
+	moudle:Get("BtnText1").Text = Csv.Text("Friend_1")
+	moudle:Get("BtnText2").Text = Csv.Text("Friend_2")
+	self.Btns = {}
+	local funcCsv = Csv.Func[self._SysId]
+	moudle:Get("C_Text").Text = funcCsv.name
+	local funcs = MMain.GetOpenedFuncs(self._SysId, true)
+	local count = #funcs
+	if count > 0 then
+		local isHave = false
+		for index,v in pairs(funcs) do
+			local funcId = v.id
+			if funcId == chooseFunc then
+				isHave = true
+			end
+			local btn = moudle:Get("sheet_" .. index)
+			self.Btns[funcId] = btn
+			moudle:Get("C_text_" .. index).Text = v.name
+			btn:AddOnButton(function()
+				_P.OnPressTab(self, funcId)
+			end)
+			--注册小红点
+			self:RegistRedpoint(moudle:Get("redPoint_" .. index), funcId)
+		end
+		if not isHave and not MFriend.CheckPrivateTalkNoRead() then
+			chooseFunc = funcs[1].id
+		else
+			chooseFunc = funcs[4].id
+		end
+		_P.OnPressTab(self, chooseFunc)
+	end
+	if count < 4 then
+		for i=count + 1,4 do
+			moudle:Get("sheet_" .. i).Activity = false
+		end
+	end
+end
+
+return _M

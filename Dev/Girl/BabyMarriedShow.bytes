@@ -1,0 +1,79 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MERRYACTORID = 10023
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+		WindowMgr.Call("UGirlMarried","OpenToggle",2)
+	end)
+	SoundMgr.Play(10009)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Success")
+
+	local ownIcon = moudle:Get("OwnBSX")
+	local otherIcon = moudle:Get("OtherBSX")
+
+	local ownName = moudle:Get("ownName")
+	local OwnParentsName = moudle:Get("OwnParentsName")
+	local OwnParentsText = moudle:Get("OwnParentsText")
+	local OwnAttribute = moudle:Get("OwnAttribute")
+	local OwnAttributeText = moudle:Get("OwnAttributeText")
+	local OtherAttribute = moudle:Get("OtherAttribute")
+	local OtherAttributeText = moudle:Get("OtherAttributeText")
+	local OtherParentsName = moudle:Get("OtherParentsName")
+	local OtherParentsText = moudle:Get("OtherParentsText")
+	local otherName = moudle:Get("otherName")
+	
+	local data = MGirl.GetMarriedData(id)
+
+	ownIcon.SpriteName = MGirl.GetBabyIcon(data.babyGender,data.babyDegree)
+	otherIcon.SpriteName = MGirl.GetBabyIcon(data.mateGender,data.mateDegree)
+
+	local ownSex = MPlayer.GetSex()
+	if ownSex == 1 then
+		OwnParentsName.Text = Csv.Text("Girl_married_motherShow")--"母  亲:"
+	else
+		OwnParentsName.Text = Csv.Text("Girl_married_fatherShow")--"父  亲:"
+	end
+
+	if data.mateOwnerGender == 1 then
+		OtherParentsName.Text = Csv.Text("Girl_married_motherShow")--"母  亲:"
+	else
+		OtherParentsName.Text = Csv.Text("Girl_married_fatherShow")--"父  亲:"
+	end
+	OwnAttribute.Text = Csv.Text("Girl_married_allAttrShow")--"总属性："
+	OtherAttribute.Text = Csv.Text("Girl_married_allAttrShow")--"总属性："
+
+	ownName.Text = data.babyName
+	OwnParentsText.Text = MPlayer.GetName()
+	OwnAttributeText.Text =  data.babySumAttr
+
+	otherName.Text = data.mateName
+	OtherParentsText.Text = data.mateOwnerName
+	OtherAttributeText.Text =  data.mateSumAttr
+
+	-- 播放结婚特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), MERRYACTORID)
+end
+
+
+return _M

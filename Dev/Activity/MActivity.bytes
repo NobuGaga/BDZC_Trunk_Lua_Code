@@ -1,0 +1,234 @@
+local MMain = JRequire "Dev.Main.MMain"
+local _M = {}
+
+_M.ActivityState = 
+{
+	Waiting = 1,	--未开始
+	Doing = 2,		--进行中
+	Finish = 3,		--已结束（显示界面）
+	Close = 4,		--关闭（不显示界面）
+}
+
+_M.RewardGetState = 
+{
+	CanNotGet = 2,	--不可领取
+	CanGet = 0,		--可领取
+	Geted = 1,		--已领取
+	Buying = 3,		--订单处理中
+}
+
+_M.CharityGetState = 
+{
+	CanGet = 1, --可领取
+	Geted = 2,	--已领取
+	CanNotGet = 3,--不能领取
+}
+
+_M.AdvantureTypeEnum = {
+	Person = 1,
+	Gang = 2,
+}
+
+_M.XinGuanTypeEnum = {
+	Gang = 1,
+	Personal = 2
+}
+
+_M.AdvReqTypeEnum = {
+	Gongguan = 1, --公关
+	Xingzheng = 2,--行政
+	Tech = 3,	  --技术
+	Sell = 4,	  --营销
+	Sex = 5,	  --性别
+	Nationality = 6,--国籍
+	Age = 7,		--年龄
+	YuanGong = 8,	--员工
+	Job = 9,		--职位
+}
+
+_M.AdvSexEnum = {
+	Man = 1, 	--	男性
+	Female = 2,	-- 女性
+}
+
+--全局配置表冲榜活动商会冲榜榜单类型
+_M.CommerceRank = {
+	[Csv.Const(67)] = true,
+	[Csv.Const(85)] = true,
+	[Csv.Const(86)] = true,
+	[Csv.Const(92)] = true,
+}
+
+_M.ActList = {}
+_M.ActTypeCached = {}
+_M.ActRankTypeToID = {}
+_M.ActRedpointCached = {}
+_M.ActRankQuestTime = {}
+_M.XinGuanStatus = {} 				-- 新官上任活动，每日有个时间段，标记每日是否在活动时间段内
+_M.IsUpdateTime1 = false 			-- 新官上任，倒计时为0，向后端请求数据标记
+_M.IsUpdateTime2 = false 			-- 新官上任，倒计时为0，向后端请求数据标记
+_M.ActIdForType = {}				-- 活动类型对应活动ID
+_M.LotteryMessage = {}				-- 抽奖消息
+_M.XinGuanRed = false
+_M.SevenDayTargetPageRedIndex = -1	-- 七日目标今日目标页签红点Index
+
+function _M.Clean()
+	_M.ActList = {}
+	_M.ActTypeCached = {}
+	_M.ActRankTypeToID = {}
+	_M.ActRedpointCached = {}	
+	_M.ActRankQuestTime = {}
+	_M.ActIdForType = {}
+	_M.IsUpdateTime1 = false
+	_M.IsUpdateTime2 = false	
+	_M.XinGuanStatus = {}
+	_M.LotteryMessage = {}
+	_M.XinGuanRed = false
+end
+
+function _M.ClearForType(actType)
+	local list = _M.ActTypeCached[actType]
+	if list ~= nil then
+		for k,v in pairs(list) do
+			_M.ActList[k] = nil
+			_M.ActRedpointCached[k] = nil
+		end
+		_M.ActTypeCached[actType] = nil
+	end
+end
+
+function _M.ClearForId(actId)
+	if _M.ActList ~= nil and _M.ActList[actId] ~= nil then
+		local actType = _M.ActList[actId].actType
+		_M.ActList[actId] = nil
+		_M.ActRedpointCached[actId] = nil
+		if _M.ActTypeCached[actType] ~= nil then
+			_M.ActTypeCached[actType][actId] = nil
+			if not _M.IsHaveActForType(actType) then
+				_M.ActTypeCached[actType] = nil
+			end
+		end
+	end
+end
+
+function _M.ClearAll()
+	_M.ActList = {}
+	_M.ActTypeCached = {}
+	_M.ActRankTypeToID = {}
+end
+
+function _M.UpdateAct(id, type, info)
+	_M.ActList[id] = info
+	local tmp = _M.ActTypeCached[type]
+	if tmp ~= nil then
+		tmp[id] = info
+	else
+		tmp = {[id] = info}
+		_M.ActTypeCached[type] = tmp
+	end
+	_M.ActIdForType[type] = id
+
+	if info and info.selfRank and info.rankType then
+		_M.ActRankTypeToID[info.rankType] = id
+	end
+end
+
+function _M.ActRedpoint(id, index, needRedpoint)
+	local tmp = _M.ActRedpointCached[id]
+	if tmp == nil then
+		tmp = {[index] = needRedpoint}
+		_M.ActRedpointCached[id] = tmp
+		return true
+	elseif tmp[index] ~= needRedpoint then
+		tmp[index] = needRedpoint
+		return true
+	end
+	return false
+end
+
+--根据活动ID或活动索引项获取活动红点情况
+function _M.IsHaveRedpointForAct(actId, index)
+	if actId ~= nil then
+		local actRedpoint = _M.ActRedpointCached[actId]
+		if actRedpoint ~= nil then	
+			if index ~= nil then
+				return actRedpoint[index]
+			end
+			for _, isCanGet in pairs(actRedpoint) do
+				if isCanGet then
+					return true
+				end
+			end
+		end
+		return false
+	end
+	return false
+end
+
+function _M.GetListFromType(actType)
+	return _M.ActTypeCached[actType]
+end
+
+function _M.GetFromId(actId)
+	return _M.ActList[actId]
+end
+
+function _M.IsHaveActForType(actType)
+	return _M.ActTypeCached[actType] ~= nil and next(_M.ActTypeCached[actType]) ~= nil
+end
+
+function _M.SetLastRankTime(id, time)
+	if _M.ActRankQuestTime ~= nil then
+		_M.ActRankQuestTime[id] = time
+	end
+end
+
+function _M.GetLastRankTime(id)
+	if _M.ActRankQuestTime ~= nil and _M.ActRankQuestTime[id] ~= nil then
+		return _M.ActRankQuestTime[id]
+	end
+	return nil
+end
+
+--获取充值奖励切页状态
+function _M.GetRechargeOpenFunc()
+	local funcs = {}
+	local csvLines = Csv.FuncMap[Define.SysId.RechargeReward]
+	if csvLines ~= nil and #csvLines > 0 then
+		for k,v in pairs(csvLines) do
+			if MMain.FuncIsOpen(v.id) then
+				if (v.id == Define.SysId.RechargeReward_Day and _M.GetListFromType(Define.ActivityType.RechargeReward_Day) ~= nil) or
+					(v.id == Define.SysId.RechargeReward_Total and _M.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil) or
+					 (v.id == Define.SysId.RechargeReward_TotalDay and _M.GetListFromType(Define.ActivityType.RechargeReward_TotalDay) ~= nil) or
+					  (v.id == Define.SysId.RechargeReward_DailyGift and _M.GetListFromType(Define.ActivityType.RechargeReward_DailyGift) ~= nil) then
+						table.insert(funcs, v)
+				end
+			end
+		end
+	end
+	if isNeedSort and #funcs > 0 then
+		table.sort( funcs, function (a, b)
+			return a.sort < b.sort
+		end )
+	end
+	
+	return funcs
+end
+
+--更新带有榜单类型的活动自己排名数据
+function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
+	if _M.ActRankTypeToID and _M.ActRankTypeToID[rankType] and _M.ActList and 
+									 _M.ActList[_M.ActRankTypeToID[rankType]] then
+		local actData = _M.ActList[_M.ActRankTypeToID[rankType]]
+		if not _M.CommerceRank[rankType] then
+			if actData.selfRank and selfRank then
+				actData.selfRank = selfRank
+			end
+			if actData.rankPro and selfValue then
+				actData.rankPro = selfValue
+			end
+		end
+	end
+end
+
+return _M

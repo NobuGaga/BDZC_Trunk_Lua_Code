@@ -1,0 +1,67 @@
+-- 参加宴会成功后，答谢界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local DAOLUNID = 4 -- 捣乱者类型id
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data, playerName)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Ths")
+	if data == nil or module == nil then return end
+
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local isDaoLuan = (data.joinType == DAOLUNID)
+	module:Get("dialogueText").Text = ((isDaoLuan and Csv.Text("club_thanks_daolun")) or Csv.Text("club_thanks_desc"))
+	module:Get("name").Text  = playerName
+
+	-- 先播放活动分数特效
+	CCommon.ShowFlyText(module:Get("effect"), Csv.Text("club_rank_score") .. ((data.gainScore > 0 and '+') or '') .. data.gainScore, 0.3)
+	SoundMgr.Play(11000)
+	-- 捣乱者参加不显示宝箱
+	if isDaoLuan then
+		module:Get("baoxiangUnopen").Activity = false
+		return
+	end
+
+	-- 开启宝箱
+	module.SelfRect:AddOnTime(function()
+		module:Get("baoxiangUnopen").Activity = false
+		self.boxImg = module:Get("baoxiangopen")
+		self.boxImg.Activity = true
+
+		-- 自动播放奖励特效
+		_P.PlayGetAnim(self, data.gainItems)
+	end, nil, 0.5)
+end
+
+
+function _P.PlayGetAnim(self, gainList)
+	if gainList == nil then return end
+
+	local delayCount = 0
+	for k,value in pairs(gainList) do
+		CCommon.ShowFlyItem(self.boxImg, value.key, value.value, delayCount)
+		delayCount = delayCount + 0.5
+	end
+end
+
+return _M

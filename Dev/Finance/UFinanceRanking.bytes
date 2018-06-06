@@ -1,0 +1,278 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local CRank = JRequire "Dev.Rank.CRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+
+local itemWidth = 630
+local itemHeight = 60
+local space = 4
+local pageNum = 11
+local pageHeight = 722
+
+local TOGGLE_ID = {SCORE = 1,KILLER = 2}
+local TOGGLE_SHEET={{id = TOGGLE_ID.SCORE,name = Csv.Text("finance_scorelist")},
+		{id = TOGGLE_ID.KILLER,name = Csv.Text("finance_killerlist")}}
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:delete()
+		self.mTabHandle = nil
+	end
+	if self.mRankVertical ~= nil then
+		self.mRankVertical:delete()
+		self.mRankVertical = nil
+	end
+	if self.mScrollVertical ~= nil then
+		self.mScrollVertical:delete()
+		self.mScrollVertical = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnGetScoreRank(self,data)
+	_P.ShowScoreRank(self,data)
+end
+
+function _R.OnGetSkillerRank(self,data)
+	_P.ShowSkillerRank(self,data)
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_FractionRanking")
+	self.Moudle = moudle
+
+	--返回按钮
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local content = moudle:Get("content")
+	self.mContent = content
+
+	--标题及可用积分
+	local title = moudle:Get("C_Text")
+	local rankTitle = moudle:Get("ranking")
+	local nameTitle = moudle:Get("name")
+	local scoreTitle = moudle:Get("Fraction")
+	self.mRankTitle = rankTitle
+	self.mNameTitle = nameTitle
+	self.mScoreTitle = scoreTitle
+
+	title.Text=Csv.Text("finance_list")
+	nameTitle.Text=Csv.Text("finance_playername")
+
+	--自己信息
+	local OwnName = moudle:Get("OwnName")
+	local OwnRanking = moudle:Get("OwnRanking")
+	local OwnFraction = moudle:Get("OwnFraction")
+	local NameText = moudle:Get("NameText")
+	local RankingText = moudle:Get("RankingText")
+	local FractionText = moudle:Get("FractionText")
+
+	self.mOwnName = OwnName
+	self.mOwnRanking = OwnRanking
+	self.OwnFraction = OwnFraction
+	self.mNameText = NameText
+	self.mRankingText = RankingText
+	self.mFractionText = FractionText
+
+	self.mKillerText = moudle:Get("killerName")
+
+	self.mOwnInfo = moudle:Get("OwnInfo")
+	self.mKillerInfo = moudle:Get("KillerInfo")
+
+	--
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	
+	local funcs = TOGGLE_SHEET
+	local count = #funcs
+	if count > 0 then
+		local lastChoose = chooseFuncId
+		local isHave = false
+
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("sheet_"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+			--注册小红点
+			--self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end	
+	
+	self.mToggle = Toggle
+end
+
+function _P.ShowOwnScoreRank(self,data)
+	self.mOwnName.Text = Csv.Text("finance_OwnName")
+	self.mOwnRanking.Text=Csv.Text("finance_OwnRanking")
+	self.OwnFraction.Text=Csv.Text("finance_OwnFraction")
+	self.mNameText.Text = MPlayer.GetName()
+	self.mRankingText.Text = data.selfrank
+	self.mFractionText.Text = data.selfvalue
+
+	self.mOwnInfo.Activity = true
+	self.mKillerInfo.Activity = false
+end
+
+function _P.ShowKillerRank(self,data)
+	if data.list ~= nil and #data.list > 0 then
+		self.mKillerText.Text = Csv.Text("finance_lastKill",{name = data.list[1].name})--"上次击杀者："..data.list[1].name
+	end
+	
+	self.mOwnInfo.Activity = false
+	self.mKillerInfo.Activity = true
+end
+
+function _P.OnChoose(self,funcId)
+	local content = self.mContent
+	content:DestroyChildren()
+
+	if funcId == TOGGLE_ID.SCORE then
+		CRank.GetRankList(Define.RankType.FinanceScore,true)
+	elseif funcId == TOGGLE_ID.KILLER then
+		CFinance.ReqGetKillRank()
+	end
+end
+
+function _P.ShowScoreRank(self,data)
+	self.mRankTitle.Text=Csv.Text("finance_scorelistnum")
+	self.mNameTitle.Text=Csv.Text("finance_playername")
+	self.mScoreTitle.Text=Csv.Text("finance_scorenum")
+
+	local content = self.mContent
+	if data ~= nil then
+		local list = _P.GetSortList(data.ranklist)
+		self.mList = list
+		local scroll = self.Moudle:Get("scrollView")
+		if self.mRankVertical ~= nil then
+			self.mRankVertical:delete()
+			self.mRankVertical = nil
+		end
+		local scrollController = RankVertical.new(scroll,content,"M_FB_RankItem",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+		scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+		self.mRankVertical = scrollController
+	end
+
+	_P.ShowOwnScoreRank(self,data)
+end
+
+function _P.ScrollCallBack(self,index,data,moudle)
+	if moudle ~= nil then
+		local bg = moudle.SelfRect
+
+		local name = moudle:Get("name")
+		local value = moudle:Get("value")
+
+		if index > 3 then
+			local rank = moudle:Get("rank")
+			rank.Text = index
+		end
+
+		name.Text = data.name
+		value.Text = data.value
+		bg.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _P.GetSortList(list)
+	local sortList = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			table.insert(sortList,v)
+		end
+	end
+	return sortList
+end
+
+function _P.GetSortListKill(list)
+	local sortList = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			table.insert(sortList,v)
+		end
+	end
+	return sortList
+end
+
+function _P.ShowSkillerRank(self,data)
+	self.mRankTitle.Text=Csv.Text("finance_killerlistnum")
+	self.mNameTitle.Text=Csv.Text("finance_playername")
+	self.mScoreTitle.Text=Csv.Text("finance_killtime")
+
+	local content = self.mContent
+	if data ~= nil then
+		local list = _P.GetSortListKill(data.list)
+		self.mList = list
+		local scroll = self.Moudle:Get("scrollView")
+		if self.mScrollVertical ~= nil then
+			self.mScrollVertical:delete()
+			self.mScrollVertical = nil
+		end
+		local scrollController = ScrollVertical.new(scroll,content,"M_FB_RankItem",function(index,value,moudle)_P.ScrollCallBackKill(self,index,value,moudle)end)
+		scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+		self.mScrollVertical = scrollController
+	end
+	_P.ShowKillerRank(self,data)
+end
+
+function _P.ScrollCallBackKill(self,index,data,moudle)
+	if moudle ~= nil then
+		local bg = moudle.SelfRect
+		local rank = moudle:Get("rank")
+		local name = moudle:Get("name")
+		local value = moudle:Get("value")
+
+		rank.Text = index
+		name.Text = data.name
+		value.Text = LuaUtil.TransToYearMonthDayHMS(data.time)--data.time
+
+		bg.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+return _M

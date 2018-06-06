@@ -1,0 +1,68 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local babyActorId = 10014
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	SoundMgr.Play(10008)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab3_Graduation")
+
+	local Education = moudle:Get("Education")
+	local nameText = moudle:Get("Name")
+	local parent = moudle:Get("parent")
+	local parentText = moudle:Get("ParentText")
+	local attribute = moudle:Get("attribute")
+	local attributeText = moudle:Get("AttributeText")
+	local courage = moudle:Get("Courage")
+	local courageText = moudle:Get("CourageText")
+	local knowledge = moudle:Get("knowledge")
+	local knowledgeText = moudle:Get("knowledgeText")
+	local power = moudle:Get("Power")
+	local powerText = moudle:Get("PowerText")
+	local charm = moudle:Get("charm")
+	local charmText = moudle:Get("charmText")
+	local babyIcon = moudle:Get("BSX")
+
+	parent.Text = Csv.Text("Girl_baby_parent")--"母亲"
+	attribute.Text = Csv.Text("Girl_baby_gradallAttribute")--"总属性"
+	courage.Text = Csv.Text("Girl_baby_gradtype1")--"胆识"
+	knowledge.Text = Csv.Text("Girl_baby_gradtype2")--"学识"
+	power.Text = Csv.Text("Girl_baby_gradtype3")--"魄力"
+	charm.Text = Csv.Text("Girl_baby_gradtype4")--"魅力"
+
+	babyIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	babyIcon:SetNativeSize()
+	Education.Text = MGirl.GetEducationName(data.degree)
+	nameText.Text = data.name
+	parentText.Text = Csv.Girl[data.girlid].name
+	attributeText.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	courageText.Text = data.attribute.Wuli
+	knowledgeText.Text = data.attribute.Zhili
+	powerText.Text = data.attribute.Zhengzhi
+	charmText.Text = data.attribute.Meili
+
+	-- 宝宝毕业特效
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), babyActorId)
+end
+
+return _M

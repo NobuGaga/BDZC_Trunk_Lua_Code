@@ -1,0 +1,196 @@
+-- 积分兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local NUM_TWEEN = "T_Club_NumSacle"
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(actId, stageId)
+	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Change")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	-- local data = MSiege.AllStageData[stageId]
+	-- if data == nil then return end
+	-- self.mData = data
+	self.mData = {
+		point = 220,
+		itemList = {{index = 1, goodid = 34049, buyCount = 10},{index = 2, goodid = 34050, buyCount = 2},
+		{index = 3, goodid = 34051, buyCount = 3},{index = 4, goodid = 34052, buyCount = 4}}
+	}
+
+	module:Get("C_Text_0").Text = Csv.Text("siege_exchange_title")
+	module:Get("IntegralText").Text = Csv.Text("siege_exchange_point", {num = self.mData.point})
+
+	-- local typeList = MActivity.GetListFromType(27)
+	-- local activityData = typeList[actId]
+	-- local isShowTime = activityData.endTime > HeartBeat.ServSecond()
+	local isShowTime = 1527436799 <= HeartBeat.ServSecond()
+	local siegeExchangeConf = Csv.SiegeExchange[actId * 100 + stageId]
+	self.siegeExchangeConf = siegeExchangeConf
+	if isShowTime then
+		local endTime = 1527436799 + siegeExchangeConf.getRewardTime
+		_P.OnStartTimer(self, endTime)
+	end
+
+	_P.OnCreateList(self)
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self, endTime)
+	local curTime = endTime - HeartBeat.ServSecond()
+	self.mModule:Get("TimeOutText").Text = Csv.Text("siege_exchange_close", {time = LuaUtil.GetTimeHMS((curTime < 0 and 0) or curTime)})
+	self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
+		_P.OnUpdateTime(self, endTime)
+	end, nil, 1)
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self, endTime)
+	local time = endTime - HeartBeat.ServSecond()
+	if time > 0 then
+		_P.OnSetItemTime(self, endTime)
+	else
+		_P.OnClearTimer(self)
+	end
+end
+
+
+function _P.OnSetItemTime(self, countTime)
+	local time = countTime - HeartBeat.ServSecond()
+	local downTimeText = self.mModule:Get("TimeOutText")
+	if time <= 0 then
+		downTimeText.Text = Csv.Text("siege_exchange_close", {time = LuaUtil.GetTimeHMS(0)})
+	else
+		downTimeText.Text = Csv.Text("siege_exchange_close", {time = LuaUtil.GetTimeHMS(time)})
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+function _P.OnCreateList(self)
+	local listData = self.mData.itemList
+	if listData == nil then return end
+
+	local itemGrid = self.mModule:Get("Content")
+	self.itemModules = {}
+	for id, value in pairs(listData) do
+		self.itemModules[id] = _P.CreateExchangeItem(self, itemGrid, "M_Wghej_Change_Item", value)
+	end
+end
+
+
+function _P.CreateExchangeItem(self, itemGrid, itemName, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if itemModule == nil or data == nil then return end
+	local itemData = {}
+	
+	local iconBox = itemModule:Get("IconBox")
+	local iconSp = itemModule:Get("Head")
+	iconSp:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		
+		if data.goodid ~= nil then
+			WindowMgr.Create("UBagDetailPop", data.goodid)
+		end
+	end, nil, 0.95)
+	local iconName = itemModule:Get("NameText")
+	local spendText = itemModule:Get("Integral")
+	local canExchange = itemModule:Get("Num")
+	local exchangeText = itemModule:Get("C_text")
+
+	local itemConf = Csv.Item[data.goodid]
+	if itemConf ~= nil then
+		iconBox.SpriteName = itemConf.colorIcon
+		iconSp.SpriteName = itemConf.icon
+		iconName.Text = itemConf.name
+	end
+
+	local costNum = self.siegeExchangeConf.needPoint[data.index]
+	local hasNum = self.siegeExchangeConf.limitCount[data.index] - data.buyCount
+	spendText.Text = Csv.Text("finance_needJifen") .. costNum
+	canExchange.Text = Csv.Text("finance_canExchangeCount") .. hasNum
+	exchangeText.Text = Csv.Text("siege_exchange_btn")
+
+	local exchangeBtn = itemModule:Get("Btn")
+	exchangeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		--兑换
+		if data.buyCount > 0 then
+			if costNum <= self.mData.point then
+				CSiege.BuyShopItemReq(self.stageId, data.index, 1)
+				-- _R.OnExchangeCallBack(self, {index = 2, goodid = 34050, buyCount = 3, costpoint = 110, point = 110})
+			else
+				CCommon.ShowError(Csv.Text("finance_noJifen"))
+			end
+		else
+			CCommon.ShowError(Csv.Text("finance_noExchangeCount"))
+		end
+	end, nil, 0.9)
+	exchangeBtn.IsGray = hasNum <= 0
+	exchangeBtn.RaycastTarget = hasNum > 0
+
+	itemData.module = itemModule
+	return itemData
+end
+
+
+function _R.OnExchangeCallBack(self, data)
+	local updateItem = self.itemModules[data.index]
+	local itemModule = updateItem.module
+	if updateItem == nil or itemModule == nil then return end
+
+	local exchangeBtn = itemModule:Get("Btn")
+	local hasNum = self.siegeExchangeConf.limitCount[data.index] - data.buyCount
+	exchangeBtn.IsGray = hasNum <= 0
+	exchangeBtn.RaycastTarget = hasNum > 0
+	itemModule:Get("Num").Text = Csv.Text("finance_canExchangeCount") .. hasNum
+
+	-- 更新分数
+	local scoreText = self.mModule:Get("IntegralText")
+	self.mData.point = data.point
+	scoreText.Text = Csv.Text("siege_exchange_point", {num = data.point})
+
+	-- 获得奖励动画
+	local ScoreTween = scoreText.CachedTran:GetJTweener(NUM_TWEEN)
+	ScoreTween:Play()
+
+	local effectRect = itemModule:Get("ScoreEffect")
+	if effectRect == nil then return end
+
+	CCommon.ShowFlyItem(effectRect, data.goodid, 1)
+end
+
+
+return _M

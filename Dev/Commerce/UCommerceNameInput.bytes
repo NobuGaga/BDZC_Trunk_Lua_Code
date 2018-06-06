@@ -1,0 +1,60 @@
+--商会名字输入界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy()
+	if self.DoneCall ~= nil then
+		self.DoneCall(self.InputName)
+	end
+end
+
+--界面构建
+function _M:OnCreate(doneCall)
+	self.InputName = nil
+	self.DoneCall = doneCall
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main_Info_Name")
+	moudle:Get("C_backBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	moudle:Get("Title").Text = Csv.Text("commerce_create19")
+	local input = moudle:Get("input")
+	input.PlaceholderWidget.Text = Csv.Text("commerce_create7")
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+	moudle:Get("C_Btn_b"):AddOnButton(function ()
+		SoundMgr.Play(10001)
+		self.InputName = LuaUtil.Trim(input.Text)
+		self:Destroy()
+	end)	
+end
+
+return _M

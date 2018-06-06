@@ -1,0 +1,329 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local USign = JRequire"Dev.Welfare.USign"
+local ULockSys = JRequire"Dev.Welfare.ULockSys"
+local UWelfareGod = JRequire"Dev.Welfare.UWelfareGod"
+local UWelfareQQ = JRequire"Dev.Welfare.UWelfareQQ"
+local UWelfareWeixin = JRequire"Dev.Welfare.UWelfareWeixin"
+local UMonthCard = JRequire"Dev.Welfare.UMonthCard"
+local UMonthAndYear = JRequire"Dev.Welfare.UMonthAndYear"
+local UYearCard = JRequire"Dev.Welfare.UYearCard"
+local UFirstRecharge = JRequire"Dev.Welfare.UFirstRecharge"
+local UWelfareVip = JRequire"Dev.Welfare.UWelfareVip"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:delete()
+		self.mTabHandle = nil
+	end
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseUWelfare(self)
+	self:Destroy()
+end
+
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Welfare_Main")
+	self.Moudle = moudle
+	local node = moudle:Get("ValueRect")
+	self.mEffectRect = moudle:Get("effectRect")
+	self.PageNode = node
+
+	local closeBtn = moudle:Get("closeBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local titleText = moudle:Get("TitleText")
+	--local shadowTitle = moudle:Get("TitleTextShadow")
+	--self.mShadowTitle = shadowTitle
+	self.mTitle = titleText
+
+	local nextBtn = moudle:Get("NextBtn")
+	local beforeBtn = moudle:Get("BeforeBtn")
+
+	local scrollView = moudle:Get("downScroll")
+	local content = moudle:Get("content")
+	self.mContent = content
+	--local funcIDs = {}
+	local lastChoose = 0
+
+	local openFunc = MMain.GetOpenedFuncs(self._SysId, true)
+	local _funcs = {}
+	for k,v in pairs(openFunc)do
+		table.insert(_funcs,{id = v.id,icon = v.icon,sort = v.sort,name = v.name})
+	end
+	local funcs = _P.SortFunc(_funcs)
+	table.sort(funcs,function(a,b)
+		return a.sort < b.sort
+	end)
+
+	local currentVip = MPlayer.GetVip()
+	local count = #funcs
+	if count > 0 then
+		lastChoose = chooseFuncId
+		local isHave = false
+		local defaultColor = Color(247/255, 211/255, 169/255, 1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "HXbian_001_14", "HXbian_001_14",nil,defaultColor,beforeBtn,nextBtn,scrollView,content)
+	
+		for k,v in pairs(funcs) do
+			local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item", WindowType.UI, 10)
+			local sheetRect = sheetMoudle.SelfRect
+			sheetRect.Activity = true
+
+			local sheetNameText =  sheetMoudle:Get("nameText_1")
+			sheetNameText.Activity = true
+
+			tabHandle:Add(v.id, sheetRect, sheetNameText, v.name)
+		
+			if lastChoose == v.id then
+				isHave = true
+			end
+
+			--注册小红点
+			self:RegistRedpoint(sheetMoudle:Get("redPoint_1"), v.id)
+		end
+
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end	
+	
+end
+
+function _P.SortFunc(funcs)
+	local sortFunc = funcs
+	_M.isGetQQWelfare = false
+	_M.isGetWeixinWelfare = false
+
+	local vipLevel = MPlayer.GetVip()
+	for k,v in pairs(sortFunc)do
+		
+		local funcData = Csv.Func[v.id]
+		if v.id == Define.SysId.Welfare_QQ then
+			if MWelfare.isGetQQWelfare then
+				v.sort = funcData.sort *1000
+			end
+		elseif v.id == Define.SysId.Welfare_WeiXin then
+			if MWelfare.isGetWeixinWelfare then
+				v.sort = funcData.sort *1000
+			end
+		elseif v.id == Define.SysId.Welfare_First then
+			if MWelfare.firstRechargeState == 2 then
+				v.sort = funcData.sort *1000
+			end
+		--[[
+		elseif v.id == Define.SysId.Welfare_Vip1 then
+			if MWelfare.CheckVipReward(1) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip2 then
+			if MWelfare.CheckVipReward(2) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip3 then
+			if MWelfare.CheckVipReward(3) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip4 then
+			if MWelfare.CheckVipReward(4) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip5 then
+			if MWelfare.CheckVipReward(5) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip6 then
+			if MWelfare.CheckVipReward(6) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip7 then
+			if MWelfare.CheckVipReward(7) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip8 then
+			if MWelfare.CheckVipReward(8) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip9 then
+			if MWelfare.CheckVipReward(9) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip10 then
+			if MWelfare.CheckVipReward(10) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip11 then
+			if MWelfare.CheckVipReward(11) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip12 then
+			if MWelfare.CheckVipReward(12) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip13 then
+			if MWelfare.CheckVipReward(13) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip14 then
+			if MWelfare.CheckVipReward(14) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip15 then
+			if MWelfare.CheckVipReward(15) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip16 then
+			if MWelfare.CheckVipReward(16) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip17 then
+			if MWelfare.CheckVipReward(17) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip18 then
+			if MWelfare.CheckVipReward(18) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip19 then
+			if MWelfare.CheckVipReward(19) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip20 then
+			if MWelfare.CheckVipReward(20) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip21 then
+			if MWelfare.CheckVipReward(21) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip22 then
+			if MWelfare.CheckVipReward(22) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip23 then
+			if MWelfare.CheckVipReward(23) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip24 then
+			if MWelfare.CheckVipReward(24) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip25 then
+			if MWelfare.CheckVipReward(25) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip26 then
+			if MWelfare.CheckVipReward(26) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip27 then
+			if MWelfare.CheckVipReward(27) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip28 then
+			if MWelfare.CheckVipReward(28) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip29 then
+			if MWelfare.CheckVipReward(29) then
+				v.sort = funcData.sort *100
+			end
+		elseif v.id == Define.SysId.Welfare_Vip30 then
+			if MWelfare.CheckVipReward(30) then
+				v.sort = funcData.sort *100
+			end
+		--]]
+		else
+
+		end
+	end
+
+	return sortFunc
+end
+
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+
+	if funcId == Define.SysId.Welfare_Sign then
+		self.ChooseMoudle = USign.new(self.PageNode,self.mEffectRect)
+	elseif funcId == Define.SysId.Welfare_Func then
+		self.ChooseMoudle = ULockSys.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_Month then
+		self.ChooseMoudle = UMonthAndYear.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_Year then
+		self.ChooseMoudle = UMonthAndYear.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_God then
+		self.ChooseMoudle = UWelfareGod.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_First then
+		self.ChooseMoudle = UFirstRecharge.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_QQ then
+		self.ChooseMoudle = UWelfareQQ.new(self.PageNode)
+	elseif funcId == Define.SysId.Welfare_WeiXin then
+		self.ChooseMoudle = UWelfareWeixin.new(self.PageNode)
+	
+	else
+
+	end
+
+	MWelfare.selectToggle = funcId
+	self.mTitle.Text = Csv.Func[funcId].name
+end
+
+
+function _R.RepSign(self,data)
+	if MWelfare.selectToggle == Define.SysId.Welfare_Sign then
+		self.ChooseMoudle:RefreshSign(data)
+	end
+end
+
+function _R.RefreshMonthCard(self)
+	if MWelfare.selectToggle == Define.SysId.Welfare_Month then
+		self.ChooseMoudle:RefreshMonthState()
+	end
+end
+
+function _R.RefreshYearCard(self)
+	if MWelfare.selectToggle == Define.SysId.Welfare_Year then
+		self.ChooseMoudle:RefreshYearState()
+	end
+end
+
+function _R.RefreshGodDatas(self)
+	if MWelfare.selectToggle == Define.SysId.Welfare_God then
+		self.ChooseMoudle:RefreshGodDatas()
+	end
+end
+
+return _M

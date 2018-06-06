@@ -1,0 +1,186 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+function _R.OnUnlock(self, staffId)
+	if self.CachedList ~= nil then
+		local tmp = self.CachedList[staffId]
+		if tmp ~= nil then 
+			if MBattle.LockedStaffs[staffId] then
+				tmp.blueBtn.Activity = false
+				tmp.redBtn.Activity = true
+				if MBattle.StaffLifeNum[staffId] ~= nil and MBattle.StaffLifeNum[staffId] >= Csv.Const(Define.Const.BattleStaffLiftNum) then
+					tmp.redBtn.IsGray = true
+					tmp.redBtn.RaycastTarget = false
+					tmp.redBtnTextWidget.Text = Csv.Text("common_full")
+				else					
+					tmp.redBtn.IsGray = false
+					tmp.redBtn.RaycastTarget = true
+					tmp.redBtnTextWidget.Text = Csv.Text("battle_chooseBtn2")
+				end
+			else
+				tmp.blueBtn.Activity = true
+				tmp.redBtn.Activity = false
+			end
+		end
+	end	
+end
+
+function _R.RefreshAll(self)
+	if self.CachedList ~= nil then
+		for k,_ in pairs(self.CachedList) do
+			_R.OnUnlock(self, k)
+		end
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.Sort(a, b)
+	if MBattle.LockedStaffs[a.id] then
+		if MBattle.LockedStaffs[b.id] then
+			if MBattle.StaffLifeNum[a.id] ~= nil and MBattle.StaffLifeNum[a.id] >= Csv.Const(Define.Const.BattleStaffLiftNum) then
+				if MBattle.StaffLifeNum[b.id] ~= nil and MBattle.StaffLifeNum[b.id] >= Csv.Const(Define.Const.BattleStaffLiftNum) then
+					return MStaff.SortForPower(a,b)
+				else
+					return false
+				end
+			else					
+				if MBattle.StaffLifeNum[b.id] ~= nil and MBattle.StaffLifeNum[b.id] >= Csv.Const(Define.Const.BattleStaffLiftNum) then
+					return true
+				else
+					return MStaff.SortForPower(a,b)
+				end
+			end
+			return MStaff.SortForPower(a,b)
+		end
+		return false
+	else
+		if not MBattle.LockedStaffs[b.id] then
+			return MStaff.SortForPower(a,b)
+		end
+		return true
+	end
+end
+
+--界面构建
+function _M:OnCreate(onChooseCall)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_ChooseStaff")
+	moudle:Get("btnClose"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+	moudle:Get("background2").RaycastTarget = true
+	moudle:Get("textTitle").Text = Csv.Text("battle_chooseTitle")
+	local haveStaffs = {}
+	for _,v in pairs(MStaff.StaffTable) do
+		table.insert(haveStaffs, v)
+	end
+	if #haveStaffs > 0 then
+		table.sort(haveStaffs, _P.Sort)
+
+		local text1Title = Csv.Text("staff_level") --等级:
+		local text2Title = Csv.Text("staff_aptitude1") --胆识:
+		local text3Title = Csv.Text("staff_power") --战力:
+		local blueBtnText = Csv.Text("battle_chooseBtn1")
+		local redBtnText = Csv.Text("battle_chooseBtn2")
+		local content = moudle:Get("content")
+		self.CachedList = {}
+		for _,info in pairs(haveStaffs) do
+			local staffId = info.id
+			local csv = Csv.Personnel[staffId]
+			local data = MStaff.GetStaffDataByID(staffId)
+			local staffName = csv.name						
+			local childMoudle = self:CreateMoudle(content, "M_ChooseStaff_Item")
+			childMoudle:Get("head").SpriteName = csv.asset
+			childMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[info.color]
+			childMoudle:Get("name").Text = staffName
+			--childMoudle:Get("Grade").Text = text1Title
+			childMoudle:Get("combat").Text = text2Title
+			childMoudle:Get("Comprehensive").Text = Csv.Text("common_power",{num = info.power})
+			childMoudle:Get("number1").Text = tostring(info.level)
+			childMoudle:Get("number2").Text = tostring(_P.GetAllApitude(data))
+			--childMoudle:Get("number3").Text = tostring(info.power)
+			childMoudle:Get("C_text").Text = blueBtnText
+			local redBtnTextWidget = childMoudle:Get("C_text_0")
+			redBtnTextWidget.Text = redBtnText
+
+			local blueBtn = childMoudle:Get("C_Btn_e")
+			local redBtn = childMoudle:Get("C_Btn_b")
+			blueBtn:AddOnButton(function( ... )
+				SoundMgr.Play(10001)
+				if onChooseCall ~= nil then
+					self:Destroy()
+					onChooseCall(staffId)
+				end
+			end, nil, 0.9)
+			redBtn:AddOnButton(function( ... )
+				SoundMgr.Play(10001)
+				local cost = Csv.Const(Define.Const.BattleChooseStaffCost)
+				local itemId = cost[1]
+				local costNum = cost[2]
+				local itemCsv = Csv.Item[itemId]
+				local haveNum = MBag.GetItemNum(itemId)
+				local content = Csv.Text("battle_chooseCost", {name = itemCsv.name, num = costNum, staff = staffName})
+				CCommon.CheckTips(function(isSure)
+					if isSure then
+						if haveNum < costNum then
+							if not MBag.CheckItemEnough(itemId,costNum) then
+							end
+							--CCommon.ShowError(Csv.Text("common_cont_enough", {name = itemCsv.name}))
+						else
+							CBattle.UnlockReq(staffId)
+						end	
+					end
+				end,{items = {[itemId] = haveNum}, content = content})
+			end, nil, 0.9)
+			self.CachedList[staffId] = {
+				blueBtn = blueBtn,
+				redBtn = redBtn,
+				redBtnTextWidget = redBtnTextWidget
+			} 
+			_R.OnUnlock(self, staffId)
+		end
+	end	
+end
+
+function _P.GetAllApitude(data)
+	local allAptitude = 0
+	local books = Csv.Personnel[data.id].book
+	for k,v in pairs(books) do
+		local bookData = Csv.Book[v[1]]
+		if bookData.type == Define.AttrType.Wuli then
+			local aptitude = Csv.BookLv[v[2]*1000 + data.book[v[1]]].aptitude
+			allAptitude = allAptitude + aptitude
+		end
+	end
+	return allAptitude
+end
+
+return _M

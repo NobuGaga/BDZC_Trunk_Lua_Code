@@ -1,0 +1,52 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+
+----------------------CS类引用--------------------------
+--写死配置表有vip12, 13数据项，但图片没有对应等级图片
+local ErrVipLevel = 12
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Recharge_Up"
+
+--Vip特权每行文字高度
+local VipTextRowHeight = 35
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(level, text)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	
+	if level < ErrVipLevel then
+		self.moudle:Get("Level").SpriteName = "vip_" .. level
+	end
+	_P.SetBackgroundHeight(self, text)
+	self.moudle:Get("textBuff").Text = text
+
+	self.moudle.SelfRect:AddOnTime(function()
+		self:Destroy()
+	end, nil, 1)
+end
+
+function _P.SetBackgroundHeight(self, text)
+	local row = _P.CalculateStringRow(text)
+	local height = row * VipTextRowHeight
+	local background = self.moudle:Get("background")
+	background.SizeDelta = Vector2(background.SizeDelta.x, background.SizeDelta.y + height)
+end
+
+function _P.CalculateStringRow(text)
+	local index = 0
+	local num = 1
+	while nil ~= index do
+		index = string.find(text, "\n", index + 1)
+		num = num + 1
+	end
+	return num
+end
+
+return _M

@@ -1,0 +1,97 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EFFECT_WALLET_1 = 10136
+local EFFECT_WALLET_2 = 10137
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ShowRedpacket(self,data)
+
+	self.redPacketData = data
+	if self.isEffectDone then 
+		_P.ToRedPop(self,self.redPacketData)
+	end
+end
+
+function _M:OnCreate(data)
+	self._EventNode:AddOnClick(function ()
+		--SoundMgr.Play(10001)
+		--self:Destroy()
+	end)
+	
+	self.mData = data
+	self.isShowPop = false
+	self.isEffectDone = false
+	self.redPacketData = nil
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Election_Red1")
+	self.mMoudle = moudle
+	local closeBtn = moudle:Get("closeBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local headIcon = moudle:Get("Head")
+	local nameText = moudle:Get("Name")
+	local tips1 = moudle:Get("Tips1")
+	local tips2 = moudle:Get("Tips2")
+	local effectNode = moudle:Get("EffectNode")
+
+	headIcon.SpriteName = MPlayer.GetOtherHeadYuanIcon(data.headid, data.gender)
+	nameText.Text = data.sendername
+	tips1.Text = Csv.Text("redpacket_split_tips1")
+	tips2.Text = Csv.Text("redpacket_split_tips2")
+
+	CCommon.CreateEffect(effectNode,EFFECT_WALLET_1)
+	local isClick = false
+	moudle:Get("MoneyIcon"):AddOnButton(function()
+		if not isClick then
+			isClick = true
+			CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
+
+			CCommon.CreateEffect(effectNode,EFFECT_WALLET_2)
+			moudle.SelfRect:AddOnTime(function()
+				if not self.isEffectDone then
+					self.isEffectDone = true
+				end
+				if self.redPacketData ~= nil then
+					_P.ToRedPop(self,self.redPacketData)
+				end
+			end,nil,1.6)
+		end
+	end)
+end
+
+function _P.ToRedPop(self,data)
+	if not self.isShowPop then
+		self.isShowPop = true
+		if data.result == 3 then 
+			WindowMgr.Create("URedpacketNo",data)
+		elseif data.result == 4 then
+			WindowMgr.Create("URedpacketPass",self.mData)
+		else 
+			WindowMgr.Create("URedpacketLook",data)
+		end
+	end
+end
+
+return _M

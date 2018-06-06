@@ -1,0 +1,146 @@
+-- 编号查询界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CClub = JRequire "Dev.Club.CClub"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+
+local INPUTMAXLIMIT = 8 -- 限制只能输入8个数字
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Club_NumJoin")
+	self.mModule = module
+
+	local titleText = module:Get("C_Text")
+	local inputShowText = module:Get("NumText")
+	local referText = module:Get("ReferText")
+	local referInfoText = module:Get("Placeholder")
+	local infoText = module:Get("PartyInfo")
+	local goText = module:Get("GoText")
+	local inputText = module:Get("Text")
+
+	titleText.Text = Csv.Text("club_join_title")
+	inputShowText.Text = Csv.Text("club_join_referInfo")
+	referText.Text = Csv.Text("club_join_refer")
+	referInfoText.Text = Csv.Text("club_join_input")
+	infoText.Text = Csv.Text("club_join_desc")
+	goText.Text = Csv.Text("club_join_go")
+
+	_P.SetPlayerInfo(self)
+
+	local BtnClose = module:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	local BtnGo = module:Get("Go")
+	BtnGo:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnGoToJoin(self)
+	end, nil, 0.9)
+
+	local BtnRefer = module:Get("Refer")
+	BtnRefer:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local playerid = tonumber(inputText.Text)
+		if playerid ~= nil and playerid ~= 0 then
+			if string.len(inputText.Text) > INPUTMAXLIMIT then
+				CCommon.ShowError(Csv.Text("club_join_inputError"))
+			else
+				_P.OnRequestRefer(playerid)
+			end
+		else
+			CCommon.ShowError(Csv.Text("club_join_inputError")) -- 请输入正确的编号
+		end
+	end, nil, 0.9)
+end
+
+
+function _P.SetPlayerInfo(self, infoData)
+	local infoRect = self.mModule:Get("InfoData")
+	if infoRect ~= nil then
+		infoRect.Activity = (infoData ~= nil and infoData.hasFlag)
+	end
+
+	if infoData == nil then return end
+
+	if not infoData.hasFlag then
+		CCommon.ShowError(Csv.Text("club_join_noneError"))
+		return
+	end
+
+	self.infoData = infoData
+	local clubConf = Csv.Club[infoData.clubtype]
+
+	self.mModule:Get("sponsor").Text = Csv.Text("club_join_organizer")
+	self.mModule:Get("Type").Text = Csv.Text("club_join_partyType")
+	self.mModule:Get("Seat").Text = Csv.Text("club_join_seet")
+	self.mModule:Get("time").Text = Csv.Text("club_join_time")
+
+	self.mModule:Get("SponsorText").Text = infoData.name
+	self.mModule:Get("TypeText").Text = clubConf.name
+	self.mModule:Get("SeatText").Text = infoData.joinCount .. '/' .. ((infoData.clubtype == 1 and 10) or 50)
+	if infoData.leftTime > 0 then
+		local timeRect = self.mModule:Get("TimeText")
+		timeRect.Text = LuaUtil.GetTimeHMS(self.infoData.leftTime)
+
+		_P.OnClearTimer(self)
+		self.infoData.leftTime = infoData.leftTime + HeartBeat.ServSecond()
+		self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self, timeRect)
+		end, nil, 1)
+	end
+end
+
+
+function _P.OnUpdateTime(self, timeRect)
+	local time = self.infoData.leftTime - HeartBeat.ServSecond()
+	timeRect.Text = LuaUtil.GetTimeHMS(time)
+
+	if time <= 0 then
+		_P.OnClearTimer(self)
+	end
+end
+
+
+function _P.OnClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+-- 前往参加聚会
+function _P.OnGoToJoin(self)
+	CClub.OnEnterReq(self.infoData.playerid)
+end
+
+
+-- 请求查询
+function _P.OnRequestRefer(playerId)
+	CClub.OnReferPartyReq(playerId)
+end
+
+
+-- 数据返回
+function _R.OnGetInfoBack(self, data)
+	_P.SetPlayerInfo(self, data)
+end
+
+return _M

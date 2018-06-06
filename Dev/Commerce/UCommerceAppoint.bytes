@@ -1,0 +1,116 @@
+--职位变更
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(level, playerId, job, name, jobCountMap, myjob)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Change")
+	self.Moudle = moudle
+	moudle:Get("C_backBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("Title").Text = Csv.Text("commerce_member6")
+	local csv = Csv.Commerce[level]
+	moudle:Get("BtnText1").Text =
+		string.format("%s(%d/%d)", 
+			MCommerce.GetJobStr(MCommerce.JobType.FuHuiZhang), 
+			(jobCountMap[MCommerce.JobType.FuHuiZhang] or 0), 
+			csv.jobCount2
+		)
+	moudle:Get("BtnText2").Text =
+		string.format("%s(%d/%d)", 
+			MCommerce.GetJobStr(MCommerce.JobType.JingYing), 
+			(jobCountMap[MCommerce.JobType.JingYing] or 0), 
+			csv.jobCount3
+		)
+	moudle:Get("BtnText3").Text =
+		string.format("%s(%d/%d)", 
+			MCommerce.GetJobStr(MCommerce.JobType.HuiYuan), 
+			(jobCountMap[MCommerce.JobType.HuiYuan] or 0), 
+			csv.count - 1 - (jobCountMap[MCommerce.JobType.JingYing] or 0) - (jobCountMap[MCommerce.JobType.FuHuiZhang] or 0)
+		)
+	moudle:Get("BtnText4").Text = Csv.Text("commerce_member7")
+	if job == MCommerce.JobType.FuHuiZhang then
+		moudle:Get("CurText1").Text = Csv.Text("commerce_member8")
+		moudle:Get("Btn2"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.JingYing)
+			self:Destroy()
+		end)
+		moudle:Get("Btn3"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.HuiYuan)
+			self:Destroy()
+		end)
+	elseif job == MCommerce.JobType.JingYing then
+		moudle:Get("CurText2").Text = Csv.Text("commerce_member8")
+		moudle:Get("Btn1"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.FuHuiZhang)
+			self:Destroy()
+		end)
+		moudle:Get("Btn3"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.HuiYuan)
+			self:Destroy()
+		end)
+	else
+		moudle:Get("CurText3").Text = Csv.Text("commerce_member8")
+		moudle:Get("Btn1"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.FuHuiZhang)
+			self:Destroy()
+		end)
+		moudle:Get("Btn2"):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			CCommerce.AppointReq(playerId, MCommerce.JobType.JingYing)
+			self:Destroy()
+		end)
+	end
+	moudle:Get("Btn4"):AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		CCommon.CheckTips(function (isSure)
+			if isSure then
+				CCommerce.OutMemberReq(playerId)
+				self:Destroy()
+			end
+		end, {content = Csv.Text("commerce_member4", {name = name, num = csv.kickCost})})
+	end)
+
+	if myjob == MCommerce.JobType.FuHuiZhang then
+		local btn = moudle:Get("Btn1")
+		btn.RaycastTarget = false
+		btn.IsGray = true
+	end
+end
+
+return _M

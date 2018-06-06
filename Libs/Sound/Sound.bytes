@@ -1,0 +1,203 @@
+local TimeDelay = CS.Utility.TimeDelay
+local SoundClipPool = JRequire "Libs.Sound.SoundClipPool"
+
+local _M = Class()
+
+function _M:ctor(kind, index, source, playStartCall, playEndCall)
+	self.Kind = kind
+	self.Index = index
+	self.Source = source
+	self.PlayStartCall = playStartCall
+	self.PlayEndCall = playEndCall
+	self.Volume = 1
+	
+	--音乐切换时的过度
+	self.PlayOverTween = nil
+	self.PlayOvervOlume = 1
+	
+	self.Id = 0
+	self.LoopTimes = 0
+	self.DelayHandle = 0
+	self.IsPlaying = false
+	self.RealPlaying = false
+	self.StopCall = nil
+end
+
+local function doStop(self, isOver)
+	if self.IsPlaying then
+		-- error("--doStop-->>>", self.Id, self.IsPlaying)
+		
+		if self.PlayOverTween ~= nil then
+			self.PlayOverTween:Kill()
+			self.PlayOverTween = nil
+		end
+		self.PlayOvervOlume = 1
+
+		local source = self.Source
+		if self.RealPlaying then
+			self.RealPlaying = false
+			if self.PlayEndCall ~= nil then
+				self.PlayEndCall(self.Kind, self.Index)
+			end
+		end
+
+		self.IsPlaying = false
+		if self.DelayHandle ~= 0 then
+			TimeDelay.SetValid(self.DelayHandle, false)
+			self.DelayHandle = 0
+		end
+		if self.IsPassClip then
+			source.clip = nil
+		else
+			SoundClipPool.Push(source)
+		end		
+
+		local call = self.StopCall
+		if call ~= nil then
+			self.StopCall = nil
+			call(self.Index, self.Id, isOver)
+		end
+	end
+end
+
+local function doPlay(self, time, playTime, isLoop)
+	if self.IsPlaying and self.Source ~= nil then
+		-- error("--doPlay-->>>",self.Kind, self.Id, time, playTime, isLoop)
+
+		self.LoopTimes = self.LoopTimes + 1	
+		local source = self.Source
+		self.RealPlaying = true
+		if isLoop ~= true and self.PlayStartCall ~= nil then
+			self.PlayStartCall(self.Kind, self.Index)
+		end
+		if self.PlayOverTween ~= nil then
+			self.PlayOverTween:Kill()
+			self.PlayOverTween = nil
+		end
+		self.PlayOvervOlume = 1
+
+		if playTime ~= nil and playTime > 0 then
+			self.PlayOvervOlume = 0
+			self.PlayOverTween = CS.JTween.JTweenerManager.FloatTween(0, 1, playTime, function(value)
+				self.PlayOvervOlume = value
+				source.volume = self.Volume * self.PlayOvervOlume
+			end, function()
+				source.volume = self.Volume
+			end)
+		else
+			source.volume = self.Volume
+		end
+		source:Play()	
+		local soundCsv = Csv.Sound[self.Id]
+		self.DelayHandle = TimeDelay.DelayCall(time, true, function ( ... )
+			self.RealPlaying = false
+			local soundCsv = Csv.Sound[self.Id]
+			if soundCsv.loopTimes ~= nil and (soundCsv.loopTimes == -1 or soundCsv.loopTimes > self.LoopTimes) then
+				if soundCsv.loopSpace ~= nil and soundCsv.loopSpace > 0 then
+					self.DelayHandle = TimeDelay.DelayCall(soundCsv.loopSpace, true, function ( ... )
+						doPlay(self, time, soundCsv.playTime)
+					end)
+					if self.PlayEndCall ~= nil then
+						self.PlayEndCall(self.Kind, self.Index)
+					end
+				else
+					doPlay(self, time, soundCsv.playTime, true)
+				end
+			else
+				if self.PlayEndCall ~= nil then
+					self.PlayEndCall(self.Kind, self.Index)
+				end				
+				doStop(self, true)
+			end		
+		end)
+	end
+end
+
+function _M:Stop()
+	doStop(self, false)
+end
+
+--设置外部音量
+function _M:UpdateVolume(volume)
+	if self.IsPlaying then
+		local source = self.Source
+		local soundCsv = Csv.Sound[self.Id]
+		self.Volume = soundCsv.volume * volume
+		source.volume = self.Volume * self.PlayOvervOlume
+	end
+end
+
+function _M:Play(id, volume, stopCall, audioClip)
+	-- error("--Play-->>>",self.Kind, id, volume)
+	local soundCsv = Csv.Sound[id]
+	if soundCsv.prob ~= nil and soundCsv.prob > 0 then
+		if math.random(1, 100) > soundCsv.prob then
+			return false
+		end
+	end
+	local assetName
+	if audioClip == nil then
+		if soundCsv.widget == nil or #soundCsv.widget <= 0 then
+			assetName = soundCsv.asset[1]
+		else
+			local widgetFull = 0
+			for _,v in pairs(soundCsv.widget) do
+				widgetFull = widgetFull + v
+			end
+			local w = math.random(1, widgetFull)
+
+			widgetFull = 0
+			for index,v in pairs(soundCsv.widget) do
+				widgetFull = widgetFull + v
+				if w <= widgetFull then
+					assetName = soundCsv.asset[index]
+					break
+				end
+			end
+		end
+		if assetName == nil then
+			error(string.format("Sound Csv error, assetName is Null!!! id: %d", id))
+			return false
+		end
+	end
+
+	doStop(self, false)
+
+	local source = self.Source
+	self.LoopTimes = 0
+	self.Id = id
+	self.IsPlaying = true
+	self.StopCall = stopCall
+	self.Volume = soundCsv.volume * volume
+	--音量
+	source.volume = self.Volume * self.PlayOvervOlume
+	--均衡器优先级
+	source.priority = soundCsv.prior
+	-- source.playOnAwake = true
+	--听到声音的最近距离
+	if soundCsv.minDist ~= nil and soundCsv.maxDist ~= nil then
+		source.spatialBlend = 1
+		source.minDistance = soundCsv.minDist
+		source.maxDistance = soundCsv.maxDist
+	else
+		source.spatialBlend = 0
+		source.minDistance = 1
+		source.maxDistance = 500
+	end
+	--名字
+	source.name = tostring(id)
+	if audioClip ~= nil then
+		self.IsPassClip = true
+		source.clip = audioClip
+		doPlay(self, source.clip.length, soundCsv.playTime)
+	else
+		self.IsPassClip = false
+		SoundClipPool.Pop(assetName, source, function ( ... )
+			if source ~= nil and source.clip ~= nil then
+				doPlay(self, source.clip.length, soundCsv.playTime)
+			end
+		end)
+	end	
+end
+
+return _M

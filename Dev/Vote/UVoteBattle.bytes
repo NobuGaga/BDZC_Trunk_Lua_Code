@@ -1,0 +1,53 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CFinance = JRequire "Dev.Finance.CFinance"
+local MVote = JRequire "Dev.Vote.MVote"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local Effect = 10126
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bft")
+	self.mMoudle = moudle
+
+	moudle:Get("Title").Text = Csv.Text("vote_32")
+	moudle:Get("Tips").Text = Csv.Text("vote_34")
+	self.TweenThree = LuaUtil.TextAddThreePoint(moudle:Get("time"), Csv.Text("vote_33"))
+
+	moudle:Get("BackBtn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	local fightBtn = moudle:Get("diyu")
+	fightBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickFight(self)
+	end)
+	local t = fightBtn.CachedTran:GetJTweener("T_Finance_Button")--动画
+	t:Play()
+
+	CCommon.CreateEffect(moudle:Get("FightEffectPanel"),Effect)
+end
+
+function _P.OnClickFight(self)
+	CFinance.ReqResist(3)
+end
+
+function _R.GetResist(self,data)
+	WindowMgr.Create("UVoteBattlePop",data)
+end
+
+return _M

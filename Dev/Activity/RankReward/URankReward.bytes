@@ -1,0 +1,185 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity= JRequire "Dev.Activity.MActivity"
+-- @RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_List_Home"
+local BtnClose = "btnBack"
+local ItemName = "M_List_Home_Item"
+
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(BtnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	_P.InitActivityList(self)
+end
+
+--初始化活动列表
+function _P.InitActivityList(self)
+	self.content = self.moudle:Get("content")
+	self.listCache = {}
+
+	_P.RefreshActivityList(self)
+end
+
+--刷新所有活动列表数据
+function _P.RefreshActivityList(self)
+	local listData = MActivity.GetListFromType(Define.ActivityType.RankReward)
+	if nil ~= listData then
+		local tempList = {}
+		for index, data in pairs(listData) do
+			table.insert(tempList, data)
+		end
+		table.sort(tempList, function(left, right) return left.sort < right.sort end)
+		for index, data in ipairs(tempList) do
+			if MActivity.ActivityState.Doing == data.state.state or
+			   MActivity.ActivityState.Finish == data.state.state then
+				_P.CreateItem(self, index, data)
+			end
+		end
+		if nil ~= self.countList then
+			self.contentTimer = self.content:AddOnUpdate(function() _P.RefreshAllItemTime(self) end, nil, 1)
+		end
+	else
+		self:Destroy()
+	end
+end
+
+--创建活动项
+function _P.CreateItem(self, index, data)
+	local item
+	if nil == self.listCache[index] then
+		_P.InitItem(self, index, data)
+	end
+	item = self.listCache[index]
+	item.actId = data.actId
+	item.rankType = data.rankType
+
+	if not item.item.Activity then
+		item.item.Activity = true
+	end
+	item.textCorner.Text = data.title1
+	item.background.SpriteName = data.icon
+	item.cornerLeft.SpriteName = "cb_007"
+
+	item.textLastTime.Text = Csv.Text("rankreward_last_time", {startTime = LuaUtil.TransToMD(data.state.startTime),
+															   endTime = LuaUtil.TransToMD(data.state.startTime + data.settleTime)})
+
+	local time = data.state.lefttime - HeartBeat.ServSecond()
+	item.time = data.state.lefttime
+	if time < 0 then
+		time = 0
+	end
+	_P.RefreshItemTime(item)
+	if time > 0 then
+		if nil == self.countList then
+			self.countList = {}
+		end
+		self.countList[index] = true
+	end
+end
+
+--初始化活动项
+function _P.InitItem(self, index, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	local item = {}
+
+	item.item = itemMoudle.SelfRect
+	item.background = itemMoudle:Get("background")
+	item.textLastTime = itemMoudle:Get("textLastTime")
+	item.textTimeCounter = itemMoudle:Get("textTimeCounter")
+	item.cornerLeft = itemMoudle:Get("CornerLeft")
+	item.textCorner = itemMoudle:Get("textCorner")
+	itemMoudle:Get("textBtnOpen").Text = Csv.Text("timelimit_open_tips")
+	itemMoudle:Get("btnOpen"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URankRewardAct", item.actId, item.rankType)
+	end)
+	self:RegistRedpoint(itemMoudle:Get("redpoint"), Define.SysId.RankReward, data.actId)
+
+	self.listCache[index] = item
+end
+
+--倒计时刷新所有子项时间
+function _P.RefreshAllItemTime(self)
+	if nil ~= self.listCache then
+		for index, item in pairs(self.listCache) do
+			local isNotCount = _P.RefreshItemTime(item)
+			if isNotCount and nil ~= self.countList then
+				self.countList[index] = nil
+			end
+		end
+	end
+	if nil == self.countList or 0 == #self.countList then
+		if nil ~= self.contentTimer then
+			self.contentTimer:Destroy()
+		end
+	end
+end
+
+--倒计时刷新子项时间
+function _P.RefreshItemTime(item)
+	local time = item.time - HeartBeat.ServSecond()
+	local isFinish = time <= 0
+	if isFinish then
+		item.textTimeCounter.Text = Csv.Text("rankreward_finish")
+		item.cornerLeft.SpriteName = "cb_008"
+	else
+		item.textTimeCounter.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("rankreward_count_time"))
+	end
+	return isFinish
+end
+
+--重置缓存数据
+function _P.ResetCacheList(self)
+	if nil ~= self.countList then
+		if nil ~= self.contentTimer then
+			self.contentTimer:Destroy()
+		end
+		for index in pairs(self.countList) do
+			self.countList[index] = nil
+		end
+		self.countList = nil
+	end
+	if nil ~= self.listCache then
+		for index, item in pairs(self.listCache) do
+			if nil ~= item.item then
+				item.item.Activity = false
+			end
+		end
+	end
+end
+
+function _R.OnRefreshView(self)
+	_P.ResetCacheList(self)
+	_P.RefreshActivityList(self)
+end
+
+return _M

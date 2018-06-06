@@ -1,0 +1,60 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseWin(self)
+	self:Destroy()
+end
+
+function _M:OnCreate()
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_tips1")
+	local backBtn = moudle:Get("backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local title = moudle:Get("title")
+	title.Text = Csv.Text("Girl_married_beMarried")--"结婚"
+	local zhaoqinText = moudle:Get("C_text")
+	local tiqinText = moudle:Get("C_text_0")
+
+	zhaoqinText.Text = Csv.Text("Girl_married_zhaoqin")--"招亲"
+	tiqinText.Text = Csv.Text("Girl_married_tiqin")--"提亲"
+
+	local zhaoqinBtn = moudle:Get("Btn_e")
+	zhaoqinBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedZhaoqin")
+		--self:Destroy()
+	end)
+
+	local tiqinBtn = moudle:Get("Btn_b")
+	tiqinBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedTiqin")
+		--self:Destroy()
+	end)
+	
+end
+
+return _M

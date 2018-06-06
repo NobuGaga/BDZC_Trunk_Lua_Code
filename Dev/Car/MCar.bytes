@@ -1,0 +1,336 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local rapidjson = require "rapidjson"
+local MBag = JRequire "Dev.Bag.MBag"
+local _M = {}
+
+-- 开启分（装备，未装备），未开启分（未开启，禁止）
+_M.SeatStateEnum = {
+	Equiping = 1,
+	UnEquip = 2,
+	UnOpen = 3,
+	Stop = 4,
+}
+
+-- 车库列表分装备、更换、赠送
+_M.GarageTypeEnum = {
+	Equiping = 1,
+	Change = 2,
+	Give = 3,
+}
+
+_M.CarLevelParams = Csv.Const(Define.Const.CarLevelParams)
+_M.CarScoreParams = Csv.Const(Define.Const.CarScoreParams)
+_M.CarSeatOpenMax = Csv.Const(Define.Const.CarSeatOpenMax)
+_M.CarMaxLevel = Csv.Const(Define.Const.CarMaxLevel)
+_M.CarMaxStarLevel = Csv.Const(Define.Const.CarMaxStarLevel)
+_M.CarShopListMax = Csv.Const(Define.Const.CarShopListMax)
+_M.CarAttrMax = Csv.Const(Define.Const.CarAttrMax)
+
+_M.CarTable = {}
+_M.CarSeatList = {}
+_M.StaffInCarList = {}  -- 所有装备的员工列表
+_M.SellGetData = {} -- 出售道具后获得数据
+_M.CarRedPoint = false -- 红点
+_M.BatchBreakList = {} -- 一键分解缓存品质id
+_M.BatchSellList = {} -- 一键出售缓存品质id
+_M.CarMatBreakData = {} -- 座驾材料分解缓存
+
+function _M.Clean()
+	_M.CarTable = {}
+	_M.CarSeatList = {}
+	_M.StaffInCarList = {}
+	_M.SellGetData = {}
+	_M.CarRedPoint = false
+	_M.BatchBreakList = {}
+	_M.BatchSellList = {}
+	_M.CarMatBreakData = {}
+end
+
+
+-- 根据id获取当前座驾数据
+function _M.GetCurCarData(id)
+	local list = _M.CarTable
+	return list[id]
+end
+
+
+-- 判断该车位是否符合开启（不是钻石开启情况下）
+function _M.CheckIsOpenSeat(seatId)
+	local seatConf = Csv.CarSeatOpen[seatId]
+	if not seatConf then return false end
+
+	local nowLevel = MPlayer.GetLevel()
+	local conditionNum = 0
+	for k,v in pairs(seatConf.openCondition) do
+		if v[1] == 1 and nowLevel >= v[2] then -- 判定头衔
+			conditionNum = conditionNum + 1
+		end
+	end
+
+	return conditionNum == #seatConf.openCondition
+end
+
+
+-- 获取车辆资质星级图片
+function _M.GetCarStarIcon(starNum)
+	local count = starNum % 5
+	local carNum = (count == 0 and 5) or count
+	if starNum <= 5 then
+		return {name = "zj_013", num = starNum, index = 1}
+	elseif starNum > 5 and starNum <= 10 then
+		return {name = "zj_014", num = carNum, index = 2}
+	elseif starNum > 10 and starNum <= 15 then
+		return {name = "zj_015", num = carNum, index = 3}
+	elseif starNum > 15 and starNum <= 20 then
+		return {name = "zj_016", num = carNum, index = 4}
+	else
+		return {name = "zj_017", num = carNum, index = 5}
+	end
+end
+
+
+-- 根据座驾资质、等级得到座驾属性值
+function _M.GetCarAttrNum(attNum, carLevel)
+	if carLevel > _M.CarMaxLevel then return -1 end
+
+	local params = _M.CarLevelParams
+	return math.modf(attNum * (carLevel ^ params[1]) * params[2] + params[3])
+end
+
+
+-- 根据座驾的星阶，id得到座驾加成值
+function _M.GetCarStarAddNum(starLv, carId, attId)
+	if starLv > _M.CarMaxStarLevel then return -1 end
+
+	local carConf = Csv.Car[carId]
+	if carConf then
+		local addNum = carConf.starUpAdd[attId][2]
+		return starLv * (addNum / 100)
+	end
+end
+
+
+-- 得到座驾评分
+function _M.GetCarScore(quality, level, star, totalAttr, attr1, attr2, attr3, attr4)
+	local parmas = _M.CarScoreParams
+	return level * quality * parmas[1] + star * quality * parmas[2] + totalAttr * parmas[3] + 
+		_M.GetCarAttrNum(attr1, level) * parmas[4] + _M.GetCarAttrNum(attr2, level) * parmas[5] + _M.GetCarAttrNum(attr3, level) * parmas[6] +
+		_M.GetCarAttrNum(attr4, level) * parmas[7]
+end
+
+
+-- 得到当前资质亮灯个数
+function _M.GetAttrLightNum(attrNum, attrId, carId)
+	local carConf = Csv.Car[carId]
+	if carConf then
+		local oneNeed = _M.CarAttrMax / 5
+		return math.floor(attrNum / oneNeed)
+	end
+end
+
+
+-- 得到综合总资质
+function _M.GetTotalAttrs(data)
+	if not data then return 0 end
+
+	return data.Wuli + data.Zhili + data.Zhengzhi + data.Meili
+end
+
+
+-- 得到符合条件的车库更换列表数据(已经装备的排除)
+function _M.GetChangeCarList()
+	local carList = {}
+	local list = _M.CarTable
+	for k,v in pairs(list) do
+		local carConf = Csv.Car[v.carid]
+		if not v.isequip then
+			carList[#carList + 1] = v
+		end
+	end
+
+	return carList
+end
+
+
+-- 得到符合条件的车库赠送列表数据(已经装备或者座位数为0的排除)
+function _M.GetGiveCarList()
+	local carList = {}
+	local list = _M.CarTable
+	for k,v in pairs(list) do
+		local carConf = Csv.Car[v.carid]
+		if (not v.isequip) and carConf.seatNum and (carConf.seatNum > 0) then
+			carList[#carList + 1] = v
+		end
+	end
+
+	return carList
+end
+
+
+-- 判断是否可以赠送
+function _M.CheckIsCanGive(carData)
+	if carData == nil then return false end
+
+	local carConf = Csv.Car[carData.carid]
+	if carConf and carData.color > 3 and carData.star == carConf.initialStar and carData.level == carConf.initialLevel and carData.intensifylv == 0 then
+		return true
+	end
+
+	return false
+end
+
+
+-- 判断是否培养过
+function _M.CheckIsUp(carData)
+	if carData == nil then return false end
+	
+	local carConf = Csv.Car[carData.carid]
+	return carConf and (carData.level > carConf.initialLevel or carData.star > carConf.initialStar or carData.intensifylv > 0)
+end
+
+
+-- 判断该员工是否已经装备
+function _M.CheckIsInCar(staffId)
+	for k,v in pairs(_M.StaffInCarList) do
+		if v.id == staffId then
+			return v
+		end
+	end
+end
+
+
+-- 判断座驾系统是否开放
+function _M.CheckCarSystemIsOpen()
+	return #_M.CarSeatList ~= 0
+end
+
+
+-- 判断是否有未装备的座驾
+function _M.CheckHasCar()
+	for k,v in pairs(_M.CarTable) do
+		local carConf = Csv.Car[v.carid]
+		if not v.isequip and carConf.seatNum and carConf.seatNum > 0 then
+			return true
+		end
+	end
+
+	return false
+end
+
+
+-- 判断上方是否显示红点
+function _M.CheckShowRed(typeEnum, carData)
+	if typeEnum == _M.SeatStateEnum.Equiping then 
+		local isUp = _M.CheckIsHasUp(carData)
+		local isUpApti = _M.CheckIsCanUpApti(carData)
+		return isUp or isUpApti
+	elseif typeEnum == _M.SeatStateEnum.UnEquip then
+		return _M.CheckHasCar()
+	end
+
+	return false
+end
+
+
+-- 判断当前座驾是否能升星
+function _M.CheckIsHasUp(carData)
+	if not carData then return false end
+	if carData.star >= _M.CarMaxStarLevel then return false end
+
+	local costId = carData.color * 1000 + carData.star
+	local costConf = Csv.CarUpStarCost[costId]
+	if costConf then
+		for k,v in pairs(costConf.cost) do
+			local itemConf = Csv.Item[v[1]]
+			local curGetNum = MBag.GetItemNum(itemConf.id)
+
+			if curGetNum < v[2] then
+				return false
+			end
+		end
+
+		return true
+	end
+end
+
+
+function _M.CheckIsCanUpApti(carData)
+	if carData == nil then return false end
+	
+	local upId = carData.carid * 1000 + carData.level
+	local upConf = Csv.CarUpQualification[upId]
+	if upConf then
+		if carData.intensifylv >= carData.level then return false end
+
+		if upConf.aptiExpUpCost then
+			local curNum1 = MBag.GetItemNum(upConf.aptiExpUpCost[1])
+			if curNum1 >= upConf.aptiExpUpCost[2] then
+				return true
+			end
+		end
+
+		if upConf.aptiItemUpCost then
+			local curNum2 = MBag.GetItemNum(upConf.aptiItemUpCost[1])
+			if curNum2 >= upConf.aptiItemUpCost[2] then
+				return true
+			end
+		end
+
+		return false
+	end
+end
+
+
+-- 得到座驾总战力
+function _M.GetTotalPowerNum()
+	local totalNum = 0
+	for k,v in pairs(_M.CarSeatList) do
+		if v.state == _M.SeatStateEnum.Equiping then
+			local carData = _M.GetCurCarData(v.carid)
+			if carData then
+				totalNum = totalNum + carData.score
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 前端缓存上一次一键分解、一键出售的品质数组
+local BATECH_CAR_BREAK_FILE_NAME = "carBreakMessage.txt"
+local BATECH_CAR_SELL_FILE_NAME = "carSellMessage.txt"
+
+function _M.GetCarBatchMessages(batchType)
+	if batchType == 1 then _M.BatchBreakList = {}
+	else _M.BatchSellList = {} end
+	
+	local fileName = (batchType == 1 and BATECH_CAR_BREAK_FILE_NAME) or BATECH_CAR_SELL_FILE_NAME
+	local fileData = CS.Loader.LoadAccessor.ReadText(fileName)
+	if fileData and fileData ~= "" then
+		local retTable = rapidjson.decode(fileData)
+		if retTable ~= nil then
+			for k,v in pairs(retTable) do
+				if batchType == 1 then
+					_M.BatchBreakList[v + 1] = v
+				else
+					_M.BatchSellList[v] = v
+				end
+			end
+		end
+	end
+end
+
+
+function _M.SaveCarBatchMessages(list, batchType)
+	local mesList = {}
+	for k,v in pairs(list) do
+		table.insert(mesList, v)
+	end
+
+	local fileName = (batchType == 1 and BATECH_CAR_BREAK_FILE_NAME) or BATECH_CAR_SELL_FILE_NAME
+	CS.Loader.LoadAccessor.WriteText(fileName, rapidjson.encode(mesList))
+end
+
+
+return _M

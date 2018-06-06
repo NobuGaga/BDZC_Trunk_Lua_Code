@@ -1,0 +1,85 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local URelationsRank = JRequire "Dev.Relations.URelationsRank"
+local MMain = JRequire "Dev.Main.MMain"
+local CRank = JRequire "Dev.Rank.CRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end 
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.RelationsRank then
+		self.ChooseMoudle = URelationsRank.new(self.PageNode)
+		CRank.GetRankList(Define.RankType.Relations,true)
+	end
+	MRelations.LastChooseRank = funcId
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_RankingTab")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("relations_rank")
+
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.RelationsTabRank, true)
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "ty_016", "ty_017")
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			if index <= 1 then
+				tabHandle:Add(v.id, moudle:Get("C_Btn_"..index), moudle:Get("C_text_"..index), v.name)
+			end
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+end
+
+function _R.GetRankData(self)
+	if MRelations.LastChooseRank == Define.SysId.RelationsRank then
+		self.ChooseMoudle:Refresh()
+	end
+end
+
+return _M

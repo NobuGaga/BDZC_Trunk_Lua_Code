@@ -1,0 +1,83 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MCompany = JRequire "Dev.Company.MCompany"
+local CCommon = JRequire "Dev.Common.CCommon"
+local _M = Class(WindowBase)
+local _P = {}
+
+local DELAY = 0.3
+
+--界面构建
+function _M:OnCreate(id)
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Company_Tab3_Settlement", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	moudle:Get("title").Text = Csv.Text("company_PA1")
+	moudle:Get("text11").Text = Csv.Text("company_PA10")
+	moudle:Get("text21").Text = Csv.Text("company_PA10")
+	moudle:Get("text31").Text = Csv.Text("company_PA10")
+	moudle:Get("text41").Text = Csv.Text("company_PA10")
+	moudle:Get("companyname").Text = Csv.Text("company_PA2")
+	moudle:Get("zhiwei").Text = Csv.Text("company_PA3")
+	moudle:Get("text0").Text = Csv.Text("company_PA4")
+	moudle:Get("text1").Text = Csv.Text("company_PA5")
+	moudle:Get("text2").Text = Csv.Text("company_PA6")
+	moudle:Get("text3").Text = Csv.Text("company_PA7")
+	moudle:Get("text4").Text = Csv.Text("company_PA8")
+	moudle:Get("text5").Text = Csv.Text("company_PA9")
+	moudle:Get("yeji").Text = Csv.Text("company_PA12")
+	moudle:Get("xiaoshou").Text = Csv.Text("company_PA11")
+	moudle:Get("shouru").Text = Csv.Text("company_PA13")
+	moudle:Get("C_text").Text = Csv.Text("common_sure")
+
+	local csvPatrol = Csv.Patrol[id]
+	if csvPatrol ~= nil then
+		moudle:Get("nametext").Text = csvPatrol.companyName
+		moudle:Get("zhiweiname").Text = csvPatrol.name
+	end
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 0.9)
+
+	local BtnOK = moudle:Get("C_Btn_b")
+	BtnOK:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.ShowAward(self)
+		end, nil, 0.9)
+
+	local content = moudle:Get("content")
+	local awards = MCompany.PatrolAward
+	if awards ~= nil then
+		for k,v in pairs(awards) do
+			CCommon.CreateItem(content,k,function(itemid,param) CCommon.ShowItemTips(itemid,param) end,{num = v}, Define.SysId.Patrol)
+		end
+	end
+end
+
+function _P.ShowAward(self)
+	local moudle = self.mMoudle
+	local btn = moudle:Get("C_Btn_b")
+	btn.RaycastTarget = false
+	local awards = MCompany.PatrolAward
+	local time = 0
+	local num = 0
+	for k,v in pairs(awards) do
+		CCommon.ShowFlyItem(btn, k, v, time)
+		time = time + DELAY
+		num = num + 1
+	end
+	btn:AddOnTime(function()
+		self:Destroy()
+	end,nil,num * DELAY + 1)
+end
+
+function _M:BeforeDestroy()
+	MCompany.PatrolAward = {}
+end
+
+return _M

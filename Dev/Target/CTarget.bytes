@@ -1,0 +1,119 @@
+local EventCenter = JRequire "Dev.EventCenter"
+local MTarget = JRequire "Dev.Target.MTarget"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cReqTargetDone = 1,	-- 领取奖励 PTarget.CReqTargetDone
+
+	sTargetInit = 1,	-- 初始化 PTarget.SInit
+	sTargetDone = 2,	-- 领取奖励返回 PTarget.STargetDone
+}
+
+function _M.ModuleClean()
+	MTarget.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cReqTargetDone] = "PTarget.CTargetDone",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sTargetInit] = { proto = "PTarget.STargetInit", handle = _P.OnInit},
+		[ECmdId.sTargetDone] = { proto = "PTarget.STargetDone", handle = _P.OnGainAward},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Target, func_send, func_recv, isReload)
+end
+
+-- 公关
+EventCenter.RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+	_P.CheckTargetRedPoint()
+end, true)
+-- 资本
+EventCenter.RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+	_P.CheckTargetRedPoint()
+end, true)
+-- vip等级
+EventCenter.RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
+	_P.CheckTargetRedPoint()
+end, true)
+
+
+-- 请求领取奖励
+function _M.GainAwardReq(targetId, targetType)
+	_M.Send(ECmdId.cReqTargetDone, {target = {type = targetType, index = targetId}})
+end
+
+
+-- 初始化（S2C）
+function _P.OnInit(data)
+	MTarget.OnSetData(data)
+	_P.CheckTargetRedPoint()
+end
+
+
+-- 领取奖励返回
+function _P.OnGainAward(data)
+	local targetData = data.target
+	for i,v in ipairs(MTarget.TargetTable) do
+		if v.type == targetData.type then
+			if v.type == MTarget.TargetTypeEnum.VipUp then
+				v.index = targetData.index - 1
+			else
+				v.index = targetData.index
+			end
+			break
+		end
+	end
+
+	_P.CheckTargetRedPoint()
+	WindowMgr.Call("UMain", "RefreshLeftBtns")
+	WindowMgr.Call("UTargetPanel", "OnUpdateData", targetData)
+end
+
+
+-- 设置红点
+function _P.CheckTargetRedPoint()
+	local redNum = 0
+	for i,v in ipairs(MTarget.TargetTable) do
+		local nextData = MTarget.GetNextData(v.type, v.index)
+		if nextData then
+			local isAchive = MTarget.ThisTargetIsAchieve(nextData.goalType, nextData.id, v.index)
+			if v.type == MTarget.TargetTypeEnum.CompanyUp then
+				CMain.UpdateRedpoint(isAchive, Define.SysId.Target_CompanyUp)
+				if isAchive then redNum = redNum + 1 end
+			elseif v.type == MTarget.TargetTypeEnum.PowerUp then
+				CMain.UpdateRedpoint(isAchive, Define.SysId.Target_PowerUp)
+				if isAchive then redNum = redNum + 1 end				
+			elseif v.type == MTarget.TargetTypeEnum.VipUp then
+				-- CMain.UpdateRedpoint(isAchive, Define.SysId.Target_VipUp)
+				CMain.UpdateRedpoint(false, Define.SysId.Target_VipUp)
+			end
+		end
+	end
+	
+	if redNum == 0 then
+		MTarget.ShowTargetRed = false
+	else
+		MTarget.ShowTargetRed = true
+	end
+	-- WindowMgr.Call("UMain", "OnUpdateTargetAnim")
+end
+
+
+-- vip等级发生变化，需要更新红点
+-- function _M.CheckVipChangeRedPoint()
+-- 	_P.CheckTargetRedPoint()
+-- end
+
+
+return _M

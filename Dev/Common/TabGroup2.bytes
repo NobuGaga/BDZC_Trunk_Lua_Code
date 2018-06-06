@@ -1,0 +1,67 @@
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class()
+local _P = {}
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+function _M:ctor(onChooseCall,...)
+	self.OnChooseCall = onChooseCall
+
+	self.Tabs = {}
+	self.TabsIndex = {}
+	self.LastChoose = 0
+end
+
+function _M:Choose(key)
+	if self.Tabs[key] ~= nil then
+		for k,v in pairs(self.Tabs) do
+			if v.image ~= nil then
+				if k == key then
+					v.image.RaycastTarget = false
+					v.image.SpriteName = _LightImg
+					v.image.SizeDelta = _LightImgSize
+					v.text.FontSize = _LightFontSize
+					v.text.Color = _LightFontColor
+				else
+					v.image.RaycastTarget = true
+					v.image.SpriteName = _DefaultImg
+					v.image.SizeDelta = _DefaultImgSize
+					v.text.FontSize = _DefaultFontSize
+					v.text.Color = _DefaultFontColor
+				end
+			end
+		end
+
+		self.LastChoose = key
+		self.OnChooseCall(key)
+	end
+	return true
+end
+
+function _M:Add(key, imageWidget, textWidget, title)
+	imageWidget.SpriteName = self.DefaultIcon
+	textWidget.Text = title
+	imageWidget:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Choose(key)
+	end, nil, 0.9)
+	self.Tabs[key] = {image = imageWidget, text = textWidget}
+
+	table.insert(self.TabsIndex,key)
+end
+
+return _M

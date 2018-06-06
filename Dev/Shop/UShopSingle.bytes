@@ -1,0 +1,146 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MShop = JRequire "Dev.Shop.MShop"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CShop = JRequire "Dev.Shop.CShop"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local SHOPID = 1
+local EFFECT_ID = 12
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Shop_Product", WindowType.UI, 0)
+	self.mMoudle = moudle
+	_P.OnCreateList(self)
+end
+
+function _P.OnCreateList(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local itemTable = {}
+	local shopTable = _P.GetSortShop(MShop.ShopTable[SHOPID])
+	if shopTable ~= nil then
+		local index = 0
+		for k,v in pairs(shopTable) do
+			local shop = {}
+			local shopMoudle = JGuiManager.GetMoudle(content,"M_Shop_Product_ele1",WindowType.UI, 0)
+			local csvShop = Csv.SingleShop[v.index]
+			local csvItem = Csv.Item[csvShop.itemid]
+			local ImgVip = shopMoudle:Get("Label1")
+			if csvShop.viplevel > 0 then
+				ImgVip.Activity = true
+				shopMoudle:Get("vip1").Text = csvShop.viplevel
+			else
+				ImgVip.Activity = false
+			end
+			shopMoudle:Get("ProductName1").Text = csvItem.name
+			shopMoudle:Get("brief1").Text = csvItem.tips
+			local TextLimit = shopMoudle:Get("limit1")
+			if csvShop.limit ~=nil and csvShop.limit > 0 then
+				if csvShop.limit - v.times < 0 then
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = 0})
+				else
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = csvShop.limit - v.times})
+				end
+			end
+			shopMoudle:Get("Price1").Text = "x"..csvShop.price
+			shopMoudle:Get("productNumber1").Text = csvShop.itemcount
+			shopMoudle:Get("PriceImg1").SpriteName = Csv.Item[csvShop.buytype].miniIcon
+			shopMoudle:Get("PriceImg2").SpriteName = Csv.Item[csvShop.buytype].miniIcon
+			shopMoudle:Get("product_icon1").SpriteName = csvItem.icon
+			--shopMoudle:Get("jiage").Text = Csv.Text("shop_jiage")
+			--shopMoudle:Get("Btn_Text").Text = Csv.Text("shop_liji")
+
+			local ImgColor = shopMoudle:Get("product_box1")
+			ImgColor.SpriteName = csvItem.colorIcon
+			CCommon.CreateItemLight(ImgColor.transform, Define.SysId.Shop, nil, csvItem.color)
+
+
+			shopMoudle:Get("product_box1"):AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				CCommon.ShowItemTips(csvShop.itemid)
+			end,nil,0.9)
+
+			shopMoudle:Get("Btn_1"):AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				if MPlayer.GetLevel() < csvShop.level then
+					CCommon.ShowError(Csv.Text("shop_lvlow"))
+				else
+					if MPlayer.GetVip() < csvShop.viplevel then
+						CCommon.ShowError(Csv.Text("shop_viplow",{num = csvShop.viplevel}))
+					else
+						if v.times >= csvShop.limit then
+							CCommon.ShowError(Csv.Text("shop_timeslow"))
+						else
+							local state,str = MBag.GetCostState({csvShop.buytype,csvShop.price},true)
+							if state then
+								CShop.ShopBuy(v.type,v.index)
+							else
+								CCommon.ShowError(str)
+							end
+						end
+					end
+				end
+			end,nil,0.9)
+
+			shop.moudle = shopMoudle
+			itemTable[v.index] = shop
+			if index == 0 then
+				WindowMgr.Call("UShop","UpdateTime",SHOPID,v.index)
+			end
+			index = index + 1
+		end
+	end
+	self.mItemTable = itemTable
+end
+
+function _P.GetSortShop(rawTable)
+	local sortTable = {}
+	if rawTable ~= nil then
+		for k,v in pairs(rawTable) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b) return a.index < b.index end)
+	end
+	return sortTable
+end
+
+function _M:ResetShop()
+	_P.OnCreateList(self)
+end
+
+function _M:ShopBuy(data)
+	local shop = self.mItemTable[data.result.index]
+	if shop ~= nil then
+		local moudle = shop.moudle
+		if moudle ~= nil then
+			local csvShop = Csv.SingleShop[data.result.index]
+			local limit = csvShop.limit
+			if limit ~= nil and limit > 0 then
+				moudle:Get("limit1").Text = Csv.Text("shop_xiangou",{num = limit - data.result.times})
+			end
+			--CCommon.ShowFlyItem(moudle:Get("Btn_1").transform,csvShop.itemid,csvShop.itemcount)
+			local csvItem = Csv.Item[csvShop.itemid]
+			local spMap = {back = csvItem.colorIcon,icon = csvItem.icon}
+			local textMap = {num = csvShop.itemcount}
+			CCommon.CreateEffect(self.mMoudle:Get("mask"),EFFECT_ID,moudle:Get("product_box1").RootCanvasPos,nil,spMap,textMap)
+			SoundMgr.Play(11000)
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

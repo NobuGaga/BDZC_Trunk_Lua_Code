@@ -1,0 +1,91 @@
+--@RefType [Dev.Recharge.MRecharge.bytes#_M]
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+-- local CTarget = JRequire "Dev.Target.CTarget"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cRecharge = 1,				--充值请求，客户端测试使用
+
+	sRechargeInit =	1,			--初始化充值信息
+	sReqRechargeSuccess = 2,	--充值成功
+	sVipSysInfo	= 3,			--vip信息	PRecharge.SVipSysInfo
+	sRechargeInfo = 4,			--充值信息
+}
+
+function _M.ModuleClean()
+	MRecharge.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cRecharge] = "PRecharge.CCharge",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sRechargeInit] = {		 proto = "PRecharge.SVipSysInfo", handle = _P.OnInit},
+		[CMD_ID.sReqRechargeSuccess] = { proto = "PRecharge.SRechargeSuccess", handle = _P.OnRechargeSuccess},
+		[CMD_ID.sVipSysInfo] = {		 proto = "PRecharge.SVipSysInfo", handle = _P.OnUpdate},
+		[CMD_ID.sRechargeInfo] = {		 proto = "PRecharge.SRechargeInfo", handle = _P.OnProductInfo},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Recharge, func_send, func_recv, isReload)	
+end
+
+------------------Client -- Server----------------
+function _M.Charge(chargeID)
+	_M.Send(CMD_ID.cRecharge, {chargeID = chargeID})
+end
+
+------------------Server -- Client----------------
+function _P.OnInit(data)
+	MRecharge.SetVipData(data.viplevel, data.value)
+	MVipWelfare.CheckVipRedPoint()
+	local csvVip = Csv.Vip
+	if nil ~= csvVip[data.viplevel] then
+		WindowMgr.Call("URecharge", "OnRefreshView", data.viplevel, data.value, csvVip[data.viplevel].upExp)
+	end
+	CPlayer.OnUpdateVip()
+end
+
+function _P.OnRechargeSuccess(data)
+	if nil ~= data and nil ~= data.productId then
+		local csvValue = Csv.Recharge[data.productId]
+		if nil ~= csvValue then
+			local csvText = "recharge_success"
+			if GameSetting.IsiOSCommit or nil == csvValue.type or 0 == csvValue.type then
+				csvText = csvText
+			else
+				csvText = csvText .. csvValue.type
+			end
+			CCommon.ShowRight(Csv.Text(csvText))
+		end
+	end
+end
+
+function _P.OnUpdate(data)
+	_P.OnInit(data)
+end
+
+function _P.OnProductInfo(data)
+	if nil ~= data and nil ~= data.list then
+		MRecharge.SetProductData(data.list)
+		WindowMgr.Call("URecharge", "OnRefreshFirstFlag")
+	else
+		MRecharge.ProductData = {}
+	end
+end
+
+return _M

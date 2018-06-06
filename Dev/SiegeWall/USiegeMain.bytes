@@ -1,0 +1,481 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local luaUtil = JRequire"Libs.LuaUtil"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.GetProtest(self,data)
+	if data.type == 1 then
+		--请求进入boss
+	elseif data.type == 2 then
+		WindowMgr.Create("UGetUDisk",data)
+	elseif data.type == 3 then
+		WindowMgr.Create("UGetItems",data)
+	end
+end
+
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode,"M_Wghej_Opened")
+	self.mMoudle = moudle
+	local closeBtn = moudle:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local activityId = MSiege.ActivityId
+	local phase = MSiege.Phase
+
+	local helpBtn = moudle:Get("helpBtn")
+	helpBtn:AddOnButton(function()
+		SoundMgr.Play(10002)
+		if phase == 1 then
+			WindowMgr.Create("URuleTips",17401)
+		elseif phase == 2 then
+			WindowMgr.Create("URuleTips",17402)
+		elseif phase == 3 then
+			WindowMgr.Create("URuleTips",17403)
+		end
+		
+	end,nil,1.2)
+
+	local title = moudle:Get("Title")
+	title.Text = Csv.Text("siege_wall_title")
+
+	local recoveTime = moudle:Get("TimeText2")
+	local waitTime = moudle:Get("TimeText")
+	local titleImg = moudle:Get("FBname")
+	self.mRecoveTime = recoveTime
+	self.mWaitTime = waitTime
+	waitTime.Activity = false
+	recoveTime.Activity = false
+
+	-----------进行中---------------------------------------------------
+	local fightBtn = moudle:Get("diyu")
+
+	fightBtn:AddOnButton(function()
+		print("探索！")
+		_R.GetProtest(self,{type = 2,jifen = 1,score = 1,items = nil})
+	end)
+	-------已开启----------------------------------------------
+	local downRect = moudle:Get("blackbg")
+	local bossBtn = moudle:Get("IconBox1")
+	local bagBtn = moudle:Get("IconBox2")
+	local shopBtn = moudle:Get("IconBox3")
+	local rankBtn = moudle:Get("IconBox4")
+	self.mDownRect = downRect
+	
+	bossBtn:AddOnButton(function()
+		WindowMgr.Create("USiegeBoss")
+	end)
+
+	bagBtn:AddOnButton(function()
+		WindowMgr.Create("USiegeTreasurePanel", 2)
+	end)
+
+	shopBtn:AddOnButton(function()
+		WindowMgr.Create("USiegeExchangePanel", 1, 2)
+	end)
+
+	rankBtn:AddOnButton(function()
+		WindowMgr.Create("USiegeRankPanel", {selfGetState = 0, gangGetState = 1, actId = 1, state = {lefttime = 1527505838,
+			endTime = 1527091200, state = 3, startTime = 1527091200}}, 2)
+	end)
+
+	-- 红点显示
+	-- local curStageData = MSiege.AllStageData[curStage]
+	-- local redRect = moudle:Get("redpoint")
+	-- redRect.Activity = (curStageData.selfGetState == 0 or curStageData.gangGetState == 0)
+
+	self.mSelectPhase = phase
+	_P.ShowTopImg(self,moudle)
+	----------------------------------------------------------
+	_P.SelectNowPhase(self,phase)
+
+	--MSiege.OpenTime = 1800 + HeartBeat.ServSecond()
+	MSiege.RecoveTime = 3800 + HeartBeat.ServSecond()
+	_P.ReduceTime(self)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		local leftTime = MSiege.RecoveTime - HeartBeat.ServSecond()
+		local openLeftTime = MSiege.OpenTime - HeartBeat.ServSecond()
+
+		if MSiege.OpenTime > 0 then
+			if self.mSelectPhase == phase  then
+				if openLeftTime > 0 then
+					waitTime.Activity = true
+					waitTime.Text = Csv.Text("siege_open_lasttime",{time = luaUtil.GetTimeHMS(openLeftTime)})
+				else
+					waitTime.Activity = false
+					MSiege.OpenTime = 0
+					_P.SelectNowPhase(self,phase)
+				end
+			else
+				waitTime.Activity = false
+			end
+		else
+			waitTime.Activity = false
+			if MSiege.RecoveTime > 0 then
+				if leftTime > 0 then
+					if self.mSelectPhase == phase then
+						recoveTime.Activity = true
+						_P.UpdateActionPoint(self)
+						recoveTime.Text = Csv.Text("siege_next_protest",{time = luaUtil.GetTimeHMS(leftTime)})
+					else
+						recoveTime.Activity = false
+					end
+				else
+					recoveTime.Activity = false
+				end
+			else
+				recoveTime.Activity = false
+			end
+		end
+	end)
+end
+
+function _P.UpdateActionPoint(self)
+
+end
+
+function _P.ShowTopImg(self,moudle)
+	local phase = MSiege.Phase
+
+	local nextImgs = {}
+	nextImgs[2] = moudle:Get("JT1")
+	nextImgs[3] = moudle:Get("JT2")
+	for i = 1,3,1 do
+		local topImg = moudle:Get("Scene"..i)
+
+		topImg:AddOnButton(function()
+			self.mSelectPhase = i
+			_P.ReduceTime(self)
+			if phase > i then
+				_P.ShowEndRect(self,moudle,i)
+			elseif phase == i then
+				_P.SelectNowPhase(self,phase)
+			end
+		end,nil,1.2)
+
+		if i>phase then
+			topImg.RaycastTarget = false
+			topImg.IsGray = true
+			if i >1 then
+				nextImgs[i].IsGray = true
+			end
+		else
+			topImg.RaycastTarget = true
+			topImg.IsGray = false
+			if i >1 then
+				nextImgs[i].IsGray = false
+			end
+		end
+	end
+end
+
+function _P.SelectNowPhase(self,phase)
+	local moudle = self.mMoudle
+
+	local activityData = Csv.Siege[MSiege.ActivityId]
+	if activityData ~= nil then
+		local checkBeginTime = _P.GetTargetTime(activityData.beginTime)
+		local checkCloseTime = _P.GetTargetTime(activityData.endTime)
+
+		if checkBeginTime > 0 or checkCloseTime < 0 then
+			_P.ShowIngRect(self,moudle,phase)
+		else
+			if MSiege.OpenTime > 0 then
+				_P.ShowWaitRect(self,moudle,phase)
+			else
+				_P.ShowIngRect(self,moudle,phase)
+			end
+		end
+	else
+		print("找不到对应的数据id_______",activityId)
+	end
+end
+
+function _P.ShowWaitRect(self,moudle,index)
+	local wait = moudle:Get("Wait")
+	local IngRect = moudle:Get("IngRect")
+	local End = moudle:Get("End")
+	wait.Activity = true
+	IngRect.Activity = false
+	End.Activity = false
+	self.mDownRect.Activity = false
+
+	local waitText = moudle:Get("WaitText")
+	local waitRect = moudle:Get("SecondWaitRect")
+
+	waitRect.Activity = false
+	waitRect:DestroyChildren()
+
+	local activityId = MSiege.ActivityId
+	local SiegeData = Csv.Siege[activityId]
+	if SiegeData ~= nil then
+		local waitDese = ""
+		local phaseId = index
+		if phaseId == 1 then
+			waitDese = SiegeData.phaseWait1
+		elseif phaseId == 2 then
+			waitDese = SiegeData.phaseWait2
+		
+			waitRect.Activity = true
+			for k,v in pairs(MSiege.Teams)do
+				local itemMoudle = JGuiManager.GetMoudle(waitRect,"M_Wghej_WaitRect_Item", WindowType.UI, 10)
+				local headIcon = itemMoudle:Get("Head1")
+				local desc = itemMoudle:Get("text111")
+				local btn = itemMoudle:Get("C_Btn_a")
+				local btnText = itemMoudle:Get("C_text")
+				btnText.Text = Csv.Text("siege_team_message")
+
+				local bossData = Csv.SiegeBoss[v.bossId]
+				if bossData ~= nil then
+					headIcon.SpriteName = bossData.iconRound
+					desc.Text = bossData.teamDesc
+				end
+
+				btnText:AddOnButton(function(...)
+					WindowMgr.Create("USiegeTeamMessage",v)
+				end)
+			end
+		elseif phaseId == 3 then
+			waitDese = SiegeData.phaseWait3
+		end
+		waitText.Text = waitDese
+	else
+		print("找不到对应的活动id___",activityId)
+	end
+end
+
+function _P.ShowEndRect(self,moudle,index)
+	local wait = moudle:Get("Wait")
+	local IngRect = moudle:Get("IngRect")
+	local End = moudle:Get("End")
+	wait.Activity = false
+	IngRect.Activity = false
+	End.Activity = true
+	self.mDownRect.Activity = true
+
+	local endText = moudle:Get("EndText")
+
+	local activityId = MSiege.ActivityId
+	local SiegeData = Csv.Siege[activityId]
+	if SiegeData ~= nil then
+		local waitDese = ""
+		local phaseId = index
+		if phaseId == 1 then
+			waitDese = SiegeData.phaseEnd1
+		elseif phaseId == 2 then
+			waitDese = SiegeData.phaseEnd2
+		elseif phaseId == 3 then
+			waitDese = SiegeData.phaseEnd3
+		end
+		endText.Text = waitDese
+	else
+		print("找不到对应的活动id___",activityId)
+	end
+end
+
+function _P.ShowIngRect(self,moudle,index)
+	local wait = moudle:Get("Wait")
+	local IngRect = moudle:Get("IngRect")
+	local End = moudle:Get("End")
+	wait.Activity = false
+	IngRect.Activity = true
+	End.Activity = false
+	self.mDownRect.Activity = true
+
+	------------活动未开启-----------------------------------------------
+	local diyuBtn = moudle:Get("diyu")
+	local actionTime = moudle:Get("TimeText2")
+	local openTime = moudle:Get("openTime")
+
+	local activityData = Csv.Siege[MSiege.ActivityId]
+	if activityData ~= nil then
+		local checkBeginTime = _P.GetTargetTime(activityData.beginTime)
+		local checkCloseTime = _P.GetTargetTime(activityData.endTime)
+		if checkBeginTime > 0 or checkCloseTime < 0 then
+			diyuBtn.Activity = false
+			actionTime.Activity = false
+			openTime.Activity = true
+		
+			openTime.Text = Csv.Text("siege_open_time",{time1 = activityData.beginTime,time2 = activityData.endTime})
+		end
+	else
+		print("找不到对应的数据id_______",activityId)
+	end
+	---------------------------------------------------------------------------
+
+	local phaseboss1 = moudle:Get("StopLoss")
+	local phaseboss2 = moudle:Get("OneByOne")
+	local phaseboss3 = moudle:Get("Duel")
+	
+	local phase = index
+	phaseboss1.Activity = false
+	phaseboss2.Activity = false
+	phaseboss3.Activity = false
+
+	if phase == 1 then
+		phaseboss1.Activity = true
+		local slider = moudle:Get("StopLossSlider1")
+		local sliderText = moudle:Get("StopLossSliderText")
+		local lossText = moudle:Get("StopLossText")
+
+		if MSiege.Progress[1] ~= nil then
+			local progress = MSiege.Progress[1].progressCur/MSiege.Progress[1].progressMax
+
+			if progress >= 1 then
+				local bossInfo = MSiege.BigBoss[1]
+				if bossInfo ~= nil then
+					local bossData = Csv.SiegeBoss[bossInfo.id]
+					local bossProgress = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
+
+					slider.FillAmount = bossProgress
+					sliderText.Text = bossData.name.."："..math.ceil(bossProgress*100).."%"
+				end
+			else
+				slider.FillAmount = progress
+				sliderText.Text = Csv.Text("siege_progress_1",{num = progress*100})
+			end
+		else
+			print("该阶段没有进度！_____1")
+		end
+
+		if MSiege.LastUdisk ~= nil then
+			local lossprop = MSiege.LastUdisk.ncur/MSiege.LastUdisk.nmax
+			if lossprop ~= nil then
+				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = lossprop})
+			end
+		end
+	elseif phase == 2 then
+		phaseboss2.Activity = true
+		local lossText = moudle:Get("StopLossText_0")
+		local progressTab = {}
+		for i = 1,3,1 do
+			local _slider = moudle:Get("OneByOneSlider"..i)
+			local _sliderText = moudle:Get("OneByOneSliderText"..i)
+			local _head = moudle:Get("BossHead"..i)
+			progressTab[i] = {slider = _slider,sliderText = _sliderText,head = _head}
+
+			if MSiege.Progress[i] ~= nil then
+				local progress = MSiege.Progress[i].progressCur/MSiege.Progress[i].progressMax
+				if progress >= 1 then
+					local bossInfo = MSiege.BigBoss[i]
+					if bossInfo ~= nil then
+						local bossData = Csv.SiegeBoss[bossInfo.id]
+						local bossProgress = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
+						_slider.FillAmount = bossProgress
+						_sliderText.Text = bossData.name.."："..math.ceil(bossProgress*100).."%"
+					end
+				else
+					_slider.FillAmount = progress
+					_sliderText.Text = Csv.Text("siege_progress_1",{num = progress*100})
+				end
+			else
+				print("该阶段没有进度_____1")
+			end
+		end
+
+		if MSiege.LastUdisk ~= nil then
+			local lossprop = MSiege.LastUdisk.ncur/MSiege.LastUdisk.nmax
+			if lossprop ~= nil then
+				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = lossprop * 100})
+			end
+		end
+
+	elseif phase == 3 then
+		phaseboss3.Activity = true
+
+		local bossText = moudle:Get("text1")
+		local enemyText = moudle:Get("text2")
+		local udiskText = moudle:Get("text3")
+
+		local bossInfo = MSiege.BigBoss[1]
+		if bossInfo ~= nil then
+			local bossData = Csv.SiegeBoss[bossInfo.id]
+			if bossData ~= nil then
+				if bossInfo.discoverer ~= nil then
+					local bossBloodProp = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
+					if bossBloodProp ~= nil then
+						bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = bossBloodProp *100})
+					end
+				else
+					bossText.Text = Csv.Text("siege_bigboss_nil",{name = bossData.name})
+				end
+			else
+				print("找不到boss数据 id为__________",bossInfo.id)
+			end
+		else
+			print("第三阶段boss没数据！")
+		end
+
+		enemyText.Text = Csv.Text("siege_last_enemy",{num = MSiege.lastEnmey}) 
+
+		if MSiege.LastUdisk ~= nil then
+			local lastUdisk = MSiege.LastUdisk.ncur
+			if lastUdisk ~= nil then
+				udiskText.Text = Csv.Text("siege_last_udisk",{num = lastUdisk})
+			end
+		end
+	end
+end
+--
+function _P.ReduceTime(self)
+	local recoveTime = self.mRecoveTime
+	local waitTime =  self.mWaitTime
+	local phase = MSiege.Phase
+
+	local leftTime = MSiege.RecoveTime - HeartBeat.ServSecond()
+	local openLeftTime = MSiege.OpenTime - HeartBeat.ServSecond()
+	print("_____________",MSiege.OpenTime,openLeftTime,self.mSelectPhase,phase)
+	if MSiege.OpenTime > 0 then
+		if openLeftTime > 0 then
+			if self.mSelectPhase == phase then
+				print("________1_____")
+				waitTime.Activity = true
+				waitTime.Text = Csv.Text("siege_open_lasttime",{time = luaUtil.GetTimeHMS(openLeftTime)})
+			end
+		end
+	else
+		if MSiege.RecoveTime > 0 then
+			if leftTime > 0 then
+				if self.mSelectPhase == phase then
+					recoveTime.Activity = true
+					recoveTime.Text = Csv.Text("siege_next_protest",{time = luaUtil.GetTimeHMS(leftTime)})
+				end
+			end
+		end
+	end
+	
+	
+end
+
+function _P.GetTargetTime(hour)
+	local cur_time = os.time()
+	local temp_date = os.date("*t", cur_time)
+	local targetTime =  os.time({year=temp_date.year, month=temp_date.month, day=temp_date.day, hour=hour})
+
+	return targetTime-cur_time
+end
+
+return _M

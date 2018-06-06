@@ -1,0 +1,113 @@
+-- 演讲战斗界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local JTweenerManager = CS.JTween.JTweenerManager
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local BattleActorId = 10145
+local animDura = 2.2
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:OnCreate(data, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_Speech")
+	self.mModule = module
+	self.OnClose = onClose
+
+	module:Get("Title").SpriteName = 'jz_005'
+	module:Get("text1").Text = Csv.Text("lecture_battle_mineText1")
+	module:Get("text11").Text = MPlayer.GetName()
+	module:Get("text3").Text = Csv.Text("lecture_battle_mineText2")
+	module:Get("text33").Text = MPlayer.GetAttr(Define.AttrType.Zhili)
+	module:Get("text5").Text = Csv.Text("lecture_battle_mineText3")
+	module:Get("text55").Text = MBag.GetItemNum(Define.AssetsType.Coin)
+	module:Get("text2").Text = Csv.Text("lecture_battle_enemyText1")
+	module:Get("text4").Text = Csv.Text("lecture_battle_enemyText2")
+	module:Get("text6").Text = Csv.Text("lecture_battle_enemyText3")
+	
+	-- local closeBtn = module:Get("BackBtn")
+	-- closeBtn:AddOnButton(function ( ... )
+	-- 	SoundMgr.Play(10002)
+	-- 	self:Destroy()
+	-- end, nil, 1.2)
+
+	local cityConf = Csv.LecturesBattle[data.id]
+	if cityConf == nil then return end
+
+	module:Get("text22").Text = cityConf.name
+	module:Get("text44").Text = cityConf.power
+
+	_P.OnPlayBattleAnim(self, data)
+end
+
+
+function _P.OnPlayBattleAnim(self, data)
+	local actorNameId = (data.state == MLectures.ResultState.Win and 'huanghu') or 'tuichang'
+	local soundId = (data.state == MLectures.ResultState.Win and 10048) or 10049
+	local actorNode = self.mModule:Get("ActorPanel")
+
+	SoundMgr.PlayNonStopUI(soundId)
+	CCommon.CreateEffect(actorNode, BattleActorId)
+	actorNode:SkeletonSetAnimation(actorNameId)
+
+	-- self:Lock()
+	local mineNumText = self.mModule:Get("text55")
+	local enemyNumText = self.mModule:Get("text66")
+	local mineLastNum = 0
+	local mineNowNum = 0
+	local enemyLastNum = 0
+	local enemyNowNum = 0
+	if data.state == MLectures.ResultState.Win then
+		mineLastNum = MBag.GetItemNum(Define.AssetsType.Coin)
+		mineNowNum = mineLastNum + data.selfcost
+		enemyLastNum = 0
+		enemyNowNum = MLectures.LastBossBlood
+	else
+		mineLastNum = 0
+		mineNowNum = data.selfcost
+		enemyLastNum = MLectures.CurBossBlood
+		enemyNowNum = MLectures.LastBossBlood
+	end
+
+	local numberMineAnim = JTweenerManager.IntTween(mineNowNum, mineLastNum, animDura, function(value)
+		if mineNumText ~= nil then mineNumText.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if mineNumText ~= nil then mineNumText.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin)) end
+	end)
+	numberMineAnim:SetTarget(mineNumText.CachedTran)
+
+	local numberEnemyAnim = JTweenerManager.IntTween(enemyNowNum, enemyLastNum, animDura, function(value)
+		if enemyNumText ~= nil then enemyNumText.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if enemyNumText ~= nil then
+			local enemyBloodNum = (data.state == MLectures.ResultState.Win and 0) or MLectures.CurBossBlood
+			enemyNumText.Text = LuaUtil.NumberFormat(enemyBloodNum)
+		end
+
+		self.mModule.SelfRect:AddOnTime(function()
+			-- self:Unlock()
+			if data.state == MLectures.ResultState.Win then
+				WindowMgr.Create("ULecturesWinPanel", data, function( ... )
+					if self.OnClose ~= nil then
+						self.OnClose()
+					end
+				end)
+			else
+				WindowMgr.Create("ULecturesFailPanel", data.id, function( ... )
+					if self.OnClose ~= nil then
+						self.OnClose()
+					end
+				end)
+			end
+		end, nil, 0.3)
+	end)
+	numberEnemyAnim:SetTarget(enemyNumText.CachedTran)
+end
+
+
+return _M

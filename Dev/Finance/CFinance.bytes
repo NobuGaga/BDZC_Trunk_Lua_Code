@@ -1,0 +1,314 @@
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MFinance = JRequire "Dev.Finance.MFinance"
+local MVote = JRequire "Dev.Vote.MVote"
+
+local _M = {}
+local _P = {}
+local _R = {}
+
+local ECmdId = {
+    cGetInvade							=	1,--请求副本信息(金融入侵)
+    cGetResist							=	2,--请求副本信息(反恶意收购)
+	cInvadeFight						=	3,--开始战斗
+	cResistFight						=	4,--开始战斗
+	cExchangeItem						=	5,--兑换物品
+	cUnlockStaff						=	6,--解锁员工(恢复)
+	cGetKillRank						=	7,--击杀榜
+	cLeaveInvade						=	8,--离开副本（金融入侵）
+	cLeaveResist						=	9,--离开副本（反恶意收购）
+	cGetResistRankReward				=	10,--领取排名奖励
+	
+--------------------------------------------------------------------
+
+    sInitFinance							=	1,--金融机构初始化
+    sGetInvade								=	2,--副本信息(金融入侵)
+    sGetResist								=	3,--副本信息(反恶意收购)
+    sInvadeFight							=   4,--结果 （金融入侵）
+    sResistFight							=   5,--结果 （反恶意收购）
+	sResistRankReward						=   6,--奖励 （反恶意收购结束奖励） 
+	sExchangeItem							=   7,--兑换物品 
+	sUnlockStaff							=   8,--解锁员工   
+	sGetKillRank							=   9,--击杀榜   
+	sInvadeList								=   10,--抵御列表（金融入侵）
+	sGetResistRankReward					=	11,--领取排名奖励（反恶意收购）
+	sFinanceStateNotify						=	12,--金融机构状态通知
+	sInvadeListUpdate						=	13,--抵御列表更新（金融入侵）
+	sResistRank								=	14,--伤害排行（反恶意收购）
+	sFinanceUpdate							=	15,--金融机构更新
+ }
+
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cGetInvade] = "",
+		[ECmdId.cGetResist] = "PFinance.CGetResist",
+		[ECmdId.cInvadeFight] = "PFinance.CInvadeFight",
+		[ECmdId.cResistFight] = "PFinance.CResistFight",
+		[ECmdId.cExchangeItem] = "PFinance.CExchangeItem",
+		[ECmdId.cUnlockStaff] = "PFinance.CUnlockStaff",
+		[ECmdId.cGetKillRank] = "PFinance.CGetKillRank",
+		[ECmdId.cLeaveInvade] = "",
+		[ECmdId.cLeaveResist] = "PFinance.CLeaveResist",
+		[ECmdId.cGetResistRankReward] = "PFinance.CGetResistRankReward",
+	}
+	local recv = {
+		[ECmdId.sInitFinance] = 		{proto = "PFinance.SInitFinance",		handle = _P.RepInitFinance},
+		[ECmdId.sGetInvade] =	{proto = "PFinance.SGetInvade",	handle = _P.RepGetInvade},
+		[ECmdId.sGetResist] =	{proto = "PFinance.SGetResist",	handle = _P.RepGetResist},
+		[ECmdId.sInvadeFight] =	{proto = "PFinance.SInvadeFight",	handle = _P.RepInvadeFight},
+		[ECmdId.sResistFight] =	{proto = "PFinance.SResistFight",	handle = _P.RepResistFight},
+		[ECmdId.sResistRankReward] =	{proto = "PFinance.SResistRankReward",	handle = _P.RepResistRankReward},
+		[ECmdId.sExchangeItem] =	{proto = "PFinance.SExchangeItem",	handle = _P.RepExchangeItem},
+		[ECmdId.sUnlockStaff] =	{proto = "PFinance.SUnlockStaff",	handle = _P.RepUnlockStaff},
+		[ECmdId.sGetKillRank] =	{proto = "PFinance.SGetKillRank",	handle = _P.RepGetKillRank},
+		[ECmdId.sInvadeList] =	{proto = "PFinance.SInvadeList",	handle = _P.RepInvadeList},
+		[ECmdId.sGetResistRankReward] = {proto = "PFinance.SGetResistRankReward",handle = _P.RepGetResistRankReward},
+		[ECmdId.sFinanceStateNotify] = {proto = "PFinance.SFinanceStateNotify",handle = _P.RepSFinanceStateNotify},
+		--sResistRank
+		[ECmdId.sInvadeListUpdate] = {proto = "PFinance.SInvadeListUpdate",handle = _P.RepInvadeListUpdate},
+		[ECmdId.sResistRank] = {proto = "PFinance.SResistRank",handle = _P.RepSResistRank},
+		[ECmdId.sFinanceUpdate] = {proto = "PFinance.SInitFinance",handle = _P.RepFinanceUpdate},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Finance,send,recv,isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+--后端消息推送
+EventCenter.RegistCallEvent(Define.EventListenId.ServerError,function(handle, sysId, msgId)
+	if sysId == Define.SysId.Finance then
+		if msgId == ECmdId.cGetInvade or msgId == ECmdId.cGetResist then
+			--WindowMgr.Call("UGirlUnlock", "OnRandomDateError")
+		end
+	end
+end, true)
+
+function _P.OnDayout()
+	MFinance.OnDayout()
+	WindowMgr.Call("UFinanceExchange","RefreshAllExchange")
+end
+
+--清空模块
+function _M.ModuleClean()
+	MFinance.Clean()
+end
+
+------------------------------------------------------------------
+function _M.ReqInvade()
+	_M.Send(ECmdId.cGetInvade)
+end
+function _M.ReqResist(Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cGetResist,{type = Type})
+	else
+		_M.Send(ECmdId.cGetResist,{type = 2})
+	end
+end
+
+function _M.ReqInvadeFight(staffID)
+	_M.Send(ECmdId.cInvadeFight,{staffid = staffID})
+end
+
+function _M.ReqResistFight(staffID,Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cResistFight,{staffid = staffID,type = Type})
+	else
+		_M.Send(ECmdId.cResistFight,{staffid = staffID,type = 2})
+	end
+end
+
+function _M.ReqExchangeItem(_id,_count)
+	_M.Send(ECmdId.cExchangeItem,{id = _id,count = _count})
+end
+
+--恢复
+function _M.ReqUnlockStaff(_staffID,Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cUnlockStaff,{staffid = _staffID,type = Type})
+	else
+		_M.Send(ECmdId.cUnlockStaff,{staffid = _staffID,type = 2})
+	end
+end
+
+--击杀榜
+function _M.ReqGetKillRank(Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cGetKillRank,{type = Type})
+	else
+		_M.Send(ECmdId.cGetKillRank,{type = 2})
+	end
+end
+
+--离开副本（金融入侵）
+function _M.ReqLeaveInvade()
+	_M.Send(ECmdId.cLeaveInvade)
+end
+
+--离开副本（反恶意收购）
+function _M.ReqLeaveResist(Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cLeaveResist,{type = Type})
+	else
+		_M.Send(ECmdId.cLeaveResist,{type = 2})
+	end
+end
+
+function _M.ReqGetResistRankReward(Type)
+	if Type ~= nil then
+		_M.Send(ECmdId.cGetResistRankReward,{type = Type})
+	else
+		_M.Send(ECmdId.cGetResistRankReward,{type = 2})
+	end
+end
+-----------------------------------------------------------------
+function _P.RepInitFinance(data)
+	MFinance.Clean()
+
+	MFinance.InitFinance(data)
+	
+	--初始化
+	if WindowMgr.IsCreated("UFinance") then
+		WindowMgr.Create("UFinance") 
+	elseif WindowMgr.IsCreated("UFinanceBattle") then
+		WindowMgr.Create("UFinance")
+	end
+end
+
+function _P.RepFinanceUpdate(data)
+	MFinance.InitFinance(data)
+end
+
+function _P.RepGetInvade(data)
+
+	MFinance.GetStaffList(data.lockedStaffs, data.staffLifeNum)
+	
+	if MFinance.isBattle == true then
+		WindowMgr.Call("UFinanceBattle","RefreshInvade",data)
+	else
+		WindowMgr.Call("UFinance","GetInvade",data)
+	end
+end
+
+function _P.RepGetResist(data)
+	if data.type == 3 then
+		MVote.GetStaffList(data.lockedStaffs, data.staffLifeNum)
+		if MVote.isBattle == true then
+			WindowMgr.Call("UVoteBattlePop","RefreshResist",data)
+		else
+			WindowMgr.Call("UVoteBattle","GetResist",data)
+		end
+	else
+		MFinance.GetStaffList(data.lockedStaffs, data.staffLifeNum)
+		if MFinance.isBattle == true then
+			WindowMgr.Call("UFinanceBattle","RefreshResist",data)
+		else
+			WindowMgr.Call("UFinance","GetResist",data)
+		end
+	end
+end
+
+function _P.RepInvadeFight(data)
+	WindowMgr.Call("UFinanceBattle","GetInvaderFight",data)
+	
+end
+
+function _P.RepResistFight(data)
+	if data.type == 3 then
+		WindowMgr.Call("UVoteBattlePop","GetResistFight",data)
+	else
+		WindowMgr.Call("UFinanceBattle","GetResistFight",data)
+	end
+end
+
+function _P.RepResistRankReward(data)
+	if data.type == 3 then
+		MVote.RewardData = data
+		MVote.isReward = true
+		if MVote.isBattle == true then
+			WindowMgr.Call("UVoteBattlePop","ShowResistReward",data)
+		end
+	else
+		MFinance.RewardData = data
+		MFinance.isReward = true
+		if MFinance.isBattle == true then
+			WindowMgr.Call("UFinanceBattle","ShowResistReward",data)
+		end
+	end
+end
+
+function _P.RepUnlockStaff(data)
+	if data.type == 3 then
+		MVote.UnlockStaff(data.staffid, data.staffLifeNum)
+		WindowMgr.Call("UVoteBattleSelectStaff","RefreshStaff")
+	else
+		MFinance.UnlockStaff(data.staffid, data.staffLifeNum)
+		WindowMgr.Call("UFinanceSelectStaff","RefreshStaff")
+	end
+end
+
+function _P.RepExchangeItem(data)
+	MFinance.GetExchangeItem(data)
+	WindowMgr.Call("UFinanceExchange","RefreshExchange",data)
+end
+
+function _P.RepGetKillRank(data)
+	if type == 3 then
+		WindowMgr.Call("UFinanceRanking","OnGetSkillerRank",data)
+	else
+		WindowMgr.Call("UFinanceRanking","OnGetSkillerRank",data)
+	end
+end
+
+--抵御列表
+function _P.RepInvadeList(data)
+	WindowMgr.Call("UFinanceBattle","InitInvadeList",data)
+end
+
+function _P.RepInvadeListUpdate(data)
+	WindowMgr.Call("UFinanceBattle","RefreshInvadeList",data)
+end
+
+function _P.RepSResistRank(data)
+	if data.type == 3 then
+		WindowMgr.Call("UVoteBattlePop","ShowResistRankList",data)
+	else
+		WindowMgr.Call("UFinanceBattle","ShowResistRankList",data)
+	end
+end
+
+function _P.RepGetResistRankReward(data)
+	print("RepGetResistRankReward!!!!")
+
+end
+
+function _P.RepSFinanceStateNotify(data)
+	if data.type == 3 then
+		MVote.BattleData = {state = data.state}
+		WindowMgr.Call("UMain","SetVoteBossState")
+		if data.state == 1 then
+			MVote.OnResetStaff()
+		end
+	else
+		MFinance.GetFinanceStateNotify(data)
+		WindowMgr.Call("UFinance","RefreshFinance",data)
+		WindowMgr.Call("UWorldMap", "SetBuildEffectActive", data.state == 1)
+	end
+end
+
+
+
+return _M

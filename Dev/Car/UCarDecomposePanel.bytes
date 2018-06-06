@@ -1,0 +1,112 @@
+-- 分解界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(isHasUp, carData)
+	local viewName = (isHasUp and "M_Car_Decompose") or "M_Car_Decompose2"
+	local module = self:CreateMoudle(self._RootNode, viewName)
+	self.mModule = module
+	self.isHasUp = isHasUp
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local decompseBtn = module:Get("C_Btn_b")
+	decompseBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if carData.isequip then -- 装备中的座驾不能分解
+			CCommon.ShowError(Csv.Text("err_car_decompose"))
+		else
+			CCar.CarBreakDownReq(carData.id)
+		end
+	end, nil, 0.9)
+	module:Get("Title").Text = Csv.Text("car_garage_fenjie")
+
+	_P.SetCarData(self, carData)
+end
+
+
+function _P.SetCarData(self, carData)
+	local carConf = Csv.Car[carData.carid]
+	local itemConf = Csv.Item[carData.carid]
+	local strColor = Csv.ItemColor[itemConf.color].str
+	self.mModule:Get("Car").SpriteName = itemConf.colorIcon
+	self.mModule:Get("CarIcon").SpriteName = carConf.icon
+	local qualityNum = (carData.color > 6 and 6) or carData.color
+	self.mModule:Get("CarQualifications").SpriteName = QualityIconNameArr[qualityNum]
+
+	self.mModule:Get("CarLv1").Text = 'Lv' .. carData.level
+	self.mModule:Get("CarLv2").Text = Csv.Text("car_main_jieji") .. carData.star
+	self.mModule:Get("CarName").Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+	self.mModule:Get("CarZz").Text = Csv.Text("car_attiDetail_zonghe")
+	self.mModule:Get("ZzNum").Text = MCar.GetTotalAttrs(carData.Attr)
+	self.mModule:Get("CarBrief").Text = carConf.desc
+	self.mModule:Get("C_text").Text = Csv.Text("car_garage_fenjie")
+
+	_P.SetOneListData(self, carData, carConf)
+	
+	if self.isHasUp then
+		self.mModule:Get("Get").Text = Csv.Text("car_decompose_tip1")
+		self.mModule:Get("Get2").Text = Csv.Text("car_decompose_tip2")
+		_P.SetTwoListData(self, carData)
+	else
+		self.mModule:Get("Get").Text = Csv.Text("car_decompose_tip4")
+	end
+end
+
+
+function _P.SetOneListData(self, carData, carConf)
+	if carConf == nil or carConf.decomposeItem == nil then return end
+
+	local itemContent = self.mModule:Get("Content")
+	for k,v in pairs(carConf.decomposeItem) do
+		local item = CCommon.CreateItem(itemContent, v[1], nil, {num = v[2]})
+		local numText = item:Get("Num")
+		if numText then
+			numText.Text = ''
+		end
+	end
+end
+
+
+function _P.SetTwoListData(self, carData)
+	if (not carData) or (not carData.breakdown) then return end
+
+	local itemContent = self.mModule:Get("Content2")
+	for k,v in pairs(carData.breakdown) do
+		if v.key ~= nil and v.value ~= nil then
+			CCommon.CreateItem(itemContent, v.key, nil, {num = v.value})
+		end
+	end
+end
+
+
+return _M

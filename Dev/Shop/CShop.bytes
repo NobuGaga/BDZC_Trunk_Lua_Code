@@ -1,0 +1,57 @@
+local MShop = JRequire "Dev.Shop.MShop"
+local EventCenter = JRequire "Dev.EventCenter"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+		cShop								=	1,--购买 PShop.CShopBuy
+
+		sShopInit							=	1,--获取列表 PShop.SShopInit
+		sShopResult						    =	2,--购买返回 PShop.SShopResult
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cShop] = "PShop.CShopBuy",
+	}
+	local recv = {
+		[ECmdId.sShopInit]			=		{proto = "PShop.SShopInit",			handle = _P.OnGetList},
+		[ECmdId.sShopResult]		=		{proto = "PShop.SShopResult",		handle = _P.OnGetBuy},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Shop, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MShop.Clean()
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+--C
+function _M.ShopBuy(TYPE,INDEX)
+	_M.Send(ECmdId.cShop,{type = TYPE,index = INDEX})
+end
+
+--S
+function _P.OnGetList(data)
+	MShop.CreateList(data)
+	WindowMgr.Call("UShop","ResetShop")
+end
+
+function _P.OnGetBuy(data)
+	MShop.OnGetBuy(data)
+	WindowMgr.Call("UShop","ShopBuy",data)
+end
+
+--local
+function _P.OnDayout()
+	MShop.OnDayout()
+	WindowMgr.Call("UShop","ResetShop")
+end
+
+return _M

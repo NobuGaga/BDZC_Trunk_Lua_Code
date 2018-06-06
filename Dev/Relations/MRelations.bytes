@@ -1,0 +1,284 @@
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local _M = {}
+
+_M.InitData = nil		--主界面数据
+_M.FightData = nil		--选人界面数据
+_M.ReportData = nil		--战报数据
+_M.StaffTable = {}		--今天已使用过的员工（不包含日常）
+_M.AdverData = nil		--上诉（仇人）数据
+_M.DefenseData = nil	--防守信息数据
+_M.RankData = nil		--排行榜数据
+_M.LogData = nil		--追诉（追杀）记录数据
+_M.NewsData = nil		--新闻数据
+_M.ShowAdd = true
+
+_M.PlayerID = nil
+_M.SelectStaffID = nil
+_M.FightType = nil
+
+_M.LastChooseAdver = nil
+_M.LastChooseRank = nil
+
+_M.isFirstFight = false --第一次打这个人
+_M.lastMypoint = 0 --记录上一次进度
+
+_M.isWaitingReport = false --标记是否处于获取战报中
+
+_M.isRedPoint = false
+
+function _M.Clean( ... )
+	_M.InitData = nil
+	_M.FightData = nil
+	_M.ReportData = nil
+	_M.StaffTable = {}
+	_M.AdverData = nil
+	_M.DefenseData = nil
+	_M.RankData = nil
+	_M.LogData = nil
+	_M.NewsData = nil
+	_M.ShowAdd = true
+
+	_M.PlayerID = nil
+	_M.SelectStaffID = nil
+	_M.FightType = nil
+
+	_M.LastChooseAdver = nil
+	_M.LastChooseRank = nil
+
+	_M.isFirstFight = false
+	_M.lastMypoint = 0
+
+	_M.isWaitingReport = false
+
+	_M.isRedPoint = false
+end
+
+function _M.OnBuyAdd(data)
+	local fightData = _M.FightData
+	if fightData ~= nil then
+		fightData.attackadd = data.attackadd
+		fightData.skilladd = data.skilladd
+		fightData.blood = data.blood
+		fightData.maxblood = data.maxblood
+		for k,v in pairs(fightData.adds) do
+			if v.key == data.id then
+				v.value = v.value + 1
+			end
+		end
+	end
+end
+
+function _M.InitStaff(data)
+	local staffTable = {}
+	if data ~= nil and data.list ~= nil then
+		for k,v in pairs(data.list) do
+			staffTable[v] = true
+		end
+	end
+	_M.StaffTable = staffTable
+end
+
+function _M.SetInitData(data)
+	local initData = _M.InitData or {}
+	initData.staffid = data.info.staffid
+	initData.state = data.info.state
+	if data.info.time ~= nil then
+		initData.time = data.info.time + HeartBeat.ServSecond()
+	else
+		initData.time = nil
+	end
+	initData.exnum = data.info.exnum
+	initData.maxnum = data.info.maxnum
+	initData.freenum = data.info.freenum
+	initData.cdnum = data.info.cdnum
+	initData.maxcdnum = data.info.maxcdnum
+	_M.InitData = initData
+end
+
+function _M.SetFightData(data)
+	local fightData = {}
+
+	fightData.name = data.name
+	fightData.otherpoint = data.otherpoint
+	fightData.staffnum = data.staffnum
+	fightData.surnum = data.surnum
+	fightData.mypoint = data.mypoint
+	fightData.attackadd = data.attackadd
+	fightData.skilladd = data.skilladd
+	fightData.type = data.type
+
+	fightData.mstaffinfo = {staffid = data.mstaffinfo.staffid,color = data.mstaffinfo.color,level = data.mstaffinfo.level,staffattr = data.mstaffinfo.staffattr}
+	fightData.blood = {blood = data.blood.blood,maxblood = data.blood.maxblood}
+
+	local staffs = {}
+	if data.staffs ~= nil then
+		for k,v in pairs(data.staffs) do
+			local staff = {staffid = v.staffid,color = v.color,level = v.level,staffattr = v.staffattr}
+			table.insert(staffs,staff)
+		end
+	end
+	fightData.staffs = staffs
+
+	local adds = {}
+	for k,v in pairs(data.adds) do
+		local add = {key = v.key,value = v.value}
+		table.insert(adds,add)
+	end
+	fightData.adds = adds
+
+	_M.FightData = fightData
+end
+
+function _M.SetReportData(data)
+	local reportData = {}
+	
+	reportData.state = data.state
+	reportData.point = data.point
+	reportData.liansheng = data.liansheng
+	reportData.allpoint = data.allpoint
+	reportData.name = data.name
+
+	reportData.blood = {blood = data.blood.blood,maxblood = data.blood.maxblood}
+	reportData.oblood = {blood = data.oblood.blood,maxblood = data.oblood.maxblood}
+	reportData.mstaffinfo = {staffid = data.mstaffinfo.staffid,color = data.mstaffinfo.color,level = data.mstaffinfo.level,staffattr = data.mstaffinfo.staffattr}
+	reportData.ostaffinfo = {staffid = data.ostaffinfo.staffid,color = data.ostaffinfo.color,level = data.ostaffinfo.level,staffattr = data.ostaffinfo.staffattr}
+	
+	if data.award ~= nil then
+		local awards = {}
+		for k,v in pairs(data.award) do
+			local award = {key = v.key,value = v.value}
+			table.insert(awards,award)
+		end
+		reportData.award = awards
+	end
+
+	if data.allaward ~= nil then
+		local allawards = {}
+		for k,v in pairs(data.allaward) do
+			local allaward = {key = v.key,value = v.value}
+			table.insert(allawards,allaward)
+		end
+		reportData.allaward = allawards
+	end
+
+	if data.exaward ~= nil then
+		local exaward = {key = data.exaward.key,value = data.exaward.value}
+		reportData.exaward = exaward
+	end
+
+	local reports = {}
+	for k,v in pairs(data.reports) do
+		local report = {attack = v.attack,oleftblood = v.oleftblood,mleftblood = v.mleftblood,index = v.index,iscrit = v.iscrit}
+		table.insert(reports,report)
+	end
+	reportData.reports = reports
+
+	_M.ReportData = reportData
+end
+
+function _M.SetAdverData(data)
+	local adverData = {}
+	local list = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local adver = {name = v.name,point = v.point,level = v.level,power = v.power,time = v.time,playerid = v.playerid}
+			table.insert(list,adver)
+		end
+	end
+	adverData.list = list
+	_M.AdverData = adverData
+end
+
+function _M.SetDefenseData(data)
+	local defenseData = {}
+	local list = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local defense = {name = v.name,allpoint = v.allpoint,point = v.point,num = v.num,power = v.power,time = v.time,staffid = v.staffid,playerid = v.playerid}
+			table.insert(list,defense)
+		end
+	end
+	defenseData.list = list
+	_M.DefenseData = defenseData
+end
+
+function _M.SetRankData(data)
+	local rankData = {}
+
+	rankData.myrank = data.myrank
+	rankData.mypoint = data.mypoint
+
+	local list = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local rank = {rank = v.rank,name = v.name,level = v.level,point = v.point}
+			table.insert(list,rank)
+		end
+	end
+	rankData.list = list
+
+	_M.RankData = rankData
+end
+
+function _M.SetLogData(data)
+	local logData = {}
+	local list = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local log = {index = v.index,playerid = v.playerid,name = v.name,point = v.point,level = v.level}
+			table.insert(list,log)
+		end
+	end
+	logData.list = list
+
+	_M.LogData = logData
+end
+
+function _M.SetNewsData(data)
+	local newsData = {}
+
+	newsData.attackname = data.attackname
+	newsData.failname = data.failname
+	newsData.times = data.times
+	newsData.lastname = data.lastname
+	newsData.lastid = data.lastid
+
+	local list = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			local news = {index = v.index,playerid = v.playerid,name = v.name,staffid = v.staffid,failname = v.failname,
+							time = v.time,num = v.num,type = v.type,times = v.times}
+			table.insert(list,news)
+		end
+	end
+	table.sort(list,function(a,b) return a.time > b.time end)
+	newsData.list = list
+
+	_M.NewsData = newsData
+end
+
+function _M.PushNews(data)
+	if _M.NewsData ~= nil then
+		local list = _M.NewsData.list
+		if data ~= nil then
+			local news = {index = data.index,playerid = data.playerid,name = data.name,staffid = data.staffid,failname = data.failname,
+								time = data.time,num = data.num,type = data.type,times = data.times}
+			table.insert(list,1,news)
+		end
+	end
+end
+
+function _M.CheckisAdd()
+	local fightData = _M.FightData
+	if fightData ~= nil then
+		for k,v in pairs(fightData.adds) do
+			if v.value > 0 then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+return _M

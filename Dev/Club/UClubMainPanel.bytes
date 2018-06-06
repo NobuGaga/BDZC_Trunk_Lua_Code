@@ -1,0 +1,265 @@
+----------------------文件引用--------------------------
+-- 继承基类WindowBase
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+-- @RefType [Dev.Club.MClub.bytes#_M]
+local CClub = JRequire"Dev.Club.CClub"
+local MClub = JRequire "Dev.Club.MClub"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+local BOXTIP_POSY = "T_Club_Host_PosY"
+local SPRITETIP_POSY = "T_Club_Sprite_PosY"
+local MAINACTORID = 10055
+local SHIPSIMPLEID = 10056
+local CLICKSHIPID = 10057
+local BIGSIMPLEID = 10058
+local BIGCLICKID = 10059
+local cruiseImgName = {"yth_003", "yth_003_2"}
+local mineCruiseImgName = {"yth_003_1", "yth_003_3"}
+-------------------------------------------------------
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(...)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_UMain")
+	self.mModule = module
+
+	self.tipText = module:Get("Tips")
+	_P.OnUpdateSpriteData(self)
+
+	-- 请求刷新宴会列表
+	CClub.RefreshListReq()
+
+	-- 播放流水特效
+	CCommon.CreateEffect(module:Get("ActorPanel"), MAINACTORID)
+
+	module:Get("C_Text").Text = Csv.Text("club_main_title")
+	module:Get("rankBtntext").Text = Csv.Text("club_rank_btnTitle")
+	module:Get("shopText").Text = Csv.Text("club_main_shop")
+	module:Get("newsText").Text = Csv.Text("club_main_news")
+	module:Get("NumText").Text = Csv.Text("club_main_numShow")
+	module:Get("TipsText").Text = Csv.Text("club_main_desc")
+	module:Get("C_text").Text = Csv.Text("club_main_feastText")
+
+	local numText = module:Get("Num")
+	local curJoinNum = MClub.ClubTable.joinCount
+	local joinMaxNum = tonumber(Csv.Const(Define.Const.JoinPartyMax)) + Csv.Vip[MPlayer.GetVip()].clubJoinCount
+	numText.Text = ((curJoinNum == nil and 0) or joinMaxNum - curJoinNum) .. '/' .. joinMaxNum
+
+	local BtnClose = module:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local BtnRank = module:Get("rankBtn")
+	BtnRank:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UClubRankPanel")
+	end, nil, 0.9)
+	BtnRank.Activity = not GameSetting.IsiOSCommit
+
+	local BtnShop = module:Get("shopBtn")
+	BtnShop:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UClubExchangePanel")
+	end, nil, 0.9)
+
+	local BtnNews = module:Get("news")
+	BtnNews:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UClubInfoPanel")
+	end, nil, 0.9)
+
+	local BtnFeast = module:Get("Feast")
+	BtnFeast:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UClubNumJoinPanel")
+	end, nil, 0.9)
+
+	local TipBox = module:Get("TipsBox")
+	self.shipBtn = module:Get("luncun")
+	self.ownShipActor = module:Get("OwnShipActor")
+	CCommon.CreateEffect(self.ownShipActor, BIGSIMPLEID)
+	self.shipBtn:AddOnPress(function(obj, arg, data)
+		self.ownShipActor:DestroyChildren()
+		if data.isPress then
+			CCommon.CreateEffect(self.ownShipActor, BIGCLICKID)
+		else
+			CCommon.CreateEffect(self.ownShipActor, BIGSIMPLEID)
+		end
+	end)
+	self.shipBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickTip(self)
+	end, nil, 0.95)
+
+	-- 播放动画
+	local scaleTween = TipBox.CachedTran:GetJTweener(BOXTIP_POSY)
+	scaleTween:Play()
+
+	local oneSpriteTip = module:Get("dialogue1")
+	local twoSpriteTip = module:Get("dialogue2")
+	
+	local moveY1 = oneSpriteTip.CachedTran:GetJTweener(SPRITETIP_POSY)
+	moveY1:Play()
+
+	module.SelfRect:AddOnTime(function()
+		local moveY2 = twoSpriteTip.CachedTran:GetJTweener(SPRITETIP_POSY)
+		moveY2:Play()
+	end, nil, 0.2)
+end
+
+
+function _P.OnCreateList(self, list)
+	local contentTransform = self.mModule:Get("content")
+	contentTransform:DestroyChildren()
+
+	if list == nil then return end
+
+	local shipList = _P.GetSortList(list)
+	for k,v in ipairs(shipList) do
+		_P.OnCreateShipItem(v, contentTransform)
+	end
+end
+
+
+-- 排序
+function _P.GetSortList(shipList)
+	if shipList == nil then return {} end
+	
+	local sortList = {}
+	for k, v in pairs(shipList) do
+		table.insert(sortList, v)
+	end
+
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateShipItem(data, contentTransform)
+	local itemModule = JGuiManager.GetMoudle(contentTransform, "M_Club_Cruise", WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	local cruiseImg = itemModule:Get("M_Club_Cruise")
+	cruiseImg.SpriteName = cruiseImgName[data.clubtype]
+
+	local cruiseActorPanel = itemModule:Get("ActorPanel")
+	CCommon.CreateEffect(cruiseActorPanel, SHIPSIMPLEID)
+	cruiseImg:AddOnPress(function(obj, arg, data)
+		cruiseActorPanel:DestroyChildren()
+		if data.isPress then
+			CCommon.CreateEffect(cruiseActorPanel, CLICKSHIPID)
+		else
+			CCommon.CreateEffect(cruiseActorPanel, SHIPSIMPLEID)
+		end
+	end)
+
+	cruiseImg:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickShip(self, data)
+	end, nil, 0.95)
+
+	itemModule:Get("name").Text = data.name
+end
+
+
+function _P.OnSetSprite(self)
+	self.mModule:Get("dialogueText1").Text = Csv.Text("club_main_welcome")
+	self.mModule:Get("dialogueText2").Text = Csv.Text("club_main_welcome")
+
+	local oneSprite = self.mModule:Get("oneSprite")
+	local twoSprite = self.mModule:Get("twoSprite")
+	
+	local isHas = MClub.ClubTable.openFlag
+	oneSprite.Activity = isHas
+	twoSprite.Activity = isHas
+end
+
+
+-- 点击自己宴会tip
+function _P.OnClickTip(self)
+	local isOpen = MClub.ClubTable.openFlag
+	if  isOpen ~= nil and isOpen then
+		local playerid = MPlayer.GetId()
+		CClub.OnEnterReq(playerid)
+	else
+		WindowMgr.Create("UClubChoosePanel")
+	end
+end
+
+
+-- 点击他人party
+function _P.OnClickShip(self, data)
+	-- 向后端发送请求进入
+	CClub.OnEnterReq(data.playerid)
+end
+
+
+-- 更新两只守门精灵显示
+function _R.OnRefreshOwnText(self, data)
+	_P.OnUpdateSpriteData(self, data)
+
+	if data == nil or data.gainPoint == nil or data.gainPoint <= 0 then return end
+	local tweenRect = self.mModule:Get("gainEffect")
+	for i=1, 2 do
+		local showText = (i == 1 and Csv.Text("club_main_fenshu", {num = data.gainScore})) or Csv.Text("club_main_jifen", {num = data.gainPoint})
+		CCommon.ShowFlyText(tweenRect, showText, i * 0.5)
+		SoundMgr.Play(11000)
+	end
+end
+
+
+function _P.OnUpdateSpriteData(self, data)
+	-- 设置自己船(举办宴会，领取宴会奖励后更新)
+	if self.shipBtn then
+		local mineClubType = data and data.clubtype
+		local typeId = ((mineClubType and mineClubType > 1) and 2) or 1
+		self.shipBtn.SpriteName = mineCruiseImgName[typeId]
+	end
+
+	self.tipText.Text = (MClub.ClubTable.openFlag and Csv.Text("club_main_enterParty")) or Csv.Text("club_main_hostParty")
+	_P.OnSetSprite(self)
+end
+
+
+function _R.OnUpdateJoinCount(self)
+	local numText = self.mModule:Get("Num")
+	local joinMaxNum = tonumber(Csv.Const(Define.Const.JoinPartyMax)) + Csv.Vip[MPlayer.GetVip()].clubJoinCount
+	local curJoinNum = MClub.ClubTable.joinCount
+	numText.Text = ((curJoinNum == nil and 0) or joinMaxNum - curJoinNum) .. '/' .. joinMaxNum
+end
+
+
+-- 创建船列表
+function _R.OnCreateShipList(self, data)
+	_P.OnCreateList(self, data.shipList)
+	_P.OnUpdateSpriteData(self, data)
+end
+
+
+return _M

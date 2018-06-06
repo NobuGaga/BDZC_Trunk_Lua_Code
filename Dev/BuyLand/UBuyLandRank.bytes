@@ -1,0 +1,204 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CRank = JRequire "Dev.Rank.CRank"
+local MRank = JRequire "Dev.Rank.MRank"
+
+-- local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local RankID = {}
+local itemWidth = 724
+local itemHeight = 56
+local space = 10
+local pageNum = 15
+local pageHeight = 710
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	RankID[1] = Define.RankType.BuyLand1
+	RankID[2] = Define.RankType.BuyLand2
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bidding_Ranking")
+	self.Moudle = moudle
+	moudle:Get("C_Text").Text = Csv.Text("buyland_rank_title")
+	moudle:Get("OwnName").Text = Csv.Text("buyland_rank_playername")
+	moudle:Get("NameText").Text = MPlayer.GetName()
+
+	moudle:Get("ranking").Text = Csv.Text("buyland_rank_columname1")
+	moudle:Get("name").Text = Csv.Text("buyland_rank_columname2")
+	moudle:Get("Fraction").Text = Csv.Text("buyland_rank_columname3")
+	moudle:Get("JiFen").Text = Csv.Text("buyland_rank_columname4")
+	
+	--Table标签控制
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	local tabHandle = TabGroup.new(function (funcId)
+		-- print("--------------OnChoose:", HeartBeat.ClientMilliSecond())
+		_P.OnChoose(self, funcId)
+	end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+
+	tabHandle:Add(1, moudle:Get("Btn_c1"), moudle:Get("C_text_1"), Csv.Text("buyland_rank_1"))
+	tabHandle:Add(2, moudle:Get("Btn_c2"), moudle:Get("C_text_2"), Csv.Text("buyland_rank_2"))
+	-- print("--------------Choose:", HeartBeat.ClientMilliSecond())
+	tabHandle:Choose(1)
+	self.tabHandle = tabHandle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+end
+
+function _P.OnChoose(self, funcId)
+	self.SelectFuncID = funcId
+	if funcId == 1 then
+		self.Moudle:Get("Tips").Text = Csv.Text("buyland_rank_weektips")
+	elseif funcId == 2 then
+		self.Moudle:Get("Tips").Text = ""
+	end
+	self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
+	self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
+	CRank.GetRankList(RankID[funcId],true)
+end
+
+function _P.SetBottomData(self,funcId)
+	self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
+	self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
+	local rankid = RankID[funcId]
+	local rankinfo = MRank.RankTable[rankid]
+	if rankinfo ~= nil then
+		self.Moudle:Get("RankingText").Text = rankinfo.selfrank
+		self.Moudle:Get("FractionText").Text = rankinfo.selfvalue
+		_P.OnCreateList(self, rankinfo)
+	end
+end
+
+
+function _P.OnCreateList(self, rankinfo)
+	local list = _P.GetSortList(rankinfo.ranklist)
+	self.mList = list
+	local content = self.Moudle:Get("content")
+	content:DestroyChildren()
+	local scroll = self.Moudle:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	-- print("--------------OnCreateList scrollController:", HeartBeat.ClientMilliSecond())
+	local scrollController = RankVertical.new(scroll,content,"M_Bidding_Ranking",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,list)
+	self.scrollController = scrollController
+	-- print("--------------OnCreateList scrollController:", HeartBeat.ClientMilliSecond())
+end
+
+function _P.GetSortList(list)
+	local sortList = {}
+	if list ~= nil then
+		for k,v in pairs(list) do
+			table.insert(sortList,v)
+		end
+		table.sort(sortList,function(a,b)return _P.SortRank(a,b)end)
+	end
+	return sortList
+end
+
+function _P.SortRank(a,b)
+	return a.rank < b.rank
+end
+
+function _R.ResetList(self, data)
+	-- print("--------------ResetList:", HeartBeat.ClientMilliSecond())
+	_P.SetBottomData(self, self.SelectFuncID)
+end
+
+function _P.ScrollCallBack(self,index,value,moudle)
+	if moudle ~= nil then
+		if value.rank > 3 then
+			moudle:Get("rank").Text = value.rank
+		end
+		moudle:Get("name").Text = value.name
+		_P.SetLevelAndTitle(value, moudle)
+		-- moudle:Get("guimo").Text = _P.GetLevelStr(value)
+		moudle:Get("value").Text = value.value
+
+		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+function _P.GetLevelStr(data)
+	local level = (data.level <= 0 and 1) or data.level
+	local str = Csv.Company[level].name
+	
+	if data.titleid ~= nil then
+		if data.titleid > 0 then
+			local fashionData = Csv.Title[data.titleid]
+			str = fashionData.name
+		end
+	end
+
+	return str
+end
+function _P.SetLevelAndTitle(data, moudle)
+	local str = Csv.Company[data.level].name
+	local levelText = moudle:Get("guimo")
+	local title = moudle:Get("title")
+	
+	if data.titleid ~= nil and data.titleid > 0 then
+		--兼容没有配置称号图标, 使用文本称号显示
+		local fashionData = Csv.Title[data.titleid]
+		if fashionData.rankIcon then
+			title.Activity = true
+			-- print("--------------title.SpriteName:", HeartBeat.ClientMilliSecond())
+			title.SpriteName = fashionData.rankIcon
+			-- print("--------------title.SpriteName2:", HeartBeat.ClientMilliSecond())
+			levelText.Text = ""
+		elseif fashionData.name then
+			title.Activity = false
+			levelText.Text = fashionData.name
+		end
+	else
+		levelText.Text = str
+		title.Activity = false
+	end
+end
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+
+	if self.TabHandle ~= nil then
+		self.TabHandle:delete()
+		self.TabHandle = nil
+	end
+end
+
+return _M

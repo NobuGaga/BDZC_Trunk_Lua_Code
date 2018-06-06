@@ -1,0 +1,99 @@
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local JGuiManager = CS.JGui.JGuiManager
+local MRank = JRequire "Dev.Rank.MRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local RANKID = Define.RankType.Relations
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Lobby_Ranking")
+	self.mMoudle = moudle
+
+	moudle:Get("ranking").Text = Csv.Text("finance_scorelistnum")
+	moudle:Get("name").Text = Csv.Text("club_rank_name")
+	moudle:Get("Fraction").Text = Csv.Text("palyer_levelup")
+	moudle:Get("JiFen").Text = Csv.Text("relations_rankpointT")
+
+	moudle:Get("OwnRanking").Text = Csv.Text("relations_rankrank")
+	moudle:Get("OwnFraction").Text = Csv.Text("relations_pointminus")
+
+	moudle:Get("new_text").Text = Csv.Text("relations_tip1")
+	_P.RefreshView(self)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local rankData = MRank.RankTable[RANKID]
+	if rankData ~= nil then
+		content:DestroyChildren()
+		local rankTable = _P.GetSortTable(rankData.ranklist)
+		if rankTable ~= nil then
+			for k,v in pairs(rankTable) do
+				local rankMoudle
+				if v.rank > 3 then
+					rankMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Ranking4")
+					rankMoudle:Get("rank").Text = v.rank
+				else
+					rankMoudle = JGuiManager.GetMoudle(content, "M_Lobby_Ranking"..v.rank)
+				end
+				rankMoudle:Get("name").Text = v.name
+				rankMoudle:Get("value").Text = v.value
+				local csvCompany = Csv.Company[v.level]
+				rankMoudle:Get("guimo").Text = csvCompany.name
+
+				rankMoudle.SelfRect:AddOnButton(function(...)
+					SoundMgr.Play(10001)
+					if v.playerid ~= nil and v.playerid ~= MPlayer.GetId() then
+						CPlayer.LookPlayerReq(v.playerid)
+					end
+				end)
+			end
+		end
+		moudle:Get("OwnName").Text = Csv.Text("relations_rankname",{name = MPlayer.GetName()})
+		moudle:Get("RankingText").Text = rankData.selfrank
+		moudle:Get("FractionText").Text = rankData.selfvalue
+
+		local tip = moudle:Get("new_text")
+		if rankTable == nil or #rankTable <= 0 then
+			tip.Activity = true
+		else
+			tip.Activity = false
+		end
+	end
+end
+
+function _P.GetSortTable(rawTable)
+	local sortTable = {}
+	if rawTable ~= nil then
+		for k,v in pairs(rawTable) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	end
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	return a.rank < b.rank
+end
+
+function _M:Refresh()
+	_P.RefreshView(self)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

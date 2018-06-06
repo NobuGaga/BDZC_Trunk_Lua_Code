@@ -1,0 +1,263 @@
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+local EventCenter = JRequire "Dev.EventCenter"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CMain = JRequire "Dev.Main.CMain"
+local CCar = JRequire "Dev.Car.CCar"
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cBagUseItem							=	1,--使用道具 PBag.CUseItem
+	cBagMergeItem						=	2,--合成道具 PBag.CMergeItem
+
+	sBagInit							=	1,--初始化 PBag.SInit
+	sBagGainItem						=	2,--获取道具 PBag.SGainItem
+	sBagDelItem							=	3,--删除道具 PBag.SDelItem
+	sMergeItem							=	4,--合并道具 PBag.SMergeRet
+	sBagStaffChange                     =   5,--使用道具后员工数据变化 PBag.SStaffChange
+	sBagPackage                         =   6,--使用礼包类物品后返回   PBag.SUsePackage
+	sBagGirlChange                      =   7,--使用道具后美女亲密度变化 PBag.SGirlChange
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cBagUseItem] = "PBag.CUseItem",
+		[ECmdId.cBagMergeItem] = "PBag.CMergeItem",
+	}
+	local recv = {
+		[ECmdId.sBagInit]		=	{proto = "PBag.SInit",		handle = _P.OnGetBagData},
+		[ECmdId.sBagGainItem]	=	{proto = "PBag.SGainItem",	handle = _P.OnGetItem},
+		[ECmdId.sBagDelItem]	=	{proto = "PBag.SDelItem",	handle = _P.OnDelItem},
+		[ECmdId.sMergeItem]		=	{proto = "PBag.SMergeRet",	handle = _P.OnMergeItem},
+		[ECmdId.sBagStaffChange]=	{proto = "PBag.SStaffChange",handle = _P.OnStaffChange},
+		[ECmdId.sBagPackage]=	{proto = "PBag.SUsePackage",handle = _P.OnUsePackage},
+		[ECmdId.sBagGirlChange]=	{proto = "PBag.SGirlChange",handle = _P.OnGirlChange},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Bag, send, recv, isReload)
+end
+
+function _M.ModuleClean()
+	MBag.Clean()
+end
+
+function _M.OnUseItem(id,num,param)
+	MBag.LastUseItemid = id
+	MBag.LastUseItemcount = num
+	_M.Send(ECmdId.cBagUseItem,{itemid = id,itemcount = num,params = param})
+end
+
+function _M.OnMergeItem(id,num)
+	_M.Send(ECmdId.cBagMergeItem,{mergeid = id,mergecount = num})
+end
+
+function _P.OnGetBagData(data)
+	MBag.BagInit(data.itemlist)
+	MBag.BagMergeInit(data.merge)
+	_P.AircraftSkinListInit(data.itemlist)
+	--_P.CheckMergeRedPoint(nil,true)
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Call("UBag","RefreshSelect")
+	end
+end
+
+function _P.OnGetItem(data)
+	MBag.Update(data.item,true)
+	
+	
+	local csvItem = Csv.Item[data.item.itemid]
+	if csvItem ~= nil then
+		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
+			CActivity.UpdateRecuitStaffRed(data.item.itemid)
+		end
+
+		if csvItem.type == 6 then
+			CCar.CheckCarRedPoint()
+		end
+	end
+	
+	EventCenter.CallEventTrigger(Define.EventListenId.ItemUpdateEvent, data.item.itemid , data.item.itemcount, true)
+	_P.CheckIsUpdateStaffRed(data.item.itemid)
+	_P.CheckIsUpdateAircraftSkin(data.item.itemid)
+	--_P.CheckMergeRedPoint(data.item.itemid)
+	if MBag.SellGetData ~= nil then
+		WindowMgr.Call("UBag","ShowSellGeted")
+		MBag.SellGetData = nil
+	end
+end
+
+function _P.OnDelItem(data)
+	MBag.Update(data.item,false)
+
+	local csvItem = Csv.Item[data.item.itemid]
+	if csvItem ~= nil then
+		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
+			CActivity.UpdateRecuitStaffRed(data.item.itemid)
+		end
+
+		if csvItem.type == 6 then
+			CCar.CheckCarRedPoint()
+		end
+	end
+	--_P.CheckMergeRedPoint(data.item.itemid)
+	EventCenter.CallEventTrigger(Define.EventListenId.ItemUpdateEvent, data.item.itemid , data.item.itemcount, false)
+end
+
+function _P.OnMergeItem(data)
+	local mergeData = {mergeid = data.mergeid,count = data.mergecount}
+	MBag.UpdateMerge(mergeData)
+	
+    local csvItem = Csv.Item[Csv.Merge[data.mergeid].itemid]
+    CCommon.ShowRight(Csv.Text("bag_merSuc",{name = csvItem.name}))
+	if WindowMgr.IsCreated("UBagSyntheticPop") then
+		WindowMgr.Call("UBagSyntheticPop","OnBagMerge",data.mergeid , data.mergecount)
+	end
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Call("UBag","OnBagMergeSuccess")
+	end
+end
+
+function _P.OnStaffChange(data)
+	MStaff.StaffChangeByItem(data)
+	if WindowMgr.IsCreated("UBagStaffPop") then
+		WindowMgr.Call("UBagStaffPop","StaffChange",data)
+	else
+		WindowMgr.Call("UBag","StaffChange",data)
+	end
+
+	if WindowMgr.IsCreated("UStaffQuickPromotion") then
+		WindowMgr.Call("UStaffQuickPromotion", "StaffChange", data)
+	end
+
+	if WindowMgr.IsCreated("UStaffDetails") then
+		WindowMgr.Call("UStaffDetails","UpdateStaffAttr")
+	end
+	CStaff.CheckStaffRedPoint()
+end
+
+function _P.OnUsePackage(data)
+	if data.list ~= nil and #data.list > 0 then
+		if WindowMgr.IsCreated("UBag") then
+			WindowMgr.Call("UBag","UsePackage",data.list)
+		end
+	end
+end
+
+function _P.OnGirlChange(data)
+	if data.list ~= nil and #data.list > 0 then
+		if WindowMgr.IsCreated("UBag") then
+			WindowMgr.Call("UBag","GirlChange",data)
+		end
+	end
+end
+
+function _P.CheckIsUpdateStaffRed(itemid)
+	local csvItem = Csv.Item[itemid]
+	if csvItem ~= nil then
+		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 1 then
+			CStaff.CheckStaffRedPoint()
+		end
+	end
+end
+
+function _P.CheckIsUpdateAircraftSkin(itemid)
+	local csvItem = Csv.Item[itemid]
+	if csvItem ~= nil then
+		if csvItem.dressSysId ~= nil and csvItem.dressSysId == Define.SysId.Aircraft then
+			local csvValue = Csv.AircraftSkin[itemid]
+			local isUpdate = false
+			if csvValue ~= nil then
+				isUpdate = true
+				MAircraft.RefreshAircraftSkinList({itemid})
+				--获得飞机皮肤展示
+				--展示
+				CTrigger.OnGetNewFly(itemid)
+			else
+				csvValue = Csv.Aircraft[itemid]
+				if csvValue ~= nil then
+					isUpdate = true
+					MAircraft.RefreshAircraftBaseSkinList({itemid})
+				end
+			end
+			if isUpdate then
+				WindowMgr.Call("UAircraft", "RefreshAircraftSkinInfo")
+			end
+		end
+	end
+end
+
+function _P.AircraftSkinListInit(itemlist)
+	local skinList
+	local baseSkinList
+	if itemlist ~= nil then
+		for k,v in pairs(itemlist) do
+			local csvItem = Csv.Item[v.itemid]
+			if csvItem ~= nil then
+				if csvItem.dressSysId ~= nil and csvItem.dressSysId == Define.SysId.Aircraft then
+					local csvValue = Csv.AircraftSkin[v.itemid]
+					if csvValue ~= nil then
+						if skinList == nil then
+							skinList = {}
+						end
+						skinList[#skinList + 1] = v.itemid
+					else
+						csvValue = Csv.Aircraft[v.itemid]
+						if csvValue ~= nil then
+							if baseSkinList == nil then
+								baseSkinList = {}
+							end
+							baseSkinList[#baseSkinList + 1] = v.itemid
+						end
+					end
+				end
+			end
+		end
+	end
+	MAircraft.CreateAircraftSkinList(skinList)
+	MAircraft.CreateAircraftBaseSkinList(baseSkinList)
+end
+
+function _P.CheckMergeRedPoint(itemid,isFirstRefresh)
+	local isRedPoint = false
+	local mergeUpdateItemTable = MBag.MergeUpdateItemTable
+	if isFirstRefresh or mergeUpdateItemTable[itemid] ~= nil then
+		local mergeItems = MBag.MergeItems
+		local stateTable = {}
+		if mergeItems ~= nil then
+			for k,v in pairs(mergeItems) do
+				local csvMerge = Csv.Merge[v.mergeid]
+				if csvMerge ~= nil then
+					local items = csvMerge.cost_item
+					if items ~= nil then
+						local state,str = MBag.GetCostState(items,false)
+						stateTable[v.mergeid] = state
+					end
+				end
+			end
+		end
+		isRedPoint = _P.GetState(stateTable)
+		if isRedPoint ~= MBag.MergeRedPoint then
+			MBag.MergeRedPoint = isRedPoint
+			CMain.UpdateRedpoint(isRedPoint,Define.SysId.Bag_Synthetic)
+		end
+	end
+end
+
+function _P.GetState(stateTable)
+	if stateTable ~= nil then
+		for k,v in pairs(stateTable) do
+			if v then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+return _M

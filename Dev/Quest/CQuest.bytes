@@ -1,0 +1,173 @@
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local CMD_ID = 
+{
+	cQuestMainDone		=	1,--请求主线任务完成 PQuest.PDoneReq
+	cQuestDailyDone		=	2,--请求日常任务完成 PQuest.PDoneReq
+	cQuestActiveAward	=	3,--每日活跃度奖励 PQuest.CActiveAw
+
+	sQuestInit			=	1,--初始化	PQuest.SInit
+	sQuestMainUpdate	=	2,--主线任务更新状态 PQuest.PQuest
+	sQuestDailyUpdate	=	3,--日常任务更新状态 PQuest.PQuest
+	sQuestActiveAward	=	4,--活跃度奖励 PQuest.SActiveAward
+}
+
+function _M.ModuleClean()
+	MQuest.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cQuestMainDone] = "PQuest.CDoneReq",
+		[CMD_ID.cQuestDailyDone] = "PQuest.CDoneReq",
+		[CMD_ID.cQuestActiveAward] = "PQuest.CActiveAward",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sQuestInit] = {			proto = "PQuest.SInit", 		handle = _P.OnInit},
+		[CMD_ID.sQuestMainUpdate] = {	proto = "PQuest.PMainQuest", 	handle = _P.OnMainUpdate},
+		[CMD_ID.sQuestDailyUpdate] = {	proto = "PQuest.SDailyUpdate", 	handle = _P.OnDailyUpdate},
+		[CMD_ID.sQuestActiveAward] = {	proto = "PQuest.SActiveAward", 	handle = _P.OnActiveAward},
+	}
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Quest, func_send, func_recv, isReload)	
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+	_P.OnDayout()
+end, true)
+
+------------------Client -- Server----------------
+function _M.MainDoneReq()
+	_M.Send(CMD_ID.cQuestMainDone, {questid = MQuest.MainQuest.questid})
+end
+
+function _M.DailyDoneReq(questid)
+	_M.Send(CMD_ID.cQuestDailyDone, {questid = questid})
+end
+
+function _M.ActiveAwardReq(activeid)
+	_M.Send(CMD_ID.cQuestActiveAward, {activeid = activeid})
+end
+
+------------------Server -- Client----------------
+function _P.OnDayout()
+	--12点重置
+	for k,v in pairs(MQuest.DailyQuest) do
+		v.pro = 0
+		v.state = MQuest.State.Doing
+	end
+	MQuest.ActiveAwardRewards = {}
+	--当前活跃度
+	MQuest.ActiveAward = 0
+	WindowMgr.Call("UDailyQuest","OnDayout")
+	_P.CheckDailyRedpoint()
+end
+
+function _P.UpdateMain(mainQuest)
+	local tab = MQuest.MainQuest
+	tab.questid = mainQuest.questid
+	tab.pro = mainQuest.pro
+	tab.maxval = mainQuest.maxval
+end
+
+function _P.UpdateDaily(dailyQuest)
+	local tab = MQuest.DailyQuest[dailyQuest.questid]
+	if tab == nil then
+		tab = {}
+		MQuest.DailyQuest[dailyQuest.questid] = tab
+	end
+	tab.questid = dailyQuest.questid
+	tab.pro = dailyQuest.pro
+	tab.maxval = dailyQuest.maxval
+	tab.state = dailyQuest.state
+end
+
+--刷新日常任务小红点
+function _P.CheckDailyRedpoint()
+	--检查有没有可领取的活跃度箱子
+	local isRedpoint = false
+	if MQuest.ActiveAward > 0 then
+		local line 
+		for k,_ in pairs(Csv.ActiveAward) do
+			line = Csv.ActiveAward[k]
+			if MQuest.ActiveAward >= line.unlock and not MQuest.ActiveAwardIsGeted(k) then
+				isRedpoint = true
+				break
+			end	
+		end
+	end
+	if not isRedpoint then
+		for _,v in pairs(MQuest.DailyQuest) do
+			if v.state == MQuest.State.Done then
+				isRedpoint = true
+				break
+			end
+		end
+	end
+	if isRedpoint ~= MQuest.DailyQuestRedpoint then
+		MQuest.DailyQuestRedpoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Quest)
+	end
+end
+
+function _P.OnInit(data)
+	--主线
+	_P.UpdateMain(data.mainQuest)
+	--日常	
+	if data.dailyQuest ~= nil then
+		for _,v in pairs(data.dailyQuest) do
+			_P.UpdateDaily(v)
+		end
+	end
+	--当前活跃度
+	MQuest.ActiveAward = data.activeValue
+	--已经领取的活跃度奖励
+	if data.awarded_activeids ~= nil then
+		for _,actId in pairs(data.awarded_activeids) do
+			MQuest.ActiveAwardRewards[actId] = true
+		end
+	end
+	_P.CheckDailyRedpoint()
+	WindowMgr.Call("UMain","OnTaskUpdate")
+	WindowMgr.Call("UMainQuest","OnTaskUpdate")
+	WindowMgr.Call("UDailyQuest","OnUpdateAll")
+end
+
+function _P.OnMainUpdate(data)
+	_P.UpdateMain(data)
+
+	WindowMgr.Call("UMain","OnTaskUpdate")
+	WindowMgr.Call("UMainQuest","OnTaskUpdate")
+end
+
+function _P.OnDailyUpdate(data)
+	_P.UpdateDaily(data.quest)
+	MQuest.ActiveAward = data.activeValue
+
+	WindowMgr.Call("UDailyQuest","OnTaskUpdate", data.quest.questid)
+	_P.CheckDailyRedpoint()
+end
+
+function _P.OnActiveAward(data)
+	MQuest.ActiveAwardRewards[data.activeid] = true
+
+	WindowMgr.Call("UDailyQuest","OnActiveAwardUpdate", data.activeid, data.rewardList)
+	_P.CheckDailyRedpoint()
+end
+
+return _M

@@ -1,0 +1,133 @@
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local _M = Class()
+local _P = {}
+
+--界面构建
+function _M:ctor(parent,csvstory,doneCall)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Guidance_Story2", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.Csvstory = csvstory
+
+	self:Lock()
+	self.mDoneCall = doneCall
+	self.mIsPlayEnd = false
+	moudle:Get("bg"):AddOnClick(function ()
+		SoundMgr.Play(10001)
+		if self.mIsPlayEnd then
+			_P.AutoDestroy(self,csvstory)
+		else
+			_P.ShowEnd(self)
+			self.mIsPlayEnd = true
+		end
+	end)
+
+	local height
+
+	local TextTips = moudle:Get("text")
+	if csvstory ~= nil then
+		TextTips.Text = csvstory.tips
+	end
+
+	TextTips:AddOnTime(function()
+		TextTips.Activity = true
+		height = TextTips.SizeDelta.y
+		local ScrollView = moudle:Get("scrollView")
+		ScrollView.LocalPosition = Vector2(0,height/2)
+		self.mScrollView = ScrollView
+		self.mTween = ScrollView:DOSizeDelta(Vector2(750,height),height/60)
+		self.mTween:SetEase(CS.DG.Tweening.Ease.Linear)
+		self.mHeight = height
+		TextTips:AddOnTime(function()
+			self.mIsPlayEnd = true
+		end,nil,height/60)
+	end,nil,0.1)
+
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end,nil,0.2)
+
+	self.Continue = moudle:Get("continue")
+	self.Continue.Text = Csv.Text("guide_continue")
+	local t = self.Continue.CachedTran:GetJTweener("T_Guide_Continue")
+	t:Play()
+
+end
+
+function _P.AutoDestroy(self,csvstory)
+	if csvstory.next ~= nil then
+		local nextStory = Csv.Story[csvstory.next]
+		if nextStory ~= nil and nextStory.passAnimate ~= nil then
+			local csvEffect = Csv.Effect[nextStory.passAnimate]
+			if csvEffect ~= nil then
+				local time = csvEffect.dura
+				if time ~= nil and time > 0 then
+					self:Lock()
+					_P.DoCall(self)
+					self.mMoudle.SelfRect:AddOnTime(function()
+						self:Destroy()
+					end,nil,time/2)
+				end
+			else
+				_P.DoCall(self)
+				self:Destroy()
+			end
+		else
+			_P.DoCall(self)
+			self:Destroy()
+		end
+	else
+		_P.DoCall(self)
+		self:Destroy()
+	end
+end
+
+function _M:OnCreateTweenDone()
+	self:Lock()
+end
+
+function _M:Lock()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		local lock = moudle:Get("lock")
+		if lock ~= nil then
+			lock.RaycastTarget = true
+		end
+	end
+end
+
+function _M:Unlock()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		local lock = moudle:Get("lock")
+		if lock ~= nil then
+			lock.RaycastTarget = false
+		end
+	end
+end
+
+function _P.ShowEnd(self)
+	local csvstory = self.Csvstory
+	if self.mScrollView ~= nil then
+		self.mScrollView:DOKill()
+	end
+	self.mMoudle:Get("scrollView").SizeDelta = Vector2(750,self.mHeight)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+function _P.DoCall(self)
+	local doneCall = self.mDoneCall
+	if doneCall ~= nil then
+		doneCall()
+	end
+end
+
+return _M

@@ -1,0 +1,86 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local CBuyLand = JRequire "Dev.BuyLand.CBuyLand"
+local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
+
+----------------------CS类引用--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+--界面删除前回收
+function _M:BeforeDestroy( ... )
+	if self.SliderButton ~= nil then
+		self.SliderButton:delete()
+		self.SliderButton = nil
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall(table.unpack(self.OnCloseCallParam))
+	end
+end
+
+--界面构建
+function _M:OnCreate(onClose, ...)
+	self.OnCloseCall = onClose
+	self.OnCloseCallParam = {...}
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bidding_OneKey")
+	self.Moudle = moudle
+	
+	moudle:Get("Title").Text = Csv.Text("buyland_allin_btn") -- 一键竞标
+	local money = MBag.GetItemNum(Define.AssetsType.Soldier)
+	moudle:Get("Desc").Text = Csv.Text("buyland_allin_money", {num = LuaUtil.NumberFormat(money)})
+	moudle:Get("Desc2").Text = Csv.Text("buyland_allin_tip2") -- 请选择需要一键竞标达到的关卡数
+
+	self.mValue = 1
+	self.Moudle:Get("NumText_0").Text = self.mValue
+	self.consume = moudle:Get("consume")
+	local allInMoney = MBuyLand.GetAllInMoney(self.mValue)
+	if allInMoney == nil then
+		allInMoney = 0
+	end
+	self.consume.Text = Csv.Text("buyland_allin_cost", {num = allInMoney, max = LuaUtil.NumberFormat(money)})
+	local SliderButton = SliderButton.new(1,math.min(MBuyLand.GetAllInMoneyCount()),1,function(value)_P.OnSliderValueChanged(self,value)end)
+	SliderButton:CreateSliderBtn(moudle:Get("Slider"),moudle:Get("BtnAdd"),moudle:Get("BtnMinus"))
+	self.SliderButton = SliderButton
+
+	local BtnUse = moudle:Get("BtnUse")
+	moudle:Get("C_text").Text = Csv.Text("buyland_allin_go")
+	BtnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse(self)
+		end, nil, 0.9)
+	moudle:Get("BtnClose"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+end
+
+function _P.OnSliderValueChanged(self,value)
+	self.Moudle:Get("NumText_0").Text = value
+	self.mValue = value
+	local money = MBag.GetItemNum(Define.AssetsType.Soldier)
+	local allInMoney = MBuyLand.GetAllInMoney(value)
+	if allInMoney == nil then
+		allInMoney = 0
+	end
+	self.consume.Text = Csv.Text("buyland_allin_cost",{num = LuaUtil.NumberFormat(allInMoney),max = LuaUtil.NumberFormat(money)})
+end
+
+function _P.OnClickUse(self)
+	CBuyLand.CAllIn(self.mValue)
+	self:Destroy()
+end
+
+return _M

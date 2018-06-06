@@ -1,0 +1,264 @@
+-- 排行版界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CRank = JRequire "Dev.Rank.CRank"
+local MRank = JRequire "Dev.Rank.MRank"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+
+local WeekRankId = Define.RankType.LectureWeekRank
+local MonthRankId = Define.RankType.LectureMonthRank
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local itemWidth = 635
+local itemHeight = 61
+local space = 12
+local pageNum = 11
+local pageHeight = 802
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Lecture_Ranking")
+	self.mModule = module
+
+	CRank.GetRankList(WeekRankId, true)
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = Csv.Text("lectures_rank_title")
+	module:Get("ranking").Text = Csv.Text("lectures_rank_num")
+	module:Get("name").Text = Csv.Text("lectures_rank_name")
+	module:Get("Fraction").Text = Csv.Text("lectures_rank_level")
+	module:Get("JiFen").Text = Csv.Text("lectures_rank_zhimingdu")
+	module:Get("Tips").Text = Csv.Text("lectures_rank_tip")
+	module:Get("OwnName").Text = Csv.Text("lectures_rank_curName")
+	module:Get("OwnRanking").Text = Csv.Text("lectures_rank_curNum")
+	module:Get("OwnFraction").Text = Csv.Text("lectures_rank_curDu")
+
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("club_rank_none")
+	self.noneText.Activity = true
+
+	local weekBtnText = module:Get("C_text_1")
+	local monthBtnText = module:Get("C_text_2")
+	weekBtnText.Text = Csv.Text("lectures_rank_week")
+	monthBtnText.Text = Csv.Text("lectures_rank_month")
+	self.weekBtnText = weekBtnText
+	self.monthBtnText = monthBtnText
+
+	self.curSelectToggle = 1
+	_P.InitPageData(self)
+end
+
+
+function _P.InitPageData(self)
+	self.personSelectImg = self.mModule:Get("C_Btn_1")
+	self.gangSelectImg = self.mModule:Get("C_Btn_2")
+
+	_P.OnSetPageText(self)
+
+	self.personSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, 1)
+	end, nil, 0.95)
+	self.gangSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, 2)
+	end, nil, 0.95)
+end
+
+
+function _P.OnSetPageText(self)
+	local isWeekRank = self.curSelectToggle == 1
+	self.personSelectImg.SpriteName = ((isWeekRank and _LightImg) or _DefaultImg)
+	self.gangSelectImg.SpriteName = ((not isWeekRank and _LightImg) or _DefaultImg)
+	self.personSelectImg.SizeDelta = ((isWeekRank and _LightImgSize) or _DefaultImgSize)
+	self.gangSelectImg.SizeDelta = ((not isWeekRank and _LightImgSize) or _DefaultImgSize)
+
+	self.weekBtnText.Color = ((isWeekRank and _LightFontColor) or _DefaultFontColor)
+	self.monthBtnText.Color = ((not isWeekRank and _LightFontColor) or _DefaultFontColor)
+	self.weekBtnText.FontSize = ((isWeekRank and _LightFontSize) or _DefaultFontSize)
+	self.monthBtnText.FontSize = ((not isWeekRank and _LightFontSize) or _DefaultFontSize)
+
+	_P.SetOwnData(self)
+end
+
+
+function _P.OnClickPage(self, curSelect)
+	if self.curSelectToggle == curSelect then return end
+	self.curSelectToggle = curSelect
+
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+	self.mModule:Get("Tips").Activity = (self.curSelectToggle == 1)
+end
+
+
+-- 设置列表数据
+function _P.OnSetListData(self)
+	local rankId = (self.curSelectToggle == 1 and WeekRankId) or MonthRankId
+	local rankData = MRank.RankTable[rankId]
+
+	if rankData == nil then
+		_P.SetOwnData(self)
+	else
+		_P.SetOwnData(self, {name = rankData.selfName, rank = rankData.selfrank, value = rankData.selfvalue})
+	end
+
+	local itemContent = self.mModule:Get("content")
+	itemContent:DestroyChildren()
+	if rankData == nil or rankData.ranklist == nil then
+		self.noneText.Activity = true
+		return
+	end
+
+	self.noneText.Activity = false
+	local rankList = _P.GetSortList(self, rankData.ranklist)
+	self.mList = rankList
+	if rankList == nil then return end
+
+	local scroll = self.mModule:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	self.scrollController = RankVertical.new(scroll, itemContent, "M_Lecture_Ranking",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	self.scrollController:CreateScroll(pageNum, pageHeight, itemWidth, itemHeight, space, rankList)
+end
+
+
+function _P.ScrollCallBack(self,index,v,itemModule)
+	if itemModule ~= nil then
+		local itemRank = (v.rank >= 4 and 4) or v.rank
+		if itemModule ~= nil then
+			-- 如果排名>3时，要显示排名num
+			if v.rank > 3 then
+				itemModule:Get("rank").Text = v.rank
+			end
+
+			itemModule:Get("name").Text = v.name
+			itemModule:Get("value").Text = (v.value < 0 and 0) or v.value
+			_P.SetLevelAndTitle(v, itemModule)
+		end
+
+		itemModule.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+
+function _P.SetLevelAndTitle(data, module)
+	local str = Csv.Company[data.level].name
+	local levelText = module:Get("guimo")
+	local title = module:Get("title")
+	
+	if data.titleid ~= nil and data.titleid > 0 then
+		--兼容没有配置称号图标, 使用文本称号显示
+		local fashionData = Csv.Title[data.titleid]
+		if fashionData.rankIcon then
+			title.Activity = true
+			title.SpriteName = fashionData.rankIcon
+			levelText.Text = ""
+		elseif fashionData.name then
+			title.Activity = false
+			levelText.Text = fashionData.name
+		end
+	else
+		levelText.Text = str
+		title.Activity = false
+	end
+end
+
+
+function _P.GetLevelStr(data)
+	local level = (data.level <= 0 and 1) or data.level
+	local str = Csv.Company[level].name
+	
+	if data.titleid ~= nil then
+		if data.titleid > 0 then
+			local fashionData = Csv.Title[data.titleid]
+			str = fashionData.name
+		end
+	end
+
+	return str
+end
+
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+
+-- 排序
+function _P.GetSortList(self, rankList)
+	local sortList = rankList
+	
+	table.sort(sortList, function (a, b)
+		return a.rank < b.rank
+	end)
+
+	return sortList
+end
+
+
+-- 设置玩家数据
+function _P.SetOwnData(self, data)
+	local playerName = MPlayer.GetName()
+	local nameText = self.mModule:Get("nameText")
+	local rankText = self.mModule:Get("RankingText")
+	local scoreText = self.mModule:Get("FractionText")
+
+	nameText.Text = playerName
+	rankText.Text = (data ~= nil and data.rank) or "10000+"
+	scoreText.Text = (data ~= nil and ((data.value < 0 and 0) or data.value)) or "0"
+end
+
+
+function _R.OnGetWeekRankData(self)
+	CRank.GetRankList(MonthRankId, true)
+	_P.OnSetListData(self)
+end
+
+
+return _M

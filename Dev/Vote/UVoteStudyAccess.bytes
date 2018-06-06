@@ -1,0 +1,209 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local JGuiManager = CS.JGui.JGuiManager
+local MBag = JRequire "Dev.Bag.MBag"
+local MVote = JRequire "Dev.Vote.MVote"
+local CVote = JRequire "Dev.Vote.CVote"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local LuaUtil = JRequire"Libs.LuaUtil"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local Auto_Select_Num = Csv.Const(Define.Const.VoteStudyMax)
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(voteid)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Study_Change")
+	self.mMoudle = moudle
+	self.Voteid = voteid
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	moudle:Get("C_Text").Text = Csv.Text("vote_48")
+	moudle:Get("C_text").Text = Csv.Text("vote_53")
+	moudle:Get("Tips1").Text = Csv.Text("vote_70")
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		_P.OnClickInvite(self)
+	end,nil,0.9)
+end
+
+function _P.OnClickInvite(self)
+	local selectMemberTable = self.SelectMemberTable
+	local selectTable = {}
+	local num = 0
+	if selectMemberTable ~= nil then
+		for k,v in pairs(selectMemberTable) do
+			if v then
+				table.insert(selectTable,k)
+			end
+		end
+	end
+	CVote.ReqVoteParStudy(self.Voteid,selectTable)
+	self:Destroy()
+end
+
+function _R.SetCommerceMember(self,data)
+	self.SelectMemberTable = {}
+	self.ItemTable = {}
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local sortTable = _P.GetSort(data.list)
+	for k,v in ipairs(sortTable) do
+		local voteMoudle = JGuiManager.GetMoudle(content,"M_Study_Change_Item")
+		
+		voteMoudle:Get("SLText").Text = Csv.Text("vote_49")
+		voteMoudle:Get("Lv").Text = Csv.Text("vote_50")
+		voteMoudle:Get("Gx").Text = Csv.Text("vote_51")
+		voteMoudle:Get("Time").Text = Csv.Text("vote_52")
+
+		voteMoudle:Get("ShName").Text = v.name..Csv.Text("commerce_op14",{name = MCommerce.GetJobStr(v.job)})
+		voteMoudle:Get("SLNum").Text = tostring(v.power)
+		local companyCsv = Csv.Company[v.level]
+		voteMoudle:Get("LvText").Text = companyCsv.name
+		voteMoudle:Get("GxText").Text = v.contribution.ncur .. "/" .. v.contribution.nmax
+		voteMoudle:Get("PeopleNum").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - v.lastTime)
+
+		voteMoudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(v.headId,v.sex)
+		voteMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..v.vip
+		local csvVip = Csv.Vip[v.vip]
+		if csvVip.imgBord ~= nil then
+			voteMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+		else
+			voteMoudle:Get("OutBox").Activity = false
+		end
+
+		local Box = voteMoudle:Get("Box")
+		local BoxClick = voteMoudle:Get("BoxClick")
+
+		BoxClick:AddOnButton(function()
+			_P.OnClickBox(self,v.id,k)
+		end,nil,1)
+
+		if k <= Auto_Select_Num then
+			self.SelectMemberTable[v.id] = true
+			voteMoudle:Get("Gou").Activity = true
+			Box.IsGray = false
+			BoxClick.RaycastTarget = true
+		else
+			self.SelectMemberTable[v.id] = false
+			voteMoudle:Get("Gou").Activity = false
+			Box.IsGray = true
+			BoxClick.RaycastTarget = false
+		end
+
+		self.ItemTable[v.id] = voteMoudle
+		_P.SetAllBoxState(self)
+	end
+	local textTip = moudle:Get("Tips1")
+	if #sortTable > 0 then
+		textTip.Activity = false
+	else
+		textTip.Activity = true
+	end
+end
+
+function _P.OnClickBox(self,playerid,index)
+	local selectMemberTable = self.SelectMemberTable
+	if selectMemberTable[playerid] then
+		selectMemberTable[playerid] = false
+	else
+		selectMemberTable[playerid] = true
+	end
+	_P.SetGouState(self,playerid,selectMemberTable[playerid])
+	self.SelectMemberTable = selectMemberTable
+	_P.SetAllBoxState(self)
+end
+
+function _P.SetAllBoxState(self)
+	local selectNum = 0
+	local selectMemberTable = self.SelectMemberTable
+	if selectMemberTable ~= nil then
+		for k,v in pairs(selectMemberTable) do
+			if v then
+				selectNum = selectNum + 1
+			end
+		end
+		if selectNum >= Auto_Select_Num then
+			for k,v in pairs(self.ItemTable) do
+				local Box = v:Get("Box")
+				local BoxClick = v:Get("BoxClick")
+				if selectMemberTable[k] then
+					BoxClick.RaycastTarget = true
+					Box.IsGray = false
+				else
+					BoxClick.RaycastTarget = false
+					Box.IsGray = true
+				end
+			end
+		else
+			for k,v in pairs(self.ItemTable) do
+				local Box = v:Get("Box")
+				local BoxClick = v:Get("BoxClick")
+				BoxClick.RaycastTarget = true
+				Box.IsGray = false
+			end
+		end
+	end
+
+	self.mMoudle:Get("Tips").Text = Csv.Text("vote_69",{num = selectNum,max = Auto_Select_Num})
+end
+
+function _P.SetGouState(self,playerid,state)
+	local itemMoudle = self.ItemTable[playerid]
+	if itemMoudle ~= nil then
+		itemMoudle:Get("Gou").Activity = state
+	end
+end
+
+function _P.GetSort(info)
+	local sortTable = {}
+	for k,v in pairs(info) do
+		if v.id ~= MPlayer.GetId() then
+			table.insert(sortTable,v)
+		end
+	end
+	table.sort(sortTable,function(a,b) return _P.Sort(a,b) end)
+	return sortTable
+end
+
+function _P.Sort(a,b)
+	if a.job == 0 and b.job == 0 then
+		return a.contribution.ncur > b.contribution.ncur
+	elseif a.job == 0 and b.job ~= 0 then
+		return false
+	elseif a.job ~= 0 and b.job == 0 then
+		return true
+	else
+		if a.job == b.job then
+			return a.contribution.ncur > b.contribution.ncur
+		else
+			return a.job < b.job
+		end
+	end
+end
+
+return _M

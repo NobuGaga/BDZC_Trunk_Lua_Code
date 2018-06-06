@@ -1,0 +1,120 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+-- @RefType [Dev.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_DailyRecharge_1Yuan_TC"
+
+local GTE_EFFECT_ID = 5
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取完奖励飞出Item动画后关闭界面时间
+local GetCloseDelay = 1
+--领取奖励弹出物品高度位置
+local RewardFlyHeight = 69
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(actId, index, rewards)
+	self.rewards = rewards
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.background = self.moudle:Get("background")
+
+	self.moudle:Get("textTitle").Text = Csv.Text("chargeaward_gift_free")
+	if nil ~= rewards then
+		_P.InitData(self)
+		_P.InitRewardList(self)
+	end
+
+	self.moudle:Get("textBtnGet").Text = Csv.Text("quest_get")
+	self.btnGet = self.moudle:Get("btnGet")
+	self.btnGet:AddOnClick(function()
+		SoundMgr.Play(10001)
+		CActivity.GetRewardReq(actId, index)
+	end)
+	self.getFlag = self.moudle:Get("getFlag")
+	self.getFlag.Activity = false
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+end
+
+--初始化数据
+function _P.InitData(self)
+	self.defaultSelfRectHeight = self.moudle.SelfRect.SizeDelta.y
+	self.background = self.moudle:Get("background")
+	if nil ~= self.background then
+		self.defaultHeight = self.background.SizeDelta.y
+	end
+
+	self.content = self.moudle:Get("content")
+	if nil ~= self.content then
+		self.layout = self.content:AddGridLayoutGroup()
+		if nil ~= self.layout then
+			self.rewardColumnCount = self.layout.constraintCount
+			self.rewardRowHeight = self.layout.cellSize.y + self.layout.spacing.y
+		end
+	end
+end
+
+--初始化奖励列表
+function _P.InitRewardList(self)
+	for k, reward in pairs(self.rewards) do
+		CCommon.CreateItem(self.content, reward[1], CCommon.ShowItemTips, 
+					       {num = reward[2]}, Define.SysId.RechargeReward_DailyGift)
+	end
+	local row, rest = math.modf(#self.rewards / self.rewardColumnCount)
+	if rest > 0 then
+		row = row + 1
+	end
+	local width = self.background.SizeDelta.x
+	self.background.SizeDelta = Vector2(width, self.defaultHeight + (row - 1) * self.rewardRowHeight)
+	width = self.moudle.SelfRect.SizeDelta.x
+	self.moudle.SelfRect.SizeDelta = Vector2(width, self.defaultSelfRectHeight + (row - 1) * self.rewardRowHeight)
+end
+
+--刷新获取状态
+function _R.RefreshGetState(self, data)
+	self.btnGet.Activity = false
+	self.getFlag.Activity = true
+	self.getFlag.Alpha = 0
+	SoundMgr.Play(10004)
+	CCommon.CreateEffect(self.getFlag, GTE_EFFECT_ID, nil, function( ... ) 
+		self.getFlag.Alpha = 1
+		self.moudle.SelfRect:AddOnTime(function ()
+			self:Destroy()
+		end, nil, GetCloseDelay)
+	end)
+
+	if nil ~= self.rewards then
+		for index, reward in ipairs(self.rewards) do 
+			CCommon.ShowFlyItem(self.getFlag, reward[1], reward[2], index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
+		end
+	end
+end
+
+return _M

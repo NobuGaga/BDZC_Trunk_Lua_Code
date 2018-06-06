@@ -1,0 +1,467 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Recharge.MRecharge.bytes#_M]
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+--@RefType [Dev.Recharge.CRecharge.bytes#_M]
+local CRecharge = JRequire "Dev.Recharge.CRecharge"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local VipBarUpTime = 0.3
+--Vip特权每行文字高度偏移调整纸
+local VipTextRowHeightArg = 5.5
+
+local NormalMoudleName = "M_Recharge_VIP"
+local iOSMoudleName = "M_NewRecharge"
+local NormalItemName = "M_Recharge_Item"
+local iOSItemName = "M_NewRecharge_Item"
+
+local ColorGray = Color(166 / 255, 164 / 255, 164 / 255, 1)
+local ColorBlack = Color(0.5, 0.5, 0.5, 1)
+local ColorWhite = Color(1, 1, 1, 1)
+
+local RechargeFuncID = 10801
+local VipFuncID = 10802
+
+local ImageDatas = {
+	{
+		nodeName = "BG",
+		imageSize = Vector2(512, 1024),
+		iamgeName = "xbcz_001",
+	},
+	{
+		nodeName = "C_Back_Btn",
+		imageSize = Vector2(200, 133),
+		iamgeName = "xbcz_002",
+	},
+	{
+		nodeName = "ProgressBar",
+		imageSize = Vector2(10, 10),
+		iamgeName = "xbcz_003",
+	},
+	{
+		nodeName = "BtnCharge",
+		imageSize = Vector2(228, 64),
+		iamgeName = "xbcz_005",
+	},
+}
+local iOSItemIamgeName = "xbcz_004"
+local iOSItemIamgeSize = Vector2(396, 299)
+local iOSItemDiamondSize = Vector2(344, 279)
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local closeScale = 1.1
+	if GameSetting.IsiOSCommit then
+		self.moudle = self:CreateMoudle(self._RootNode, iOSMoudleName)
+		_P.InitiOSSprite(self)
+	else		
+		closeScale = 1.2
+		self.moudle = self:CreateMoudle(self._RootNode, NormalMoudleName)
+		self.moudle:Get("C_Text_1").Text = Csv.Text("recharge_title")
+	end
+	self.moudle:Get("C_Back_Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, closeScale)
+
+	self.lastLevel = MRecharge.VipData.level
+	_P.InitProgress(self, MRecharge.VipData.exp)
+
+	_P.InitPageButton(self)
+
+	local helpBtn = self.moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if self._SysId ~= nil and Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+end
+
+function _P.InitiOSSprite(self)
+	for _, imageData in pairs(ImageDatas) do
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(imageData.iamgeName, "Recharge"), 
+												imageData.imageSize.x, imageData.imageSize.y, 
+												function (sp)
+													if sp then
+														self.moudle:Get(imageData.nodeName).Sprite = sp
+													end
+												end)
+	end
+end
+
+function _P.InitProgress(self, curExp)
+	self.LevelNum = self.moudle:Get("LevelNum")
+	self.ProgressBar = self.moudle:Get("ProgressBar")
+	self.ProgressBar.FillAmount = 0
+	self.ExpText = self.moudle:Get("ExpText")
+	self.ExplainText = self.moudle:Get("ExplainText")
+	if not GameSetting.IsiOSCommit then
+		self.AssetNum = self.moudle:Get("AssetNum")
+		self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+			if Define.AssetsType.Gold == itemid then
+				self.AssetNum.Text = MBag.GetItemNum(itemid)
+			end
+		end)
+	end
+	
+	_P.InitMaxVipLevel(self)
+	_P.SetText(self, 0, 0, 0)
+
+	local csvVip = Csv.Vip
+	if nil ~= csvVip[self.lastLevel] then
+		local maxExp = csvVip[self.lastLevel].upExp
+		self.ProgressBar.FillAmount = curExp / maxExp
+		_P.SetText(self, self.lastLevel, curExp, maxExp)
+	end
+end
+
+function _P.InitMaxVipLevel(self)
+	local csvVip = Csv.Vip
+	self.maxVipLevel = 0
+	if nil ~= csvVip then
+		local csvVipCopy = {}
+		for id, csvValue in pairs(csvVip) do
+			table.insert(csvVipCopy, csvValue)
+		end
+		table.sort(csvVipCopy, function (left, right)
+			return left.level < right.level
+		end)
+		for id, csvValue in ipairs(csvVipCopy) do
+			if self.maxVipLevel < csvValue.level then
+				self.maxVipLevel = csvValue.level
+			end
+		end
+	end
+end
+
+function _P.SetText(self, level, curExp, maxExp)
+	if self.LevelNum.SpriteName then
+		self.LevelNum.SpriteName = Csv.Vip[level].icon
+	else
+		self.LevelNum.Text = level
+	end
+	if self.maxVipLevel == level then
+		self.ExpText.Text = curExp .. '/' .. curExp
+		maxExp = curExp
+		self.ProgressBar.FillAmount = 1
+	else
+		self.ExpText.Text = curExp .. '/' .. maxExp
+	end
+	if curExp < maxExp then
+		self.ExplainText.Text = Csv.Text("recharge_next", {num = maxExp - curExp, level = level + 1})
+	else
+		self.ExplainText.Text = ""
+	end
+	if self.AssetNum then
+		self.AssetNum.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+	end
+end
+
+function _P.InitPageButton(self)
+	local isRechargeOpen = nil ~= Csv.Func[RechargeFuncID]
+	local isVipOpen = nil ~= Csv.Func[VipFuncID]
+	local BtnPower
+
+	if not GameSetting.IsiOSCommit then
+		self.BtnCharge = self.moudle:Get("BtnChargeSelect")
+		self.BtnPower = self.moudle:Get("BtnPowerSelect")
+		self.BtnCharge.Activity = true
+		self.BtnPower.Activity = false
+
+		self.moudle:Get("PowerText").Text = Csv.Text("recharge_power")
+		self.moudle:Get("PowerTextSelect").Text = Csv.Text("recharge_power")
+		self.moudle:Get("ChargeTextSelect").Text = Csv.Text("recharge_title")
+
+	 	BtnPower = self.moudle:Get("BtnPower")
+		BtnPower.Activity = isVipOpen
+	end
+
+	self.moudle:Get("ChargeText").Text = Csv.Text("recharge_title")
+
+	_P.InitChargeView(self)
+
+	local BtnCharge = self.moudle:Get("BtnCharge")
+	BtnCharge.Activity = isRechargeOpen
+	
+	if isRechargeOpen and isVipOpen then
+		BtnCharge:AddOnButton(function()
+			SoundMgr.Play(10001)
+			_P.OnClickPage(self, true)
+		end)
+		BtnPower:AddOnButton(function()
+			SoundMgr.Play(10001)
+			_P.OnClickPage(self, false)
+		end)
+	end
+end
+
+function _P.InitChargeView(self)
+	self.ChargeView = self.moudle:Get("ChargeView") 
+	self.ChargeView.Activity = true
+	self.listItemCharge = {}
+	self.ChargeContent = self.moudle:Get("ChargeContent")
+	local csvRecharge = Csv.Recharge
+	if nil ~= csvRecharge then
+		for id, csvValue in pairs(csvRecharge) do
+			if GameSetting.IsiOSCommit or (nil == csvValue.type or 0 == csvValue.type) then
+				_P.CreateChargeItem(self, csvValue)
+			end
+		end
+	end
+end
+
+function _P.CreateChargeItem(self, data)
+	local itemMoudle
+	if GameSetting.IsiOSCommit then 
+		itemMoudle = JGuiManager.GetMoudle(self.ChargeContent, iOSItemName)
+	else
+		itemMoudle = JGuiManager.GetMoudle(self.ChargeContent, NormalItemName)
+	end
+	local item = {}
+	
+	item.titleText = itemMoudle:Get("TextTitle")
+	item.titleText.Text = Csv.Text("recharge_coin", {num = data.diamond})
+	item.buyNumText = itemMoudle:Get("TextBuyNum")
+	item.buyNumText.Text = data.costText
+	item.icon = itemMoudle:Get("Icon")
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSItemIamgeName, "Recharge"), 
+												iOSItemIamgeSize.x, iOSItemIamgeSize.y, 
+												function (sp)
+													if sp then
+														itemMoudle.SelfRect.Sprite = sp
+													end
+												end)
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(data.icon, "Recharge"), 
+												iOSItemDiamondSize.x, iOSItemDiamondSize.y, 
+												function (sp)
+													if sp then
+														item.icon.Sprite = sp
+													end
+												end)
+	else
+		item.icon.SpriteName = data.icon
+		item.FirstFlag = itemMoudle:Get("LbConerLeft")
+		item.FirstFlag.Activity = MRecharge.IsFirstBuy(data.id)
+	end
+	item.icon:SetNativeSize()
+
+	itemMoudle.SelfRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		SDKMgr.ReqPay(data.id, data.cost, data.diamond) 
+	end)
+
+	self.listItemCharge[data.id] = item
+end
+
+function _P.InitVipView(self)
+	self.VipView = self.moudle:Get("VipView") 
+	self.VipView.Activity = true
+	self.listItemVIP = {}
+	self.VipContent = self.moudle:Get("VipContent")
+	
+	local csvVip = Csv.Vip
+	if nil ~= csvVip then
+		local csvVipCopy = {}
+		for id, csvValue in pairs(csvVip) do
+			table.insert(csvVipCopy, csvValue)
+		end
+		table.sort(csvVipCopy, function (left, right)
+			return left.level < right.level
+		end)
+		for id, csvValue in ipairs(csvVipCopy) do
+			if 0 ~= csvValue.level then
+				_P.CreateVipItem(self, "M_Recharge_VIP_Item", csvValue, csvVipCopy[id - 1])
+			end
+		end
+	end
+end
+
+function _P.CreateVipItem(self, itemName, data, lastData)
+	local itemMoudle = JGuiManager.GetMoudle(self.VipContent, itemName)
+
+	local allBackground = {}
+	allBackground["Vip"] = itemMoudle:Get("Vip")
+	allBackground["Vip"].SpriteName = Csv.Vip[data.level].icon
+	allBackground["TextTitle"] = itemMoudle:Get("TextTitle")
+	allBackground["TextTitle"].Text = Csv.Text("recharge_power_need", {num = lastData.upExp})
+	allBackground["TextBuff"] = itemMoudle:Get("TextBuff")
+	self.VipTextRowHeight = allBackground["TextBuff"].FontSize + VipTextRowHeightArg
+	allBackground["VipImg"] = itemMoudle:Get("VipImg")
+	allBackground["line1"] = itemMoudle:Get("line1")
+	allBackground["line2"] = itemMoudle:Get("line2")
+	_P.ChangeVipItemHeight(self, itemMoudle, data, allBackground)
+
+	if self.lastLevel < data.level then
+		for _, image in pairs(allBackground) do
+			if "line1" == _ or "line2" == _ then
+				image.Color = ColorBlack
+			elseif "TextTitle" == _ then
+				image.Color = ColorGray
+			elseif "TextBuff" == _  then
+				image.Color = ColorGray
+				image.Text = string.gsub(image.Text, "<.->", "")
+			else
+				image.IsGray = true				 
+			end
+		end
+	end
+	self.listItemVIP[data.level] = allBackground
+end
+
+function _P.ChangeVipItemHeight(self, itemMoudle, data, allBackground)
+	if nil == self.VipItemHeight then
+		self.VipItemHeight = {}
+		self.VipItemHeight[0] = 0
+		self.VipItemSpaceHeight = self.VipContent:AddVerticalLayoutGroup().spacing
+	end
+
+	local vipItemBg = _P.InitVipItemHeight(self, itemMoudle, data)
+	local row = _P.CalculateStringRow(data.desc)
+	local height = row * self.VipTextRowHeight
+	for key, rect in pairs(vipItemBg) do
+		rect.SizeDelta = Vector2(rect.SizeDelta.x, rect.SizeDelta.y + height)
+		if "Item" == key then
+			self.VipItemHeight[data.level] = self.VipItemHeight[data.level - 1] + rect.SizeDelta.y + self.VipItemSpaceHeight
+			if self.maxVipLevel == data.level then
+				local layoutGroup = self.VipContent:AddVerticalLayoutGroup()
+				self.VipItemHeight[data.level] = self.VipItemHeight[data.level] - self.VipItemSpaceHeight + layoutGroup.padding.top
+			end
+		end
+	end
+	allBackground["TextBuff"].Text = data.desc
+end
+
+function _P.InitVipItemHeight(self, itemMoudle, data)
+	local vipItemBg = {}
+	vipItemBg["Item"] = itemMoudle.SelfRect
+	vipItemBg["bg2"] = itemMoudle:Get("bg2")
+	vipItemBg["bg4"] = itemMoudle:Get("bg4")
+	vipItemBg["bg5"] = itemMoudle:Get("bg5")
+	vipItemBg["bg3"] = itemMoudle:Get("bg3")
+	return vipItemBg
+end
+
+function _P.CalculateStringRow(text)
+	local index = 0
+	local num = 1
+	while nil ~= index do
+		index = string.find(text, "\n", index + 1)
+		num = num + 1
+	end
+	return num
+end
+
+function _P.OnClickPage(self, isCharge)
+	if nil == self.VipView and not isCharge then
+		_P.InitVipView(self)
+	end
+
+	if (not self.BtnCharge.Activity and isCharge) or
+	   (not self.BtnPower.Activity and not isCharge) then
+		self.BtnCharge.Activity = isCharge
+		self.BtnPower.Activity = not isCharge
+		self.VipView.Activity = not isCharge
+		self.ChargeView.Activity = isCharge
+
+		if isCharge then
+			self.ChargeContent.LocalPosition = Vector2(self.ChargeContent.LocalPosition.x, 0)
+		else
+			local maxHeight = self.VipItemHeight[self.maxVipLevel] - self.VipView.SizeDelta.y
+			local height = self.VipItemHeight[self.lastLevel]
+			if height > maxHeight then
+				height = maxHeight
+			end
+			self.VipContent.LocalPosition = Vector2(self.VipContent.LocalPosition.x, height)
+		end
+	end
+end
+
+function _R.OnRefreshView(self, level, curExp, maxExp)
+	_P.SetText(self, level, curExp, maxExp)
+	if level > self.lastLevel then
+		self.ProgressBar:DOKill()
+		self.ProgressBar:DOFillAmount(1, VipBarUpTime):OnComplete(
+			function() 
+				self.ProgressBar.FillAmount = 0
+				self.ProgressBar:DOFillAmount(curExp / maxExp, VipBarUpTime):OnComplete(
+					function()
+						if nil ~= Csv.Vip[level].icon then
+							local text = Csv.Vip[level].desc
+							if nil ~= text and not GameSetting.IsiOSCommit then
+								WindowMgr.Create("URechargeUp", level, text)
+							end
+						end
+					end)
+			end)
+
+		if nil ~= self.listItemVIP then
+			for itemLevel, itemVip in pairs(self.listItemVIP) do
+				if itemLevel > self.lastLevel and level >= itemLevel then
+					for _, image in pairs(self.listItemVIP[level]) do
+						if "line1" == _ or "line2" == _ then 
+							image.Color = ColorWhite
+						elseif "TextTitle" == _ then 
+							image.Color = ColorWhite
+						elseif "TextBuff" == _ then
+							image.Color = ColorWhite
+							image.Text = Csv.Vip[level].icon.desc
+						else
+							image.IsGray = false				 
+						end
+					end
+				end
+			end
+		end
+	else
+		self.ProgressBar:DOFillAmount(curExp / maxExp, VipBarUpTime)
+	end
+	self.lastLevel = level
+end
+
+function _R.OnRefreshFirstFlag(self)
+	local data = MRecharge.ProductData
+	if nil ~= data then
+		for key, value in pairs(data) do
+			local item = self.listItemCharge[key]
+			if nil ~= item and nil ~= item.FirstFlag then
+				item.FirstFlag.Activity = 0 == value
+			end
+		end
+	end
+end
+
+return _M

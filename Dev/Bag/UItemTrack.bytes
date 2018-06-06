@@ -1,0 +1,95 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MBag = JRequire "Dev.Bag.MBag"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(itemId, needNum, haveNum)
+	local itemCsv = Csv.Item[itemId]
+	local trackCsv = Csv.ItemTrack[itemId]
+	assert(itemCsv ~= nil and trackCsv ~= nil, itemId)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_ItemTrack")
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("bag_itemTrack1")
+
+	local iconRect = moudle:Get("IconRect")
+	local noneRect = moudle:Get("None")
+	noneRect.Text = trackCsv.showParam
+	if trackCsv and trackCsv.showType and trackCsv.showType == 1 then
+		iconRect.Activity = false
+		noneRect.Activity = true
+	else
+		iconRect.Activity = true
+		noneRect.Activity = false
+		moudle:Get("ItemColor").SpriteName = itemCsv.colorIcon
+		moudle:Get("ItemName").Text = Csv.Text("common_color",{num = Csv.ItemColor[itemCsv.color].str,name = itemCsv.name})
+		moudle:Get("ItemIcon").SpriteName = itemCsv.icon
+		if haveNum ~= nil then
+			moudle:Get("ItemNum").Text = Csv.Text("bag_itemTrack3", {num = haveNum, max = needNum})
+		else
+			moudle:Get("ItemNum").Text = Csv.Text("bag_itemTrack3", {num = MBag.GetItemNum(itemId), max = needNum})
+		end
+	end
+
+	local content = moudle:Get("Content")
+	local notOpenFuncs = {}
+	for index,funcId in pairs(trackCsv.funcId) do
+		if MMain.FuncIsOpen(funcId) then
+			local oneMoudle = self:CreateMoudle(content, "M_ItemTrackOne")
+			local title = trackCsv.title[index]
+			oneMoudle:Get("Name").Text = title or ""
+			local tips = trackCsv.tips[index]
+			oneMoudle:Get("Tips").Text = tips or ""
+			oneMoudle:Get("C_text").Text = Csv.Text("bag_itemTrack2")
+			
+			oneMoudle:Get("C_Btn_a").Activity = true
+			oneMoudle:Get("C_Btn_a"):AddOnButton(function( ... )
+				WindowOpen.Open(funcId)
+			end)
+		else
+			table.insert(notOpenFuncs, {index = index, funcId = funcId})
+		end
+	end
+	if #notOpenFuncs > 0 then
+		for _,v in pairs(notOpenFuncs) do
+			local oneMoudle = self:CreateMoudle(content, "M_ItemTrackOne")
+			local title = trackCsv.title[v.index]
+			oneMoudle:Get("Name").Text = title or ""
+			local tips = trackCsv.tips[v.index]
+			oneMoudle:Get("Tips").Text = tips or ""
+			oneMoudle:Get("C_text").Text = Csv.Text("bag_itemTrack2")
+			oneMoudle:Get("C_Btn_a").Activity = true
+			oneMoudle:Get("C_Btn_a").IsGray = true
+		end
+	end
+end
+
+return _M

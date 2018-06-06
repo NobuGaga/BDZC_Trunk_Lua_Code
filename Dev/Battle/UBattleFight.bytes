@@ -1,0 +1,1263 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MLogin = JRequire "Dev.Login.MLogin"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local staffVec1 = Vector2(-183, -1036)
+local staffVec2 = Vector2(653, -1036)
+local enemyBossVec1 = Vector2(208, -530)
+local enemyBossVec2 = Vector2(-638, -530)
+
+local MINETALKTWEEN = "T_Battle_OwnTalk"
+local ENEMYTALKTWEEN = "T_Battle_BossTalk"
+local ENEMYMOVETWEEN1 = "T_Battle_EnemyChangeStaff1"
+local ENEMYMOVETWEEN2 = "T_Battle_EnemyChangeStaff2"
+local MINEMOVETWEEN1 = "T_Battle_MineChangeStaff1"
+local MINEMOVETWEEN2 = "T_Battle_MineChangeStaff2"
+local SECKILLTALKTWEEN = "T_Battle_SeckillTalk"
+local SECKILLBGTWEEN = "T_Battle_SeckillBg"
+local SIMPLE_STR = "_Simple"
+local COLOR_WHITE = Color(1, 1, 1, 1)
+
+local dackActorId = 10018
+local attackActorId = 10038
+local seckillAttackActorId = 10068
+local seckillDackActorId = 10069
+local seckillActorId = 10070
+local seckillpkActorId = 10079
+
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+local lastBattleTime = 0
+local seckillBattleTime = 0
+local openVipLevel = Csv.Const(Define.Const.OpenSeckillLv)
+local lockImgName = "gk_031_1"
+local openImgName = "gk_031"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+-- 战斗表现方式枚举，1为对话，2为新员工顶调旧员工
+local BattleShowEnum = {
+	Task = 1,
+	TopOff = 2
+}
+
+
+-- 阵营枚举
+local CampEnum = {
+	Mine = 1,
+	Enemy = 2
+}
+
+
+local MAX_PRO_NUM = 8
+local PRO_PASSED_SPRITENAME = "gk_005_1"
+local PRO_SPRITENAME = "gk_005"
+
+-- 结果回调
+function _R.OnResult(self, data, onDoneCall)
+	self.isWin = (data.state == MBattle.ResultState.Win)
+	self.PkRoot.Activity = false
+	self.seckillActorPanel.Activity = false
+	self.resultData = data
+	self.onDoneCall = onDoneCall
+	self.isShowResult = nil
+	if self.IsNoPassBtn then
+
+	else
+		self.skipBtn.Activity = true
+	end	
+	_P.RefreshBobyInfo(self)
+	_P.GetBattlerReportData(self)
+
+	--战斗效果播放
+	self.closeBtn.RaycastTarget = false
+	_P.OnPlayOneReport(self)
+end
+
+
+-- 一键秒杀回调
+function _R.OnSeckillResult(self, data, onDoneCall)
+	self.isWin = (data.state == MBattle.ResultState.Win)
+	self.PkRoot.Activity = false
+	self.seckillActorPanel.Activity = false
+	if self.IsNoPassBtn then
+
+	else
+		self.skipBtn.Activity = false
+	end
+	self.Enemy.Blood.Activity = false
+	self.resultData = data
+	self.onDoneCall = onDoneCall
+	self.isShowResult = nil
+	MBattle.IsSeckill = true
+	if self.resultData.blood then
+		-- 进度条强制设置为满的情况
+		local csv = Csv.Battle[self.resultData.id]
+		local chapterCsv = Csv.Chapter[csv.chapter]
+		self.Enemy.Blood:DOKill()
+		self.Enemy.BloodBar:DOKill()
+		self.Enemy.BloodBar.FillAmount = 1
+		self.Enemy.Blood.Text = LuaUtil.NumberFormat(csv.gold)
+	end
+
+	-- 播放战斗效果
+	self.closeBtn.RaycastTarget = false
+	_P.OnPlaySeckillAnim(self)
+end
+
+
+-- 关闭战斗胜利、失败界面后调用
+function _P.OnResultClose(self)
+	if self.Moudle ~= nil then
+		if self.LastBattleID ~= MBattle.CurId then
+			local lastBattleCsv = Csv.Battle[self.LastBattleID]
+			local curBattleCsv = Csv.Battle[MBattle.CurId]
+			if lastBattleCsv.chapter ~= curBattleCsv.chapter then -- 胜利，进入下一章节
+				self:Destroy()
+			else -- 胜利，还在当前章节
+				self.closeBtn.RaycastTarget = true
+				_P.RefreshBattle(self, true)
+			end
+		else -- 失败
+			self.closeBtn.RaycastTarget = true
+			_P.RefreshBattle(self, false)
+		end
+	end
+	if self.onDoneCall ~= nil then
+		self.onDoneCall()
+	end
+end
+
+
+-- 显示结果
+function _P.DoShowResult(self)
+	if self.Moudle ~= nil then
+		if self.resultData.state == MBattle.ResultState.Fail or
+			self.resultData.state == MBattle.ResultState.Continue
+		then
+			WindowMgr.Create("UBattleFail", self.resultData.id, self.resultData.hurt, function ()
+				_P.OnResultClose(self)
+			end)
+		else
+			WindowMgr.Create("UBattleWin", self.resultData.id, self.resultData.money, function ()
+				_P.OnResultClose(self)
+			end, self.ownPower, self.resultData.selfcost)
+		end
+
+		self.isShowResult = true
+		self.Own.Blood:DOKill()
+		self.Own.BloodBar:DOKill()
+		local nowMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+		self.Own.BloodBar.FillAmount = nowMoney / self.StartMoney
+		self.Own.Blood.Text = LuaUtil.NumberFormat(nowMoney)
+
+		self.Enemy.Blood:DOKill()
+		self.Enemy.BloodBar:DOKill()
+		local nowBlood = self.resultData.blood or 0
+		local lastBattleCsv = Csv.Battle[self.LastBattleID]
+		self.Enemy.Blood.Text = LuaUtil.NumberFormat(nowBlood)
+		self.Enemy.BloodBar.FillAmount = nowBlood / lastBattleCsv.gold
+
+	elseif self.onDoneCall ~= nil then
+		self.onDoneCall()
+	end
+end
+
+
+function _P.OnPlayOwnBlood(self, isFast)
+	self.Own.Blood:DOKill()
+	self.Own.BloodBar:DOKill()
+
+	local nowMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+	local isWinDelay = (isFast == nil and 0.3) or 0.05
+
+	local curRoundBlood = math.floor((self.StartMoney - nowMoney) * ((self.totalMineNum - self.CurMineRound) / self.totalMineNum) + nowMoney)
+	self.Own.BloodBar:DOFillAmount(curRoundBlood / self.StartMoney, isWinDelay)
+	
+	local t = JTweenerManager.IntTween(self.LastMoney, curRoundBlood, isWinDelay, function(value)
+		if self.Own.Blood ~= nil then self.Own.Blood.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if self.Own.Blood ~= nil then 
+			self.Own.Blood.Text = LuaUtil.NumberFormat(curRoundBlood)
+			self.LastMoney = curRoundBlood
+		end
+	end)
+	t:SetTarget(self.Own.Blood.CachedTran)
+end
+
+
+-- 一键秒杀播放自己血条
+function _P.OnPlayFastOwnBlood(self, delay)
+	self.Own.Blood:DOKill()
+	self.Own.BloodBar:DOKill()
+
+	local nowMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+	self.Own.BloodBar:DOFillAmount(nowMoney / self.StartMoney, delay)
+	local t = JTweenerManager.IntTween(self.StartMoney, nowMoney, delay, function(value)
+		if self.Own.Blood ~= nil then self.Own.Blood.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if self.Own.Blood ~= nil then self.Own.Blood.Text = LuaUtil.NumberFormat(nowMoney) end
+	end)
+	t:SetTarget(self.Own.Blood.CachedTran)
+end
+
+
+function _P.OnPlayThatBlood(self, isFast)
+	self.Enemy.Blood:DOKill()
+	self.Enemy.BloodBar:DOKill()
+	local nowBlood = self.resultData.blood or 0
+	local lastBattleCsv = Csv.Battle[self.LastBattleID]
+
+	local leaveBlood = self.LastEnemyBlood - nowBlood
+	local curRoundBlood = math.floor(leaveBlood * ((self.totalEnemyNum - self.CurEnemyRound) / self.totalEnemyNum) + nowBlood)
+	local isWinDelay = (isFast == nil and 0.3) or 0.05
+
+	self.Enemy.BloodBar:DOFillAmount(curRoundBlood / lastBattleCsv.gold, isWinDelay)
+	self.thatIntTween = JTweenerManager.IntTween(self.LastEnemyNum, curRoundBlood, isWinDelay, function(value)
+		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if self.Enemy.Blood ~= nil then 
+			self.Enemy.Blood.Text = LuaUtil.NumberFormat(curRoundBlood)
+			self.LastEnemyNum = curRoundBlood
+		end
+	end)
+	self.thatIntTween:SetTarget(self.Enemy.Blood.CachedTran)
+end
+
+
+-- 一键秒杀播放boss血条信息
+function _P.OnPlayFastThatBlood(self, delay)
+	self.Enemy.Blood:DOKill()
+	self.Enemy.BloodBar:DOKill()
+	local nowBlood = (self.resultData and self.resultData.blood) or 0
+	local lastBattleId = MBattle.SeckillBattleData.lastId
+	local lastBattleCsv = Csv.Battle[lastBattleId]
+	self.Enemy.BloodBar:DOFillAmount(nowBlood / lastBattleCsv.gold, delay)
+	local t = JTweenerManager.IntTween(self.LastEnemyBlood, nowBlood, delay, function(value)
+		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(nowBlood) end
+	end)
+	t:SetTarget(self.Enemy.Blood.CachedTran)
+end
+
+
+function _P.OnPlayOneReport(self, isFast)
+	if self.reportData == nil then return end
+
+	if #self.reportData <= 0 then
+		self.Moudle.SelfRect:AddOnTime(function()
+			if self.isShowResult == nil then
+				self.Own.Talk.Activity = false
+				self.Own.BobyBg1.Activity = false
+				self.Enemy.Talk.Activity = false
+				self.reportData = nil
+				if self.resultData.state == MBattle.ResultState.Win and self.thatIntTween and tonumber(self.Enemy.Blood.Text) ~= 0 then
+					self.Enemy.Blood.Text = 0
+					self.Enemy.BloodBar:DOKill()
+					self.Enemy.BloodBar.FillAmount = 0
+					self.thatIntTween = nil
+				end
+				_P.DoShowResult(self)
+			end
+		end, nil, 0.25)
+		return
+	end
+
+	local reportData = self.reportData[1]
+	if reportData.playType == BattleShowEnum.Task then
+		_P.OnPlayTalk(self, reportData)
+	else
+		SoundMgr.PlayNonStopUI(10022)
+		_P.OnPlayMove(self, reportData)
+	end
+
+	-- 需要播放血条变化
+	if reportData.isShowHit then
+		if isFast then
+			if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
+				_P.SetBloodData(self, reportData.campType, isFast)
+			end
+
+			if self.isSkipBattle then self.isSkipBattle = nil end
+		else
+			local delayTime = (reportData.playType == BattleShowEnum.Task and 1.2) or 1.9
+			self.BG:AddOnTime(function()
+				if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
+					_P.SetBloodData(self, reportData.campType, isFast)
+				end
+
+				if self.isSkipBattle then self.isSkipBattle = nil end
+			end, nil, delayTime)
+		end
+	end
+
+	table.remove(self.reportData, 1)
+end
+
+
+function _P.SetBloodData(self, curCampEnum, isFast)
+	if curCampEnum == CampEnum.Enemy then
+		self.CurMineRound = self.CurMineRound + 1
+		_P.OnPlayOwnBlood(self, isFast)
+	else
+		self.CurEnemyRound = self.CurEnemyRound + 1
+		_P.OnPlayThatBlood(self, isFast)
+	end
+end
+
+
+-- isShowHit对方是否需要显示攻击效果
+function _P.OnPlayTalk(self, data)
+	local boby = (data.campType == CampEnum.Mine and self.Own.BobyBg1) or self.Enemy.BobyBg1
+	local enemyBoby = (data.campType ~= CampEnum.Mine and self.Own.BobyBg1) or self.Enemy.BobyBg1
+	local text = data.showText
+	local talkBg = (data.campType == CampEnum.Mine and self.Own.Talk) or self.Enemy.Talk
+	local thatTalkBg = (data.campType == CampEnum.Enemy and self.Own.Talk) or self.Enemy.Talk
+	local talkText = (data.campType == CampEnum.Mine and self.Own.TalkText) or self.Enemy.TalkText
+	local tweenName = (data.campType == CampEnum.Mine and MINETALKTWEEN) or ENEMYTALKTWEEN .. ((data.isShowHit and "") or SIMPLE_STR)
+	local actorPanel = (data.campType == CampEnum.Enemy and self.Own.ActorPanel) or self.Enemy.ActorPanel
+	talkBg.LocalScale = (data.campType == CampEnum.Mine and Vector3.one) or Vector3(-1, -1, 1)
+	thatTalkBg.LocalScale = (data.campType == CampEnum.Mine and Vector3.one) or Vector3(-1, -1, 1)
+
+	self.CurTween = {type = BattleShowEnum.Task, campType = data.campType, bobyBg = boby, enemyBoby = enemyBoby, talkBg = talkBg, 
+					thatTalkBg = thatTalkBg, talkText = talkText, text = text, actorPanel = actorPanel}
+
+	--播放特效
+	if self.talkTween then
+		self.talkTween:Restore()
+	end
+
+	talkBg.Activity = true
+	talkText.Text = text
+
+	local talkTweener = self.AnimRect.CachedTran:GetJTweener(tweenName)
+	self.talkTween = talkTweener
+
+	talkTweener:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			talkBg.Activity = false
+		end
+
+		if self.talkTween == nil then return end
+		_P.OnPlayOneReport(self)
+	end)
+
+	SoundMgr.PlayNonStopUI(10020)
+	talkTweener:Play()
+
+	if data.isShowHit then
+		self.Moudle.SelfRect:AddOnTime(function()
+			self.isPlayAttack = true
+			SoundMgr.PlayNonStopUI(10021)
+			CCommon.CreateEffect(actorPanel, attackActorId, nil, function( ... ) -- 播放攻击效果
+				self.isPlayAttack = nil
+			end)
+		end, nil, 1.1)
+	else
+		SoundMgr.PlayNonStopUI(10023)
+	end
+end
+
+
+-- 播放一键秒杀动画
+function _P.OnPlaySeckillAnim(self)
+	local fluxayActorPanel = self.Moudle:Get("ActorSeckillPanel")
+	local lastBattleId = MBattle.SeckillBattleData.lastId
+	local curBattleId = MBattle.SeckillBattleData.curId
+	local lightPro = MBattle.GetPassNum()
+	local oneDelay = 1.8 / lightPro
+	
+	self.BlackBg.Activity = true
+	CCommon.CreateEffect(fluxayActorPanel, seckillActorId, nil, function( ... )
+		self.BlackBg.Activity = false
+		local curStaffId = _P.RefreshBobyInfo(self, true)
+
+		-- 设置对话框内容
+		local curBattleConf = Csv.Battle[lastBattleId]
+		local enemyTalkStr = ""
+		if curBattleConf then
+			enemyTalkStr = _P.GetCurStaffTalkStr(curBattleConf.bossSeckillResponse, curBattleConf.bossId)
+			local mineTalkStr = _P.GetCurStaffTalkStr(curBattleConf.staffSeckillSpeak, curStaffId)
+			self.Enemy.Talk.LocalScale = Vector3(-1, -1, 1)
+			self.Own.Talk.Activity = true
+			self.Own.TalkText.Text = mineTalkStr
+			self.Enemy.TalkText.Text = ""
+		end
+
+		local shakeBg = self.Moudle:Get("BattlePanel")
+		local talkTweener = self.AnimRect.CachedTran:GetJTweener("T_Battle_SeckillTalk")
+		talkTweener:SetOnComplete(function()
+			_P.DestroyProTween(self)
+			_P.AcountSeckillResult(self)
+		end)
+		talkTweener:Play()
+
+		self.Moudle.SelfRect:AddOnTime(function()
+			local shakeTweener = shakeBg.CachedTran:GetJTweener("T_Battle_SeckillBg")
+			shakeTweener:Play()
+			self.Enemy.Talk.Activity = true
+			local scrollTween = self.Enemy.TalkText:DOText(enemyTalkStr, 2)
+
+			SoundMgr.PlayNonStopUI(10028)
+			CCommon.CreateEffect(self.Enemy.ActorPanel, seckillAttackActorId, nil, function( ... ) -- 播放攻击效果
+				shakeTweener:DOKill()
+
+				if scrollTween ~= nil then
+					self.Enemy.TalkText:DOKill()
+				end
+			end)
+
+			_P.OnPlayFastOwnBlood(self, 1.8)
+			_P.OnPlayFastThatBlood(self, 1.8)
+
+			if lightPro > 0 then
+				local numTmp = 1
+				local proNum = curBattleId % 10
+				_P.SetSeckillProData(self, proNum)
+
+				if numTmp <= lightPro and lightPro > 1 then
+					self.ProTween = shakeBg:AddOnUpdate(function()
+						if numTmp == lightPro then
+							_P.DestroyProTween(self)
+							return
+						end
+
+						proNum = proNum + 1
+						numTmp = numTmp + 1
+						_P.SetSeckillProData(self, proNum)
+					end, nil, oneDelay)
+				end
+			end
+		end, nil, 1.1)
+	end)
+end
+
+
+function _P.DestroyProTween(self)
+	if self.ProTween then
+		self.ProTween:Destroy()
+		self.ProTween = nil
+	end
+end
+
+
+-- 一键秒杀结算
+function _P.AcountSeckillResult(self)
+	local seckillData = MBattle.SeckillBattleData
+	local curBattleData = MBattle.GetCurData(seckillData.list, seckillData.curId)
+	local lastBattleData = MBattle.GetCurData(seckillData.list, seckillData.lastId)
+
+	if curBattleData and lastBattleData then
+		if curBattleData.state == MBattle.ResultState.Fail then
+			WindowMgr.Create("UBattleFail", self.resultData.id, self.resultData.hurt, function ()
+				_P.OnResultClose(self)
+			end)
+		else
+			WindowMgr.Create("UBattleWin", self.resultData.id, self.resultData.money, function ()
+				_P.OnResultClose(self)
+			end, self.ownPower, self.resultData.selfcost, true)
+		end
+	end
+end
+
+
+function _P.OnPlayMove(self, data)
+	if self.moveTween1 then
+		self.moveTween1:Restore()
+	end
+
+	if self.moveTween2 then
+		self.moveTween2:Restore()
+	end
+
+	local staff1 = (data.campType == CampEnum.Mine and self.Own.BobyBg1) or self.Enemy.BobyBg1
+	local staff2 = (data.campType == CampEnum.Mine and self.Own.BobyBg2) or self.Enemy.BobyBg2
+	staff2.SpriteName = data.newIconName
+
+	local tweenName1 = (data.campType == CampEnum.Mine and MINEMOVETWEEN1) or ENEMYMOVETWEEN1
+	local tweenName2 = (data.campType == CampEnum.Mine and MINEMOVETWEEN2) or ENEMYMOVETWEEN2
+	local staffPos1 = (data.campType == CampEnum.Mine and staffVec1) or enemyBossVec1
+	local staffPos2 = (data.campType == CampEnum.Mine and staffVec2) or enemyBossVec2
+	local staffTweener1 = staff1.CachedTran:GetJTweener(tweenName1)
+	local staffTweener2 = staff2.CachedTran:GetJTweener(tweenName2)
+
+	self.moveTween1 = staffTweener1
+	self.moveTween2 = staffTweener2
+	self.CurTween = {type = BattleShowEnum.TopOff, staff1 = staff1, staff2 = staff2, 
+					staffPos1 = staffPos1, staffPos2 = staffPos2, moveData = data}
+
+	staffTweener1:SetOnComplete(function()
+		if self.moveTween1 == nil then return end
+
+		staffTweener2:Play()
+	end)
+
+	staffTweener2:SetOnComplete(function()
+		if self.moveTween2 == nil then return end
+
+		if self.Moudle ~= nil then
+			staff1.SpriteName = data.newIconName
+			staff1.LocalPosition = staffPos1
+			staff2.LocalPosition = staffPos2
+		end
+
+		-- 挡刀情况不需要播对话，直接跳到下一步骤
+		if data.showText then
+			_P.OnPlayTalk(self, data)
+		else
+			_P.OnPlayOneReport(self)
+		end
+	end)
+
+	staffTweener1:Play()
+end
+
+
+-- 移除谈话步骤
+function _P.KilledTalkTween(self)
+	if self.CurTween.isFinished ~= nil then return end
+	self.CurTween.isFinished = true
+
+	self.CurTween.bobyBg.LocalScale = Vector3.one
+	self.CurTween.talkText.Text = self.CurTween.text
+	self.CurTween.thatTalkBg.Activity = false
+	self.CurTween.talkBg.Activity = true
+	self.CurTween.talkBg.LocalScale = (self.CurTween.campType == CampEnum.Mine and Vector3.one) or Vector3(-1, -1, 1)
+	self.CurTween.Alpha = 1
+	self.CurTween.enemyBoby.Color = COLOR_WHITE
+
+	self.Moudle.SelfRect:AddOnTime(function()
+		self.CurTween.talkBg.Activity = false
+		if self.isShowResult == nil then
+			_P.OnPlayOneReport(self, true)
+		end
+	end, nil, 0.2)
+end
+
+
+-- 移除移动步骤
+function _P.KilledMoveTween(self)
+	if self.CurTween.type == BattleShowEnum.Task then
+		if self.CurTween.talkBg then
+			self.CurTween.talkBg.Activity = false
+		end
+		if self.CurTween.thatTalkBg then
+			self.CurTween.thatTalkBg.Activity = false
+		end
+		_P.KilledTalkTween(self)
+		return
+	end
+
+	if self.CurTween.isFinished ~= nil then return end
+	self.CurTween.isFinished = true
+	
+	self.CurTween.staff1.LocalScale = Vector3.one
+	self.CurTween.staff1.LocalPosition = self.CurTween.staffPos1
+
+	self.CurTween.staff2.LocalScale = Vector3.one
+	self.CurTween.staff2.LocalPosition = self.CurTween.staffPos2
+
+	if self.CurTween.moveData ~= nil then
+		self.CurTween.staff1.SpriteName = self.CurTween.moveData.newIconName
+		self.CurTween.type = BattleShowEnum.Task
+		if not self.isSkipBattle then
+			_P.OnPlayTalk(self, self.CurTween.moveData)
+		end
+	end
+end
+
+
+-- 点击快进按钮
+function _P.OnClickFast(self)
+	if self.CurTween == nil or (self.CurTween.isFinished ~= nil and self.CurTween.isFinished) then return end
+		
+	if self.CurTween.type == BattleShowEnum.Task then
+		if self.talkTween ~= nil then
+			self.talkTween:DOKill()
+			_P.KilledTalkTween(self)
+			self.talkTween = nil
+		end
+
+		-- 销毁攻击特效
+		if self.CurTween.actorPanel ~= nil and self.isPlayAttack ~= nil then
+			self.CurTween.actorPanel:DestroyChildren()
+		end
+	elseif self.CurTween.type == BattleShowEnum.TopOff then
+		if self.moveTween1 ~= nil then
+			self.moveTween1:DOKill()
+			_P.KilledMoveTween(self)
+			self.moveTween1 = nil
+		end
+
+		if self.moveTween2 ~= nil then
+			self.moveTween2:DOKill()
+			_P.KilledMoveTween(self)
+			self.moveTween2 = nil
+		end
+	end
+end
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+-- 名字
+function _P.RefreshName(self)
+	self.Own.Name.Text = MPlayer.GetName()
+end
+
+
+-- 等级
+function _P.RefreshLevel(self)
+	local csv = Csv.Company[MPlayer.GetLevel()]
+	self.Own.Level.Text = '(' .. csv.name .. ')'
+end
+
+
+-- 头像
+function _P.RefreshAvatar(self)
+	self.Own.Head.SpriteName = MPlayer.GetHeadIcon()
+end
+
+
+-- 公关
+function _P.RefreshAttr(self)
+	local csv = Csv.Battle[self.LastBattleID]
+
+	self.ownPower = MPlayer.GetAttr(Define.AttrType.Wuli)
+	self.Own.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(self.ownPower)) .. _P.GetBattleLevel(csv.Courage, self.ownPower)
+end
+
+
+-- 设置我方血量信息
+function _P.RefreshMoney(self)
+	self.Own.Blood:DOKill()
+	self.Own.BloodBar:DOKill()
+	self.StartMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+	self.LastMoney = self.StartMoney -- 上一轮金钱数量
+	if self.StartMoney > 0 then
+		self.Own.BloodBar.FillAmount = 1
+	else
+		self.Own.BloodBar.FillAmount = 0
+	end
+	self.Own.Blood.Text = LuaUtil.NumberFormat(self.StartMoney)
+end
+
+
+-- 设置背景图
+function _P.RefreshBG(self)
+	local csv = Csv.Battle[self.LastBattleID]
+	self.BG.SpriteName = Csv.BattleIcon[csv.scene].str
+	self.Moudle:Get("tab").SpriteName = Csv.BattleIcon[csv.tableImg].str
+
+	self.isBossBattle = true -- 是boss迎战
+	self.mineStaffs = _P.GetOwnRandomStaff() -- 获得随机三个员工
+	self.Enemy.BobyBg1.SpriteName = Csv.BattleIcon[csv.bossIcon].str
+end
+
+
+-- 设置敌人进度信息
+function _P.RefreshEnemyPro(self, isFinished, isSeckill)
+	local curIndex = MAX_PRO_NUM - self.LastBattleID % 10 + 1
+	for k,v in pairs(self.EnemyProSps) do
+		if k > curIndex then
+			if isFinished and k == curIndex + 1 then
+				local actorPanel = self.Moudle:Get("ActorDankPanel")
+				actorPanel.LocalPosition = Vector2(v.LocalPosition.x, self.enemyEffectY)
+				v.SpriteName = PRO_SPRITENAME
+				if isSeckill then
+					_P.RefreshMinePro(self, isFinished, isSeckill)
+				else
+					CCommon.CreateEffect(actorPanel, dackActorId)
+					_P.RefreshMinePro(self, isFinished)
+				end
+				break
+			end
+
+			v.SpriteName = PRO_SPRITENAME
+		else
+			v.SpriteName = PRO_PASSED_SPRITENAME
+		end
+	end
+end
+
+
+-- 普通战斗最后一关是不需要播放收获股份证明特效，一键秒杀需要
+function _P.SetSeckillProData(self, index)
+	local pointIndex = index or 1
+
+	local actorPanel = self.Moudle:Get("ActorDankPanel")
+	local lastEnemyPro = self.EnemyProSps[MAX_PRO_NUM - pointIndex + 1]
+	if lastEnemyPro then
+		actorPanel.LocalPosition = Vector2(lastEnemyPro.LocalPosition.x, self.enemyEffectY)
+		lastEnemyPro.SpriteName = PRO_SPRITENAME
+		CCommon.CreateEffect(actorPanel, seckillDackActorId, nil, function()
+			lastEnemyPro.SpriteName = PRO_SPRITENAME
+		end)
+	end
+
+	local actorDarkPanel = self.Moudle:Get("ActorLightPanel")
+	local lastMinePro = self.MineProSps[pointIndex]
+	if lastMinePro then
+		actorDarkPanel.LocalPosition = Vector2(lastMinePro.LocalPosition.x, self.mineEffectY)
+		lastMinePro.SpriteName = PRO_PASSED_SPRITENAME
+		CCommon.CreateEffect(actorDarkPanel, seckillDackActorId, nil, function()
+			lastMinePro.SpriteName = PRO_PASSED_SPRITENAME
+		end)
+	end
+end
+
+
+-- 一键秒杀随机一个员工头像
+function _P.RefreshBobyInfo(self, isRandom)
+	local ownStaffConf
+	local randomNum = 0
+	if isRandom then
+		randomNum = math.random(1, #self.mineStaffs)
+		ownStaffConf = Csv.Personnel[self.mineStaffs[randomNum]]
+	else
+		ownStaffConf = Csv.Personnel[self.mineStaffs[1]]
+	end
+
+	self.Own.BobyBg1.Activity = true
+	self.Own.BobyBg1.SpriteName = ownStaffConf.asset
+
+	return self.mineStaffs[randomNum]
+end
+
+
+-- 设置我方进度信息
+function _P.RefreshMinePro(self, isFinished, isSeckill)
+	local curIndex = self.LastBattleID % 10
+	for k,v in pairs(self.MineProSps) do
+		if k < curIndex then
+			if isFinished and k == curIndex - 1 then
+				local actorPanel = self.Moudle:Get("ActorLightPanel")
+				actorPanel.LocalPosition = Vector2(v.LocalPosition.x, self.mineEffectY)
+				v.SpriteName = PRO_PASSED_SPRITENAME
+				if not isSeckill then
+					CCommon.CreateEffect(actorPanel, dackActorId)
+				end
+				break
+			end
+
+			v.SpriteName = PRO_PASSED_SPRITENAME
+		else
+			v.SpriteName = PRO_SPRITENAME
+		end
+	end
+end
+
+
+-- 更新敌人信息，（LastEnemyBlood这一关敌人剩余血量）
+function _P.RefreshEnemy(self, isSeckill)
+	local info = self.Enemy
+	local battleId = 0
+	local lastEnemyBlood = 0
+	if isSeckill then
+		battleId = MBattle.SeckillBattleData.lastId
+		lastEnemyBlood = self.resultData.blood or 0
+	else
+		battleId = self.LastBattleID
+		lastEnemyBlood = self.LastEnemyBlood
+	end
+
+	local csv = Csv.Battle[battleId]
+	local chapterCsv = Csv.Chapter[csv.chapter]
+	self.Enemy.Blood:DOKill()
+	self.Enemy.BloodBar:DOKill()
+
+	info.Head.SpriteName = chapterCsv.icon
+	info.Name.Text =  Csv.BattleName[csv.name].str 
+	info.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(csv.Courage))
+	info.BloodBar.FillAmount = lastEnemyBlood / csv.gold
+	info.Blood.Text = LuaUtil.NumberFormat(lastEnemyBlood)
+	info.Level.Text = '(' .. chapterCsv.posName .. ')'
+end
+
+
+-- 初始化战斗数据，默认是站立的状态
+function _P.RefreshBattle(self, isFinished)
+	self.LastBattleID = MBattle.CurId
+	self.LastEnemyBlood = MBattle.CurBlood
+	self.LastEnemyNum = self.LastEnemyBlood -- 上一轮敌人血量数
+	self.PkRoot.Activity = true
+	self.seckillActorPanel.Activity = true
+	if self.IsNoPassBtn then
+
+	else
+		self.skipBtn.Activity = false
+	end	
+	self.Enemy.Blood.Activity = true
+	self.Own.Talk.Activity = false
+	self.Enemy.Talk.Activity = false
+	self.Own.BobyBg1.Activity = false
+	self.CurTween = nil
+	self.CurMineRound = 0  -- 当前血条播放回合
+	self.CurEnemyRound = 0  -- 当前血条播放回合
+	
+	_P.RefreshBG(self)
+	_P.RefreshEnemyPro(self, isFinished, MBattle.IsSeckill)
+	if MBattle.IsSeckill then
+		MBattle.IsSeckill = false
+	end
+	_P.RefreshEnemy(self)
+	_P.RefreshMoney(self)
+	_P.RefreshAttr(self)
+
+	if isFinished == nil or (not isFinished) then
+		_P.RefreshMinePro(self, isFinished)
+	end
+end
+
+
+-- 设置界面信息
+function _P.RefreshAll(self)
+	_P.RefreshBattle(self, false)
+	_P.RefreshName(self)
+	_P.RefreshLevel(self)
+	_P.RefreshAvatar(self)
+end
+
+
+-- 点击pk按钮
+function _P.OnPressPK(self)
+	self.PkRoot.Activity = false
+	self.seckillActorPanel.Activity = false
+	if MPlayer.GetAttr(Define.AttrType.Wuli) <= 0 or MBag.GetItemNum(Define.AssetsType.Soldier) <= 0 then
+		WindowMgr.Create("UBattleFail", self.LastBattleID, 0, function ()
+			if self.Moudle ~= nil then
+				self.PkRoot.Activity = true
+				self.seckillActorPanel.Activity = true
+			end
+		end, true)
+	else
+		CBattle.BattleReq(self.LastBattleID)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_StartPK")
+	self.Moudle = moudle
+
+	self.closeBtn = moudle:Get("Btn_back")
+	self.closeBtn:AddOnButton(function ( ... )
+		SoundMgr.PlayNonStopUI(10001)
+		self:Destroy()
+	end, nil, 0.9)
+
+	moudle:Get("C_text").Text = Csv.Text("battle_skip")
+	self.skipBtn = moudle:Get("C_Btn_b")
+	self.IsNoPassBtn = MLogin.IsNoPassBtn()
+	if self.IsNoPassBtn then
+		self.skipBtn.Activity = false
+	else
+		self.skipBtn:AddOnButton(function ( ... )
+			if not _P.CheckBtnIsClick(1) then
+				return
+			end
+			
+			if not MBattle.IsSeckill then
+				SoundMgr.PlayNonStopUI(10001)
+				_P.OnSkipBattle(self)
+			end
+		end, nil, 0.9)
+	end
+
+	self._EventNode:AddOnClick(function()
+		if not MBattle.IsSeckill then
+			_P.OnClickFast(self)
+		end
+	end, nil)
+
+	self.ownPower = 0 -- 我方公关数，战斗胜利评级用到
+
+	local EnemyProgressText = moudle:Get("ProgressText")
+	EnemyProgressText.Text = Csv.Text("battle_fight1")
+	self.enemyEffectY = EnemyProgressText.LocalPosition.y
+
+	local MineProgressText = moudle:Get("ProgressText2")
+	MineProgressText.Text = Csv.Text("battle_fight1")
+	self.mineEffectY = MineProgressText.LocalPosition.y
+
+	self.EnemyProSps = {}
+	for i=1, MAX_PRO_NUM do
+		self.EnemyProSps[i] = moudle:Get("Speed" .. i)
+	end
+
+	self.MineProSps = {}
+	for i=1, MAX_PRO_NUM do
+		self.MineProSps[i] = moudle:Get("OwnSpeed" .. i)
+	end
+
+	self.BlackBg = moudle:Get("BG_Black")
+	self.BG = moudle:Get("BG_Img")
+	self.AnimRect = moudle:Get("AnimRect")
+	self.Enemy = 
+	{
+		Head = moudle:Get("EnemyHead"),
+		Name = moudle:Get("EnemyName"),
+		Power = moudle:Get("EnemyPower"),
+		PowerNum = moudle:Get("EnemyPowerNum"),
+		WillText = moudle:Get("yizhitext"),
+		BloodBar = moudle:Get("EnemyBar"),
+		Blood = moudle:Get("EnemyBlood"),
+		Talk = moudle:Get("dialogueBg"),
+		TalkText = moudle:Get("dialogue"),
+		BobyBg1 = moudle:Get("difangyuangong"),
+		BobyBg2 = moudle:Get("difangyuangong2"),
+		ActorPanel = moudle:Get("EnemyActorPanel"),
+		Level = moudle:Get("EnemyLevel")
+	}
+	self.Own = 
+	{
+		Head = moudle:Get("OwnHead"),
+		Name = moudle:Get("OwnName"),
+		Power = moudle:Get("OwnPower"),
+		BloodBar = moudle:Get("OwnBar"),
+		Blood = moudle:Get("OwnBlood"),
+		Level = moudle:Get("OwnLevel"),
+		Talk = moudle:Get("OwndialogueBg"),
+		TalkText = moudle:Get("Owndialogue"),
+		BobyBg1 = moudle:Get("staffBSX"),
+		BobyBg2 = moudle:Get("staffBSX1"),
+		ActorPanel = moudle:Get("MineActorPanel")
+	}
+
+	local seckillTipText = moudle:Get("SeckillTip")
+	seckillTipText.Text = Csv.Text("battle_seckillTip", {level = openVipLevel})
+
+	self.Enemy.WillText.Text = Csv.Text("battle_yizhi")
+	moudle:Get("yizhi2").Text = Csv.Text("battle_gold")
+	self.PkRoot = moudle:Get("black")
+	moudle:Get("beginPK"):AddOnButton(function( ... )
+		if not _P.CheckPkBtnIsClick(1) then
+			return
+		end
+
+		SoundMgr.PlayNonStopUI(10001)
+		_P.OnPressPK(self)
+	end, nil, 0.9)
+	moudle:Get("bagintext").Text = Csv.Text("battle_begin")
+
+	local seckillBtn = moudle:Get("seckillPK")
+	local curVipLv = MPlayer.GetVip()
+	seckillBtn:AddOnButton(function( ... )
+		if not _P.CheckSeckillPkBtnIsClick(1) then
+			return
+		end
+
+		SoundMgr.PlayNonStopUI(10001)
+		_P.OnSeckillBattle(self)
+	end, nil, 0.9)
+	local isCanShow = curVipLv >= openVipLevel
+
+	if isCanShow then
+		seckillBtn.SpriteName = openImgName
+		seckillBtn.RaycastTarget = true
+	else
+		seckillBtn.SpriteName = lockImgName
+		seckillBtn.RaycastTarget = false
+	end
+	
+	seckillTipText.Activity = not isCanShow
+
+	self.seckillActorPanel = moudle:Get("ActorSeckillPkPanel")
+	if isCanShow then
+		CCommon.CreateEffect(self.seckillActorPanel, seckillpkActorId)
+	end
+	_P.RefreshAll(self)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAttr(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerNameUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshName(self)
+		end
+	end)
+end
+
+
+-- 从拥有的员工中随机三个不同员工（不足三个，默认补上10001以防止报错）
+function _P.GetOwnRandomStaff()
+	local allStaff = {}
+	local count = 1
+	for k,v in pairs(MStaff.StaffTable) do
+		allStaff[count] = k
+		count = count + 1
+	end
+
+	local randomStaffArr = {}
+	for i=1, 3 do
+		if #allStaff < i then
+			randomStaff[i] = 10001
+		else
+			local randomNum = math.random(1, #allStaff)
+			randomStaffArr[i] = allStaff[randomNum]
+
+			if allStaff[randomNum] ~= allStaff[#allStaff] then
+				allStaff[randomNum] = allStaff[#allStaff]
+				allStaff[#allStaff] = nil
+			else
+				allStaff[randomNum] = nil
+			end
+		end
+	end
+
+	return randomStaffArr
+end
+
+
+-- 每一轮失败概率，返回true or false，有胜利或者失败
+function _P.IsOver(roundRomNum)
+	local randomNum = math.random(1, 100)
+	return ((randomNum <= roundRomNum and true) or false)
+end
+
+
+-- 是否出现员工挡刀
+function _P.IsHasStaffResist(resistProb)
+	local randomNum = math.random(1, 20)
+	return ((randomNum <= resistProb and true) or false)
+end
+
+
+-- 战报信息
+function _P.GetBattlerReportData(self)
+	local curBattleConf = Csv.Battle[self.LastBattleID]
+	if curBattleConf == nil then return end
+
+	if #self.mineStaffs ~= 3 then return end
+	self.reportData = {}
+	self.totalMineNum = 0 -- 当前我方战斗总轮数
+	self.totalEnemyNum = 0 -- 当前我方战斗总轮数
+	
+	for i=1, 3 do
+		local curStaff = self.mineStaffs[i]
+		if i ~= 1 then -- 我方旧员工替换新员工
+			local newIconConf = Csv.Personnel[curStaff]
+			local oldIconConf = Csv.Personnel[self.mineStaffs[i - 1]]
+			_P.SetOneData(self, CampEnum.Mine, BattleShowEnum.TopOff, false, _P.GetCurStaffTalkStr(curBattleConf.staffSpeak, curStaff), 2, true, i - 1, oldIconConf.asset, newIconConf.asset)
+		else
+			_P.SetOneData(self, CampEnum.Mine, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.staffSpeak, curStaff), 1, true)
+		end
+
+		local curLayerProb = Csv.BattleProb[i]
+		if curLayerProb == nil then break end
+
+		local isOver = _P.IsOver(curLayerProb.overWinProb)
+		if (not self.isWin) or (not isOver) then -- 战斗继续
+			if self.isBossBattle then
+				if _P.IsHasStaffResist(curLayerProb.resistProb) then -- 敌方有员工挡刀
+					self.isBossBattle = false
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, false, nil, 2, false, nil, Csv.BattleIcon[curBattleConf.bossIcon].str, Csv.BattleIcon[curBattleConf.bossStaffIcon].str)
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.bossStaffSpeak, curBattleConf.bossStaffId), 1, true) -- 敌方员工应答
+				else
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.bossRespones, curBattleConf.bossId), 1, true)
+				end
+			else
+				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.bossStaffSpeak, curBattleConf.bossStaffId), 1, true) -- 敌方员工应答
+			end
+
+			-- 我方应答环节删掉
+			-- _P.SetOneData(self, CampEnum.Mine, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.staffResponse, curStaff), 1, true)
+		
+			if(not self.isWin) and _P.IsOver(curLayerProb.overFailProb) then
+				if self.isBossBattle then
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, true, _P.GetCurStaffTalkStr(curBattleConf.bossWin, curBattleConf.bossId), 1, false) -- 敌方胜利
+				else
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossWin, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str)
+				end
+
+				return
+			end
+		else -- 战斗结束
+			if self.isBossBattle then
+				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, true, _P.GetCurStaffTalkStr(curBattleConf.bossFail, curBattleConf.bossId), 1, false)
+			else
+				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossFail, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str)
+			end
+
+			return
+		end
+	end
+end
+
+
+-- 设置一条战报信息
+function _P.SetOneData(self, campType, playType, isFinish, showText, delay, isShowHit, curRoundFinishId, oldIconName, newIconName)
+	if isShowHit then
+		if campType == CampEnum.Enemy then
+			self.totalMineNum = self.totalMineNum + 1
+		else
+			self.totalEnemyNum = self.totalEnemyNum + 1
+		end
+	end
+	
+	local infoData = {
+		campType = campType,
+		playType = playType,
+		isFinish = isFinish,  -- 是否已经结束
+		showText = showText,
+		delay = delay,        -- 延迟时间
+		isShowHit = isShowHit,  -- 是否需要对方受击
+		curRoundFinishId = curRoundFinishId,  -- 当前是第几轮结算
+		oldIconName = oldIconName,
+		newIconName = newIconName
+	}
+
+	table.insert(self.reportData, infoData)
+end
+
+
+-- 根据对话id、员工id得到相应的对话
+function _P.GetCurStaffTalkStr(talkId, staffId)
+	local talkList = {}
+	for k,v in pairs(Csv.TalkText) do
+		if v.talkId == talkId and v.staffId == staffId then
+			table.insert(talkList, v)
+		end
+	end
+
+	if #talkList > 0 then
+		local randomNum = math.random(1, #talkList)
+		for i,v in ipairs(talkList) do
+			if i == randomNum then
+				return v.text
+			end
+		end
+	else
+		return "找不到相应的字段，配置出错"
+	end
+end
+
+
+-- 评级
+function _P.GetBattleLevel(enemyPower, ownPower)
+	local scoreStr = ""
+	if enemyPower * 3 < ownPower then
+		scoreStr = Csv.Text("battle_excellent")
+	elseif enemyPower * 1.5 < ownPower and ownPower <= enemyPower * 3 then
+		scoreStr = Csv.Text("battle_well")
+	elseif enemyPower < ownPower and ownPower <= enemyPower * 1.5 then
+		scoreStr = Csv.Text("battle_stabilize")
+	elseif enemyPower * 0.5 < ownPower and ownPower <= enemyPower then
+		scoreStr = Csv.Text("battle_ordinary")
+	elseif ownPower <= enemyPower * 0.5 then
+		scoreStr = Csv.Text("battle_abnormal")
+	end
+
+	return scoreStr
+end
+
+
+-- 一键跳过战斗(强制将敌方进度设置为0)
+function _P.OnSkipBattle(self)
+	if self.isWin then
+		local nowMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
+		self.Own.Blood.Text = LuaUtil.NumberFormat(nowMoney)
+		self.Own.BloodBar:DOKill()
+		self.Own.BloodBar.FillAmount = nowMoney / self.StartMoney
+
+		self.Enemy.Blood.Text = 0
+		self.Enemy.BloodBar:DOKill()
+		self.Enemy.BloodBar.FillAmount = 0
+	else
+		self.Own.Blood.Text = 0
+		self.Own.BloodBar:DOKill()
+		self.Own.BloodBar.FillAmount = 0
+
+		local csv = Csv.Battle[self.resultData.id]
+		self.Enemy.Blood.Text = LuaUtil.NumberFormat(self.resultData.blood)
+		self.Enemy.BloodBar:DOKill()
+		self.Enemy.BloodBar.FillAmount = self.resultData.blood / csv.gold
+	end
+
+	self.reportData = {}
+	self.isSkipBattle = true
+	_P.OnClickFast(self)
+	_P.OnPlayOneReport(self, false)
+end
+
+
+-- 一键秒杀（vip）
+function _P.OnSeckillBattle(self)
+	if MPlayer.GetAttr(Define.AttrType.Wuli) <= 0 or MBag.GetItemNum(Define.AssetsType.Soldier) <= 0 then
+		CCommon.ShowError(Csv.Text("battle_seckillErr"))
+	else
+		CBattle.SeckillBattleReq(self.LastBattleID)
+	end
+end
+
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+function _P.CheckPkBtnIsClick(delayTime)
+	if (UnityTime.time - lastBattleTime) < delayTime then
+		return false
+	end
+
+	lastBattleTime = UnityTime.time
+	return true
+end
+
+
+function _P.CheckSeckillPkBtnIsClick(delayTime)
+	if (UnityTime.time - seckillBattleTime) < delayTime then
+		return false
+	end
+
+	seckillBattleTime = UnityTime.time
+	return true
+end
+
+
+return _M

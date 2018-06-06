@@ -1,0 +1,520 @@
+--商会副本界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Dev.Commerce.CCommerce.bytes#_M]
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+--@RefType [Dev.Commerce.MCommerce.bytes#_M]
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+local attackActorId = 10038
+local DEFAULT_BODY_NAME = "staff_choose"
+
+local T_FB_Staff_AttackGo = "T_FB_Staff_AttackGo"
+local T_FB_Staff_AttackBack = "T_FB_Staff_AttackBack"
+local T_FB_Boss_Dark = "T_FB_Boss_Dark"
+local T_FB_Boss_blood = "T_FB_Boss_blood"
+local T_FB_Boss_Hurt = "T_FB_Boss_Hurt"
+local T_FB_Boss_HurtBack = "T_FB_Boss_HurtBack"
+
+local ROUND = Csv.Const(Define.Const.CommerceBossRound)
+
+function _R.OnBattleResult(self, data)
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		if myInfo ~= nil then
+			table.insert(self.Messages, {
+				attacker = MPlayer.GetName(),
+				hurt = data.hurt,
+				time = HeartBeat.ServSecond(),
+				staffId = data.lockStaff,
+				job = myInfo.job
+			})		
+		end
+	end
+
+	local resInfo = data.info
+	if resInfo.state == MCommerce.BattleState.Killed then
+		if resInfo.killerId ~= MPlayer.GetId() then
+			_R.OnBattleInfo(self, data.info)	
+			_P.UpdateBottomMsg(self)
+			if self.MessageRoot.Activity == true then
+				_P.UpdateMessage(self, true)
+			end
+		else
+			self:Lock()
+			_P.PlayHit(self, data, function()
+				if self.Moudle ~= nil then
+					self:Unlock()
+					
+					_P.UpdateBottomMsg(self)
+					if self.MessageRoot.Activity == true then
+						_P.UpdateMessage(self, true)
+					end
+					WindowMgr.Create("UCommerceBattleKill", data, function()
+						_R.OnBattleInfo(self, data.info)	
+					end)
+				end
+			end)			
+		end
+	else
+		if data.hurt > 0 then
+			self:Lock()
+			_P.PlayHit(self, data, function()
+				if self.Moudle ~= nil then
+					self:Unlock()
+					_P.UpdateBottomMsg(self)
+					if self.MessageRoot.Activity == true then
+						_P.UpdateMessage(self, true)
+					end
+					WindowMgr.Create("UCommerceBattleResult", data, function()
+						_R.OnBattleInfo(self, data.info)	
+						_P.AutoSelectStaff(self)
+					end)
+				end
+			end)
+		else
+			_R.OnBattleInfo(self, data.info)
+			_P.AutoSelectStaff(self)
+			_P.UpdateBottomMsg(self)
+			if self.MessageRoot.Activity == true then
+				_P.UpdateMessage(self, true)
+			end
+		end
+	end
+end
+
+function _P.PlayHit(self, data, callBack)
+
+	local oneHurt = math.floor(data.hurt / ROUND)
+	local startBlood = self.LastEnemyBlood
+
+	local battleCsv = Csv.CommerceBattle[self.BattleId]
+	self.BossTalkList = LuaUtil.Shuffle(battleCsv.talk)
+	local staffCsv = Csv.Personnel[self.ChooseStaff]
+	if staffCsv ~= nil then
+		self.StaffTalkList = LuaUtil.Shuffle(staffCsv.commerceTalk)
+	else
+		self.StaffTalkList = {}
+	end	
+
+	local t = self.Moudle.SelfRect.CachedTran:GetJTweener("T_CommerceBattle_FightBoss")
+
+	local doHurt = function(isFire)
+		local info = self.BOSS
+		local lastBlood = startBlood
+		startBlood = math.max(0,startBlood - oneHurt)
+		local fill = startBlood / self.FullBlood
+		info.Bar:DOKill()
+		info.BloodText:DOKill()
+		local ft = info.Bar:DOFillAmount(fill, 0.2)
+		if isFire then
+			ft:SetDelay(0.26)
+		end
+		local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
+			local endValue = (value / self.FullBlood) * 100
+			local per = math.floor(endValue + 0.5)
+			if per == 0 and endValue > 0 then
+				per = 1
+			end
+			if info.BloodText ~= nil then info.BloodText.Text = Csv.Text("battle_bossBlood", {per = per}) end
+		end, function()
+			local endValue = fill * 100
+			local per = math.floor(endValue + 0.5)
+			if per == 0 and endValue > 0 then
+				per = 1
+			end
+			if info.BloodText ~= nil then info.BloodText.Text = Csv.Text("battle_bossBlood", {per = per}) end
+
+			CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
+		end)
+		t:SetTarget(info.BloodText.CachedTran)
+	end
+
+	local ownFire = function ()
+		if t ~= nil then
+			t:Restore()
+			callBack()
+		end
+	end
+
+---------------员工 --> boss----------------------------------
+	local ownTalk = function()
+		if t ~= nil then
+			_P.OwnTalk(self,nil,function()
+				t:Play(T_FB_Boss_blood)
+				t:Play(T_FB_Boss_Hurt)
+
+				SoundMgr.Play(10021)
+				local actorPanel = self.Moudle:Get("ActorLightPanel")
+				CCommon.CreateEffect(actorPanel, attackActorId)
+			end)
+		end
+	end
+
+	local enemyHurtBack = function()
+		if t ~= nil then
+			t:Play(T_FB_Boss_HurtBack)
+		end
+	end
+
+	local StaffAttackEnd = function()
+		doHurt()
+		t:Play(T_FB_Staff_AttackBack)
+	end
+
+	local staffRound = function()
+		if t ~= nil then
+			self.Moudle.SelfRect:AddOnTime(function()
+				ownFire()	
+			end,nil,0.5)	
+		end
+	end
+
+	t:SetWaitEventOnComplete(T_FB_Staff_AttackGo, ownTalk)
+	t:SetWaitEventOnComplete(T_FB_Boss_Hurt, enemyHurtBack)
+	t:SetWaitEventOnComplete(T_FB_Boss_HurtBack, StaffAttackEnd)
+	t:SetWaitEventOnComplete(T_FB_Staff_AttackBack, staffRound)
+
+	SoundMgr.Play(10020)
+	t:Play(T_FB_Staff_AttackGo)
+	t:Play(T_FB_Boss_Dark)
+end
+
+function _P.OwnTalk(self, doHurt ,callBack)
+	--播放特效
+	if doHurt ~= nil then
+		doHurt()
+	end
+	if self.LastOwnTalkTween ~= nil then
+		self.LastOwnTalkTween:Restore()
+	end
+	local text = Csv.Talk[self.StaffTalkList[1]].str
+	table.remove(self.StaffTalkList, 1)
+	self.STAFF.TalkBG.Activity = true
+	self.STAFF.TalkText.Text = text
+	local t = self.STAFF.TalkBG.CachedTran:GetJTweener("T_CommerceBattle_OwnTalk")
+	self.LastOwnTalkTween = t
+	--[[
+	local tween = t:GetTweenForType(42)
+	if tween ~= nil then
+		tween.ToText = text
+		tween.ScrambleChars = text
+	end
+	--]]
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.STAFF.TalkBG.Activity = false
+		end		
+	end)
+	t:Play()
+
+	self.Moudle:Get("STAFF"):AddOnTime(function()
+		callBack()
+	end,nil,0.3)
+end
+
+function _P.ThatTalk(self, callBack)
+	--播放特效
+	if self.LastBossTalkTween ~= nil then
+		self.LastBossTalkTween:Restore()
+	end
+	local text = Csv.Talk[self.BossTalkList[1]].str
+	table.remove(self.BossTalkList, 1)
+	self.BOSS.TalkBG.Activity = true
+	self.BOSS.TalkText.Text = ""
+	local t = self.BOSS.TalkBG.CachedTran:GetJTweener("T_CommerceBattle_BossTalk")
+	self.LastBossTalkTween = t
+	local tween = t:GetTweenForType(42)
+	if tween ~= nil then
+		tween.ToText = text
+		tween.ScrambleChars = text
+	end
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.BOSS.TalkBG.Activity = false
+			callBack()
+		end		
+	end)
+	t:Play()
+end
+
+function _R.OnBattleInfo(self, info)
+	local csv = Csv.CommerceBattle[info.id]
+	
+	if info.state == MCommerce.BattleState.Killed then
+		self.BOSS.Root.Activity = false
+		self.STAFF.Root.Activity = false
+		self.BeginBtn.Activity = false
+		self.BottomMsg.Root.Activity = false
+		self.KILLED.Activity = true	
+		WindowMgr.Create("UCommerceBattleList")
+	else
+		self.LastEnemyBlood = info.blood
+		self.BeginBtn.Activity = true
+		self.BOSS.Bar.FillAmount = info.blood / csv.blood
+		local endValue = (info.blood / csv.blood) * 100
+		local per = math.floor(endValue + 0.5)
+		if per == 0 and endValue > 0 then
+			per = 1
+		end
+		self.BOSS.BloodText.Text = Csv.Text("battle_bossBlood", {per = per})
+	end
+end
+
+function _R.OnBattleBattle(self, data)
+	local moudle = self.Moudle
+	self.Messages = {}
+	if data ~= nil then
+		if data.info ~= nil then
+			_R.OnBattleInfo(self, data.info)
+		end
+		if self.MessageRoot ~= nil then
+			if data.message ~= nil then
+				for _,info in pairs(data.message) do
+					table.insert(self.Messages, {
+						attacker = info.attacker,
+						hurt = info.hurt,
+						time = info.time,
+						staffId = info.staffId,
+						job = info.job
+					})
+				end
+				if #self.Messages > 0 then
+					table.sort(self.Messages, function(a, b)
+						return a.time < b.time
+					end)
+					-- self.BottomMsg.Root.Activity = true
+				end
+				
+				_P.UpdateBottomMsg(self)
+				if self.MessageRoot.Activity == true then
+					_P.UpdateMessage(self, true)
+				end
+			end
+
+			_P.AutoSelectStaff(self)
+		end
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.BeginPK(self)
+	if self.ChooseStaff > 0 then
+		CCommerce.BattleReq(self.BattleId,self.ChooseStaff)
+		self.BeginBtn.Activity = false
+	else
+		CCommon.ShowError(Csv.Text("commerce_battle30"))
+	end
+end
+
+function _P.OnChooseStaff(self, staffId)
+	self.ChooseStaff = staffId
+
+	if staffId > 0 then
+		local info = MStaff.GetStaffDataByID(staffId)
+		local staffCsv = Csv.Personnel[staffId]
+		self.STAFF.Actor.SpriteName = staffCsv.asset
+		self.STAFF.Power.Text = tostring(info.power)
+	else
+		self.STAFF.Actor.SpriteName = DEFAULT_BODY_NAME
+		self.STAFF.Power.Text = ""
+	end	
+end
+
+function _P.Sort(a, b)
+	if MCommerce.StaffIsLocked(a.id) then
+		if MCommerce.StaffIsLocked(b.id) then
+			return MStaff.SortForPower(a,b)
+		end
+		return false
+	else
+		if not MCommerce.StaffIsLocked(b.id) then
+			return MStaff.SortForPower(a,b)
+		end
+		return true
+	end
+end
+
+function _P.AutoSelectStaff(self)
+	local haveStaffs = {}
+	for _,v in pairs(MStaff.StaffTable) do
+		if not MCommerce.StaffIsLocked(v.id) then
+			table.insert(haveStaffs, v)
+		end		
+	end
+	if #haveStaffs > 0 then
+		table.sort(haveStaffs, _P.Sort)
+		_P.OnChooseStaff(self, haveStaffs[1].id)
+	else
+		_P.OnChooseStaff(self, 0)
+	end
+end
+
+function _P.UpdateMessage(self, isActivity)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	if isActivity then
+		local msgCount =  #self.Messages
+		if msgCount > 0 then
+			local index = 0
+			for i=msgCount,1,-1 do
+				local info = self.Messages[i]
+				index = index + 1
+				local oneMoudle = self:CreateMoudle(content, "M_Gang_FbPk_Item")
+				oneMoudle:Get("Index").Text = tostring(index)
+				oneMoudle:Get("position").Text = Csv.Text("commerce_main8")
+				oneMoudle:Get("Name_0").Text = info.attacker
+				oneMoudle:Get("Info").Text = _P.GetMessageStr(info)
+				oneMoudle:Get("TimeText").Text = Csv.Text("commerce_main9")
+				oneMoudle:Get("TimeNum_0").Text = LuaUtil.TransToYearMonthDayHMS(info.time)
+			end
+		end
+	end
+end
+
+function _P.GetMessageStr(info)
+	local staffCsv = Csv.Personnel[info.staffId]
+	local staffName = staffCsv.name
+	if info.staffName ~= nil and info.staffName ~= "" then
+		staffName = info.staffName
+	end
+	return Csv.Text("commerce_battle29", {name = staffName, num = info.hurt})
+end
+
+function _P.UpdateBottomMsg(self)
+	local msgCount =  #self.Messages
+	if msgCount > 0 then
+		local info = self.Messages[msgCount]
+		self.BottomMsg.Name.Text = info.attacker
+		self.BottomMsg.Text.Text = _P.GetMessageStr(info)
+		self.BottomMsg.ZW.Text = Csv.Text("commerce_main8")
+	end
+end
+
+--界面构建
+function _M:OnCreate(battleId)
+	self.BattleId = battleId
+	self.ChooseStaff = 0
+
+	CCommerce.BattleBattleReq(battleId)
+	self.Messages = {}
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_FbPk")
+	self.Moudle = moudle
+	moudle:Get("BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local csv = Csv.CommerceBattle[battleId]
+	self.LastEnemyBlood = csv.blood
+	self.FullBlood = csv.blood
+	moudle:Get("BG").SpriteName = csv.bg
+	moudle:Get("BossBSX").SpriteName = csv.asset
+	moudle:Get("NameText").Text = csv.name
+	moudle:Get("KilledTipsText").Text = Csv.Text("commerce_battle28")
+	moudle:Get("KilledBtnText").Text = Csv.Text("commerce_battle7")
+	moudle:Get("PKtext").Text = Csv.Text("commerce_battle34")
+	moudle:Get("KilledBtn"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCommerceBattleReport",battleId)
+	end)
+	self.BeginBtn = moudle:Get("BeginBtn")
+	self.BeginBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.BeginPK(self)
+	end)
+	self.KILLED = moudle:Get("KILLED")
+	self.BOSS = {
+		Root = moudle:Get("BOSS"),
+		Bar = moudle:Get("Bar"),
+		BloodText = moudle:Get("BloodText"),
+		TalkBG = moudle:Get("DHK1"),
+		TalkText = moudle:Get("text1"),
+		Actor = moudle:Get("BossBSX"),
+		HurtFly = moudle:Get("HurtFly")
+	}
+	moudle:Get("ChooseBtn"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCommerceBattleStaffChoose",function(staffId)
+			if self.Moudle ~= nil then
+				_P.OnChooseStaff(self, staffId)
+			end
+		end)
+	end)
+	moudle:Get("major").Text = Csv.Text("staff_power")
+	moudle:Get("chooseText").Text = Csv.Text("battle_choose")
+	self.STAFF = {
+		Root = moudle:Get('STAFF'),
+		Actor = moudle:Get("StaffBSX"),
+		Power = moudle:Get("majorText"),
+		TalkBG = moudle:Get("DHK12"),
+		TalkText = moudle:Get("text1_0")
+	}
+	local arrow = moudle:Get("Arrow")
+	arrow.LocalScale = Vector3(1,-1,1)
+	local t = arrow.CachedTran:GetJTweener("T_Commerce_Arrow")
+	t:Play()
+	local messageRoot = moudle:Get("messageRoot")
+	local bottomMessage = moudle:Get("ZW")
+	self.MessageRoot = messageRoot
+	moudle:Get("More"):AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		local isActivity = not messageRoot.Activity
+		messageRoot.Activity = isActivity
+		_P.UpdateMessage(self, isActivity)
+		if isActivity then
+			arrow.LocalScale = Vector3.one
+		else
+			arrow.LocalScale = Vector3(1,-1,1)
+		end
+		bottomMessage.Activity = not isActivity
+	end)
+	messageRoot:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		messageRoot.Activity = false
+		_P.UpdateMessage(self, false)
+		arrow.LocalScale = Vector3(1,-1,1)
+		bottomMessage.Activity = true
+	end)
+	self.BottomMsg = {
+		Root = moudle:Get("BottomInfoBg"),
+		Name = moudle:Get("NameText_0"),
+		Text = moudle:Get("Info_0"),
+		ZW = moudle:Get("ZW"),
+	}
+	-- self.BottomMsg.Root.Activity = false
+end
+
+return _M

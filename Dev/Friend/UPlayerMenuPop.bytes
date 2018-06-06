@@ -1,0 +1,161 @@
+--点击玩家头像弹框
+
+----------------------文件引用--------------------------
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local SDKMgr = JRequire "SDK.SDKMgr"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+_P.TextTab = 
+{
+	--查看
+	[MFriend.PlayerMenu.Look] = Csv.Text("PlayerMenu_1"),
+	--私聊
+	[MFriend.PlayerMenu.Talk] = Csv.Text("PlayerMenu_2"),
+	--复制ID
+	[MFriend.PlayerMenu.Copy] = Csv.Text("PlayerMenu_3"),
+	--添加好友
+	[MFriend.PlayerMenu.AddFriend] = Csv.Text("PlayerMenu_4"),
+	--删除好友
+	[MFriend.PlayerMenu.DelFriend] = Csv.Text("PlayerMenu_5"),
+	--添加黑名单
+	[MFriend.PlayerMenu.AddBlacklist] = Csv.Text("PlayerMenu_6"),
+	--移除黑名单
+	[MFriend.PlayerMenu.DelBlacklist] = Csv.Text("PlayerMenu_7"),
+}
+
+_P.FuncTab = 
+{
+	--查看
+	[MFriend.PlayerMenu.Look] = function(palyerId)
+		CPlayer.LookPlayerReq(palyerId)
+	end,
+	--私聊
+	[MFriend.PlayerMenu.Talk] = function(palyerId, playerName)
+		local isBlackList = MFriend.CheckRelation(palyerId, MFriend.RelationType.BlackList)
+		if isBlackList then
+			CCommon.ShowError(Csv.Text("Friend_41"))
+		else
+			WindowOpen.Open(Define.SysId.Talk_Private, palyerId, playerName)
+		end		
+	end,
+	--复制ID
+	[MFriend.PlayerMenu.Copy] = function(palyerId)
+		SDKMgr.CopyText(tostring(palyerId))
+		CCommon.ShowRight(Csv.Text("welfare_copySuccess"))
+	end,
+	--添加好友
+	[MFriend.PlayerMenu.AddFriend] = function(palyerId)
+		CFriend.ReqAdd(palyerId, MFriend.RelationType.Friend)
+	end,
+	--删除好友
+	[MFriend.PlayerMenu.DelFriend] = function(palyerId)
+		CCommon.CheckTips(function(isSure, arg)
+			if isSure then
+				CFriend.ReqDelete(palyerId, MFriend.RelationType.Friend)
+			end
+		end, {content = Csv.Text("Friend_44")})	
+	end,
+	--添加黑名单
+	[MFriend.PlayerMenu.AddBlacklist] = function(palyerId)
+		CCommon.CheckTips(function(isSure, arg)
+			if isSure then
+				CFriend.ReqAdd(palyerId, MFriend.RelationType.BlackList)
+			end
+		end, {content = Csv.Text("Friend_46")})			
+	end,
+	--移除黑名单
+	[MFriend.PlayerMenu.DelBlacklist] = function(palyerId)
+		CCommon.CheckTips(function(isSure, arg)
+			if isSure then
+				CFriend.ReqDelete(palyerId, MFriend.RelationType.BlackList)
+			end
+		end, {content = Csv.Text("Friend_45")})
+	end,
+}
+
+function _M:Destroy()
+	if self._RootNode ~= nil then
+		self._RootNode:Destroy()
+		self._RootNode = nil
+	end	
+end
+
+
+--界面构建
+--playerId: 玩家id
+--menuArray: 按钮列表
+function _M:ctor(canvasParent, palyerId, menuArray, pos, playerName)
+	self._RootNode = JGuiManager.CreateEmpty(canvasParent, "menuRoot")
+	self._RootNode:SetFullSize(10)
+	self._RootNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local menuTab = {}
+	for _,v in pairs(menuArray) do
+		menuTab[v] = true
+	end
+	--好友处理
+	if menuTab[MFriend.PlayerMenu.AddFriend] or menuTab[MFriend.PlayerMenu.DelFriend] then
+		local isFriend = MFriend.CheckRelation(palyerId, MFriend.RelationType.Friend)
+		if isFriend then
+			--是好友
+			menuTab[MFriend.PlayerMenu.AddFriend] = nil
+		else
+			menuTab[MFriend.PlayerMenu.DelFriend] = nil
+		end
+	end
+	--黑名单处理
+	if menuTab[MFriend.PlayerMenu.AddBlacklist] or menuTab[MFriend.PlayerMenu.DelBlacklist] then
+		local isBlackList = MFriend.CheckRelation(palyerId, MFriend.RelationType.BlackList)
+		if isBlackList then
+			--是好友
+			menuTab[MFriend.PlayerMenu.AddBlacklist] = nil
+		else
+			menuTab[MFriend.PlayerMenu.DelBlacklist] = nil
+		end
+	end
+
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Friend_Item_Menu")
+	local index = 0
+	for _,menuId in pairs(menuArray) do
+		if menuTab[menuId] then
+			index = index + 1
+
+			local btn = moudle:Get("menutext"..index)
+			btn.Text = _P.TextTab[menuId]
+			btn:AddOnButton(function()
+				self:Destroy()
+				_P.FuncTab[menuId](palyerId, playerName)
+			end)
+		end
+	end
+	moudle:Get("line"..index).Activity = false
+
+	if index < 6 then
+		for i = index + 1, 6 do
+			moudle:Get("menutext"..i).Activity = false
+		end
+	end
+	if pos ~= nil then
+		local screenY = CS.JGui.JGuiManager.GuiRoot.Height
+		pos.y = math.max(-screenY / 2 + 320, pos.y)
+		moudle.SelfRect.LocalPosition = pos
+	end
+end
+
+return _M

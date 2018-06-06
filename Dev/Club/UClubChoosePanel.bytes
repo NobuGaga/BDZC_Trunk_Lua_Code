@@ -1,0 +1,148 @@
+-- 举办宴会界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CClub = JRequire "Dev.Club.CClub"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local COLOR_GREEN = Color(93 / 255, 153 / 255, 255 / 255, 1)
+local COLOR_RED = Color(255 / 255, 93 / 255, 140 / 255, 1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Choose")
+	self.mModule = module
+	self.isSelectOpen = true
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = Csv.Text("club_choose_title")
+	self.curGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	module:Get("Num").Text = self.curGold
+
+	local partyList = Csv.Club
+	if partyList == nil then return end
+
+	local itemGrid = module:Get("content")
+	for id, value in pairs(partyList) do
+		_P.CreatePartyItem(self, itemGrid, "M_Club_Choose_Item" .. id, value)
+	end
+end
+
+
+-- 创建单个item
+function _P.CreatePartyItem(self, itemGrid, itemName, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	itemModule:Get("NumText").Text = data.cost
+	itemModule:Get("Condition").Text = Csv.Text("club_choose_condition")
+	itemModule:Get("C_text").Text = Csv.Text("club_choose_open")
+	local joinBtn = itemModule:Get("Btn_b")
+	joinBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickJoin(self, data)
+	end)
+	
+	if data.id == 1 then -- 私人聚会
+		itemModule:Get("TipsText").Text = Csv.Text("club_choose_openParty")
+
+		local CheckBoxBtn = itemModule:Get("chooseBox")
+		local checkImg = itemModule:Get("choose")
+		CheckBoxBtn:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			_P.SetCheckBoxData(self)
+			checkImg.Activity = self.isSelectOpen
+		end, nil, 1)
+		itemModule:Get("TitleText").Text = Csv.Text("club_join_private")
+	else
+		itemModule:Get("TitleText").Text = Csv.Text("club_join_good")
+	end
+
+	-- 奖励列表
+	local awardGrid = itemModule:Get("content")
+	if awardGrid == nil then return end
+
+	for id, value in pairs(data.costItem) do
+		_P.CreateAwardItem(self, awardGrid, "M_Club_Choose_AwardItem", value)
+	end
+end
+
+
+-- 举办聚会
+function _P.OnClickJoin(self, data)
+	-- 金币不足
+	if not MBag.CheckItemEnough(Define.AssetsType.Gold, data.cost) then
+		return
+	end
+	if not MBag.CheckItemEnoughForArray(data.costItem) then
+		return
+	end
+
+	-- 请求举办聚会
+	if data.id == 1 then
+		CClub.OpenPartyReq(data.id, self.isSelectOpen)
+	else
+		CClub.OpenPartyReq(data.id, true)
+	end
+end
+
+
+function _P.SetCheckBoxData(self)
+	self.isSelectOpen =  not self.isSelectOpen
+end
+
+
+function _P.CreateAwardItem(self, itemGrid, itemName, data)
+	local awardModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if awardModule == nil or #data ~= 2 then return end
+	
+	local awardId = data[1]
+	local maxNum = data[2]	
+	local NumText = awardModule:Get("Num")
+	local curNum = MBag.GetItemNum(awardId)
+	NumText.Text = Csv.Text("club_choose_award", {curNum = curNum, maxNum = maxNum})
+	NumText.Color = (curNum >= maxNum and COLOR_GREEN) or COLOR_RED
+	
+	local itemConf = Csv.Item[awardId]
+	if itemConf == nil then return end
+
+	-- 设置item数据
+	local IconImg = awardModule:Get("Icon")
+	IconImg.SpriteName = itemConf.icon
+	IconImg:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickIcon(itemConf.id)
+	end, nil, 1)
+
+	local qualityImg  = awardModule:Get("M_Club_Choose_AwardItem")
+	qualityImg.SpriteName = itemConf.colorIcon
+end
+
+
+-- 打开道具详情界面
+function _P.OnClickIcon(id)
+	if id ~= nil then
+		WindowMgr.Create("UBagDetailPop", id)
+	end
+end
+
+
+return _M

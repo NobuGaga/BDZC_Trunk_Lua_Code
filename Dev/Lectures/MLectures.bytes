@@ -1,0 +1,39 @@
+local _M = {}
+
+_M.MaxLecturesNum = Csv.Const(18007)
+_M.UnLockAutoNum = Csv.Const(18003)
+
+_M.CurBattleId = 0		-- 当前演讲id
+_M.ShowRewTable = {}	-- 当前演讲奖励展示
+_M.CurBossBlood = 0		-- 当前演讲boss血量
+_M.LastBossBlood = 0	-- 上一次boss血量
+_M.IsOpenOneKey = false -- 是否开启一键演讲
+
+_M.ResultState = 
+{
+	Win = 1,
+	Fail = 2
+}
+
+function _M.Clean()
+	_M.CurBattleId = 0
+	_M.ShowRewTable = {}
+	_M.CurBossBlood = 0
+	_M.LastBossBlood = 0
+	_M.IsOpenOneKey = false
+end
+
+
+function _M.OnSaveRewardList(list)
+	if list == nil then return end
+
+	local rewardList = {}
+	_M.ShowRewTable = {}
+	for k,v in pairs(list) do
+		rewardList[#rewardList + 1] = v
+	end
+	_M.ShowRewTable = rewardList
+end
+
+
+return _M

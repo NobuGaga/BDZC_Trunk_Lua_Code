@@ -1,0 +1,33 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+
+--删除后调用
+function _M:EndDestroy( ... )
+	if self.CallBack ~= nil then
+		self.CallBack()
+	end	
+end
+
+--界面构建
+function _M:OnCreate(partId, callBack)
+	self.CallBack = callBack
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local csv = Csv.Part[partId]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Start")
+	moudle:Get("C_Text").Text = Csv.Text("battle_title",{index = csv.id,name = csv.name})
+	moudle:Get("bg").SpriteName = csv.startBg
+	moudle:Get("text").Text = csv.startTips
+	LuaUtil.TextAddThreePoint(moudle:Get("text1"), Csv.Text("battle_enterTips"))
+end
+
+return _M

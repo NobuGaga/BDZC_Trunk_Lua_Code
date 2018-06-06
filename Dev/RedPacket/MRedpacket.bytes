@@ -1,0 +1,162 @@
+local EventCenter = JRequire "Dev.EventCenter"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = {}
+local _P = {}
+
+_M.REDPACKET_CD = Csv.Const(93)
+
+_M.isRedTicks = false
+_M.RedpacketHandle = nil
+
+_M.isRedPackets = false
+_M.redPacketList = {}
+_M.redPackInfo = {}
+
+function _M.Clean()
+	if _M.isRedTicks then
+		EventCenter.UnRegistCallEvent(_M.RedpacketHandle)
+	end
+
+	_M.isRedTicks = false
+	_M.isRedPackets = false
+	_M.redPacketList = {}
+	_M.redPackInfo = {}
+end
+
+function _M.InitRedPacket(data)
+	_M.redPacketList = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list)do
+			local redpacket =  _P.OnRedpacketInfo(v)
+			table.insert(_M.redPacketList,redpacket)
+		end
+	end
+	_M.RefreshRedPacketTick()
+
+	_P.CheckIsRedPacket()
+end
+
+function _M.GetNewRedPacket(data)
+	if data.redPacket ~= nil then
+		local redpacket =  _P.OnRedpacketInfo(data.redPacket)
+		table.insert(_M.redPacketList,redpacket)
+	end
+	_M.RefreshRedPacketTick()
+
+	_P.CheckIsRedPacket()
+end
+
+--已领完，已领取 都移除
+function _M.RemoveRedPacket(id)
+	if _M.redPacketList ~= nil then
+		for k,v in pairs(_M.redPacketList)do
+			if v.id == id then
+				table.remove(_M.redPacketList,k)
+			end
+		end
+	end
+	_P.CheckIsRedPacket()
+end
+
+function _M.SetRedpacketInfo(data)
+	_M.redPackInfo = {
+		id = data.id,
+		result = data.result,
+		redPacket = _P.OnRedpacketInfo(data.redPacket)
+	}
+end
+
+function _P.OnRedpacketInfo(data)
+	redPacket = {
+		id = data.id,
+		senderId = data.senderId,
+		senderName = data.senderName,
+		senderHead = data.senderHead,
+		sendTime = data.sendTime,
+		type = data.type,
+		gold = data.gold,
+		leftGold = data.leftGold,
+		packetNum = data.packetNum,
+		receivedNum = data.receivedNum,
+		receiverList = _P.GetReceiverList(data),
+		expireTime = data.sendTime + _M.REDPACKET_CD,
+		talkChannel = data.talkChannel,
+	}
+	return redPacket
+end
+
+function _P.GetReceiverList(data)
+	receiverList = {}
+	if data.receiverList ~= nil then
+		for k,v in pairs(data.receiverList)do
+			local RedPacketReceiver = {
+				playerId = v.playerId,
+				playerName = v.playerName,
+				head = {headid = v.head.headid,gender = v.head.gender},
+				playerId = v.playerId,
+				gold = v.gold,
+				time = v.time,
+			}
+			table.insert(receiverList,v)
+		end
+	end
+	return receiverList
+end
+
+--已领完，已过期
+function _P.CheckIsRedPacket()
+	_M.isRedPackets = false
+	if _M.redPacketList ~= nil and #_M.redPacketList > 0 then
+		_M.isRedPackets = true
+	end
+	--
+	WindowMgr.Call("UMain", "RefreshRedpacket")
+end
+
+
+--检测红包过期
+function _M.RefreshRedPacketTick()
+	if _M.isRedTicks == false then
+		local tick = _P.GetRedpacketTick()
+		if tick>0 then
+			_M.isRedTicks = true
+			_M.RedpacketHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local _tick = _P.GetRedpacketTick()
+				print("___",_tick-HeartBeat.ServSecond())
+				if _tick > 0 then
+					for k,v in pairs(_M.redPacketList)do
+						if v.expireTime < HeartBeat.ServSecond() then
+							--过期
+							_M.RemoveRedPacket(v.id)
+						end
+					end
+				else
+					_M.isRedTicks = false
+					EventCenter.UnRegistCallEvent(eventHandle)
+				end
+			end)
+		end
+	end
+end
+
+function _M.GetTopRedPacked()
+	if _M.redPacketList ~= nil and #_M.redPacketList > 0 then
+		return _M.redPacketList[1]
+	end
+	return nil
+end
+
+function _P.GetRedpacketTick()
+	local tick = 0
+	for k,v in pairs(_M.redPacketList)do
+		if v.expireTime ~= nil then
+			if tick < v.expireTime then
+				tick = v.expireTime
+			end
+		end
+	end
+	return tick
+end
+
+return _M

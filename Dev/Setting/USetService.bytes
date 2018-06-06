@@ -1,0 +1,37 @@
+-- 联系客服界面
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+
+----------------------常量定义--------------------------
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+--界面构建
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Setup_UMain_Service")
+	
+	--返回按钮
+	local BtnClose = module:Get("backBtn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("title").Text = Csv.Text("service_Name")
+	module:Get("Text1").Text = Csv.Text("service_Notice")
+	module:Get("QQ").Text = Csv.Text("service_QQ")
+	module:Get("qqText").Text = Csv.Text("service_QQNum")
+	-- module:Get("Tieba").Text = Csv.Text("service_Tieba")
+	-- module:Get("TiebaText").Text = Csv.Text("service_TiebaName")
+	-- module:Get("weixin").Text = Csv.Text("service_WeChat")
+	-- module:Get("WXText").Text = Csv.Text("service_WeChatName")
+end
+
+return _M

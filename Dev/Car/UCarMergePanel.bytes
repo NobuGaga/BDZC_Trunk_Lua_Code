@@ -1,0 +1,117 @@
+-- 座驾合成界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCar = JRequire "Dev.Car.CCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(itemId)
+	local module = self:CreateMoudle(self._RootNode, "M_Bag_SyntheticPop")
+	self.mModule = module
+
+	local closeBtn = module:Get("BtnClose")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local mergeBtn = module:Get("Btn")
+	mergeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if self.mData.id ~= nil then
+			local hasNum = MBag.GetItemNum(self.mData.id)
+			if hasNum >= self.mData.count then
+				CCar.CarItemMergeReq(self.mData.id)
+			else
+				CCommon.ShowError(Csv.Text("err_car_merge"))
+			end
+		end
+	end, nil, 0.9)
+
+	module:Get("Title").Text = Csv.Text("bag_syntit")
+	module:Get("SecondTitle").Text = Csv.Text("bag_syntit2")
+
+	local mergeConf = Csv.CarItemMerge[itemId]
+	local itemConf = Csv.Item[mergeConf.mergeItemId]
+	local strColor = Csv.ItemColor[itemConf.color].str
+	module:Get("Name").Text = itemConf.name
+	module:Get("Desc").Text = Csv.Text("bag_detdescsp", {num = itemConf.tips})
+	module:Get("C_text").Text = Csv.Text("bag_syn")
+
+	local ImgIconColor = module:Get("IconColor")
+	ImgIconColor.SpriteName = itemConf.colorIcon
+
+	local ImgIcon = module:Get("Icon")
+	ImgIcon.SpriteName = itemConf.icon
+
+	self.mData = {id = itemId, count = mergeConf.needCount}
+	self.CostData = _P.CreateCostItemData(self, itemId, mergeConf.needCount)
+end
+
+
+function _P.CreateCostItemData(self, id, count)
+	local itemData = {}
+	local contentTransform = self.mModule:Get("Content")
+	local mergeModule = JGuiManager.GetMoudle(contentTransform,"M_Bag_SyntheticPopItem", WindowType.UI, 0)
+	if mergeModule ~= nil then
+		local itemConf = Csv.Item[id]
+		
+		local ImgIcon = mergeModule:Get("Icon")
+		ImgIcon.SpriteName = itemConf.icon
+
+		local ImgIconColor = mergeModule:Get("IconColor")
+		ImgIconColor.SpriteName = itemConf.colorIcon
+
+		ImgIconColor:AddOnButton(function()
+			SoundMgr.Play(10001)
+			CCommon.ShowItemTips(id)
+		end, nil, 0.9)
+
+		local TextNum = mergeModule:Get("Num")
+		local have = MBag.GetItemNum(id)
+		if have >= count then
+			TextNum.Text = Csv.Text("bag_haveG", {num = have, max = count})
+		else
+			TextNum.Text = Csv.Text("bag_haveR", {num = have, max = count})
+		end
+	end
+
+	itemData.module = mergeModule
+	return itemData
+end
+
+
+function _R.OnCarMatMerge(self, carData)
+	if self.CostData ~= nil and self.CostData.module ~= nil then
+		local module = self.CostData.module
+		local TextNum = module:Get("Num")
+		local have = MBag.GetItemNum(self.mData.id)
+		if have >= self.mData.count then
+			TextNum.Text = Csv.Text("bag_haveG", {num = have, max = self.mData.count})
+		else
+			TextNum.Text = Csv.Text("bag_haveR", {num = have, max = self.mData.count})
+		end
+	end
+
+	-- 弹窗
+	if not WindowMgr.IsCreated("UCarGetNewShowPanel") then
+		WindowMgr.Create("UCarGetNewShowPanel", carData)
+	end
+end
+
+
+return _M

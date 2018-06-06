@@ -1,0 +1,445 @@
+-- 宝库界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local PasswordIds = {34001, 34002, 34003}
+local BLACKCOLOR = Color(99/255, 99/255, 99/255, 1)
+local WHITECOLOR = Color(1, 1, 1, 1)
+local SelectImgName = "yth_023"
+local DefaultImgName = "yth_023_2"
+local DefaultImgSize = Vector2(178,57)
+local LightImgSize = Vector2(178,70)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(stageId, actId)
+	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Treasury")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.StageId = stageId
+	module:Get("C_Title").Text = Csv.Text("siege_treasure_title")
+
+	local noneText = module:Get("none")
+	noneText.Text = Csv.Text("club_info_none")
+	self.NoneText = noneText
+	
+	self.playerid = MPlayer.GetId()
+	self.curSelectPage = MSiege.TreasureEnum.Mine
+	_P.SetPasswordData(self)
+	_P.InitPageData(self)
+	_P.OnSetListData(self)
+
+	-- CSiege.EnterTreasureReq(actId, stageId)
+	_R.OnGetTreasureList(self, {
+		point = 355,
+		disklist = {{id = 34020, playerid = 100000, playername = "测试1", qualityid = 3}, {id = 34021, playerid = 100000, playername = "测试2", qualityid = 2}, {id = 34022, playerid = 100000, playername = "测试3", qualityid = 1}},
+		orderdata = {id = 34013, leavecount = 99}
+	})
+end
+
+
+function _P.SetPointData(self)
+	local pointText = self.mModule:Get("JifenText")
+	pointText.Text = Csv.Text("siege_treasure_point", {num = self.mData.point})
+end
+
+
+-- isUpdateNum为true时，是表示只更新数量，不设置图片信息
+function _P.SetPasswordData(self, isUpdateNum)
+	if PasswordIds == nil or next(PasswordIds) == nil then
+		return
+	end
+
+	for k,v in pairs(PasswordIds) do
+		if not isUpdateNum then
+			local iconImg = self.mModule:Get("Icon" .. k)
+			local qualityImg = self.mModule:Get("Quality" .. k)
+			local itemConf = Csv.Item[v]
+			if itemConf then
+				iconImg.SpriteName = itemConf.icon
+				iconImg:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					
+					if itemConf.id ~= nil then
+						WindowMgr.Create("UBagDetailPop", itemConf.id)
+					end
+				end, nil, 0.95)
+
+				qualityImg.SpriteName = itemConf.colorIcon
+			end
+		end
+
+		local hasNum = MBag.GetItemNum(v)
+		local numText = self.mModule:Get("Num" .. k)
+		local csvTextName = (hasNum > 0 and "siege_treasure_numBlue") or "siege_treasure_numRed"
+		numText.Text = Csv.Text(csvTextName, {num = hasNum})
+	end
+end
+
+
+function _P.InitPageData(self)
+	local module = self.mModule
+	local mineSelectImg = module:Get("C_Btn_c")
+	local diskSelectImg = module:Get("C_Btn_d")
+	local orderSelectImg = module:Get("C_Btn_e")
+	local mineSelectText = module:Get("C_text")
+	local diskSelectText = module:Get("C_Text")
+	local orderSelectText = module:Get("C_Text_0")
+
+	mineSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.TreasureEnum.Mine)
+	end)
+	self.mineSelectImg = mineSelectImg
+
+	diskSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.TreasureEnum.Disk)
+	end)
+	self.diskSelectImg = diskSelectImg
+
+	orderSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MSiege.TreasureEnum.Order)
+	end)
+	self.orderSelectImg = orderSelectImg
+
+	mineSelectText.Text = Csv.Text("siege_treasure_page1")
+	self.mineSelectText = mineSelectText
+	diskSelectText.Text = Csv.Text("siege_treasure_page2")
+	self.diskSelectText = diskSelectText
+	orderSelectText.Text = Csv.Text("siege_treasure_page3")
+	self.orderSelectText = orderSelectText
+
+	_P.OnSetPageText(self)
+end
+
+
+function _P.OnSetPageText(self)
+	local isMine = self.curSelectPage == MSiege.TreasureEnum.Mine
+	local isDisk = self.curSelectPage == MSiege.TreasureEnum.Disk
+	local isOrder = self.curSelectPage == MSiege.TreasureEnum.Order
+
+	self.mineSelectImg.SpriteName = ((isMine and SelectImgName) or DefaultImgName)
+	self.mineSelectImg.SizeDelta = ((isMine and LightImgSize) or DefaultImgSize)
+	self.diskSelectImg.SpriteName = ((isDisk and SelectImgName) or DefaultImgName)
+	self.diskSelectImg.SizeDelta = ((isDisk and LightImgSize) or DefaultImgSize)
+	self.orderSelectImg.SpriteName = ((isOrder and SelectImgName) or DefaultImgName)
+	self.orderSelectImg.SizeDelta = ((isOrder and LightImgSize) or DefaultImgSize)
+
+	self.mineSelectText.Color = ((isMine and BLACKCOLOR) or WHITECOLOR)
+	self.diskSelectText.Color = ((isDisk and BLACKCOLOR) or WHITECOLOR)
+	self.orderSelectText.Color = ((isOrder and BLACKCOLOR) or WHITECOLOR)
+end
+
+
+function _P.OnClickPage(self, pageType)
+	if self.curSelectPage == pageType then 
+		return
+	end
+
+	self.curSelectPage = pageType
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+
+function _P.OnSetListData(self)
+	local listData = nil
+	if self.curSelectPage == MSiege.TreasureEnum.Mine then
+		listData = _P.GetOwnSortList(MSiege.GetTreasureListByStage(self.StageId))
+	elseif self.curSelectPage == MSiege.TreasureEnum.Disk then
+		listData = _P.GetDiskSortList(self, self.mData.disklist)
+	elseif self.curSelectPage == MSiege.TreasureEnum.Order then
+		listData = self.mData.orderdata
+	end
+
+	local itemGrid = self.mModule:Get("Content")
+	itemGrid:DestroyChildren()
+	self.NoneText.Activity = (listData == nil or next(listData) == nil)
+
+	if listData ~= nil then
+		self.itemModules = {}
+
+		if self.curSelectPage ~= MSiege.TreasureEnum.Order then
+			for k,v in pairs(listData) do
+				self.itemModules[v.id] = _P.CreateTreasureItem(self, itemGrid, "M_Wghej_Treasury_Item", v)
+			end
+		else
+			self.itemModules[listData.id] = _P.CreateTreasureItem(self, itemGrid, "M_Wghej_Treasury_Item", listData)
+		end
+	end
+end
+
+
+function _P.GetOwnSortList(listData)
+	if listData == nil then return end
+
+	local sortTable = {}
+	for k,v in pairs(listData) do
+		sortTable[#sortTable + 1] = v
+	end
+
+	table.sort(sortTable, function (a, b)
+		if a.type == b.type then
+			return a.id < b.id
+		end
+
+		return a.type < b.type
+	end)
+
+	return sortTable
+end
+
+
+-- 排序：自己捐献的在后面，其余按照品质高低
+function _P.GetDiskSortList(self, infoList)
+	if infoList == nil then return end
+
+	local sortTable = infoList
+	table.sort(sortTable, function (a, b)
+		if a.playerid == self.playerid then
+			if b.playerid ~= self.playerid then
+				return false
+			end
+
+			return a.qualityid > b.qualityid
+		else
+			if b.playerid == self.playerid then
+				return true
+			end
+
+			return a.qualityid > b.qualityid
+		end
+	end)
+
+	return sortTable
+end
+
+
+function _P.CreateTreasureItem(self, itemGrid, itemName, data)
+	local siegeItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if itemModule == nil or data == nil then return end
+
+	local itemConf = Csv.Item[data.id]
+	local iconImg = itemModule:Get("Icon")
+	local qualityImg  = itemModule:Get("IconBox")
+	local nameText = itemModule:Get("NameText")
+
+	if itemConf ~= nil then
+		iconImg.SpriteName = itemConf.icon
+		iconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			
+			if itemConf.id ~= nil then
+				WindowMgr.Create("UBagDetailPop", itemConf.id)
+			end
+		end, nil, 0.95)
+		qualityImg.SpriteName = itemConf.colorIcon
+		nameText.Text = itemConf.name
+	end
+
+	local openText = itemModule:Get("OpenText")
+	local openBtn = itemModule:Get("OpenBtn")
+	openBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickOpen(self, data)
+	end, nil, 0.9)
+
+	local donateText = itemModule:Get("DonateText")
+	local donateBtn = itemModule:Get("DonateBtn")
+	donateBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickDonate(self, data)
+	end, nil, 0.9)
+
+	local showText = itemModule:Get("Shenyu")
+	local showNumText = itemModule:Get("ShengyuText")
+	local priceRect = itemModule:Get("spend")
+	local treasureConf = Csv.SiegeTreasury[data.id]
+	if self.curSelectPage == MSiege.TreasureEnum.Mine then
+		local hasNum = MBag.GetItemNum(data.id)
+		local isNone = hasNum <= 0
+		local leaveCsvText = (isNone and "siege_treasure_numRed") or "siege_treasure_numBlue"
+		showText.Activity = true
+		priceRect.Activity = false
+		openBtn.Activity = treasureConf.type == 2
+		showText.Text = Csv.Text("siege_treasure_leaveNum")
+		showNumText.Text = Csv.Text(leaveCsvText, {num = hasNum})
+		openText.Text = Csv.Text("siege_treasure_open")
+		donateText.Text = Csv.Text("siege_treasure_donate")
+
+		openBtn.IsGray = isNone
+		donateBtn.IsGray = isNone
+		openBtn.RaycastTarget = not isNone
+		donateBtn.RaycastTarget = not isNone
+	elseif self.curSelectPage == MSiege.TreasureEnum.Disk then
+		local hasNum = MBag.GetItemNum(treasureConf.passwordId)
+		local isMineDonate = data.playerid == self.playerid
+		showText.Activity = true
+		priceRect.Activity = false
+		openBtn.Activity = false
+		donateBtn.Activity = not isMineDonate
+		showText.Text = Csv.Text("siege_treasure_donateShow")
+		showNumText.Text = data.playername
+		donateText.Text = Csv.Text("siege_treasure_open")
+
+		donateBtn.IsGray = hasNum <= 0
+		donateBtn.RaycastTarget = hasNum > 0
+	elseif self.curSelectPage == MSiege.TreasureEnum.Order then
+		local priceItemConf = Csv.Item[treasureConf.buyPrice[1]]
+		showText.Activity = false
+		priceRect.Activity = true
+		openBtn.Activity = false
+
+		donateText.Text = Csv.Text("siege_treasure_buy")
+		itemModule:Get("spend").Text = Csv.Text("shop_jiage")
+		itemModule:Get("zunshi").SpriteName = priceItemConf.icon
+		itemModule:Get("spendNum").Text = treasureConf.buyPrice[2]
+		itemModule:Get("LeaveText").Text = Csv.Text("siege_treasure_leave")
+		itemModule:Get("LeaveNumText").Text = data.leavecount
+	end
+
+	siegeItem.module = itemModule
+	return siegeItem
+end
+
+
+function _P.OnClickOpen(self, data)
+	if self.curSelectPage ~= MSiege.TreasureEnum.Mine then
+		return
+	end
+
+	local treasureConf = Csv.SiegeTreasury[data.id]
+	if treasureConf and treasureConf.type == 2 then
+		local passwardNum = MBag.GetItemNum(treasureConf.passwordId)
+		if passwardNum > 0 then
+			local passwardItemConf = Csv.Item[treasureConf.passwordId]
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					-- 开启u盘
+					CSiege.OpenUdiskReq(data.id, self.playerid)
+					-- _R.OnOpenCallBack(self, {id = 34023, isown = true, point = 345, getscore =10, items = {[1]= {1,100}}})
+				end
+			end, {content = Csv.Text("siege_treasure_openShow", {name = passwardItemConf.name})})
+		else
+			local buyNeedItem = treasureConf.passwordBuy
+			local needItemConf = Csv.Item[buyNeedItem[1]]
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					-- 购买密码
+					CSiege.OpenUdiskReq(data.id, self.playerid)
+				end
+			end, {content = Csv.Text("siege_treasure_openErr", {num = buyNeedItem[2], name = needItemConf.name})})
+		end
+	end
+end
+
+
+function _P.OnClickDonate(self, data)
+	if self.curSelectPage == MSiege.TreasureEnum.Mine then
+		-- 捐献
+		CSiege.DonateReq(data.id)
+		-- _R.OnDonateCallBack(self, {id = data.id})
+	elseif self.curSelectPage == MSiege.TreasureEnum.Disk then
+		-- 开启
+		CSiege.OpenUdiskReq(data.id, data.playerid)
+	elseif self.curSelectPage == MSiege.TreasureEnum.Order then
+		-- 购买
+		if data.leavecount < 0 then
+			CCommon.ShowError(Csv.Text("siege_treasure_orderNone"))
+			return
+		end
+		CSiege.BuyOrderReq(data.id)
+		-- _R.OnBuyCallBack(self, {id = data.id, leavecount = 98})
+	end 
+end
+
+
+function _R.OnGetTreasureList(self, data)
+	self.mData = data
+	_P.SetPointData(self)
+end
+
+
+function _R.OnDonateCallBack(self, data)
+	local treasureConf = Csv.SiegeTreasury[data.id]
+	if treasureConf.type == 1 then
+		CCommon.ShowError(Csv.Text("siege_treasure_donateOrder", {num = treasureConf.getPoint}))
+		if data.id == self.mData.orderdata.id then
+			self.mData.orderdata.leavecount = self.mData.orderdata.leavecount + 1
+		end
+	else
+		CCommon.ShowError(Csv.Text("siege_treasure_donateDisk"))
+		-- 捐献列表添加一条信息
+		table.insert(self.mData.disklist, {id = data.id, playerid = self.playerid, playername = MPlayer.GetName()})
+	end
+
+	local curSelectMoudle = self.itemModules[data.id].module
+	local hasNum = MBag.GetItemNum(data.id)
+	local leaveCsvText = (hasNum <= 0 and "siege_treasure_numRed") or "siege_treasure_numBlue"
+
+	curSelectMoudle:Get("Shenyu").Text =Csv.Text("siege_treasure_leaveNum")
+	curSelectMoudle:Get("ShengyuText").Text = Csv.Text(leaveCsvText, {num = hasNum})
+end
+
+
+function _R.OnOpenCallBack(self, data)
+	local itemConf = Csv.Item[data.id]
+	CCommon.ShowError(Csv.Text("siege_treasure_openDisk", {name = itemConf.name}))
+
+	if self.curSelectPage == MSiege.TreasureEnum.Mine then
+		local curSelectMoudle = self.itemModules[data.id].module
+		local hasNum = MBag.GetItemNum(data.id)
+		local leaveCsvText = (hasNum <= 0 and "siege_treasure_numRed") or "siege_treasure_numBlue"
+
+		curSelectMoudle:Get("Shenyu").Text =Csv.Text("siege_treasure_leaveNum")
+		curSelectMoudle:Get("ShengyuText").Text = Csv.Text(leaveCsvText, {num = hasNum})
+	elseif self.curSelectPage == MSiege.TreasureEnum.Disk then
+		for k,v in pairs(self.mData.disklist) do
+			if v.id == data.id then
+				table.remove(self.mData.disklist, k)
+				break
+			end
+		end
+
+		_P.OnSetListData(self)
+	end
+end
+
+
+function _R.OnBuyCallBack(self, data)
+	local curSelectMoudle = self.itemModules[data.id].module
+	local effectRect = curSelectMoudle:Get("EffectRect")
+	CCommon.ShowFlyItem(effectRect, data.id, 1)
+
+	local curSelectMoudle = self.itemModules[data.id].module
+	curSelectMoudle:Get("LeaveText").Text = Csv.Text("siege_treasure_leave")
+	curSelectMoudle:Get("LeaveNumText").Text = data.leavecount
+end
+
+
+return _M

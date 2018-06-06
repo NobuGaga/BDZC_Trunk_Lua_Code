@@ -1,0 +1,210 @@
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cStaffLevelUp						=	2,--升级 PStaff.CLevelUp
+	cStaffColorUp						=	3,--进阶 PStaff.CCololrUp
+	cStaffBookLvUp						=	4,--升级书籍 PStaff.CBookUp
+	cStaffSkillLvUp						=	5,--技能升级 PStaff.CSkillUp
+	cStaffAureoleLvUp					=	6,--光环升阶 PStaff.CAureoleUp
+	cStaffRename						= 	7,--员工改名 PStaff.CStaffRename
+	
+	sStaffInit							=	1,--初始化 PStaff.SInit
+	sStaffLevelUp						=	2,--升级 PStaff.SLevelUp
+	sStaffColorUp						=	3,--进阶 PStaff.SColorUp
+	sStaffBookLvUp						=	4,--升级书籍 PStaff.SBookLvUp
+	sStaffSkillLvUp						=	5,--技能升级 PStaff.SSkillUp
+	sStaffAureoleLvUp					=	6,--光环升阶 PStaff.SAureoleLvUp
+	sStaffAureoleActive					=	7,--激活员工光环 PStaff.SAureoleActive
+	sStaffNewStaff						=	8,--新激活员工 PStaff.PStaffInfo
+	sStaffUpdateBookExp					=	9,--获得书籍经验 PStaff.SUpdateBookExp
+	sStaffAddItemAttr					=	10,--增加道具经验 PStaff.SAddItemAttr
+	sStaffUpdateSkillExp				=	11,--更新技能经验 PStaff.SUpdateSkillExp
+	sStaffUpdate						=	12,--更新员工属性 PStaff.SStaffChange
+	sStaffRename						=	13,--员工改名 PStaff.SStaffRename
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cStaffLevelUp] = "PStaff.CLevelUp",
+		[ECmdId.cStaffColorUp] = "PStaff.CColorUp",
+		[ECmdId.cStaffBookLvUp] = "PStaff.CBookUp",
+		[ECmdId.cStaffSkillLvUp] = "PStaff.CSkillUp",
+		[ECmdId.cStaffAureoleLvUp] = "PStaff.CAureoleUp",
+		[ECmdId.cStaffRename] = "PStaff.CStaffRename",
+	}
+	local recv = {
+		[ECmdId.sStaffInit]				=		{proto = "PStaff.SInit",				handle = _P.OnGetStaffData},
+		[ECmdId.sStaffLevelUp]			=		{proto = "PStaff.SLevelUp",				handle = _P.OnStaffLevelUp},
+		[ECmdId.sStaffColorUp]			=		{proto = "PStaff.SColorUp",				handle = _P.OnStaffColorUp},
+		[ECmdId.sStaffBookLvUp]			=		{proto = "PStaff.SBookLvUp",			handle = _P.OnStaffBookUp},
+		[ECmdId.sStaffSkillLvUp]		=		{proto = "PStaff.SSkillUp",				handle = _P.OnStaffSkillUp},
+		[ECmdId.sStaffAureoleLvUp]		=		{proto = "PStaff.SAureoleLvUp",			handle = _P.OnStaffAureoleUp},
+		[ECmdId.sStaffAureoleActive]	=		{proto = "PStaff.SAureoleActive",		handle = _P.OnStaffAureoleActive},
+		[ECmdId.sStaffNewStaff]			=		{proto = "PStaff.PStaffInfo",			handle = _P.OnStaffNew},
+		[ECmdId.sStaffUpdateBookExp]		=	{proto = "PStaff.SUpdateBookExp",		handle = _P.OnStaffUpdateBookExp},
+		[ECmdId.sStaffAddItemAttr]		=		{proto = "PStaff.SAddItemAttr",			handle = _P.OnStaffAddItem},
+		[ECmdId.sStaffUpdateSkillExp]	=		{proto = "PStaff.SUpdateSkillExp",		handle = _P.OnStaffUpdateSkillExp},
+		[ECmdId.sStaffUpdate]			=		{proto = "PStaff.SStaffChange",			handle = _P.OnStaffChange},
+		[ECmdId.sStaffRename]			=		{proto = "PStaff.SStaffRename",			handle = _P.OnStaffChangeName},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Staff, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MStaff.OnReLoginClean()
+	MStaff.Clean()
+end
+
+--C
+function _M.StaffLevelUp(ID, lvlupCount)
+	local typeValue = lvlupCount == 1 and 1 or 2
+	_M.Send(ECmdId.cStaffLevelUp,{staffid = ID, type = typeValue })
+end
+
+function _M.StaffColorUp(ID)
+	_M.Send(ECmdId.cStaffColorUp,{staffid = ID})
+end
+
+function _M.StaffBookUp(ID,BOOKID,TYPE)
+	_M.Send(ECmdId.cStaffBookLvUp,{staffid = ID,bookid = BOOKID,type = TYPE})
+end
+
+function _M.StaffSkillUp(ID,SKILLID)
+	_M.Send(ECmdId.cStaffSkillLvUp,{staffid = ID,skillid = SKILLID})
+end
+
+function _M.StaffAureoleUp(ID,AUREOLEID)
+	_M.Send(ECmdId.cStaffAureoleLvUp,{staffid = ID,aureoleid = AUREOLEID})
+end
+
+function _M.ReqStaffRename(id,_name,itemid)
+	_M.Send(ECmdId.cStaffRename,{staffid = id,name = _name,costItemId = itemid})
+end
+
+--S
+function _P.OnGetStaffData(data)
+	MStaff.Clean()
+	MStaff.StaffInit(data.stafflist)
+	_M.CheckStaffRedPoint()
+	if WindowMgr.IsCreated("UStaffDetails") then
+		WindowMgr.Call("UStaffDetails","ResetView")
+	end
+end
+
+function _P.OnStaffLevelUp(data)
+	MStaff.OnStaffLevelUp(data)
+	WindowMgr.Call("UStaff","ChangeStaffLv",data.staffid)
+	WindowMgr.Call("UStaffDetails","StaffLvUp",data)
+	_M.CheckStaffRedPoint()
+end
+
+function _P.OnStaffColorUp(data)
+	MStaff.OnStaffColorUp(data)
+	WindowMgr.Call("UStaff","ChangeStaffColor",data.staffid)
+	WindowMgr.Call("UStaffDetails","StaffColorUp",data)
+	_M.CheckBookRedPoint(data.staffid)
+	_M.CheckSkillRedPoint(data.staffid)
+	_M.CheckAureoleRedPoint(data.staffid)
+	_M.CheckStaffRedPoint()
+end
+
+function _P.OnStaffBookUp(data)
+	if data.success then
+		MStaff.OnStaffBookUp(data)
+	end
+	WindowMgr.Call("UStaffDetails","StaffBookUp",data)
+	WindowMgr.Call("UStaffBookUpPop","CreateData",data)
+	_M.CheckBookRedPoint(data.staffid)
+end
+
+function _P.OnStaffSkillUp(data)
+	MStaff.OnStaffSkillUp(data)
+	WindowMgr.Call("UStaffDetails","StaffSkillUp",data)
+	_M.CheckSkillRedPoint(data.staffid)
+end
+
+function _P.OnStaffAureoleUp(data)
+	MStaff.OnStaffAureoleUp(data)
+	WindowMgr.Call("UStaffDetails","StaffAureoleUp",data)
+	_M.CheckAureoleRedPoint(data.staffid)
+end
+
+function _P.OnStaffAureoleActive(data)
+	MStaff.OnStaffAureoleActive(data)
+end
+
+function _P.OnStaffNew(data)
+	MStaff.OnStaffNew(data)
+
+	CTrigger.OnGetNewStaff(data.id)
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Call("UBag","AddNewStaff",data.id)
+	end
+end
+
+function _P.OnStaffUpdateBookExp(data)
+	MStaff.OnStaffUpdateBookExp(data)
+	_M.CheckStaffRedPoint()
+end
+
+function _P.OnStaffAddItem(data)
+	MStaff.OnStaffAddItem(data)
+end
+
+function _P.OnStaffUpdateSkillExp(data)
+	MStaff.OnStaffUpdateSkillExp(data)
+	_M.CheckStaffRedPoint()
+end
+
+function _P.OnStaffChange(data)
+	MStaff.OnStaffNew(data.staff)
+	_M.CheckStaffRedPoint()
+end
+
+function _P.OnStaffChangeName(data)
+	MStaff.RefreshStaffName(data)
+	WindowMgr.Call("UStaffChaneName","CloseView")
+end
+
+
+--红点处理
+function _M.CheckStaffRedPoint()
+	local isRedpoint = MStaff.GetRedPointStaff()
+	MStaff.StaffRedPoint = isRedpoint
+	CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff)
+end
+
+function _M.CheckBookRedPoint(staffid)
+	local isRedpoint = MStaff.GetRedPointBookUp(staffid)
+	if isRedpoint ~= MStaff.BookRedPoint then
+		MStaff.BookRedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Book)
+		_M.CheckStaffRedPoint()
+	end
+end
+
+function _M.CheckSkillRedPoint(staffid)
+	local isRedpoint = MStaff.GetRedPointSkillUp(staffid)
+	if isRedpoint ~= MStaff.SkillRedPoint then
+		MStaff.SkillRedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Skill)
+		_M.CheckStaffRedPoint()
+	end
+end
+
+function _M.CheckAureoleRedPoint(staffid)
+	local isRedpoint = MStaff.GetRedPointAureoleUp(staffid)
+	if isRedpoint ~= MStaff.AureoleRedPoint then
+		MStaff.AureoleRedPoint = isRedpoint
+		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Aureole)
+		_M.CheckStaffRedPoint()
+	end
+end
+
+return _M

@@ -1,0 +1,93 @@
+-- 成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MLectures = JRequire "Dev.Lectures.MLectures"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+local winActorId = 10139
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(data, onClose)
+	self.OnCloseCall = onClose
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local listData = data.getlist
+	local moduleName = ''
+	if listData ~= nil then
+		local listCount = #listData
+		if listCount <= 0 then
+			moduleName = 'M_Lecture_Success_0'
+		elseif listCount <= 5 then
+			moduleName = 'M_Lecture_Success'
+		else
+			moduleName = 'M_Lecture_Success2'
+		end
+	else
+		moduleName = 'M_Lecture_Success_0'
+	end
+
+	local module = self:CreateMoudle(self._RootNode, moduleName)
+	self.mModule = module
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+		_P.ShowCloseTips(self)
+	end, nil, 1)
+
+	-- 播放战斗胜利特效
+	SoundMgr.PlayNonStopUI(10046)
+	CCommon.CreateEffect(module:Get("ActorPanel"), winActorId)
+
+	local battleId = (data.id > MLectures.MaxLecturesNum and MLectures.MaxLecturesNum) or data.id
+	local lectureConf = Csv.LecturesBattle[battleId]
+	if lectureConf == nil then return end
+	local cityName = (data.type > 1 and Csv.Text("lecture_city_moreCity")) or lectureConf.name
+
+	module:Get("Text1").Text = Csv.Text("lectures_win_text1", {num = data.selfcost})
+	module:Get("Text2").Text = Csv.Text("lectures_win_text2", {name = cityName})
+	module:Get("Text3").Text = Csv.Text("lectures_win_text3", {num = data.getscore})
+
+	_P.SetRewardList(self, data.getlist)
+end
+
+
+function _P.ShowCloseTips(self)
+	local tipsText = self.mModule:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+
+function _P.SetRewardList(self, getlist)
+	if getlist == nil or next(getlist) == nil then return end
+
+	local itemRoot = self.mModule:Get("content")
+	for _,v in pairs(getlist) do
+		local itemModule = CCommon.CreateItem(itemRoot, v.key, nil, {num = v.value})
+		CCommon.CreateItemLight(itemModule.SelfRect, Define.SysId.Lecture, v.key)
+	end
+end
+
+
+return _M

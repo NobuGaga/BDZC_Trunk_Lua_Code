@@ -1,0 +1,591 @@
+-- 新官上任战斗界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
+local Linear = CS.DG.Tweening.Ease.Linear
+local BOBYMOVETWEEN = "T_Activity_XinGuan_BodyMove"
+local BOBYCHANGETWEEN = "T_Activity_XinGuan_FadeTween"
+local RESTFADETWEEN = "T_Activity_XinGuan_RestFade"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+--按钮图片
+local _DefaultImg = "yth_023_2"
+local _LightImg = "yth_023"
+
+--按钮图片大小
+local _DefaultImgSize = Vector2(178,57)
+local _LightImgSize = Vector2(178,70)
+
+--字大小
+local _DefaultFontSize = 32
+local _LightFontSize = 34
+
+--字颜色
+local _DefaultFontColor = Color(1,1,1,1)
+local _LightFontColor = Color(135/255,135/255,168/255,1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(activityId, selectData)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_Pk")
+	self.mModule = module
+
+	self.isNone = false
+	self.selectData = selectData
+	CActivity.EnterNewReq(activityId)
+	
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.xinGuanConf = Csv.ActivityNewTake[activityId]
+	self.battleTweenName = self.xinGuanConf.battleTweenName or "T_Activity_XinGuan_Battle"
+	module:Get("C_Full_TitleBg").SpriteName = self.xinGuanConf.titleImg
+	module:Get("ditu").SpriteName = self.xinGuanConf.battleBg
+	module:Get("noticeBg").SpriteName = self.xinGuanConf.timeBg
+	module:Get("infobg").SpriteName = self.xinGuanConf.descBg
+
+	-- 播放背景人物动画
+	self.bobyRect = module:Get("Bxs")
+	self.fadeImg = module:Get("fadeImg")
+
+	if self.xinGuanConf and self.xinGuanConf.isShake == 1 then
+		local bobyTweener = self.bobyRect.CachedTran:GetJTweener(BOBYMOVETWEEN)
+		bobyTweener:Play()
+	end
+
+	local angleImg = module:Get("jiantou")
+	if self.xinGuanConf and self.xinGuanConf.isShowAngle and self.xinGuanConf.isShowAngle == 0 then
+		angleImg.Activity = false
+	else
+		angleImg.Activity = true
+	end
+
+	local talkRect = module:Get("DHK")
+	if self.xinGuanConf and self.xinGuanConf.dialogPos then
+		local talkPos = self.xinGuanConf.dialogPos
+		if #talkPos == 2 then
+			talkRect.LocalPosition = Vector2(talkPos[1], talkPos[2])
+		end
+	end
+
+	module:Get("AttackBg").SpriteName = self.xinGuanConf.attackBg
+	module:Get("C_Full_TitleBg").SpriteName= self.xinGuanConf.titleBg
+	
+	module:Get("C_Text").Text = self.xinGuanConf.title
+	self.useBtnText = module:Get("UseText")
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("xinguan_battle_noneRank")
+
+	self.curSelectToggle = MActivity.XinGuanTypeEnum.Personal
+	self.ScreenWidth = CS.JGui.JGuiManager.GuiRoot.Width
+	self.ownRankInfo = module:Get("own")
+	self.curNameText = module:Get("Num")
+	self.curPointText = module:Get("Fraction")
+	self.personText = module:Get("PersonText")
+	self.personText.Text = Csv.Text("xinguan_rank_mine_title")
+	self.gangText = module:Get("GangText")
+	self.gangText.Text = Csv.Text("xinguan_rank_gang_title")
+	self.clickText = module:Get("clickText")
+	self.clickText.Text = Csv.Text("xinguan_battle_clickBuy")
+	
+	_P.InitPageData(self)
+
+	self.qualityImg = module:Get("IconBox")
+	self.iconPos = self.qualityImg.LocalPosition
+	self.numText = module:Get("iconNum")
+
+	local activityData = MActivity.GetFromId(activityId)
+	if activityData then
+		self.activityData = activityData
+	end
+
+	self.iconImg = module:Get("icon")
+	self.iconImg:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 打开商城界面
+		WindowMgr.Create("UXinGuanShop", self.activityData, (self.isHasIconData and 2) or 1)
+	end, nil, 0.95)
+	self.scoreText = module:Get("AddScore")
+
+	self.useBtn = module:Get("Use")
+	self.useBtn:AddOnButton(function ( ... )
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+		
+		local useSoundId = self.xinGuanConf.useVoice
+		SoundMgr.Play(useSoundId)
+		_P.UseItem(self)
+	end, nil, 0.95)
+
+	self.progress = module:Get("progress")
+	self.proText = module:Get("progressNum")
+	self.bossTalkText = module:Get("BossTalk")
+end
+
+
+function _P.SetViewData(self)
+	_P.OnSetListData(self)
+	_P.SetCenterData(self)
+	_P.EnqueueRankInfo(self, self.mData.noticeData)
+end
+
+
+function _P.InitPageData(self)
+	self.personSelectImg = self.mModule:Get("Person")
+	self.gangSelectImg = self.mModule:Get("Gang")
+
+	_P.OnSetPageText(self)
+
+	self.personSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MActivity.XinGuanTypeEnum.Personal)
+	end, nil, 0.95)
+	self.gangSelectImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, MActivity.XinGuanTypeEnum.Gang)
+	end, nil, 0.95)
+end
+
+
+function _P.OnSetListData(self)
+	local list = {}
+	if self.mData then
+		local isPerson = self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal
+		list = (isPerson and self.mData.selfRankList) or self.mData.gangRankList
+	end
+	local rankList = _P.GetSortList(list)
+
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	self.noneText.Activity = (not rankList or next(rankList) == nil)
+	if not rankList then return end
+	for k,v in pairs(rankList) do
+		_P.OnCreateRankItem(v, itemGrid)
+	end
+
+	_P.SetOwnRankData(self)
+end
+
+
+function _P.GetSortList(rankData)
+	if not rankData then return {} end
+	
+	local sortList = rankData
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+function _P.OnSetPageText(self)
+	local isPerson =(self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal)
+	self.personSelectImg.SpriteName = ((isPerson and _LightImg) or _DefaultImg)
+	self.gangSelectImg.SpriteName = ((not isPerson and _LightImg) or _DefaultImg)
+	self.personSelectImg.SizeDelta = ((isPerson and _LightImgSize) or _DefaultImgSize)
+	self.gangSelectImg.SizeDelta = ((not isPerson and _LightImgSize) or _DefaultImgSize)
+
+	self.personText.FontSize = (( isPerson and _LightFontSize) or _DefaultFontSize)
+	self.gangText.FontSize = ((not isPerson and _LightFontSize) or _DefaultFontSize)
+	self.personText.Color = (( isPerson and _LightFontColor) or _DefaultFontColor)
+	self.gangText.Color = ((not isPerson and _LightFontColor) or _DefaultFontColor)
+end
+
+
+function _P.OnClickPage(self, curSelect)
+	if self.curSelectToggle == curSelect then return end
+	self.curSelectToggle = curSelect
+
+	_P.OnSetPageText(self)
+	_P.OnSetListData(self)
+end
+
+
+-- 设置自己排名信息
+function _P.SetOwnRankData(self)
+	local curRankData
+	if self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal then
+		curRankData = self.mData.selfRank
+	else
+		curRankData = self.mData.gangRank
+	end
+
+	if not curRankData then return end
+
+	local index = (curRankData.index == 0 and "10000+") or curRankData.index
+	self.curNameText.Text = Csv.Text("xinguan_battle_num", {num = index, name = curRankData.name})
+	self.curPointText.Text = Csv.Text("xinguan_battle_point") .. curRankData.score
+
+	local isShow = curRankData.name and curRankData.name ~= ""
+	self.curNameText.Activity = isShow
+	self.curPointText.Activity = isShow
+end
+
+
+function _P.OnCreateRankItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Xgsr_Pk_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("Num").Text = data.index .. '.'
+	itemModule:Get("name").Text = data.name
+	itemModule:Get("Fraction").Text = Csv.Text("xinguan_battle_point")
+	itemModule:Get("FractionNum").Text = data.score
+end
+
+
+function _P.EnqueueRankInfo(self, data)
+	if data == nil then
+		self.isNone = true
+		return
+	end
+
+	local scrollTxt = ""
+	self.noticeCount = 0
+	for k,v in pairs(data) do
+		local itemConf = Csv.Item[v.goodId]
+		local getItemConf = Csv.Item[v.gainItem.key]
+		local str = Csv.Text(self.xinGuanConf.scrollDesc, {name = v.name, 
+					itemName = itemConf.name, bossName = self.xinGuanConf.bossName,
+					getItemName = getItemConf.name, getItemNum = v.gainItem.value})
+		scrollTxt = scrollTxt .. str .. '        '
+		self.noticeCount = self.noticeCount + 1
+	end
+
+	if scrollTxt ~= "" then
+		self.scrollList = {}
+		self.scrollList[#self.scrollList + 1] = scrollTxt
+		_P.OnTextScroll(self)
+	end
+
+	self.isNone = (scrollTxt == "")
+end
+
+
+function _P.DequeueRankInfo(self)
+	if self.scrollList and next(self.scrollList) then
+		local first = self.scrollList[1]
+		table.remove(self.scrollList, 1)
+
+		return first
+	end
+
+	return nil
+end
+
+
+-- 跑马灯
+function _P.OnTextScroll(self)
+	local data = _P.DequeueRankInfo(self)
+	if not data then return end
+
+	local module = self.mModule
+	if module then
+		local TopNode = module:Get('noticeBg')
+		if TopNode then
+			_P.DoScrollFunc(self, data, TopNode, module:Get("noticeText"), self.ScreenWidth)
+		end
+	end
+end
+
+
+function _P.DoScrollFunc(self, text, TopNode, scrollLbl, screenWidth)
+	scrollLbl:DOKill()
+	scrollLbl.LocalPosition = Vector2.zero
+	scrollLbl.Text = text
+	local tween = scrollLbl:DOAnchorPosX( - scrollLbl.PreferredWidth - screenWidth - 40, self.noticeCount * 7)
+	tween:SetEase(Linear)
+	tween:OnComplete(function()
+		if TopNode ~= nil then
+			local data = _P.DequeueRankInfo(self)
+			if data ~= nil then
+				_P.DoScrollFunc(self, data, TopNode, scrollLbl, screenWidth)
+			else
+				-- 重新请求后端拿最新10个玩家的信息
+				CActivity.RefreshNewInfoReq(self.activityData.actId)
+			end
+		end
+	end)
+end
+
+
+-- 获取背包道具（按仓库顺序）
+function _P.GetHouseItemData(self)
+	for i=1, #self.xinGuanConf.shopId do
+		local itemId = self.xinGuanConf.shopId[i]
+		local itemNum = MBag.GetItemNum(itemId)
+		if itemNum > 0 then
+			return {index = i, itemId = itemId, count = itemNum, shopPoint = self.xinGuanConf.shopPoint[i]}
+		end
+	end
+end
+
+
+function _P.SetCenterData(self)
+	self.useBtn.Activity = true
+	self.iconImg.Alpha = 1
+	self.qualityImg.Alpha = 1
+	self.qualityImg.LocalPosition = self.iconPos
+	self.numText.Alpha = 1
+
+	if not self.selectData then
+		self.selectData = _P.GetHouseItemData(self)
+	end
+
+	local itemData = self.selectData
+	if not itemData then
+		self.qualityImg.SpriteName = "ty_018"
+		
+		local isSendRelax = (self.mData.bossBlood >= self.xinGuanConf.totalScore)
+		if isSendRelax then
+			self.useBtn.IsGray = false
+		else
+			self.useBtn.IsGray = true
+		end
+
+		self.iconImg.SpriteName = ""
+		self.mModule:Get("iconNum").Text = ""
+		self.clickText.Activity = true
+	else
+		self.clickText.Activity = false
+		local itemConf = Csv.Item[itemData.itemId]
+		if not itemConf then return end
+
+		-- 设置item数据
+		self.mModule:Get("iconNum").Text = itemData.count
+		self.iconImg.SpriteName = itemConf.icon
+		self.qualityImg.SpriteName = itemConf.colorIcon
+
+		self.useBtn.IsGray = false
+
+		self.scoreText.Text = '+' .. itemData.shopPoint
+	end
+
+	self.isHasIconData = itemData
+
+	-- 进度条信息
+	local progressValue = (self.xinGuanConf.totalScore - self.mData.bossBlood) / self.xinGuanConf.totalScore
+	local progressNum = math.max(progressValue * 100, 0)
+	self.progress.FillAmount = progressValue
+	self.proText.Text = string.format("%.2f", progressNum) .. '%'
+
+	if self.mData.bossBlood >= self.xinGuanConf.totalScore then
+		self.bossTalkText.Text = self.xinGuanConf.zeroBossDesc
+		self.useBtnText.Text = self.xinGuanConf.zeroDesc
+
+		-- 根据进度设置美女状态图片
+		local maxBossBgNum = #self.xinGuanConf.bossBg
+		local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
+		self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+	else
+		-- 根据进度设置boss对话
+		local maxTalkNum = #self.xinGuanConf.bossTalk
+		local talkRow = _P.GetCurState(maxTalkNum, progressValue)
+
+		self.useBtnText.Text = Csv.Text("xinguan_battle_use")
+		if self.lastTalkRow and self.lastTalkRow ~= talkRow then
+			self.useBtn.RaycastTarget = false
+			if self.battleTweener then
+				self.battleTweener:Restore()
+			end
+			
+			local tweenRect = self.mModule:Get("AnimRect")
+			local bobyTweener = tweenRect.CachedTran:GetJTweener(BOBYCHANGETWEEN)
+			bobyTweener:SetOnComplete(function()
+				self.useBtn.RaycastTarget = true
+			end)
+			bobyTweener:Play()
+
+			local updateTimer = self.mModule.SelfRect:AddOnTime(function()
+				if updateTimer then
+					updateTimer:Destroy()
+				end
+
+				_P.SetBossBobyData(self, talkRow, progressValue)
+			end, nil, 0.5)
+		else
+			_P.SetBossBobyData(self, talkRow, progressValue)
+		end
+	end
+end
+
+
+function _P.SetBossBobyData(self, talkRow, progressValue)
+	self.lastTalkRow = talkRow
+	self.bossTalkText.Text = self.xinGuanConf.bossTalk[talkRow]
+
+	-- 根据进度设置美女状态图片
+	local maxBossBgNum = #self.xinGuanConf.bossBg
+	local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
+	self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+end
+
+
+function _P.GetCurState(maxNum, progressValue)
+	local onePro = 1 / maxNum
+	local row, rest = math.modf(progressValue / onePro)
+	if rest > 0 then
+		row = row + 1
+	end
+
+	if row <= 0 then
+		row = 1
+	elseif row > maxNum then
+		row = maxNum
+	end
+
+	return row
+end
+
+
+-- 使用道具
+function _P.UseItem(self)
+	if self.mData == nil then return end
+	if self.mData.bossBlood >= self.xinGuanConf.totalScore then
+		CActivity.ToRestReq(self.xinGuanConf.id)
+		return
+	else
+		-- 发送使用道具请求
+		if self.selectData then
+			CActivity.UseNewGoodsReq(self.xinGuanConf.id, self.selectData.index)
+		else
+			CCommon.ShowError(Csv.Text("xinguan_battle_useErr"))
+		end
+	end
+end
+
+
+-- 请求进入界面返回
+function _R.OnGetDataBack(self, data)
+	self.mData = data
+	_P.SetViewData(self)
+end
+
+
+-- 最新十条信息返回
+function _R.OnGetNewInfo(self, data)
+	self.scrollList = {}
+	_P.EnqueueRankInfo(self, data)
+end
+
+
+-- 使用道具返回
+function _R.OnUseItemBack(self, data)
+	if self.isNone then
+		self.isNone = false
+		CActivity.RefreshNewInfoReq(self.activityData.actId) -- 请求刷新十条信息
+	end
+	-- 播放特效
+	if self.battleTweener then
+		self.battleTweener:Restore()
+	end
+
+	local tweenRect = self.mModule:Get("AnimRect")
+	local battleTweener = tweenRect.CachedTran:GetJTweener(self.battleTweenName)
+	self.battleTweener = battleTweener
+
+	self.useBtn.Activity = false
+	battleTweener:SetOnComplete(function()
+		if not self.battleTweener then return end
+		-- 打开获取奖励界面
+		local index = data.index
+		WindowMgr.Create("UXinGuanWin", {point = self.xinGuanConf.shopPoint[index], rewards = data.getRewards}, function( ... )
+			_P.SetCenterData(self)
+		end)
+
+		self.mData.selfRankList = data.selfRankList
+		self.mData.gangRankList = data.gangRankList
+		self.mData.selfRank = data.selfRank
+		self.mData.gangRank = data.gangRank
+		self.mData.bossBlood = data.bossBlood
+		
+		local curShopId = self.xinGuanConf.shopId[index]
+		local itemNum = MBag.GetItemNum(curShopId)
+		if itemNum > 0 then
+			self.selectData = {index = index, itemId = curShopId, count = itemNum, shopPoint = self.xinGuanConf.shopPoint[index]}
+		else
+			self.selectData = nil
+		end
+		_P.OnSetListData(self)
+	end)
+	battleTweener:Play()
+
+	self.mModule.SelfRect:AddOnTime(function()
+		-- 播放攻击特效
+		local attackSoundId = self.xinGuanConf.battleVoice
+		SoundMgr.Play(attackSoundId)
+	end, nil, 0.6)
+end
+
+
+-- 送去休息，播放动画.送去休息返回
+function _R.OnNewToRestBack(self, data)
+	self:Lock()
+	local fadeTweener = self.fadeImg.CachedTran:GetJTweener(RESTFADETWEEN)
+	fadeTweener:SetOnComplete(function()
+		self:Unlock()
+	end)
+	fadeTweener:Play()
+
+	self.fadeImg:AddOnTime(function()
+		self.mData.bossBlood = data.bossBlood
+		_P.OnSetListData(self)
+		_P.SetCenterData(self)
+	end, nil, 0.6)
+end
+
+
+-- 商城界面选中后更新战斗界面信息
+function _R.UpdateItemData(self, data)
+	self.selectData = data
+	_P.SetCenterData(self)
+end
+
+
+-- 重置boss血量为0
+function _R.ResetBoosBloodNum(self)
+	self.mData.bossBlood = 0
+	_P.SetCenterData(self)
+end
+
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+
+return _M

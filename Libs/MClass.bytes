@@ -1,0 +1,52 @@
+local _M = {}
+--类信息结构
+_M.classMap = {
+	--[classType] = {
+		--vtbl = vtbl,
+		--instList = {
+			--[i] = obj,
+		--},
+		--childList = {
+			--[classType] = true
+		--},
+		--superMethod = {
+			--[i] = methodName
+		--},
+		--name = name,
+		--parent = classType,父类型
+	--}
+}
+
+--类型表结构,外部可以访问调用
+-- classType = {
+	--父类虚表
+	--super = parentClassType.vtbl 
+	--new = function(){ctor()}
+-- }
+
+--类-名字映射表
+--热更新时，通过名字找到对应的类
+_M.classNameMap = {
+	--[name] = classType
+}
+
+_M.reLoading = false
+
+--文件模块代码管理表
+_M.scriptMgr = {
+	--[fileName] = {
+		--proxy = {__module = module}
+		--reload = 热更新标志
+	--}
+}
+
+--文件数据管理map
+_M.dataMap = {}
+
+--初始化模块数据
+_M.moduleInit = {
+	count = 0, --嵌套require次数
+	initList = {}, --嵌套的模块的moduleInit函数
+}
+
+return _M

@@ -1,0 +1,154 @@
+-- 赴宴界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MClub = JRequire "Dev.Club.MClub"
+local CClub = JRequire"Dev.Club.CClub"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+
+local COLOR_GREEN = Color(93 / 255, 153 / 255, 255 / 255, 1)
+local COLOR_RED = Color(255 / 255, 93 / 255, 140 / 255, 1)
+local COLOR_YELLOW = Color(99 / 255, 99 / 255, 99 / 255, 1)
+local COLOR_WHITE = Color(99 / 255, 99 / 255, 99 / 255, 1)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Club_Join")
+	if module == nil then return end
+
+	self.mModule = module
+	self.mData = data
+	local goText = module:Get("Num")
+	local titleText = module:Get("C_Text")	
+	goText.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+	titleText.Text = Csv.Text("club_join_chooseTitle")
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	-- 创建列表
+	_P.OnCreateList(self)
+end
+
+
+function _P.OnCreateList(self)
+	local joinList = Csv.JoinClub
+	if joinList == nil then return end
+
+	local itemGrid = self.mModule:Get("Content")
+	for id, value in pairs(joinList) do
+		_P.CreatePartyItem(self, itemGrid, "M_Club_Join_Item", value)
+	end
+end
+
+
+function _P.CreatePartyItem(self, itemGrid, itemName, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName, WindowType.UI, 0)
+	if itemModule == nil or data == nil then return end
+
+	itemModule:Get("ordinaryJB").Text = data.name
+	itemModule:Get("spend").Text = Csv.Text("club_join_cost")
+	itemModule:Get("Effect").Text = Csv.Text("club_join_effect")
+	itemModule:Get("MineText").Text = Csv.Text("club_join_goTo")
+	itemModule:Get("EnemyText").Text = Csv.Text("club_join_makeTroble")	
+
+	local mineBtn = itemModule:Get("MineBtn")
+	mineBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickJoinParty(self, data)
+	end, nil, 0.9)
+	local enemyBtn = itemModule:Get("EnemyBtn")
+	enemyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickJoinParty(self, data)
+	end, nil, 0.9)
+
+	local effectText = itemModule:Get("EffectText")
+	local numText = itemModule:Get("NumText")
+	effectText.Text = Csv.Text("club_rank_score")
+
+	if data.gainPoint > 0 then
+		effectText.Color = COLOR_GREEN
+		numText.Color = COLOR_GREEN
+		numText.Text = '+' .. data.gainPoint
+		mineBtn.Activity = true
+		enemyBtn.Activity = false		
+	else
+		effectText.Color = COLOR_RED
+		numText.Color = COLOR_RED
+		numText.Text = data.gainPoint .. ''
+		mineBtn.Activity = false
+		enemyBtn.Activity = true
+	end
+
+	local itemConf = Csv.Item[data.iconData[1]]
+	if itemConf == nil then return end
+
+	local goldCost = itemModule:Get("costGold")
+	local itemCost = itemModule:Get("costItem")
+	
+	if itemConf.id == Define.AssetsType.Gold then
+		goldCost.Activity = true
+		itemCost.Activity = false
+		itemModule:Get("spendNum").Text = data.gainPoint
+
+	else
+		goldCost.Activity = false
+		itemCost.Activity = true
+		local spendText = itemModule:Get("spendItemNum")
+		spendText.Text = itemConf.name .. ' x' .. data.iconData[2]
+
+		if data.id == 4 then
+			spendText.Color = COLOR_WHITE
+		else
+			spendText.Color = COLOR_YELLOW
+		end
+	end
+
+	-- 设置item数据
+	local IconImg = itemModule:Get("icon")
+	IconImg.SpriteName = itemConf.icon
+	local qualityImg  = itemModule:Get("IconBox")
+	qualityImg.SpriteName = itemConf.colorIcon
+end
+
+
+-- 点击参加聚会
+function _P.OnClickJoinParty(self, data)
+	if self.mData.leaveTime <= 0 then -- 宴会已经结束
+		CCommon.CheckTips(function(isSure,rg) end, {content = Csv.Text("club_ing_tip"), isNoCancel = true})
+		return
+	end
+
+	local joinMaxNum = tonumber(Csv.Const(Define.Const.JoinPartyMax)) + Csv.Vip[MPlayer.GetVip()].clubJoinCount
+	if MClub.ClubTable.joinCount == nil or MClub.ClubTable.joinCount >= joinMaxNum then
+		CCommon.ShowError(Csv.Text("club_join_numNone")) -- 次数不足
+	else
+		if not MBag.CheckItemEnoughForArray(data.costItem) then-- 物品不足
+			return
+		end
+
+		CClub.JoinPartyReq(self.mData.partyId, self.mData.index, data.id)
+	end
+end
+
+
+return _M

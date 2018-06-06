@@ -1,0 +1,57 @@
+-- 防沉迷界面
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Login_FangCM")
+
+	module:Get("title").Text = Csv.Text("antiAddiction_title")
+	module:Get("text1").Text = Csv.Text("antiAddiction_text1")
+	module:Get("text2").Text = Csv.Text("antiAddiction_text2")
+	module:Get("text3").Text = Csv.Text("antiAddiction_text3")
+	module:Get("text4").Text = Csv.Text("antiAddiction_text4")
+
+	module:Get("NAME").Text = Csv.Text("antiAddiction_name")
+	module:Get("Num").Text = Csv.Text("antiAddiction_num")
+
+	module:Get("Placeholder").Text = Csv.Text("antiAddiction_inputName")
+	module:Get("Symbol").Text = Csv.Text("antiAddiction_symbol")
+	module:Get("Placeholder2").Text = Csv.Text("antiAddiction_inputNum")
+	module:Get("Symbol2").Text = Csv.Text("antiAddiction_symbol")
+
+	module:Get("C_text").Text = Csv.Text("antiAddiction_back")
+	module:Get("C_text_0").Text = Csv.Text("antiAddiction_submit")
+
+	--返回按钮
+	local BtnClose = module:Get("C_Btn_b")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+	
+	local BtnSubmit = module:Get("C_Btn_e")
+	BtnSubmit:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 后面要接上提交防沉迷接口！！！！！！！！！！！！！！
+		WindowMgr.Call("USetting", "OnSubmitCallBack")
+		self:Destroy()
+	end, nil, 0.9)
+end
+
+return _M

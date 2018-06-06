@@ -1,0 +1,197 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local UPlayerMenuPop = JRequire "Dev.Friend.UPlayerMenuPop"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+--删除界面前调用
+function _M:BeforeDestroy( ... )
+	CFriend.OpenedAddUI()
+
+	if self.MenuPopObj ~= nil then
+		self.MenuPopObj:Destroy()
+		self.MenuPopObj:delete()
+		self.MenuPopObj = nil
+	end
+end
+
+--关系变更刷新
+function _R.OnAddFriendList(self, ids)
+	local moudle = self.Moudle
+	self.ViewContent:DestroyChildren()
+	self.PlayerIds = {}	
+	if ids ~= nil then		
+		local players = {}	
+		for _,playerId in pairs(ids) do
+			local playerInfo = MFriend.GetPlayerInfo(playerId)
+			if playerInfo ~= nil then
+				table.insert(players, playerInfo)
+			else
+				error("get playerInfo error!!!!", playerId)
+			end
+		end
+		table.sort(players, MFriend.PlayerSort)
+		for _,playerInfo in pairs(players) do
+			self.PlayerIds[playerInfo.id] = true
+			local playerMoudle = self:CreateMoudle(self.ViewContent, "M_Friend_Request_Item")
+			playerMoudle:Get("bsx").SpriteName = MPlayer.HeadIconFromSex(playerInfo.headId,playerInfo.sex,true)
+			playerMoudle:Get("Name").Text = playerInfo.name
+			local companyCsv = Csv.Company[playerInfo.level]
+			playerMoudle:Get("zhiwei").Text = companyCsv.name
+			playerMoudle:Get("shili").Text = Csv.Text("Friend_9")
+			playerMoudle:Get("shiliNum").Text = tostring(playerInfo.power)
+			if playerInfo.commerceId > 0 then
+				playerMoudle:Get("shanghui").Text = Csv.Text("Friend_10")
+				playerMoudle:Get("shanghuiNum").Text = playerInfo.commerceName
+			else
+				playerMoudle:Get("shanghui").Text = Csv.Text("Friend_11")
+			end
+			if not GameSetting.IsiOSCommit then
+				local bg = playerMoudle:Get("bg")
+				local pressMenu = {
+					MFriend.PlayerMenu.Look,
+					MFriend.PlayerMenu.Talk,
+					MFriend.PlayerMenu.Copy,
+					MFriend.PlayerMenu.AddBlacklist
+				}
+				bg:AddOnButton(function( ... )
+					if self.MenuPopObj ~= nil then
+						self.MenuPopObj:Destroy()
+						self.MenuPopObj:delete()
+						self.MenuPopObj = nil
+					end
+					self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, pressMenu, bg.RootCanvasPos + Vector2(100, -20), playerInfo.name)			
+				end)
+				playerMoudle.SelfRect:AddOnButton(function(obj, arg, data)
+					if self.MenuPopObj ~= nil then
+						self.MenuPopObj:Destroy()
+						self.MenuPopObj:delete()
+						self.MenuPopObj = nil
+					end
+					self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, pressMenu, playerMoudle.SelfRect.RootCanvasPos, playerInfo.name)	
+				end, nil, 0.96)
+			end
+			playerMoudle:Get("AddBtntext").Text = Csv.Text("Friend_18")
+			playerMoudle:Get("AddBtntext2").Text = Csv.Text("Friend_17")
+			playerMoudle:Get("AddBtn"):AddOnButton(function ( ... )
+				CFriend.ReqFeedback({
+					{id = playerInfo.id, state = 1}
+				})
+				playerMoudle:Destroy()
+				self.PlayerIds[playerInfo.id] = nil
+
+				local isHave = false
+				for _,_ in pairs(self.PlayerIds) do
+					isHave = true
+					break
+				end
+				if not isHave then
+					self:Destroy()
+				end
+			end)
+			playerMoudle:Get("AddBtn2"):AddOnButton(function ( ... )
+				CFriend.ReqFeedback({
+					{id = playerInfo.id, state = 2}
+				})
+				playerMoudle:Destroy()
+				self.PlayerIds[playerInfo.id] = nil
+
+				local isHave = false
+				for _,_ in pairs(self.PlayerIds) do
+					isHave = true
+					break
+				end
+				if not isHave then
+					self:Destroy()
+				end
+			end)
+
+			local csvVip = Csv.Vip[playerInfo.vip]
+			if csvVip ~= nil and csvVip.imgBord ~= nil then
+				playerMoudle:Get("VipBox").SpriteName = csvVip.imgBord
+				playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
+			else
+				playerMoudle:Get("VipBox").Activity = false
+			end
+		end
+	end
+	self.Btn1:AddOnButton(function ( ... )
+		_P.ReqFeedbackAll(self, 1)
+		self:Destroy()
+	end)
+	self.Btn2:AddOnButton(function ( ... )
+		_P.ReqFeedbackAll(self, 2)
+		self:Destroy()
+	end)
+	_P.CheckIsEmpty(self)	
+end
+
+function _P.CheckIsEmpty(self)
+	local isHave = false
+	for _,_ in pairs(self.PlayerIds) do
+		isHave = true
+		break
+	end
+	if not isHave then
+		self.Btn1.IsGray = true
+		self.Btn2.IsGray = true
+		self.Btn1.RaycastTarget = false
+		self.Btn2.RaycastTarget = false
+		self.Moudle:Get("None").Text = Csv.Text("Friend_19")
+	end
+end
+
+function _P.ReqFeedbackAll(self, state)
+	local list = {}
+	for playerId,_ in pairs(self.PlayerIds) do
+		table.insert(list, {id = playerId, state = state})
+	end
+	CFriend.ReqFeedback(list)
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(playerId)
+	CFriend.ReqAddFriendList()
+	CFriend.OpenedAddUI()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Friend_Request")
+	self.Moudle = moudle
+	self.PlayPopCanvas = moudle:Get("PlayPopCanvas")
+	self.ViewContent = moudle:Get("content")
+	self.PlayerIds = {}
+	self.Btn1 = moudle:Get("Btn1")
+	self.Btn2 = moudle:Get("Btn2")
+	moudle:Get("BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("title").Text = Csv.Text("Friend_1")
+	moudle:Get("BtnText1").Text = Csv.Text("Friend_16")
+	moudle:Get("BtnText2").Text = Csv.Text("Friend_15")
+end
+
+return _M

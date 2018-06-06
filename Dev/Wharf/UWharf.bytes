@@ -1,0 +1,1074 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local CWharf = JRequire "Dev.Wharf.CWharf"
+local luaUtil = JRequire"Libs.LuaUtil"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local PRESTIGT_ID = 20--restige
+local ONEKEY_MOVE_TWEENS = "T_Wharf_Item_Scale"
+local BUILD_ITEM_TWEENS = "T_Wharf_Item_Scale"
+local REFRESH_ENERGY_ITEM = Csv.Const(Define.Const.WharfRefreshID) --清CD
+local ASSET_LIST = 
+{
+	--Define.AssetsType.Soldier,
+	Define.AssetsType.Gold,
+	Define.AssetsType.Coin,
+	--Define.AssetsType.Food,	
+}
+local ASSET_INDEX = {}
+for k,v in pairs(ASSET_LIST) do
+	ASSET_INDEX[v] = k
+end
+
+local MAP_WIDTH = 2250
+local MAP_HEIGHT = 1334
+local BUILD_ACTORID = 10013
+local CLICK_FX = 10054
+local DICE_EFFECT_ID = 10110
+
+--local FIRST_GIRL = Csv.Const(16001)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.mUStoryMoudle ~= nil then
+		self.mUStoryMoudle:Destroy()
+		self.mUStoryMoudle:delete()
+		self.mUStoryMoudle = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.UpdatePokeRed(self)
+	self.mPokeRed.Activity = MWharf.CheckPictorialsRed()
+end
+
+function _R.UpdatePrestige()
+
+end
+
+function _R.RefreshNews(self,data)
+	--更新事件
+	if MWharf.GirlEventStorys ~= nil and #MWharf.GirlEventStorys > 0 then
+		self.mNews.Activity = true
+	else
+		self.mNews.Activity = false
+	end
+end
+
+function _R.UpDateTopGirl(self)
+
+	self.mTopGirlTab = _P.ShowTopGirlItems(self)
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_UMain")
+	self.Moudle = moudle
+
+	self.LastAssetsNum = {}
+
+	local titleText = moudle:Get("titleText")
+	local backBtn = moudle:Get("BackBtn")
+	local helpBtn = moudle:Get("helpBtn")
+	local iconBtn = moudle:Get("RoleIcon")
+	local playerName = moudle:Get("RoleName")
+	local levelText = moudle:Get("RloeLv")
+
+	titleText.Text = Csv.Text("Wharf_Title")--"码头"
+	backBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+	end, nil, 1.2)
+
+	local pokeRed = moudle:Get("red")
+	pokeRed.Activity = MWharf.CheckPictorialsRed()
+	moudle:Get("Icon"):AddOnButton(function( ... )
+		WindowOpen.Open(Define.SysId.Wharf_Pokedex)
+	end)
+	self.mPokeRed = pokeRed
+
+	_P.RefreshName(self, moudle)
+	_P.RefreshLevel(self, moudle)
+	_P.RefreshAvatar(self, moudle)
+
+	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshAvatar(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerExpUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshLevel(self, self.Moudle)
+		end
+	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerNameUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshName(self, self.Moudle)
+		end
+	end)
+
+	_P.InitAssets(moudle, self.LastAssetsNum)
+	
+	--注册资源监听
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if ASSET_INDEX[itemId] ~= nil then
+			local moudle = self.Moudle
+			if moudle ~= nil then
+				_P.RefreshAsset(self, itemId)
+			end
+		end
+	end)
+
+	local buildTable = {}
+	local map = moudle:Get("map")
+	map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+	local mapData = Csv.WharfBuild
+
+	for key,var in pairs(mapData) do
+		--M_Inquiries_buildItem
+		local buildMoudle = JGuiManager.GetMoudle(map, "M_Inquiries_buildItem", WindowType.UI, 10)
+		local buildRect = buildMoudle.SelfRect--buildMoudle:Get("build_"..key)
+		local buildName = buildMoudle:Get("buildName")
+
+		buildRect.LocalPosition = Vector2(var.pos[1],var.pos[2])
+		buildName.Text = var.name
+
+		buildRect:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OpenBuild(key)
+		end)
+
+		local tName =  buildRect.CachedTran:GetJTweener("T_WorldIonName")
+		tName:Play()
+
+		--建筑图标
+		local buildIcon = moudle:Get("Architecture"..key)
+		buildIcon.Alpha = 0
+		buildIcon:AddOnPress(_P.OnPressFunc, nil)
+		buildIcon:AddOnClick(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OpenBuild(key)
+		end)
+
+		buildTable[key] = buildIcon
+	end
+
+	self.mBuilds = buildTable
+	self.Map = map
+	self.mScrollView = moudle:Get("scrollView")
+	self.ActorCanvas = moudle:Get("ActorCanvas")
+	self.ClickNode = moudle:Get("ClickNode")
+	self.mScrollView:AddOnPress(function(obj, arg, data)
+		if data.isPress then
+			self.ClickNode:DestroyChildren()
+			self.ClickNode.LocalPosition = self.ActorCanvas:ScreenPosToLocal(data.pos)
+			CCommon.CreateEffect(self.ClickNode, CLICK_FX)
+		end
+	end)
+
+----------------------------------------------------------------
+	local fortuneText = moudle:Get("fortuneText")
+	local energyText = moudle:Get("energy_text")
+	local vipText = moudle:Get("VIP_text")
+	local fortuneBtn = moudle:Get("FortuneBtn")
+	local findBtn = moudle:Get("C_Btn1")
+	local findText = moudle:Get("C_text")
+	local onekeyBtn = moudle:Get("C_Btn2")
+	local onekeyText = moudle:Get("C_text_0")
+	self.mEnergyText = energyText
+	self.mFindText = findText
+	self.mOneKeyBtn = onekeyBtn
+	self.mUImask = moudle:Get("UImask")
+	--self.mOnekeyText = onekeyText
+	fortuneText.Text = Csv.Text("Wharf_fortune")--"运势："
+	vipText.Text = Csv.Text("Wharf_vipTips")--"VIP2解锁一键寻访"
+	findText.Text = Csv.Text("Wharf_find")--寻访
+	onekeyText.Text = Csv.Text("Wharf_onekeyFind")--一键寻访
+
+	local fortuneImages = {}
+	for i = 1,10,1 do
+		local Image = moudle:Get("image"..i)
+		table.insert(fortuneImages,Image)
+	end
+	self.mFortuneImages = fortuneImages
+	_R.ResetFortune(self)
+
+	--vip3显示一键寻访
+	onekeyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if MWharf.energyTimes > 0 then
+			if MWharf.fortuneValue >= 2 then 
+				_P.OneKeyFind(self)
+			else
+				CCommon.ShowError(Csv.Text("Wharf_Forturn_noEnough"))
+			end
+		else
+			local itemNum =MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+			local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+			CCommon.CheckTips(function(isSure,rg)self:OnClickRefreshCD(isSure, arg)
+			end,{items = {[REFRESH_ENERGY_ITEM] = itemNum},content = Csv.Text("Wharf_refresh_tili",{name = itemData.name})})
+		end
+	end)
+
+	onekeyBtn.Activity = MPlayer.GetVip() >= 3
+	vipText.Activity = MPlayer.GetVip() < 3
+	
+	fortuneBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OpenFortune()
+	end)
+
+	findBtn:AddOnButton(function (...)
+		SoundMgr.Play(10001)
+		
+		if MWharf.energyTimes > 0 then
+			if MWharf.fortuneValue >= 2 then 
+				_P.Find(self)
+			else
+				CCommon.ShowError(Csv.Text("Wharf_Forturn_noEnough"))
+			end
+		else
+			local itemNum =MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+			local itemData = Csv.Item[REFRESH_ENERGY_ITEM]
+			CCommon.CheckTips(function(isSure,rg)self:OnClickRefreshCD(isSure, arg)
+			end,{items = {[REFRESH_ENERGY_ITEM] = itemNum},content = Csv.Text("Wharf_refresh_tili",{name = itemData.name})})
+		end
+	end)
+	self.mFindBtn = findBtn
+
+	_R.RefreshTili(self)
+
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		if MWharf.energyTimes <= 0 then
+			--self.ChooseMoudle:UpdateEnergyTick()
+			local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
+			energyText.Text = Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+		end
+	end)
+
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), BUILD_ACTORID)
+
+	------------------------------------------------------------------------------------------
+	moudle:Get("Head").SpriteName = MPlayer.GetHeadIcon()
+	self.mPlayer = moudle:Get("HeadBox")
+	self.mPlayerIndex = 1
+
+	self.mTopScroll = moudle:Get("scrollView_0")
+	self.mTopContent = moudle:Get("content")
+
+	self.mSelectTopGirl = nil
+	self.mTopGirlTab = _P.ShowTopGirlItems(self)
+
+	moudle:Get("Arrow1"):AddOnButton(function()
+		_P.TopTurnRight(self)
+	end)
+	moudle:Get("Arrow2"):AddOnButton(function()
+		_P.TopTurnLeft(self)
+	end)
+
+	local news = moudle:Get("News")
+	if MWharf.GirlEventStorys ~= nil and #MWharf.GirlEventStorys > 0 then
+		news.Activity = true
+	else
+		news.Activity = false
+	end
+	
+	news:AddOnButton(function()
+		--发送观看新事件剧情
+		CWharf.ReqReadEvent(MWharf.GirlEventStorys[1].id)
+
+		local eventData = Csv.WharfEvent[MWharf.GirlEventStorys[1].id]
+		local tmp = MWharf.GirlEventStorys[1].peopleId
+		local StoryBack = function()
+			--剧情结束跳转到关系链
+			WindowMgr.Create("UWharfGirlRelation",tmp,eventData.id)
+		end
+		if self.mUStoryMoudle ~= nil then
+			self.mUStoryMoudle:Destroy()
+			self.mUStoryMoudle:delete()
+			self.mUStoryMoudle = nil
+		end
+		self.mUStoryMoudle =  UStoryMoudle.new(self.mUICanvas,eventData.story,StoryBack)
+	end)
+	self.mNews = news
+
+	_R.RefreshPlayerPox(self,1)
+
+	self.mLastBuildPos = 0
+	self.mDice1 = moudle:Get("dice1")
+	self.mDice2 = moudle:Get("dice2")
+	self.mBigDice1 = moudle:Get("BigDice1")
+	self.mBigDice2 = moudle:Get("BigDice2")
+	--特效
+	self.mActorPanel = moudle:Get("ActorPanel_0")
+	self.mUICanvas = moudle:Get("UICanvas")
+
+end
+
+function _P.ShowTopGirlItems(self)
+	local content = self.mTopContent
+	local topGirls = MWharf.WharfGirls
+
+	content:DestroyChildren()
+
+	local topgirlTab = {}
+	for k,v in pairs(topGirls)do
+		
+		local girlMoudle = _P.CreateTopGirl(self,content,v)
+		table.insert(topgirlTab,{id = v.girlid,moudle = girlMoudle})
+	end
+
+	--下一个美女
+	local lastGirlID = MWharf.GetLastPeople()
+	if lastGirlID ~= nil then
+		local girlData = Csv.WharfPeople[lastGirlID]
+		local data = {id = girlData.girlId,peopleId = lastGirlID,state = 0}
+		local girlMoudle = _P.CreateTopGirl(self,content,data)
+		table.insert(topgirlTab,{id = data.id,moudle = girlMoudle})
+	end
+
+	--默认选择一个美女
+	if #topgirlTab > 0 then
+		_P.SelectTopGirl(self,topgirlTab[1].moudle)
+	end
+
+	return topgirlTab
+end
+
+function _P.CreateTopGirl(self,content,v)
+	local girlMoudle = JGuiManager.GetMoudle(content, "M_Inquiries_UMain_Item", WindowType.UI, 10)
+	local girlData = Csv.Girl[v.id]
+	girlMoudle:Get("head").SpriteName = girlData.xieicon
+	girlMoudle:Get("PKtext").Text = girlData.name
+	girlMoudle:Get("BG").SpriteName = girlData.colorBg
+
+	_P.RefreshTopGirl(self,girlMoudle,v)
+	
+	return girlMoudle
+end
+
+function _P.RefreshTopGirl(self,girlMoudle,v)
+	local light = girlMoudle:Get("light")
+	local red = girlMoudle:Get("red")
+	local success = girlMoudle:Get("Success")
+	local question = girlMoudle:Get("Question")
+	local head = girlMoudle:Get("head")
+
+	light.Activity = false
+	red.Activity = false
+	success.Activity = false
+	question.Activity = false
+	head.Color = Color(1,1,1,1)
+
+	if v.state == 0 then
+		head.Color = Color(0.5,0.5,0.5,1)
+	end
+
+	girlMoudle:Get("BG"):AddOnButton(function()
+		_P.SelectTopGirl(self,girlMoudle)
+		WindowMgr.Create("UWharfGirlRelation",v.peopleId)
+	end)
+end
+
+function _P.SelectTopGirl(self,moudle)
+
+	if moudle == nil then
+		return
+	end
+	
+	if self.mSelectTopGirl ~= nil then
+		self.mSelectTopGirl:Get("light").Activity = false
+	end
+	self.mSelectTopGirl = moudle
+	self.mSelectTopGirl:Get("light").Activity = true
+
+	local topContent = self.mTopContent
+	local topScroll = self.mTopScroll
+
+	local selctPos = moudle.LocalPosition
+	local contentPox = topContent
+
+	_P.RefreshContentPos(self,moudle)
+end
+
+--content按左对齐
+--子对象居中对齐
+function _P.RefreshContentPos(self,moudle)
+	local scroll = self.mTopScroll
+	local content = self.mTopContent
+
+	if scroll == nil or content == nil then
+		return
+	end
+
+	local imgWidth = moudle.SelfRect.SizeDelta.x
+	local imgPosx = moudle.SelfRect.LocalPosition.x
+	local scrollWidth = scroll.SizeDelta.x
+	local contentPOSX = content.LocalPosition.x 
+
+	local targartPos = scrollWidth - imgPosx - imgWidth/2 
+	
+	if targartPos <= 1 then
+		content:DOAnchorPosX(targartPos,0.2)
+	else
+		content:DOAnchorPosX(0,0.2)
+	end
+end
+
+function _R.RefreshPlayerPox(self,index)
+	local play = self.mPlayer
+	local content = self.Map
+	local buildsTab = self.mBuilds
+	local scrollView =  self.mScrollView
+
+	local SWeight = scrollView.SizeDelta.x --视图高度
+	local contentPOSX = content.LocalPosition.x 
+
+	local itemID = index
+	for k,v in pairs(buildsTab) do
+		if k == itemID then
+			local moudleRect = v
+			local itemPosX = moudleRect.LocalPosition.x
+			local itemSizeX = moudleRect.SizeDelta.x
+
+			local moveTo = SWeight - itemPosX - SWeight/2
+			if moveTo > 0 then
+				moveTo = 0
+			elseif moveTo <= SWeight-content.SizeDelta.x then
+				moveTo = SWeight-content.SizeDelta.x
+			end
+			content.LocalPosition =  Vector2(moveTo,content.LocalPosition.y) --moveTo
+			play.LocalPosition = Vector2(moudleRect.LocalPosition.x,moudleRect.LocalPosition.y)
+		end
+	end
+end
+
+function _R.RefreshTili(self)
+	local energyText = self.mEnergyText
+	 local findText =  self.mFindText
+	 local oneKeyBtn = self.mOneKeyBtn
+	 
+	 local maxEnergyMax = Csv.Vip[MPlayer.GetVip()].wharfEnergt
+
+	if MWharf.energyTimes > 0 then
+		energyText.Text = Csv.Text("Wharf_energy",{value = MWharf.energyTimes.."/"..maxEnergyMax})--"体力："..MWharf.energyTimes.."/"..MWharf.EnergyMax
+		findText.Text =  Csv.Text("Wharf_find")--寻访
+		oneKeyBtn.IsGray = false
+		oneKeyBtn.RaycastTarget = true
+	else
+		local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
+		energyText.Text =  Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+		findText.Text = Csv.Text("Wharf_restore")--"恢复"
+
+		oneKeyBtn.IsGray = true
+		oneKeyBtn.RaycastTarget = false
+	end
+end
+
+function _R.ResetFortune(self)
+	local fortuneImages = self.mFortuneImages
+	local fortune =  MWharf.fortuneValue  --拿数据
+	for k,v in pairs(fortuneImages) do
+		if k<=math.floor(fortune/10) then
+			v.IsGray = false
+		else
+			v.IsGray = true
+		end
+	end
+end
+
+--一建寻访
+function _R.ShowAwardOnekey(self,dataList)
+
+	WindowMgr.Create("UWharfOnekey",MWharf.VisitDataList)
+	--[[
+	local visitDatas =  MWharf.VisitDataList
+	local awardCount = 0
+	local Prestige = 0
+	local awardStr = ""
+	local meetList = {}
+
+	for k,v in pairs(visitDatas)do
+
+		local peopleData =  Csv.WharfPeople[v.peopleId]
+		if peopleData.type == 4 then
+			awardCount = awardCount +1
+			awardStr = awardStr.."<color=#ff0000>"..Csv.Text("Wharf_nothing").."</color>".."\n\n"
+		else
+			for k2,v2 in pairs(v.itemList)do
+				
+				local itemData = Csv.Item[v2.id]
+				if itemData ~= nil then
+					if v2.count >0 then
+						if v2.id == Define.SpecialItem.Intimacy then
+							awardCount = awardCount +1
+							--local peopleData =  Csv.WharfPeople[v.peopleId]
+							awardStr = awardStr.."<color=#00ff00>"..peopleData.name.." "..itemData.name.."+"..v2.count.."</color>"
+						elseif v2.id == Define.SpecialItem.Meet then	--声望
+							Prestige = Prestige + v2.count
+						else
+							awardCount = awardCount +1
+							awardStr = awardStr..itemData.name.."+"..v2.count
+						end
+					else
+						awardStr = awardStr.."<color=#ff0000>"..itemData.name..v2.count.."</color>"
+					end
+					awardStr = awardStr.."\n"
+				end
+			end
+		end
+	end
+
+	--声望总和
+	awardCount = awardCount +1
+	local prestigeData = Csv.Item[Define.SpecialItem.Meet]
+	awardStr = awardStr ..prestigeData.name.."+"..Prestige
+
+	local moudle = self.Moudle
+	local onekeyRect = moudle:Get("onekey")
+	onekeyRect.Activity = true
+
+	local onekeyReward = moudle:Get("onekeyReward")
+	onekeyReward.Text = awardStr
+	onekeyReward.LocalPosition = Vector2(0,-150)
+
+	local moveTo = 180+awardCount*70
+	local tween = onekeyReward:DOAnchorPosY(moveTo,2+(awardCount-3)*0.7)
+
+	_P.IsOpenButton(self,false)
+	tween:OnComplete(function()
+		_P.IsOpenButton(self,true)
+		if meetList ~= nil and #meetList > 0 then
+			self.mMeeyList = meetList
+			_P.ShowMeetGirl(self)
+		end
+		onekeyRect.Activity = false
+	end)
+	--]]
+end
+
+function _P.ShowMeetGirl(self)
+	
+	local dataList = self.mMeeyList
+	if dataList ~= nil then
+		if #dataList <= 0 then
+			return
+		end
+	end
+
+	local showData = nil
+
+	local StoryBack = function()
+		if showData ~= nil then
+			local peopleData =  Csv.WharfPeople[showData.peopleId]
+			if showData.meet == peopleData.meetUnlock then
+				_P.ShowGirl(peopleData.girlId, _P.ShowMeetGirl(self))
+			else
+				_P.ShowMeetGirl(self)
+			end
+		end
+	end
+	local showStory = function(data)
+		showData = data
+		local peopleData =  Csv.WharfPeople[data.peopleId]
+		local storyId = _P.GetStory2(peopleData.story2,data.meet)--peopleData.story2[data.meet]
+		if storyId ~= nil then
+			if self.mUStoryMoudle ~= nil then
+				self.mUStoryMoudle:Destroy()
+				self.mUStoryMoudle:delete()
+				self.mUStoryMoudle = nil
+			end
+			self.mUStoryMoudle =  UStoryMoudle.new(self.mUICanvas,storyId,StoryBack)
+			self.Moudle.SelfRect:AddOnTime(function()
+				
+				local award = _P.GetAwardStr(data,peopleData)
+				if award ~= nil then
+					CCommon.ShowError(award)
+				end
+			end,nil,0.5)
+		end
+	end
+
+	showStory(dataList[1])
+	table.remove(dataList,1)
+	self.mMeeyList = dataList
+end
+
+function _R.ShowAward(self,id)
+	local visitDatas =  MWharf.VisitData
+
+	local data
+	local effectDone = function()
+		if #visitDatas <=1 then
+			for k,v in pairs(visitDatas) do
+				data = v
+				local peopleData = Csv.WharfPeople[v.peopleId]
+				local num = peopleData.build    ---self.mLastBuildPos（暂不需要扣除上次建筑位置）
+				if num <= 1 then
+					num = num +11
+				elseif num > 12 then
+					num = 12 --这只是预防配置表建筑id配置超过12
+				end
+				_P.SetDice(self,num,data)
+				
+				self.mBigDice1:AddOnTime(function()
+					self.mBigDice1.Activity = false
+					self.mBigDice2.Activity = false
+
+					--_P.PlayerMove(self,num)
+					_P.MoveToSelectItem(self,data)
+				end,nil,0.5)
+
+				self.mLastBuildPos = peopleData.build
+			end
+		end
+	end
+	CCommon.CreateEffect(self.mActorPanel, DICE_EFFECT_ID,nil,effectDone)
+	self:Lock()
+	self.mUImask.Activity = true
+end
+
+--玩家头像移动
+function _P.PlayerMove(self,target)
+	local buildsTab = self.mBuilds
+	local content = self.Map
+	local scrollView =  self.mScrollView
+	local SWeight = scrollView.SizeDelta.x --视图高度
+	local contentPOSX = content.LocalPosition.x 
+
+	local nowIndex = self.mPlayerIndex
+	local play = self.mPlayer
+
+	if nowIndex < nowIndex + target then
+		if nowIndex < 11 then
+			nowIndex = nowIndex +1
+		else
+			nowIndex = 1
+		end
+		target = target - 1
+
+		self.mPlayerIndex = nowIndex
+
+		local pos = Csv.WharfBuild[nowIndex].pos2
+		local moveTo = SWeight - pos[1] - SWeight/2
+		if moveTo > 0 then
+			moveTo = 0
+		elseif moveTo <= SWeight-content.SizeDelta.x then
+			moveTo = SWeight-content.SizeDelta.x
+		end
+		local tween = content:DOAnchorPosX(moveTo,0.3)
+		tween:OnComplete(function()
+			if target >1 then
+				_P.PlayerMove(self,target)
+			else
+				--移动结束正常展示
+				local visitDatas =  MWharf.VisitData
+				
+				if #visitDatas <=1 then
+					for k,v in pairs(visitDatas) do
+						_P.MoveToSelectItem(self,v)
+					end
+				end
+			end
+		end)
+
+		play:AddOnTime(function()
+			play.LocalPosition = Vector2(pos[1],pos[2])
+		end,nil,0.2)
+	end
+end
+
+function _P.MoveToTarget(self,target)
+	local buildsTab = self.mBuilds
+	local content = self.Map
+	local scrollView =  self.mScrollView
+
+	local SWeight = scrollView.SizeDelta.x --视图高度
+	local contentPOSX = content.LocalPosition.x 
+
+	local pos = Csv.WharfBuild[index].pos2
+	local moveTo = SWeight - pos[1] - SWeight/2
+	if moveTo > 0 then
+		moveTo = 0
+	elseif moveTo <= SWeight-content.SizeDelta.x then
+		moveTo = SWeight-content.SizeDelta.x
+	end
+	local tween = content:DOAnchorPosX(moveTo,1)
+end
+
+function _P.ShowBuildItemTween(self,item,data)
+	item.LocalScale = Vector3(0.8,0.8,0.8)
+	item.Alpha = 1
+	local buildTween = item.CachedTran:GetJTweener(BUILD_ITEM_TWEENS)
+	
+	buildTween:SetOnComplete(function()
+		_P.ShowMeetStory(self,data)
+		self:Unlock()
+		self.mUImask.Activity = false
+		item.Alpha = 0
+	end)
+	buildTween:Play()
+end
+
+
+function _P.OpenBuild(id)
+	WindowMgr.Create("UWharfBuildPop",id)
+end
+
+function _P.OpenFortune()
+	WindowMgr.Create("UWharfFortunePop",id)
+end
+
+function _P.Find(self)
+	---投掷骰子特效
+	local autoType = MWharf.GetAuto()
+	local autoThreshold = MWharf.autoThreshold
+	CWharf.ReqVist(autoType,autoThreshold,false)
+	
+end
+
+function _M:OnClickRefreshCD(isSure, arg)
+	local _randomText =	self.mRandomText
+
+	if isSure == true then
+		local count = MBag.GetItemNum(REFRESH_ENERGY_ITEM)
+		local itemDate = Csv.Item[REFRESH_ENERGY_ITEM]
+
+		if count <= 0 then
+			if not MBag.CheckItemEnough(REFRESH_ENERGY_ITEM,1) then
+				return
+			end
+			--CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		else
+			CBag.OnUseItem(REFRESH_ENERGY_ITEM,1,nil)
+		end
+	end
+end
+
+function _P.OneKeyFind()
+	local autoType = MWharf.GetAuto()
+	local autoThreshold = MWharf.autoThreshold
+	CWharf.ReqVist(autoType,autoThreshold,true)
+end
+
+function _P.MoveToSelectItem(self,data)
+	local buildsTab = self.mBuilds
+	local content = self.Map
+	local scrollView =  self.mScrollView
+
+	local SWeight = scrollView.SizeDelta.x --视图高度
+	local contentPOSX = content.LocalPosition.x 
+
+	local peopleData = Csv.WharfPeople[data.peopleId]
+	local itemID = peopleData.build
+	for k,v in pairs(buildsTab) do
+		if k == itemID then
+			local moudleRect = v
+			local itemPosX = moudleRect.LocalPosition.x
+			local itemSizeX = moudleRect.SizeDelta.x
+
+			local moveTo = SWeight - itemPosX - SWeight/2
+			if moveTo > 0 then
+				moveTo = 0
+			elseif moveTo <= SWeight-content.SizeDelta.x then
+				moveTo = SWeight-content.SizeDelta.x
+			end
+			local tween = content:DOAnchorPosX(moveTo,1)
+			--self:Lock()
+			tween:OnComplete(function()
+				--_P.ShowMeetStory(self,data)
+				_P.ShowBuildItemTween(self,v,data)
+			end)
+
+			---改版新增玩家头像
+			local play = self.mPlayer
+			play:AddOnTime(function()
+				play.LocalPosition = Vector2(moudleRect.LocalPosition.x,moudleRect.LocalPosition.y)
+			end,nil,0.5)
+		end
+	end
+end
+
+function _P.ShowMeetStory(self,data)
+	local peopleData = Csv.WharfPeople[data.peopleId]
+
+	local StoryBack = function()
+		if data.itemId == Define.SpecialItem.Meet then
+			if data.meet == peopleData.meetUnlock then
+				_P.ShowGirl(peopleData.girlId)
+			end
+		end
+	end
+
+	if peopleData.type == 2 then
+		if data.itemId == Define.SpecialItem.Meet then
+			if data.meet ~= nil then
+				local storyId =  _P.GetStory2(peopleData.story2,data.meet)--peopleData.story2[data.meet]
+				if storyId ~= nil then
+					if self.mUStoryMoudle ~= nil then
+						self.mUStoryMoudle:Destroy()
+						self.mUStoryMoudle:delete()
+						self.mUStoryMoudle = nil
+					end
+					self.mUStoryMoudle =  UStoryMoudle.new(self.mUICanvas,storyId,StoryBack)
+					self.Moudle.SelfRect:AddOnTime(function()
+						local award = _P.GetAwardStr(data,peopleData)
+						if award ~= nil then
+							CCommon.ShowError(award)
+						end
+					end,nil,0.5)
+					return
+				end
+			end
+		end
+	end
+	local index = math.random(1, #peopleData.story1)
+	local storyId = peopleData.story1[index]
+	if storyId ~= nil then
+		if self.mUStoryMoudle ~= nil then
+			self.mUStoryMoudle:Destroy()
+			self.mUStoryMoudle:delete()
+			self.mUStoryMoudle = nil
+		end
+		self.mUStoryMoudle = UStoryMoudle.new(self.mUICanvas,storyId,StoryBack)
+
+		self.Moudle.SelfRect:AddOnTime(function()
+			local award = _P.GetAwardStr(data,peopleData)
+			if award ~= nil then
+				CCommon.ShowError(award)
+			end
+		end,nil,0.5)
+	end
+	
+	
+end
+
+function _P.ShowGirl(girlid)
+	WindowMgr.Create("UWharfGetGirl",girlid)
+end
+
+function _P.RefreshName(self, moudle)
+	moudle:Get("Name").Text = MPlayer.GetName()
+end
+function _P.RefreshLevel(self, moudle)
+	local csv = Csv.Company[MPlayer.GetLevel()]
+	moudle:Get("VipLv").Text = Csv.Text("staff_ji",{num = MPlayer.GetLevel()})--MPlayer.GetLevel()--csv.name
+end
+function _P.RefreshAvatar(self, moudle)
+	--moudle:Get("RoleIcon").SpriteName = MPlayer.GetHeadIcon()
+end
+
+function _P.OnPressFunc(btn, funcId, data)
+	if data.isPress then
+		local t = btn:DOFade(1, 0.6)
+		t:SetEase(CS.DG.Tweening.Ease.Linear)
+		t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+	else
+		if btn ~= nil then
+			btn:DOKill()
+		end
+		btn.Alpha = 0
+	end	
+end
+
+function _P.InitAssets(moudle, LastAssetsNum)
+	for index,assetId in pairs(ASSET_LIST) do
+		local csv = Csv.Item[assetId]
+		local assetNum = MBag.GetItemNum(assetId)
+		LastAssetsNum[assetId] = assetNum
+		moudle:Get('AssetIcon_' .. index).SpriteName = csv.miniIcon
+		moudle:Get('AssetNum_'..index).Text = LuaUtil.NumberFormat(assetNum)
+		if assetId == Define.AssetsType.Gold then
+			local btn = moudle:Get('AssetAdd_'..index)
+			if btn ~= nil then
+				btn:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					WindowOpen.Open(Define.SysId.Recharge)
+				end, nil, 1.3)
+			end
+		end
+	end
+
+	--声望
+	LastAssetsNum[PRESTIGT_ID] = MWharf.Prestige
+	moudle:Get('AssetNum_3').Text = LuaUtil.NumberFormat(MWharf.Prestige)
+end
+--刷新资源
+function _P.RefreshAsset(self, assetId)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		local index = ASSET_INDEX[assetId]
+		if index ~= nil then
+			local widget = moudle:Get('AssetNum_'..index)
+			widget:DOKill()
+			local lastNum = self.LastAssetsNum[assetId]
+			local nowNum = MBag.GetItemNum(assetId)
+			if lastNum ~= nowNum then
+				self.LastAssetsNum[assetId] = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(MBag.GetItemNum(assetId)) end
+					end)
+					t:SetTarget(widget.CachedTran)
+				else
+					widget.Text = LuaUtil.NumberFormat(nowNum)
+				end				
+			end
+		end
+	end
+end
+
+--刷新声望
+function _R.RefreshPrestige(self,prestige)
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		local widget = moudle:Get('AssetNum_3')
+		widget:DOKill()
+		local lastNum = self.LastAssetsNum[PRESTIGT_ID]
+		local nowNum =MWharf.Prestige--MBag.GetItemNum(assetId)
+		if lastNum ~= nowNum then
+			self.LastAssetsNum[PRESTIGT_ID] = nowNum
+			if self:IsActivity() then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if widget ~= nil then widget.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if widget ~= nil then widget.Text = LuaUtil.NumberFormat(MWharf.Prestige) end
+				end)
+				t:SetTarget(widget.CachedTran)
+			else
+				widget.Text = LuaUtil.NumberFormat(nowNum)
+			end				
+		end
+	end
+end
+
+function _P.GetAwardStr(visitdata,data)
+
+	local itemDateList = visitdata.itemList
+
+	for k,v in pairs(itemDateList) do
+		local itemData = Csv.Item[v.id]
+		if itemData ~= nil then
+			if v.id == Define.SpecialItem.Meet then
+				return nil
+			end
+			if v.count >0 then
+				return itemData.name.."+"..v.count
+			end
+			return itemData.name..v.count
+		end
+	end
+	
+end
+
+function _P.GetStory2(storyTab,meet)
+	if storyTab ~= nil then
+		for k,v in pairs(storyTab)do
+			if meet >= v[1] and meet <= v[2] then
+				return v[3]
+			end
+		end
+	end
+	print("寻访的美女剧情配置错了！找不到相遇度为____",meet)
+	return 0
+end
+
+function _P.SetDice(self,num,data)
+	local dice1 = math.floor(num/2) --math.random(1,math.min(num-1,6))
+	local dice2 = num - dice1
+	
+	self.mDice1.SpriteName = "cy_00"..dice1
+	self.mDice2.SpriteName = "cy_00"..dice2
+
+	self.mBigDice1.SpriteName = "cy_00"..dice1
+	self.mBigDice2.SpriteName = "cy_00"..dice2
+
+	self.mBigDice1.Activity = true
+	self.mBigDice2.Activity = true
+end
+
+function _P.TopTurnRight(self)
+	_P.SelectTopGirl(self,_P.GetTopTurnRightMoudle(self))
+end
+
+function _P.TopTurnLeft(self)
+	local selectTop = self.mSelectTopGirl
+	local topGirl = self.mTopGirlTab
+
+	local beforeMoudle = nil
+	for k,v in pairs(topGirl)do
+		if v.moudle == selectTop then
+			if beforeMoudle ~= nil then
+				_P.SelectTopGirl(self,beforeMoudle)
+				return
+			else
+				_P.SelectTopGirl(self,v.moudle)
+				return
+			end
+		end
+		beforeMoudle = v.moudle
+	end
+end
+
+function _P.GetTopTurnRightMoudle(self)
+	local selectTop = self.mSelectTopGirl
+	local topGirl = self.mTopGirlTab
+
+	local isget = false
+	for k,v in pairs(topGirl)do
+		if isget then
+			return v.moudle
+		else
+			if v.moudle == selectTop then
+				isget = true
+			end
+		end
+	end
+	return selectTop
+end
+
+function _P.IsOpenButton(self,isOpen)
+	self.mOneKeyBtn.RaycastTarget = isOpen
+	self.mFindBtn.RaycastTarget = isOpen
+end
+
+return _M

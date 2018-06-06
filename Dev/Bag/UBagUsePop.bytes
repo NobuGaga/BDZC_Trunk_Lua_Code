@@ -1,0 +1,84 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local CBag = JRequire "Dev.Bag.CBag"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+
+local BAGUSE_MAX = Csv.Const(Define.Const.BagUseMax)
+
+function _M:BeforeDestroy()
+	if self.SliderButton ~= nil then
+		self.SliderButton:delete()
+		self.SliderButton = nil
+	end
+end
+
+--界面构建
+function _M:OnCreate(data,isCompany,typeID)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bag_UsePop")
+	self.mMoudle = moudle
+	self.mData = data
+	self.mIsCompany = isCompany
+	self.mTypeID = typeID
+
+	local TextNum = moudle:Get("Num")
+	TextNum.Text = Csv.Text("bag_numX")
+
+	moudle:Get("NumText").Text = Csv.Text("bag_have",{num = 1,max = math.min(self.mData.itemcount,BAGUSE_MAX)})
+
+	local SliderButton = SliderButton.new(1,math.min(data.itemcount,BAGUSE_MAX),1,function(value)_P.OnSliderValueChanged(self,value)end)
+	SliderButton:CreateSliderBtn(moudle:Get("Slider"),moudle:Get("BtnAdd"),moudle:Get("BtnMinus"))
+	self.SliderButton = SliderButton
+	self.mValue = 1
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 0.9)
+	
+	local BtnUse = moudle:Get("BtnUse")
+	BtnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse(self)
+		end, nil, 0.9)
+
+	local TextTitle = moudle:Get("Title")
+	TextTitle.Text = Csv.Text("bag_usetit")
+
+	local csv = Csv.Item[data.itemid]
+	local TextDesc = moudle:Get("Desc")
+	TextDesc.Text = csv.tips
+
+	local TextBtnUse = moudle:Get("C_text")
+	TextBtnUse.Text = Csv.Text("bag_use")
+	
+	local ImgIconColor = moudle:Get("IconColor")
+	ImgIconColor.SpriteName = csv.colorIcon
+
+	local ImgIcon = moudle:Get("Icon")
+	ImgIcon.SpriteName = csv.icon
+
+	moudle:Get("Num2").Text = MBag.GetItemNum(data.itemid)
+	_P.OnSliderValueChanged(self,1)
+end
+
+function _P.OnSliderValueChanged(self,value)
+	self.mValue = value
+	self.mMoudle:Get("NumText").Text = Csv.Text("bag_have",{num = value,max = math.min(self.mData.itemcount,BAGUSE_MAX)})
+end
+
+function _P.OnClickUse(self)
+	if self.mIsCompany ~= nil then
+		local params = {}
+		table.insert(params,self.mTypeID)
+		CBag.OnUseItem(self.mData.itemid,self.mValue,params)
+	else
+		CBag.OnUseItem(self.mData.itemid,self.mValue,nil)
+	end
+	self:Destroy()
+end
+
+return _M

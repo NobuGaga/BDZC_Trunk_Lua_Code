@@ -1,0 +1,208 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MShop = JRequire "Dev.Shop.MShop"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CShop = JRequire "Dev.Shop.CShop"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local _M = Class()
+local _P = {}
+
+local ITEM_WIDTH = 693
+local ITEM_HEIGHT = 324
+local BG_WIDTH = 630
+local BG_HEIGHT = 144
+local LINENUM = 4
+local ICONWIDTH = 560
+local ICONHEGHT = 120
+local SPACE = 14
+local SPACEWIDTH = 44
+local TIMESCALE = 0.2
+local EFFECT_ID = 12
+
+local SHOPID = 2
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Shop_Preferential", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	_P.OnCreateList(self)
+
+	moudle.SelfRect:RefreshChildDragToView()
+end
+
+function _P.OnCreateList(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	local itemTable = {}
+	content:DestroyChildren()
+	local shopTable = _P.GetSortShop(MActivity.ActTypeCached[Define.ActivityType.Shop_Package])
+	if shopTable ~= nil then
+		local index = 0
+		for k,v in pairs(shopTable) do
+			local shop = {}
+			local shopMoudle = JGuiManager.GetMoudle(content,"M_Shop_Preferential_ele1",WindowType.UI, 0)
+			local csvShop = Csv.GiftShop[v.actId]
+			
+			local TextLimit = shopMoudle:Get("limit1")
+			if csvShop.limit == nil or csvShop.limit <= 0 then
+				TextLimit.Text = ""
+			else
+				if csvShop.limit - v.times < 0 then
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = 0})
+				else
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = csvShop.limit - v.times})
+				end
+			end
+			shopMoudle:Get("TitleText1").Text = csvShop.name
+			shopMoudle:Get("PriceText").Text = csvShop.price
+			shopMoudle:Get("Diamonds1").SpriteName = Csv.Item[csvShop.buytype].miniIcon
+			shopMoudle:Get("C_text").Text = Csv.Text("shop_buy")
+			shopMoudle:Get("tj").Text = Csv.Text("shop_jiage1")
+			shopMoudle:Get("C_Btn_b"):AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				if MPlayer.GetLevel() < csvShop.level then
+					CCommon.ShowError(Csv.Text("shop_lvlow"))
+				else
+					if MPlayer.GetVip() < csvShop.viplevel then
+						CCommon.ShowError(Csv.Text("shop_viplow",{num = csvShop.viplevel}))
+					else
+						_P.OnBuy(v.actId)
+					end
+				end
+			end,nil,0.9)
+
+			local rect = shopMoudle.SelfRect
+			local len = #csvShop.itemid
+			if len > LINENUM then
+				local num = len - LINENUM
+				local code1,code2 = math.modf(num/LINENUM)
+				local scrollHeight
+				local itemHeight
+				if code2 == 0 then
+					scrollHeight = ICONHEGHT + (SPACE + ICONHEGHT) * code1
+					itemHeight = ITEM_HEIGHT + (SPACE + ICONHEGHT) * code1
+				else
+					scrollHeight = ICONHEGHT + (SPACE + ICONHEGHT) * (code1 + 1)
+					itemHeight = ITEM_HEIGHT + (SPACE + ICONHEGHT) * (code1 + 1)
+				end
+				local bgHeight = BG_HEIGHT + (SPACE + ICONHEGHT) * code1
+				rect.SizeDelta = Vector2(ITEM_WIDTH,itemHeight)
+			else
+				rect.SizeDelta = Vector2(ITEM_WIDTH,ITEM_HEIGHT)
+			end
+
+			local contentIcon = shopMoudle:Get("content")
+			local itemMoudles = {}
+			for k,v in pairs(csvShop.itemid) do
+				local iconMoudle = JGuiManager.GetMoudle(contentIcon,"M_Shop_Preferential_icon",WindowType.UI, 0)
+				local csvItem = Csv.Item[v[1]]
+				local ImgColor = iconMoudle:Get("back")
+				ImgColor.SpriteName = csvItem.colorIcon
+				CCommon.CreateItemLight(ImgColor.transform, Define.SysId.Shop, nil, csvItem.color)
+				iconMoudle:Get("icon").SpriteName = csvItem.icon
+				iconMoudle:Get("num").Text = v[2]
+				iconMoudle:Get("back"):AddOnButton(function(...)
+					SoundMgr.Play(10001)
+					CCommon.ShowItemTips(v[1])
+				end,nil,0.9)
+				itemMoudles[k] = iconMoudle
+			end
+
+			if csvShop.viplevel ~= nil and csvShop.viplevel > 0 then
+				shopMoudle:Get("VIP").Activity = true
+				shopMoudle:Get("VIPNum").Text = Csv.Text("shop_vip",{num = csvShop.viplevel})
+			end
+
+			shop.moudle = shopMoudle
+			shop.itemMoudles = itemMoudles
+			shop.times = v.times
+			itemTable[v.actId] = shop
+			if index == 0 then
+				WindowMgr.Call("UShop","UpdateTime",SHOPID,v.actId)
+			end
+			index = index + 1
+		end
+	end
+	self.mItemTable = itemTable
+end
+
+function _P.OnBuy(actId)
+	local shopData = MActivity.ActList[actId]
+	local csvShop = Csv.GiftShop[actId]
+	if shopData ~= nil and csvShop ~= nil then
+		if shopData.times >= csvShop.limit then
+			CCommon.ShowError(Csv.Text("shop_timeslow"))
+		else
+			local state,str = MBag.GetCostState({csvShop.buytype,csvShop.price},true)
+			if state then
+				CActivity.GetRewardReq(actId,0)
+			else
+				CCommon.ShowError(str)
+			end
+		end
+	end
+end
+
+function _P.GetSortShop(rawTable)
+	local sortTable = {}
+	if rawTable ~= nil then
+		for k,v in pairs(rawTable) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b) return a.actId < b.actId end)
+	end
+	return sortTable
+end
+
+function _M:ResetShop()
+	_P.OnCreateList(self)
+end
+
+function _M:ShopBuy(data)
+	local shop = self.mItemTable[data.actId]
+	if shop ~= nil then
+		local moudle = shop.moudle
+		if moudle ~= nil then
+			local csvShop = Csv.GiftShop[data.actId]
+			local limit = csvShop.limit
+			if limit ~= nil and limit > 0 then
+				local shopData = MActivity.ActList[data.actId]
+				if shopData ~= nil then
+					moudle:Get("limit1").Text = Csv.Text("shop_xiangou",{num = limit - shopData.times})
+				end
+			end
+
+			for k,v in pairs(csvShop.itemid) do
+				local csvItem = Csv.Item[v[1]]
+				local spMap = {back = csvItem.colorIcon,icon = csvItem.icon}
+				local textMap = {num = v[2]}
+				local rootCanvasPos = shop.itemMoudles[k]:Get("back").RootCanvasPos
+				local effectMoudle = CCommon.CreateEffect(self.mMoudle:Get("effectNode"),EFFECT_ID,Vector2(rootCanvasPos.x - 30,rootCanvasPos.y + 120),nil,spMap,textMap)
+				effectMoudle.SelfRect.Name = tostring(k)
+			end
+			SoundMgr.Play(11000)
+		end
+	end
+end
+
+-- function _P.GetPos(index)
+-- 	local x = (((index - 1)%LINENUM + 1) * ICONHEGHT) + (index - 1) * SPACEWIDTH - ICONHEGHT/2
+-- 	local num1,num2 = math.modf((index - 1)/LINENUM)
+-- 	local y = (num1 + 1) * ICONHEGHT + num1 * SPACE - ICONHEGHT/2
+-- 	return Vector2(x,-y)
+-- end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

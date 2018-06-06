@@ -1,0 +1,87 @@
+local _M = {}
+
+_M.JobType = 
+{
+	HuiYuan = 0,
+	HuiZhang = 1,
+	FuHuiZhang = 2,
+	JingYing = 3
+}
+
+_M.BattleState = 
+{
+	Close = 1,
+	Doing = 2,
+	Killed = 3,
+	End = 4
+}
+
+--上次商会势力排行时间
+_M.LastPowerRankTime = 0
+--商会势力排行时间
+_M.PowerRankData = nil
+--我的商会id
+_M.MyCommerceId = 0
+--我的商会名
+_M.CommerceName = nil
+--下次可以加入商会的时间
+_M.NextJoinTime = 0
+--我的商会信息
+_M.MyCommerceInfo = nil
+--职位映射
+_M.JobName = nil
+
+function _M.Clean()
+	_M.LastPowerRankTime = 0
+	_M.PowerRankData = nil
+	_M.MyCommerceId = 0
+	_M.CommerceName = nil
+	_M.MyCommerceInfo = nil
+	_M.JobName = nil
+end
+
+function _M.IsJoinCommerce()
+	return _M.MyCommerceId > 0
+end
+
+function _M.GetJobStr(job)
+	if _M.JobName == nil then
+		_M.JobName = 
+		{
+			[_M.JobType.HuiYuan] = Csv.Text("commerce_job4"),
+			[_M.JobType.HuiZhang] = Csv.Text("commerce_job1"),
+			[_M.JobType.FuHuiZhang] = Csv.Text("commerce_job2"),
+			[_M.JobType.JingYing] = Csv.Text("commerce_job3"),
+		}
+	end
+	return _M.JobName[job]
+end
+
+function _M.StaffIsLocked(staffId)
+	if _M.MyCommerceInfo ~= nil and _M.MyCommerceInfo.myInfo ~= nil then
+		local lockedStaffs = _M.MyCommerceInfo.myInfo.lockedStaffs
+		if lockedStaffs ~= nil then
+			return lockedStaffs[staffId] == true
+		end
+	end
+	return false
+end
+
+function _M.StaffLiftNum(staffId)
+	if _M.MyCommerceInfo ~= nil and _M.MyCommerceInfo.myInfo ~= nil then
+		local staffLifeNum = _M.MyCommerceInfo.myInfo.staffLifeNum
+		if staffLifeNum ~= nil and staffLifeNum[staffId] ~= nil then
+			return staffLifeNum[staffId]
+		end
+	end
+	return 0
+end
+
+function _M.IsMyCommerce(commerceId)
+	if _M.MyCommerceId == 0 then
+		return false
+	end
+	return commerceId == _M.MyCommerceId
+end
+
+return _M

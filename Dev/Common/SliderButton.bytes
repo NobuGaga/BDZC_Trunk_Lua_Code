@@ -1,0 +1,71 @@
+
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class()
+
+--界面构建
+function _M:ctor(min,max,value,handler)
+    self.mMin = min
+    self.mRealMax = max
+    if max < 100 then
+        self.mMax = 100
+    else
+        self.mMax = max
+    end
+    self.mValue = value
+    self.mHandler = handler
+end
+
+function _M:CreateSliderBtn(slider,btnAdd,btnMinus)
+    self.mSlider = slider
+    slider.OnValueChanged:RemoveAllListeners()
+    slider.OnValueChanged:AddListener(function(...)self:OnSliderValueChanged(...)end)
+    slider.MinValue = 0
+    slider.MaxValue = self.mMax
+    slider.Value = self.mValue
+
+    if btnAdd ~= nil then
+        btnAdd:AddOnButton(function ( ... )
+            SoundMgr.Play(10001)
+            self:OnAddValue()
+            end, nil, 0.9)
+    end
+    
+    if btnMinus ~= nil then
+        btnMinus:AddOnButton(function ( ... )
+            SoundMgr.Play(10001)
+            self:OnMinusValue()
+            end, nil, 0.9)
+    end
+    
+    self.mSlider.Value = (self.mMax/self.mRealMax) * self.mValue
+end
+
+function _M:OnSliderValueChanged(...)
+    local value = math.ceil(self.mSlider.Value/self.mMax * self.mRealMax)
+    local handler = self.mHandler
+    if value <= 0 then
+        value = self.mMin
+    end
+    if handler ~= nil then
+        handler(value)
+    end
+end
+
+function _M:OnAddValue()
+    local value = math.ceil(self.mSlider.Value)
+    local max = self.mMax
+    if value < max then
+        self.mSlider.Value = value + (self.mMax/self.mRealMax)
+    end
+end
+
+function _M:OnMinusValue()
+    local value = math.ceil(self.mSlider.Value)
+    local min = self.mMin
+    if value > min then
+        self.mSlider.Value = value - (self.mMax/self.mRealMax)
+    end
+end
+
+return _M

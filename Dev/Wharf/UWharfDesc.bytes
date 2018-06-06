@@ -1,0 +1,74 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id,isEvent)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_GirlInfo")
+	local closeBtn = moudle:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+
+	local bxs = moudle:Get("Bxs")
+	moudle:Get("Name").Text = Csv.Text("Wharf_info_name")
+	moudle:Get("Edge").Text = Csv.Text("Wharf_info_age")
+	moudle:Get("Zhiye").Text = Csv.Text("Wharf_info_job")
+	moudle:Get("Aihao").Text = Csv.Text("Wharf_info_aihao")
+	
+	moudle:Get("Title_0").Text = Csv.Text("Wharf_info_tiptitle")
+
+	local lock = moudle:Get("Lock")
+	local lockText = moudle:Get("LockText")
+	local nameText = moudle:Get("NameText")
+	local ageText = moudle:Get("EdgeText")
+	local jobText = moudle:Get("ZhiyeText")
+	local aihaoText = moudle:Get("AihaoText")
+	local tips = moudle:Get("Tips")
+
+	lock.Text = Csv.Text("Wharf_info_prestige")
+	local data
+	if isEvent then
+		data = Csv.WharfEvent[id]
+		moudle:Get("Lock").Activity = true
+		lockText.Text = data.prestige
+		bxs.SpriteName = data.bigIcon
+		bxs:SetNativeSize()
+		bxs.LocalPosition = Vector2(data.eventIconPox[1],data.eventIconPox[2])
+		bxs.SizeDelta = Vector2(data.eventIconSize[1],data.eventIconSize[2])
+
+		nameText.Text = data.name
+		ageText.Text = data.age
+		jobText.Text = data.job
+		aihaoText.Text = data.hobby
+		tips.Text = data.desc
+	else
+		data = Csv.Girl[id]--Csv.WharfGirl[id]
+
+		moudle:Get("Lock").Activity = false
+		bxs.SpriteName = data.homeicon
+
+		nameText.Text = data.name
+		ageText.Text = data.age
+		jobText.Text = data.job
+		aihaoText.Text = data.hobby
+
+		tips.Text = data.wharfDesc
+	end
+end
+
+return _M

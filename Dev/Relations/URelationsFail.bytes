@@ -1,0 +1,43 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local failActorId = 10041
+
+local _M = Class(WindowBase)
+local _P = {}
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Fail")
+	self.mMoudle = moudle
+
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	-- 播放战斗失败特效
+	SoundMgr.Play(10015)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), failActorId)
+
+	local data = MRelations.ReportData
+	if data ~= nil then
+		moudle:Get("JFtext").Text = Csv.Text("relations_rankpointT")
+		moudle:Get("JfNum").Text = data.point
+		moudle:Get("text").Text = Csv.Text("relations_failTip")
+	end
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Call("URelations","OnFightEnd")
+		WindowMgr.Destroy("URelationsReport")
+		WindowMgr.Destroy("URelationsFight")
+		if self.mMoudle ~= nil then
+			self:Destroy()
+		end
+	end, nil)
+end
+
+return _M

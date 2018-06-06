@@ -1,0 +1,176 @@
+-- (新官上任)排行版界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MRank = JRequire "Dev.Rank.MRank"
+
+local itemWidth = 635
+local itemHeight = 61
+local space = 12
+local pageNum = 11
+local pageHeight = 802
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+
+function _M:OnCreate(rankId, isPerson)
+	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_GrRanking")
+	self.mModule = module
+
+	self.rankId = rankId
+	self.isPerson = isPerson
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local titleText = module:Get("C_Text")
+	local rankText = module:Get("ranking")
+	local nameText = module:Get("name")
+	local pointText = module:Get("Fraction")
+	local mineNameText = module:Get("OwnName")
+	local mineRankText = module:Get("OwnRanking")
+	local minePointText = module:Get("OwnFraction")
+	
+	rankText.Text = Csv.Text("xinguan_rank_paiminmg")
+	pointText.Text = Csv.Text("xinguan_rank_point")
+	mineNameText.Text = Csv.Text("rank_nameT")
+	mineRankText.Text = Csv.Text("rank_rankT")
+	minePointText.Text = Csv.Text("xinguan_rank_point") .. ': '
+	
+	if isPerson then
+		titleText.Text = Csv.Text("xinguan_rank_mine_title")
+		nameText.Text = Csv.Text("xinguan_rank_mine_name")
+	else
+		titleText.Text = Csv.Text("xinguan_rank_gang_title")
+		nameText.Text = Csv.Text("xinguan_rank_gang_name")
+	end
+
+	self.noneText = module:Get("none")
+	self.noneText.Text = Csv.Text("club_rank_none")
+	self.noneText.Activity = true
+
+	_P.SetListData(self)
+end
+
+
+-- 设置列表数据
+function _P.SetListData(self)
+	local rankData = MRank.RankTable[self.rankId]
+	if not rankData then
+		_P.SetOwnData(self)
+		return
+	end
+
+	_P.SetOwnData(self, {name = rankData.selfName, rank = rankData.selfrank, value = rankData.selfvalue})
+	if not rankData.ranklist then
+		self.noneText.Activity = true
+		return
+	end
+
+	self.noneText.Activity = false
+	local rankList = _P.GetSortList(self, rankData.ranklist)
+	self.mList = rankList
+	if not rankList then return end
+
+	local itemContent = self.mModule:Get("content")
+	itemContent:DestroyChildren()
+
+	local scroll = self.mModule:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	self.scrollController = RankVertical.new(scroll,itemContent,"M_Xgsr_GrRanking_",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+	self.scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,rankList)
+end
+
+
+function _P.ScrollCallBack(self,index,v,itemModule)
+	if itemModule then
+		local itemRank = (v.rank >= 4 and 4) or v.rank
+		-- 如果排名>3时，要显示排名num
+		if v.rank > 3 then
+			itemModule:Get("rank").Text = v.rank
+		end
+
+		itemModule:Get("name").Text = v.name
+		itemModule:Get("value").Text = (v.value < 0 and 0) or v.value
+
+		itemModule.SelfRect.LocalPosition = _P.GetPos(self,index)
+	end
+end
+
+
+function _P.GetPos(self,index)
+	local allNum = #self.mList
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0,yPos)
+end
+
+
+-- 排序
+function _P.GetSortList(self, rankList)
+	local sortList = rankList
+	table.sort(sortList, function (a, b)
+		return a.rank < b.rank
+	end)
+
+	return sortList
+end
+
+
+-- 设置玩家数据
+function _P.SetOwnData(self, data)
+	local nameText = self.mModule:Get("NameText")
+	local rankText = self.mModule:Get("RankingText")
+	local scoreText = self.mModule:Get("FractionText")
+
+	local playerName
+	if self.isPerson then
+		nameText.Text = MPlayer.GetName()
+	else
+		if data and data.name ~= "" then
+			nameText.Text = data.name
+		else
+			nameText.Text = Csv.Text("xinguan_rank_none")
+		end
+	end
+	
+	if data and data.rank > 0 then
+		rankText.Text = data.rank
+	else
+		rankText.Text = "10000+"
+	end
+
+	if data and data.value > 0 then
+		scoreText.Text = data.value
+	else
+		scoreText.Text = "0"
+	end
+end
+
+
+return _M

@@ -1,0 +1,77 @@
+-- 座驾分解材料界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SliderButton = JRequire "Dev.Common.SliderButton"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+function _M:BeforeDestroy()
+	if self.sliderBtn ~= nil then
+		self.sliderBtn:delete()
+		self.sliderBtn = nil
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Bag_UsePop")
+	self.mModule = module
+	self.mData = data
+
+	module:Get("Num").Text = Csv.Text("bag_numX")
+	module:Get("NumText").Text = Csv.Text("bag_have", {num = 1, max = data.itemcount})
+	module:Get("Title").Text = Csv.Text("car_garage_decomposeItem")
+	module:Get("C_text").Text = Csv.Text("car_garage_fenjie")
+
+	self.sliderBtn = SliderButton.new(1, data.itemcount, 1, function(value) _P.OnSliderValueChanged(self,value) end)
+	self.sliderBtn:CreateSliderBtn(module:Get("Slider"), module:Get("BtnAdd"), module:Get("BtnMinus"))
+	self.mValue = 1
+
+	local closeBtn = module:Get("BtnClose")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	
+	local composeBtn = module:Get("BtnUse")
+	composeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickDecompose(self)
+	end, nil, 0.9)
+
+	local itemConf = Csv.Item[data.itemid]
+	if itemConf then
+		module:Get("Desc").Text = itemConf.tips
+		module:Get("IconColor").SpriteName = itemConf.colorIcon
+		module:Get("Icon").SpriteName = itemConf.icon
+	end
+
+	module:Get("Num2").Text = MBag.GetItemNum(data.itemid)
+	_P.OnSliderValueChanged(self, 1)
+end
+
+
+function _P.OnSliderValueChanged(self,value)
+	self.mValue = value
+	self.mModule:Get("NumText").Text = Csv.Text("bag_have", {num = value, max = self.mData.itemcount})
+end
+
+
+function _P.OnClickDecompose(self)
+	CCar.CarItemBreakDownReq(self.mData.itemid, self.mValue)
+	MCar.CarMatBreakData = {itemid = self.mData.itemid, itemcount = self.mValue}
+	self:Destroy()
+end
+
+return _M

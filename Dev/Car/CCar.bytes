@@ -1,0 +1,662 @@
+local MCar = JRequire "Dev.Car.MCar"
+local CMain = JRequire "Dev.Main.CMain"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cCarLevelUp = 2,      	-- 座驾升级 PCar.CCar
+	cCarStarUp = 3,       	-- 座驾升星 PCar.CCar
+	cCarAddParking = 4,   	-- 车位开启 PCar.CCar
+	cCarAdd = 5,          	-- 车位添加车PCar.CCarAdd
+	cCarAddStaff = 6,     	-- 员工乘驾PCar.CCarAddStaff
+	cCarRepalce = 7,      	-- 车位更换车PCar.CCarAdd
+	cCarRepalceStaff = 8, 	-- 更换员工PCar.CCarAddStaff
+	cCarBreakDown = 9,    	-- 座驾分解PCar.CCar
+	cCarReCast = 10,      	-- 座驾重铸PCar.CCar
+	cCarHandsel = 11,     	-- 赠送PCar.CCarHandsel
+	cCarTotalBreakDown = 14,-- 一键分解PCar.CCarTotalBreakDown
+	cCarTotalSell = 15,		-- 一键出售PCar.CCarTotalSell
+	cCarIntensify = 16,		-- 资质强化PCar.CCarIntensify
+	cCarItemBreakDown = 17, -- 材料分解PCar.CCarItemBreakDown
+	cCarMerge = 18,			-- 材料合成PCar.CCarMerge
+	
+	sCarInit = 1,         	-- 初始化 PCar.SInit
+	sCarLevelUp = 2,      	-- 升级 PCar.SCarUpdate
+	sCarStarUp = 3,       	-- 升星 PCar.SCarUpdate
+	sCarAddParking = 4,   	-- 车位开启PCar.SAddParking
+	sCarAdd = 5,          	-- 车位添加车PCar.SCarAdd
+	sCarAddStaff = 6,     	-- 员工乘驾PCar.SCarAddStaff
+	sCarRepalce = 7,      	-- 车位更换车PCar.SCarAdd
+	sCarRepalceStaff = 8, 	-- 更换员工PCar.SCarAddStaff
+	sCarBreakDown = 9,    	-- 分解PCar.SCarBreakDown
+	sCarReCast = 10,      	-- 重铸PCar.SCarBreakDown
+	sCarHandsel = 11,     	-- 赠送PCar.SCarHandsel
+	sCarSeatOpen = 12,    	-- 车位开启推送PCar.SAddParking
+	sCarNew = 13,         	-- 添加新车推送PCar.SCarUpdate
+	sCarTotalBreakDown = 14,-- 一键分解返回PCar.SCarTotalBreakDown
+	sCarTotalSell = 15,		-- 一键出售返回PCar.SCarTotalSell
+	sCarIntensify = 16,		-- 资质强化PCar.SCarUpdate
+	sCarItemBreakDown = 17, -- 材料分解
+	sCarMerge = 18,		    -- 材料合成
+}
+
+
+function _M.ModuleClean()
+	MCar.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cCarLevelUp] = "PCar.CCar",
+		[ECmdId.cCarStarUp] = "PCar.CCar",
+		[ECmdId.cCarAddParking] = "PCar.CCar",
+		[ECmdId.cCarAdd] = "PCar.CCarAdd",
+		[ECmdId.cCarAddStaff] = "PCar.CCarAddStaff",
+		[ECmdId.cCarRepalce] = "PCar.CCarAdd",
+		[ECmdId.cCarRepalceStaff] = "PCar.CCarAddStaff",
+		[ECmdId.cCarBreakDown] = "PCar.CCar",
+		[ECmdId.cCarReCast] = "PCar.CCar",
+		[ECmdId.cCarHandsel] = "PCar.CCarHandsel",
+		[ECmdId.cCarTotalBreakDown] = "PCar.CCarTotalBreakDown",
+		[ECmdId.cCarTotalSell] = "PCar.CCarTotalSell",
+		[ECmdId.cCarIntensify] = "PCar.CCarIntensify",
+		[ECmdId.cCarItemBreakDown] = "PCar.CCarItemBreakDown",
+		[ECmdId.cCarMerge] = "PCar.CCarMerge",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sCarInit]          = { proto = "PCar.SCarInit",          handle = _P.OnInitData},
+		[ECmdId.sCarLevelUp]       = { proto = "PCar.SCarUpdate",        handle = _P.OnCarLevelUpData},
+		[ECmdId.sCarStarUp]        = { proto = "PCar.SCarUpdate",    	 handle = _P.OnCarStarUpData},
+		[ECmdId.sCarAddParking]    = { proto = "PCar.SAddParking",   	 handle = _P.OnOpenSeatBack},
+		[ECmdId.sCarAdd]           = { proto = "PCar.SCarAdd",       	 handle = _P.OnAddCarBack},
+		[ECmdId.sCarAddStaff]      = { proto = "PCar.SCarAddStaff",  	 handle = _P.OnAddStaffBack},
+		[ECmdId.sCarRepalce]       = { proto = "PCar.SCarAdd",       	 handle = _P.OnReplaceCarBack},
+		[ECmdId.sCarRepalceStaff]  = { proto = "PCar.SCarAddStaff",  	 handle = _P.OnReplaceStaffBack},
+		[ECmdId.sCarBreakDown]     = { proto = "PCar.SCarBreakDown", 	 handle = _P.OnResolveBack},
+		[ECmdId.sCarReCast]        = { proto = "PCar.SCarBreakDown", 	 handle = _P.OnReCastBack},
+		[ECmdId.sCarHandsel]       = { proto = "PCar.SCarHandsel",  	 handle = _P.OnHandselBack},
+		[ECmdId.sCarSeatOpen]      = { proto = "PCar.SAddParking",  	 handle = _P.OnOpenSeatPush},
+		[ECmdId.sCarNew]     	   = { proto = "PCar.SCarUpdate",  		 handle = _P.OnAddNewCar},
+		[ECmdId.sCarTotalBreakDown]= { proto = "PCar.SCarTotalBreakDown",handle = _P.OnTotalBreakDownBack},
+		[ECmdId.sCarTotalSell]     = { proto = "PCar.SCarTotalSell",	 handle = _P.OnTotalSellBack},
+		[ECmdId.sCarIntensify]     = { proto = "PCar.SCarUpdate",		 handle = _P.OnIntensifyBack},
+		[ECmdId.sCarItemBreakDown] = {									 handle = _P.OnCarItemBreakDownBack},
+		[ECmdId.sCarMerge]		   = { proto = "PCar.PCarInfo",		 	 handle = _P.OnCarItemMergeBack},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Car, func_send, func_recv, isReload)
+end
+
+
+-- C2S
+-- 座驾升级请求
+
+function _M.CarLevelUpReq(carId)
+	_M.Send(ECmdId.cCarLevelUp, {id = carId})
+end
+
+
+-- 座驾升星请求
+function _M.CarStarUpReq(carId)
+	_M.Send(ECmdId.cCarStarUp, {id = carId})
+end
+
+
+-- 座驾开启车位请求
+function _M.CarOpenParkingReq(carId)
+	_M.Send(ECmdId.cCarAddParking, {id = carId})
+end
+
+
+-- 车位添加座驾请求
+function _M.CarAddReq(seatIndex, carId)
+	_M.Send(ECmdId.cCarAdd, {index = seatIndex, id = carId})
+end
+
+
+-- 座驾添加员工请求
+function _M.CarAddStaffReq(carId, staffId, index)
+	_M.Send(ECmdId.cCarAddStaff, {carid = carId, staffid = staffId, index = index})
+end
+
+
+-- 车位更换座驾请求
+function _M.CarRepalceReq(seatIndex, carId)
+	_M.Send(ECmdId.cCarRepalce, {index = seatIndex, id = carId})
+end
+
+
+-- 更换座驾员工请求
+function _M.CarRepalceStaffReq(carId, staffId, index)
+	_M.Send(ECmdId.cCarRepalceStaff, {carid = carId, staffid = staffId, index = index})
+end
+
+
+-- 座驾分解请求
+function _M.CarBreakDownReq(carId)
+	_M.Send(ECmdId.cCarBreakDown, {id = carId})
+end
+
+
+-- 座驾重铸请求
+function _M.CarReCastReq(carId)
+	_M.Send(ECmdId.cCarReCast, {id = carId})
+end
+
+
+-- 座驾赠送请求
+function _M.CarHandselReq(playerId, carId)
+	_M.Send(ECmdId.cCarHandsel, {playerid = playerId, carid = carId})
+end
+
+
+-- 一键分解请求
+function _M.CarTotalBreakDownReq(list)
+	_M.Send(ECmdId.cCarTotalBreakDown, {carlist = list})
+end
+
+
+-- 一键出售请求
+function _M.CarTotalSellReq(list)
+	_M.Send(ECmdId.cCarTotalSell, {matlist = list})
+end
+
+
+-- 座驾强化资质
+function _M.CarIntensifyReq(id, type)
+	_M.Send(ECmdId.cCarIntensify, {type = type, carid = id})
+end
+
+
+-- 材料分解请求
+function _M.CarItemBreakDownReq(itemid, itemCount)
+	_M.Send(ECmdId.cCarItemBreakDown, {itemid = itemid, itemCount = itemCount})
+end
+
+
+-- 材料合成请求
+function _M.CarItemMergeReq(itemid)
+	_M.Send(ECmdId.sCarMerge, {itemid = itemid})
+end
+
+
+-- S2C
+-- 座驾初始化返回
+function _P.OnInitData(data)
+	_P.SetSeatData(data.carlist)
+	_P.SetCarListData(data.carinfolist)
+	_M.CheckCarRedPoint()
+
+	for i=1,2 do
+		MCar.GetCarBatchMessages(i)
+	end
+end
+
+
+-- 座驾升星更新返回
+function _P.OnCarStarUpData(data)
+	local updataData = _P.UpdateOneCarData(data.carinfo)
+	WindowMgr.Call("UCarMainPanel", "CarStarUpBack", updataData)
+
+	_M.CheckCarRedPoint()
+end
+
+
+-- 座驾升级更新返回
+function _P.OnCarLevelUpData(data)
+	local updataData = _P.UpdateOneCarData(data.carinfo)
+	WindowMgr.Call("UCarMainPanel", "CarLevelUpBack", updataData)
+
+	_M.CheckCarRedPoint()
+end
+
+
+-- 开启车位返回
+function _P.OnOpenSeatBack(data)
+	local updateSeatData = MCar.CarSeatList[data.index]
+	local nextSeatData = MCar.CarSeatList[data.index + 1]
+	if updateSeatData then
+		updateSeatData.state = MCar.SeatStateEnum.UnEquip
+	end
+
+	if nextSeatData then
+		nextSeatData.state = MCar.SeatStateEnum.UnOpen
+	end
+
+	WindowMgr.Call("UCarMainPanel", "OpenSeatBack", data.index)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 车位添加座驾返回
+function _P.OnAddCarBack(data)
+	local updateSeatData = MCar.CarSeatList[data.index]
+	if updateSeatData then
+		updateSeatData.state = MCar.SeatStateEnum.Equiping
+		updateSeatData.carid = data.carinfo.id
+	end
+
+	_P.UpdateOneCarData(data.carinfo)
+	WindowMgr.Call("UCarMainPanel", "EquipCarBack", data.index, data.carinfo.id)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 座驾添加员工返回
+function _P.OnAddStaffBack(data)
+	local oldcarid = data.oldcarid
+	if oldcarid and oldcarid > 0 then
+		local carData = MCar.CarTable[oldcarid]
+		if carData and carData.staffs then
+			local oldKey = nil
+			for k,v in pairs(carData.staffs) do
+				if v.value == data.staffid then
+					oldKey = k
+					break
+				end
+			end
+
+			if oldKey then table.remove(carData.staffs, oldKey) end
+		end
+	end
+
+	local updateStaff = _P.UpdateOneCarStaffData(data)
+	WindowMgr.Call("UCarMainPanel", "StaffRideCarBack", updateStaff, data)
+end
+
+
+-- 更换车返回
+function _P.OnReplaceCarBack(data)
+	local updateSeatData = MCar.CarSeatList[data.index]
+	local oldCarId = 0 -- 更换前车id
+	if updateSeatData then
+		updateSeatData.state = MCar.SeatStateEnum.Equiping
+		oldCarId = updateSeatData.carid
+		updateSeatData.carid = data.carinfo.carid
+	end
+
+	local oldCarData = MCar.CarTable[oldCarId]
+	if oldCarData then
+		oldCarData.isequip = false
+		if oldCarData.staffs then
+			for k,v in pairs(oldCarData.staffs) do
+				MCar.StaffInCarList[v.value] = nil
+			end
+
+			oldCarData.staffs = nil
+		end
+	end
+
+	local carData = _P.UpdateOneCarData(data.carinfo)
+	WindowMgr.Call("UCarMainPanel", "ChangeCarBack", data.index, carData)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 更换座驾员工返回
+function _P.OnReplaceStaffBack(data)
+	-- 删除旧数据
+	local oldcarid = data.oldcarid
+	if oldcarid and oldcarid > 0 then
+		local carData = MCar.CarTable[oldcarid]
+		if carData and carData.staffs then
+			local oldKey = nil
+			for k,v in pairs(carData.staffs) do
+				if v.value == data.staffid then
+					oldKey = k
+					break
+				end
+			end
+
+			if oldKey then table.remove(carData.staffs, oldKey) end
+		end
+	end
+
+	local lastData = MCar.CarTable[data.id]
+	if lastData and lastData.staffs then
+		local staffData = _P.GetStaffDataByKey(lastData.staffs, data.seatid)
+		if staffData and staffData.value then
+			MCar.StaffInCarList[staffData.value] = nil
+		end
+	end
+
+	-- 添加新数据
+	local oneData = MCar.GetCurCarData(data.id)
+	if oneData then
+		local newStaffData = {key = data.seatid, value = data.staffid}
+		if oneData.staffs then
+			local isAdd = false
+			for k,v in pairs(oneData.staffs) do
+				if v.key == data.seatid then
+					isAdd = true
+					oneData.staffs[k] = newStaffData
+					break
+				end
+			end
+
+			if not isAdd then
+				oneData.staffs[#oneData.staffs + 1] = newStaffData
+			end
+		end
+
+		MCar.CarTable[data.id] = oneData
+		_P.SetStaffListData(oneData.staffs, data.id)
+		WindowMgr.Call("UCarMainPanel", "StaffRideCarBack", newStaffData, data)
+	end
+end
+
+
+-- 根据key找到该座驾的位置信息
+function _P.GetStaffDataByKey(staffList, key)
+	for k,v in pairs(staffList) do
+		if v.key == key then
+			return v
+		end
+	end
+end
+
+
+-- 分解返回
+function _P.OnResolveBack(data)
+	local carData = MCar.CarTable[data.carid]
+	if carData then
+		MCar.CarTable[data.carid] = nil
+	end
+
+	_M.CheckCarRedPoint()
+	WindowMgr.Call("UCarMainPanel", "UpdateParkingSeatRed")
+	WindowMgr.Call("UCarGarageMain", "ResolveCarBack", carData.carid, data.getlist)
+end
+
+
+-- 重铸返回
+function _P.OnReCastBack(data)
+	local carData = _P.GetOneCarData(data.carinfo)
+	if carData then
+		local attrData = carData.Attr
+		local scoreNum = MCar.GetCarScore(carData.color, carData.level, carData.star, MCar.GetTotalAttrs(attrData), attrData.Wuli, attrData.Zhili, attrData.Zhengzhi, attrData.Meili)
+		carData.score = scoreNum
+
+		MCar.CarTable[data.carid] = carData
+	end
+
+	WindowMgr.Call("UCarGarageMain", "RecastCarBack", carData.carid, data.getlist)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 座驾赠送返回OnHandselBack
+function _P.OnHandselBack(data)
+	local carData = MCar.CarTable[data.carid]
+	if carData then
+		MCar.CarTable[data.carid] = nil
+	end
+
+	WindowMgr.Call("UCarGarageGive", "OnGiveCarBack", data.carid)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 车位开启推送
+function _P.OnOpenSeatPush(data)
+	local updateSeatData = MCar.CarSeatList[data.index]
+	local nextSeatData = MCar.CarSeatList[data.index + 1]
+	if updateSeatData then
+		updateSeatData.state = MCar.SeatStateEnum.UnEquip
+	end
+
+	if nextSeatData then
+		nextSeatData.state = MCar.SeatStateEnum.UnOpen
+	end
+
+	WindowMgr.Call("UCarMainPanel", "OpenSeatBack", data.index)
+	_M.CheckCarRedPoint()
+end
+
+
+-- 设置车位列表数据
+function _P.SetSeatData(list)
+	local seatMax = MCar.CarSeatOpenMax
+	local openNum = (list and #list) or 0
+	for i=1, seatMax do
+		local oneData = {index = i}
+		if i <= openNum then
+			local oneSeatData = list[i]
+			local carId = oneSeatData.value
+			if carId and carId > 0 then
+				oneData.state = MCar.SeatStateEnum.Equiping
+				oneData.carid = carId
+			else
+				oneData.state = MCar.SeatStateEnum.UnEquip
+			end
+		else
+			if i == openNum + 1 then
+				oneData.state = MCar.SeatStateEnum.UnOpen
+			else
+				oneData.state = MCar.SeatStateEnum.Stop
+			end
+		end
+
+		MCar.CarSeatList[i] = oneData
+	end
+end
+
+
+-- 更新单个数据
+function _P.UpdateOneCarData(data)
+	local oneData = _P.GetOneCarData(data)
+	local attrData = data.Attr
+	local scoreNum = MCar.GetCarScore(data.color, data.level, data.star, MCar.GetTotalAttrs(attrData), attrData.Wuli, attrData.Zhili, attrData.Zhengzhi, attrData.Meili)
+	oneData.score = scoreNum
+	MCar.CarTable[data.id] = oneData
+
+	return oneData
+end
+
+
+-- 更新单个数据的成员列表数据
+function _P.UpdateOneCarStaffData(data)
+	local oneData = MCar.GetCurCarData(data.id)
+	if oneData then
+		local newStaffData = {key = data.seatid, value = data.staffid}
+		if oneData.staffs then
+			oneData.staffs[#oneData.staffs + 1] = newStaffData
+		else
+			oneData.staffs = {}
+			oneData.staffs[#oneData.staffs + 1] = newStaffData
+		end
+
+		MCar.CarTable[data.id] = oneData
+		_P.SetStaffListData(oneData.staffs, data.id)
+
+		return newStaffData
+	end
+end
+
+
+-- 设置座驾车库数据
+function _P.SetCarListData(list)
+	if not list then return end
+	for i,v in ipairs(list) do
+		local oneData = _P.GetOneCarData(v)
+		local attrData = v.Attr
+		if attrData then
+			local scoreNum = MCar.GetCarScore(v.color, v.level, v.star, MCar.GetTotalAttrs(attrData), attrData.Wuli, attrData.Zhili, attrData.Zhengzhi, attrData.Meili)
+			oneData.score = scoreNum
+		end
+
+		if v.id then
+			MCar.CarTable[v.id] = oneData
+		end
+
+		if v.staffs then
+			_P.SetStaffListData(v.staffs, v.id)
+		end
+	end
+end
+
+
+-- 添加座驾员工列表数据
+function _P.SetStaffListData(list, carid)
+	for i,staffData in ipairs(list) do
+		local staffId = staffData.value
+		MCar.StaffInCarList[staffId] = {id = staffId, carid = carid, index = staffData.key}
+	end
+end
+
+
+-- 新座驾推送
+function _P.OnAddNewCar(data)
+	local oneData = _P.GetOneCarData(data.carinfo)
+	local attrData = oneData.Attr
+	local scoreNum = MCar.GetCarScore(oneData.color, oneData.level, oneData.star, MCar.GetTotalAttrs(attrData), attrData.Wuli, attrData.Zhili, attrData.Zhengzhi, attrData.Meili)
+	oneData.score = scoreNum
+	MCar.CarTable[oneData.id] = oneData
+	_M.CheckCarRedPoint()
+
+	--展示
+	if WindowMgr.IsCreated("UCarMergePanel") or WindowMgr.IsCreated("UCarGetNewShowPanel") then
+		return
+	end
+
+	CTrigger.OnGetNewCar(oneData)
+end
+
+
+-- 资质强化返回
+function _P.OnIntensifyBack(data)
+	local updataData = _P.UpdateOneCarData(data.carinfo)
+	_M.CheckCarRedPoint()
+	WindowMgr.Call("UCarMainPanel", "UpdateAptiUpBack", updataData)
+end
+
+
+-- 座驾一键分解返回
+function _P.OnTotalBreakDownBack(data)
+	-- 保存数据
+	local list = {}
+	for k,v in pairs(MCar.BatchBreakList) do
+		table.insert(list, v)
+	end
+	MCar.SaveCarBatchMessages(list, 1)
+
+	if data and data.carlist then
+		for k,v in pairs(data.carlist) do
+			local carData = MCar.CarTable[v]
+			if carData then
+				MCar.CarTable[v] = nil
+			end
+		end
+	end
+
+	_M.CheckCarRedPoint()
+	WindowMgr.Call("UCarMainPanel", "UpdateParkingSeatRed")
+	WindowMgr.Call("UCarGarageMain", "BatchResolveCarBack", data)
+end
+
+
+-- 材料一键出售返回
+function _P.OnTotalSellBack(data)
+	-- 保存数据
+	local list = {}
+	for k,v in pairs(MCar.BatchSellList) do
+		table.insert(list, v)
+	end
+	MCar.SaveCarBatchMessages(list, 2)
+end
+
+
+-- 设置红点
+function _M.CheckCarRedPoint()
+	local isShowRed = false
+
+	for i,v in ipairs(MCar.CarSeatList) do
+		if v.state == MCar.SeatStateEnum.Equiping then
+			local carData = MCar.GetCurCarData(v.carid)
+			if MCar.CheckShowRed(v.state, carData) then
+				isShowRed = true
+				break
+			end
+		else
+			if MCar.CheckShowRed(v.state, nil) then
+				isShowRed = true
+				break
+			end
+		end
+	end
+
+	if isShowRed ~= MCar.CarRedPoint then
+		MCar.CarRedPoint = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Car)
+	end
+end
+
+
+-- 分解材料返回
+function _P.OnCarItemBreakDownBack(data)
+	WindowMgr.Call("UCarGarageMain", "BreakCarMatBack")
+end
+
+
+-- 合成材料返回
+function _P.OnCarItemMergeBack(data)
+	if WindowMgr.IsCreated("UCarGarageMain") then
+		WindowMgr.Call("UCarGarageMain", "MergeCarMatBack")
+	end
+
+	if WindowMgr.IsCreated("UCarMergePanel") then
+		WindowMgr.Call("UCarMergePanel", "OnCarMatMerge", data)
+	end
+end
+
+
+-- 处理一下后端传过来的数据
+function _P.GetOneCarData(data)
+	local carData = {
+		id = data.id,
+		carid = data.carid,
+		level = data.level,
+		color = data.color,
+		star = data.star,
+		Attr = {
+			Wuli = data.Attr.Wuli,
+			Zhili = data.Attr.Zhili,
+			Zhengzhi = data.Attr.Zhengzhi,
+			Meili = data.Attr.Meili,
+		},
+		isequip = data.isequip,
+		intensifylv = data.intensifylv,
+		upresult = data.upresult
+	}
+	if data.staffs ~= nil then
+		carData.staffs = {}
+		for _k,_v in pairs(data.staffs) do
+			table.insert(carData.staffs, {key = _v.key, value = _v.value})
+		end
+	end
+	if data.breakdown ~= nil then
+		carData.breakdown = {}
+		for _k,_v in pairs(data.breakdown) do
+			table.insert(carData.breakdown, {key = _v.key, value = _v.value})
+		end
+	end
+	if data.recast ~= nil then
+		carData.recast = {}
+		for _k,_v in pairs(data.recast) do
+			table.insert(carData.recast, {key = _v.key, value = _v.value})
+		end
+	end
+
+	return carData
+end
+
+
+return _M

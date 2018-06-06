@@ -1,0 +1,553 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local MVote = JRequire "Dev.Vote.MVote"
+local CVote = JRequire "Dev.Vote.CVote"
+local MBag = JRequire "Dev.Bag.MBag"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CPlayer = JRequire "Dev.Player.CPlayer"
+local MParliament = JRequire "Dev.Parliament.MParliament"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local JTweenerManager = CS.JTween.JTweenerManager
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local DefaultBody = "body_007"
+local DefaultHead = "head_004"
+
+local ColorBlack = Color(0, 0, 0, 1)
+local ColorWhite = Color(1, 1, 1, 1)
+
+local SCROLL_WIDTH = 750
+local ITEM_WIDTH = 167
+local SPACE = 25
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Election_RedEnvelopes")
+	self.mMoudle = moudle
+	self.SelectVoteID = MVote.SelectVoteID
+	moudle:Get("C_Text").Text = Csv.Text("vote_4")
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("BodyClick"):AddOnButton(function()
+		_P.OnClickBody(self)
+	end,nil,1)
+
+	self.ItemTable = {}
+	if data ~= nil then
+		_P.RefreshView(self,data)
+	end
+
+	local arrowLeft = moudle:Get("ArrowLeft")
+	arrowLeft.CachedTran:GetJTweener("T_Parliament_LeftArrow"):Play()
+	arrowLeft:AddOnButton(function()
+		if self.NowIndex ~= nil and self.TitleLength ~= nil then
+			local index = self.NowIndex - 1
+			if index <= 0 then
+				index = self.TitleLength
+			end
+			_P.SelectTitle(self,index,true,1)
+		end
+	end,nil,1)
+
+	local arrowRight = moudle:Get("ArrowRight")
+	arrowRight.CachedTran:GetJTweener("T_Parliament_RightArrow"):Play()
+	arrowRight:AddOnButton(function()
+		if self.NowIndex ~= nil and self.TitleLength ~= nil then
+			local index = self.NowIndex + 1
+			if index > self.TitleLength then
+				index = 1
+			end
+			_P.SelectTitle(self,index,true,2)
+		end
+	end,nil,1)
+
+	moudle:Get("C_text").Text = Csv.Text("vote_30")
+	moudle:Get("Text").Text = Csv.Text("vote_31")
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if self._SysId ~= nil and Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+end
+
+function _P.OnClickBody(self)
+	if self.NowIndex ~= nil and self.SortTable ~= nil then
+		local data = self.SortTable[self.NowIndex]
+		if data ~= nil and data.playerID ~= nil then
+			CPlayer.LookPlayerReq(data.playerID)
+		end
+	end
+end
+
+function _P.RefreshView(self,data)
+	local moudle = self.mMoudle
+	local sortTable = _P.GetSortPos(data.info)
+	self.SortTable = sortTable
+	if self.NowIndex ~= nil then
+		_P.RefreshBody(self,self.NowIndex)
+		return
+	end
+	local content = moudle:Get("PosContent")
+	content:DestroyChildren()
+	local index = 0
+	local selectIndex = 1
+	local titleTable = {}
+	local isGetedSelect = false
+	for k,v in ipairs(sortTable) do
+		local posMoudle = JGuiManager.GetMoudle(content,"M_Election_RedEnvelopes_Item")
+		local csvVote = Csv.Vote[v.voteID]
+		local csvTitle
+		if csvVote ~= nil and csvVote.titleID ~= nil then
+			csvTitle = Csv.Title[csvVote.titleID]
+		end
+		if csvTitle ~= nil then
+			posMoudle:Get("Zhiwei").Text = csvTitle.name
+			posMoudle:Get("M_Election_RedEnvelopes_Item"):AddOnButton(function()
+				_P.SelectTitle(self,k,true)
+			end,nil,1)
+		end
+		index = index + 1
+		self.TitleLength = index
+		if self.SelectVoteID ~= nil and self.SelectVoteID == v.voteID and not isGetedSelect then
+			selectIndex = k
+			isGetedSelect = true
+		end
+		if v.playerID == MPlayer.GetId() and not isGetedSelect then
+			selectIndex = k
+		end
+		self.ItemTable[k] = posMoudle
+	end
+	if selectIndex ~= nil and selectIndex > 0 then
+		_P.SelectTitle(self,selectIndex,false)
+	end
+end
+
+function _P.SelectTitle(self,index,isAnimate,moveType)
+	if self.NowIndex ~= nil and self.NowIndex == index then
+		return
+	end
+	local moudle = self.mMoudle
+	if isAnimate and self.NowIndex ~= nil then
+		local movePosX = 0
+		if moveType ~= nil then
+			if moveType == 1 then
+				movePosX = JGuiManager.GuiRoot.Width
+			elseif moveType == 2 then
+				movePosX = -JGuiManager.GuiRoot.Width
+			end
+		else
+			local num = index - self.NowIndex
+			if num > 0 then
+				movePosX = -JGuiManager.GuiRoot.Width
+			else
+				movePosX = JGuiManager.GuiRoot.Width
+			end
+		end
+		if movePosX ~= 0 then
+			self:Lock()
+			local body = moudle:Get("PosBody")
+			local movePosY = body.LocalPosition.y
+			local tween = body:DOAnchorPosX(movePosX,0.15)
+			tween:OnComplete(function()
+				_P.RefreshBody(self,index)
+				body.LocalPosition = Vector2(-movePosX,movePosY)
+				local tween2 = body:DOAnchorPosX(0,0.15)
+				tween2:OnComplete(function()
+					self:Unlock()
+				end)
+			end)
+			_P.ScrollRollToIndex(self,index,isAnimate)
+		else
+			_P.RefreshBody(self,index)
+			_P.ScrollRollToIndex(self,index,isAnimate)
+		end
+	else
+		_P.RefreshBody(self,index)
+		_P.ScrollRollToIndex(self,index,isAnimate)
+	end
+	local posMoudle = self.ItemTable[index]
+	if posMoudle ~= nil then
+		local imgSelect = moudle:Get("Ing")
+		imgSelect:SetParent(posMoudle.SelfRect.CachedTran)
+		imgSelect.LocalPosition = Vector2(0,0)
+	end
+	self.NowIndex = index
+end
+
+function _P.ScrollRollToIndex(self,index,isAnimate)
+	local posX = SCROLL_WIDTH/2 - ITEM_WIDTH/2 - (index - 1) * (ITEM_WIDTH + SPACE)
+	if posX > 0 then
+		posX = 0
+	end
+	local maxRightPosX = - (self.TitleLength * ITEM_WIDTH + (self.TitleLength - 1) * SPACE - SCROLL_WIDTH)
+	if posX < maxRightPosX then
+		posX = maxRightPosX
+	end
+
+	local content = self.mMoudle:Get("PosContent")
+	if isAnimate then
+		content:DOAnchorPosX(posX,0.3)
+	else
+		content.LocalPosition = Vector2(posX,0)
+	end
+end
+
+function _P.RefreshBody(self,index)
+	local moudle =self.mMoudle
+	local sortTable = self.SortTable
+	if sortTable ~= nil and sortTable[index] ~= nil then
+		local data = sortTable[index]
+		local csvVote = Csv.Vote[data.voteID]
+		local csvTitle
+		if csvVote ~= nil and csvVote.titleID ~= nil then
+			csvTitle = Csv.Title[csvVote.titleID]
+		end
+		local isMyTitle = data.playerID ~= nil and data.playerID == MPlayer.GetId()
+		if csvTitle ~= nil then
+			local head = moudle:Get("PosHead")
+			local body = moudle:Get("PosBody")
+			moudle:Get("BG").SpriteName = csvTitle.background
+			if data.playerID ~= nil then
+				head.SpriteName = MPlayer.GetOtherHeadAsset(data.head,data.sex)
+				head.Color = ColorWhite
+				body.SpriteName = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
+				body.Color = ColorWhite
+			else
+				head.SpriteName = DefaultHead
+				head.Color = ColorBlack
+				body.SpriteName = DefaultBody
+				body.Color = ColorBlack
+			end
+
+			local nameBG = moudle:Get("NameBox")
+			local name = moudle:Get("NameText")
+			if data.playerName ~= nil then
+				nameBG.Activity = true
+				name.Text = data.playerName
+			else
+				nameBG.Activity = false
+				name.Text = ""
+			end
+
+			local commerceBG = moudle:Get("ShBG")
+			local commerce = moudle:Get("ShName")
+			if data.commerceName ~= nil and data.commerceName ~= "" then
+				commerceBG.Activity = true
+				commerce.Text = data.commerceName
+			else
+				commerceBG.Activity = false
+				commerce.Text = ""
+			end
+
+			moudle:Get("PosNameText").Text = csvTitle.name
+
+			local bottomBG = moudle:Get("BottemBg")
+			local nameNode = moudle:Get("NameNode")
+			local boxRect = moudle:Get("BoxRect")
+			boxRect:DestroyChildren()
+			if not _P.GetBoxState(data,1) and not _P.GetBoxState(data,2) and not _P.GetBoxState(data,3) then
+				bottomBG.SizeDelta = Vector2(760,180)
+				nameNode.LocalPosition = Vector2(0,-128)
+			else
+				bottomBG.SizeDelta = Vector2(760,308)
+				nameNode.LocalPosition = Vector2(0,0)
+				if _P.GetBoxState(data,1) then
+					local csvVotePer = Csv.VotePermition[data.voteID]
+					local boxdata = _P.GetBoxData(data,1)
+					if csvVotePer ~= nil and boxdata ~= nil then
+						local boxMoudle = JGuiManager.GetMoudle(boxRect,"M_Election_RedEnvelopes_Box")
+						boxMoudle:Get("Icon1").SpriteName = csvVotePer.DupIcon
+						boxMoudle:Get("Text1").Text = Csv.Text("vote_45")
+						local btn = boxMoudle:Get("Btn1")
+						local textNum = boxMoudle:Get("Num1")
+						btn:AddOnButton(function()
+							--boss开启
+							WindowMgr.Create("UVoteOpenBattle",data.voteID)
+						end,nil,0.9)
+
+						local textBtn = boxMoudle:Get("BtnText1")
+						textBtn.Text = Csv.Text("vote_29")
+						if not isMyTitle then
+							textNum.Activity = false
+							btn.LocalPosition = Vector2(115,0)
+							btn.RaycastTarget = false
+							btn.IsGray = true
+							btn.Activity = false
+							boxMoudle:Get("bg").LocalPosition = Vector2(62,0)
+						else
+							if boxdata.value >= csvVotePer.DupOpen then
+								textNum.Text = Csv.Text("vote_28",{num = 0,max = csvVotePer.DupOpen})
+								btn.RaycastTarget = false
+								btn.IsGray = true
+							else
+								textNum.Text = Csv.Text("vote_27",{num = csvVotePer.DupOpen - boxdata.value,max = csvVotePer.DupOpen})
+								btn.RaycastTarget = true
+								btn.IsGray = false
+								if boxdata.time ~= nil and boxdata.time > 0 then
+									if boxdata.time < HeartBeat.ServSecond() then
+										CVote.ReqVoteParInit(MVote.NowParType)
+									else
+										_P.TimeUpdate(boxdata.time,textBtn)
+										boxMoudle.SelfRect:AddOnUpdate(function()
+											_P.TimeUpdate(boxdata.time,textBtn)
+										end,nil,1)
+									end
+									btn.RaycastTarget = false
+									btn.IsGray = true
+								end
+							end
+						end
+					end
+				end
+				if _P.GetBoxState(data,2) then
+					local csvVotePer = Csv.VotePermition[data.voteID]
+					local boxdata = _P.GetBoxData(data,2)
+					if csvVotePer ~= nil and boxdata ~= nil then
+						local boxMoudle = JGuiManager.GetMoudle(boxRect,"M_Election_RedEnvelopes_Box")
+						boxMoudle:Get("Icon1").SpriteName = csvVotePer.HongBaoIcon
+						boxMoudle:Get("Text1").Text = Csv.Text("vote_46")
+						local btn = boxMoudle:Get("Btn1")
+						local textNum = boxMoudle:Get("Num1")
+						btn:AddOnButton(function()
+							--发红包
+							WindowMgr.Create("USendPacket",data.voteID)
+						end,nil,0.9)
+
+						local textBtn = boxMoudle:Get("BtnText1")
+						textBtn.Text = Csv.Text("vote_29")
+						if not isMyTitle then
+							textNum.Activity = false
+							btn.LocalPosition = Vector2(115,0)
+							btn.RaycastTarget = false
+							btn.IsGray = true
+							btn.Activity = false
+							boxMoudle:Get("bg").LocalPosition = Vector2(62,0)
+						else
+							if boxdata.value >= csvVotePer.HongBaoCount then
+								textNum.Text = Csv.Text("vote_28",{num = 0,max = csvVotePer.HongBaoCount})
+								btn.RaycastTarget = false
+								btn.IsGray = true
+							else
+								textNum.Text = Csv.Text("vote_27",{num = csvVotePer.HongBaoCount - boxdata.value,max = csvVotePer.HongBaoCount})
+								btn.RaycastTarget = true
+								btn.IsGray = false
+								if boxdata.time ~= nil and boxdata.time > 0 then
+									if boxdata.time < HeartBeat.ServSecond() then
+										CVote.ReqVoteParInit(MVote.NowParType)
+									else
+										_P.TimeUpdate(boxdata.time,textBtn)
+										boxMoudle.SelfRect:AddOnUpdate(function()
+											_P.TimeUpdate(boxdata.time,textBtn)
+										end,nil,1)
+									end
+									btn.RaycastTarget = false
+									btn.IsGray = true
+								end
+							end
+						end
+					end
+				end
+				if _P.GetBoxState(data,3) then
+					local csvVotePer = Csv.VotePermition[data.voteID]
+					local boxdata = _P.GetBoxData(data,3)
+					if csvVotePer ~= nil and boxdata ~= nil then
+						local boxMoudle = JGuiManager.GetMoudle(boxRect,"M_Election_RedEnvelopes_Box")
+						boxMoudle:Get("Icon1").SpriteName = csvVotePer.CommerceIcon
+						boxMoudle:Get("Text1").Text = Csv.Text("vote_47")
+						local btn = boxMoudle:Get("Btn1")
+						local textNum = boxMoudle:Get("Num1")
+						btn:AddOnButton(function()
+							--商会学习
+							if MCommerce.IsJoinCommerce() then
+								WindowMgr.Create("UVoteStudyAccess",data.voteID)
+								CCommerce.MembersReq()
+							else
+								CCommon.ShowError(Csv.Text("vote_65"))
+							end
+						end,nil,1)
+
+						local textBtn = boxMoudle:Get("BtnText1")
+						textBtn.Text = Csv.Text("vote_29")
+						if not isMyTitle then
+							textNum.Activity = false
+							btn.LocalPosition = Vector2(115,0)
+							btn.RaycastTarget = false
+							btn.IsGray = true
+							btn.Activity = false
+							boxMoudle:Get("bg").LocalPosition = Vector2(62,0)
+						else
+							if boxdata.value >= csvVotePer.CommerceCount then
+								textNum.Text = Csv.Text("vote_28",{num = 0,max = csvVotePer.CommerceCount})
+								btn.RaycastTarget = false
+								btn.IsGray = true
+							else
+								textNum.Text = Csv.Text("vote_27",{num = csvVotePer.CommerceCount - boxdata.value,max = csvVotePer.CommerceCount})
+								btn.RaycastTarget = true
+								btn.IsGray = false
+								if boxdata.time ~= nil and boxdata.time > 0 then
+									if boxdata.time < HeartBeat.ServSecond() then
+										CVote.ReqVoteParInit(MVote.NowParType)
+									else
+										_P.TimeUpdate(boxdata.time,textBtn)
+										boxMoudle.SelfRect:AddOnUpdate(function()
+											_P.TimeUpdate(boxdata.time,textBtn)
+										end,nil,1)
+									end
+									btn.RaycastTarget = false
+									btn.IsGray = true
+								end
+							end
+						end
+					end
+				end
+			end
+			if _P.GetBoxState(data,4) then
+				local csvVotePer = Csv.VotePermition[data.voteID]
+				local boxdata = _P.GetBoxData(data,4)
+				if csvVotePer ~= nil and boxdata ~= nil then
+					local btn = moudle:Get("C_Btn_a")
+					local geted = moudle:Get("Geted")
+					local redpoint = moudle:Get("RedPoint")
+					btn.Activity = false
+					geted.Activity = false
+					redpoint.Activity = false
+					btn:AddOnButton(function()
+						--礼包领取
+						CVote.ReqVoteParGift(data.voteID)
+						--if MCommerce.IsJoinCommerce then
+						--	WindowMgr.Create("UVoteStudyAccess",data.voteID)
+						--	CCommerce.MembersReq()
+						--else
+						--	CCommon.ShowError(Csv.Text("vote_65"))
+						--end
+					end,nil,0.9)
+					if not isMyTitle then
+						btn.RaycastTarget = false
+						btn.IsGray = true
+						btn.Activity = true
+					else
+						if boxdata.value >= csvVotePer.GiftCount then
+							btn.RaycastTarget = false
+							btn.IsGray = true
+							geted.Activity = true
+						else
+							btn.RaycastTarget = true
+							btn.IsGray = false
+							btn.Activity = true
+							redpoint.Activity = true
+						end
+					end
+					local iconRect = moudle:Get("IconRect")
+					iconRect:DestroyChildren()
+					for k,v in pairs(csvVotePer.Gift) do
+						CCommon.CreateItem(iconRect,v[1],CCommon.ShowItemTips,{num = v[2]})
+					end
+				end
+			end
+		end
+	end
+end
+
+function _P.TimeUpdate(time,textWidget)
+	local second = time - HeartBeat.ServSecond()
+	if second < 0 then
+		CVote.ReqVoteParInit(MVote.NowParType)
+	elseif second < 60 then
+		textWidget.Text = Csv.Text("vote_40",{num = second})
+	else
+		textWidget.Text = LuaUtil.GetTimeHM(second)
+	end
+end
+
+function _P.GetBoxState(data,type)
+	local parList = data.parList
+	if parList ~= nil then
+		for k,v in pairs(parList) do
+			if v.key == type then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _P.GetBoxData(data,type)
+	local parList = data.parList
+	if parList ~= nil then
+		for k,v in pairs(parList) do
+			if v.key == type then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _P.GetSortPos(info)
+	local sortTable = {}
+	if info ~= nil then
+		for k,v in pairs(info) do
+			table.insert(sortTable,v)
+		end
+		table.sort(sortTable,function(a,b) return a.voteID < b.voteID end)
+	end
+	return sortTable
+end
+
+function _R.RefreshView(self,data)
+	if data ~= nil then
+		_P.RefreshView(self,data)
+	end
+end
+
+function _R.ShowOpenBossAward(self,data)
+	local award = Csv.Const(Define.Const.VoteBossOpenAward)
+	if award ~= nil and #award > 0 then
+		for k,v in pairs(award) do
+			CCommon.ShowFlyItem(self.mMoudle:Get("PosBody"),v[1],v[2],0.3*(k - 1))
+		end
+	end
+end
+
+function _R.ShowGift(self,data)
+	local csvVotePer = Csv.VotePermition[data.voteid]
+	if csvVotePer ~= nil then
+		local award = csvVotePer.Gift
+		if award ~= nil and #award > 0 then
+			for k,v in pairs(award) do
+				CCommon.ShowFlyItem(self.mMoudle:Get("EffectNode"),v[1],v[2],0.3*(k - 1))
+			end
+		end
+	end
+end
+
+return _M

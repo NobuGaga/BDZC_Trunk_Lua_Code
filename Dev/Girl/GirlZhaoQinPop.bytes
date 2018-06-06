@@ -1,0 +1,201 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseWin(self)
+	self:Destroy()
+end
+
+function _R.RefreshZhaoqin(self)
+	_P.ShowZhaoqinItems(self)
+end
+
+function _M:OnCreate()
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Zhaoqing")
+	local backBtn = moudle:Get("backBtn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	CGirl.ReqZhaoQin(MGirl.MarriedSelectID)
+
+	self.mContent = moudle:Get("content")
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	local TextDiamond = moudle:Get("diamondsNum")
+	TextDiamond.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+
+	local ownIcon = moudle:Get("girl")
+	ownIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	ownIcon:SetNativeSize()
+
+	local name = moudle:Get("name")
+	local parentText = moudle:Get("parent")
+	local parentValue = moudle:Get("parentName")
+	local levelText = moudle:Get("level")
+	local levelValue = moudle:Get("levelName")
+	local allAttriText = moudle:Get("allAttri")
+	local allAttriNum = moudle:Get("allAttriNum")
+	local titleText = moudle:Get("title")
+	local noneText = moudle:Get("Nonetext")
+	local smallTitle = moudle:Get("text")
+	self.mNoneText = noneText
+
+	if MPlayer.GetSex() == 1 then
+		parentText.Text = Csv.Text("Girl_married_mother")--"母亲："
+	else
+		parentText.Text = Csv.Text("Girl_married_father")--"父亲："
+	end
+	
+	titleText.Text = Csv.Text("Girl_married_zhaoqin")--"招亲"
+	smallTitle.Text = Csv.Text("Girl_married_zhaoqinObj")--"招亲对象："
+	levelText.Text = Csv.Text("Girl_married_identity")--"学历："
+	allAttriText.Text = Csv.Text("Girl_married_attribute")--"属性:"
+
+	name.Text = data.name
+	parentValue.Text = MPlayer.GetName()
+	levelValue.Text = MGirl.GetEducationName(data.degree)
+	allAttriNum.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+
+	local timeText = moudle:Get("time")
+	local timeValue = moudle:Get("time2")
+	timeText.Text = Csv.Text("Girl_married_refreshTime")--"刷新倒计时："
+	
+
+	local refreshCDBtn = moudle:Get("C_Btn_b_0")
+	local refreshCD = moudle:Get("C_text_2")
+	refreshCD.Text = Csv.Text("Girl_married_refreshTimeFirst")--"立即刷新"
+	
+	refreshCDBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local cost = 100
+		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+		CCommon.CheckTips(function(isSure,rg)self:OnClickRefreshCDBtn(isSure, arg)
+		end,{items = {[1] = GoldCount},content = Csv.Text("Girl_married_isCostGold")})--"是否花费100钻石立即刷新"
+	end, nil, 0.9)
+
+	timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		if MGirl.ZhaoqinCD >0 then
+			timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
+		end
+	end)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == Define.AssetsType.Gold then
+			TextDiamond:DOKill()
+			local lastNum = tonumber(TextDiamond.Text)
+			local nowNum = MBag.GetItemNum(itemid)
+			if lastNum ~= nowNum then
+				local dura
+				local dec = math.abs(nowNum - lastNum)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextDiamond ~= nil then TextDiamond.Text = tostring(value) end
+				end, function()
+					if TextDiamond ~= nil then TextDiamond.Text = tostring(MBag.GetItemNum(itemid)) end
+				end)
+				t:SetTarget(TextDiamond.CachedTran)
+			end
+		end
+	end)
+end
+
+function _P.ShowZhaoqinItems(self)
+
+	local content = self.mContent
+	content:DestroyChildren()
+	self.mNoneText.Text = ""
+
+	local datas = MGirl.ZhaoqinList
+	for k,v in pairs(datas) do
+		local moudle = JGuiManager.GetMoudle(content, "M_Girl_zhaoqinItem", WindowType.UI, 10)
+		
+		local name = moudle:Get("name")
+		local parentText = moudle:Get("parent")
+		local parentValue = moudle:Get("parentName")
+		local level = moudle:Get("level")
+		local levelValue = moudle:Get("levelNum")
+		local attri = moudle:Get("attri")
+		local attriValue = moudle:Get("attriNum")
+		local headIcon = moudle:Get("head")
+		
+		if v.ownerGender == 1 then
+			parentText.Text = Csv.Text("Girl_married_mother")--"母亲："
+		else
+			parentText.Text = Csv.Text("Girl_married_father")--"父亲："
+		end
+		level.Text = Csv.Text("Girl_married_identity")--"学历："
+		attri.Text = Csv.Text("Girl_married_attribute")--"属性："
+		
+		name.Text = v.name
+		parentValue.Text = v.ownerName
+		levelValue.Text = MGirl.GetEducationName(v.degree)
+		attriValue.Text = v.sumAttr
+		headIcon.SpriteName = MGirl.GetBabyIcon(v.gender,v.degree)
+		headIcon:SetNativeSize()
+
+		local headPos = MGirl.GetBabyIconPos(v.gender,v.degree)
+		if headPos ~= nil then
+			headIcon.LocalPosition = Vector2(headPos[1],headPos[2])
+		end
+		
+		local selectText = moudle:Get("C_text")
+		selectText.Text = Csv.Text("Girl_married_select")--"选择"
+
+		local selectBtn = moudle:Get("C_Btn_b")
+		selectBtn:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			--UMarriedSelectCost
+			WindowMgr.Create("UMarriedSelectCost",v.babyid)
+		end)
+	end
+
+	if #datas <= 0 then
+		self.mNoneText.Text = Csv.Text("Girl_married_noZhaoqin")--"暂无招亲对象"
+	end
+end
+
+function _M:OnClickRefreshCDBtn(isSure, arg)
+	if isSure == true then
+		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+		local cost = 100
+		local itemDate = Csv.Item[Define.AssetsType.Gold]
+
+		if cost > GoldCount then
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+		else
+			CGirl.ReqZhaoQinRefresh(MGirl.MarriedSelectID)
+		end
+	end
+end
+
+return _M

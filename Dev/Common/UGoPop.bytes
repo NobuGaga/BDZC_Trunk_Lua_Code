@@ -1,0 +1,28 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+
+function _M:OnCreate(itemid)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	local moudle = self:CreateMoudle(self._RootNode, "M_go")
+	local csvItem = Csv.Item[itemid]
+	moudle.SelfRect.LocalPosition = Vector2(0, -222)
+	moudle:Get("Title").Text = Csv.Text("common_warning")
+	moudle:Get("Desc").Text = csvItem.jumpView[2]
+	moudle:Get("C_text").Text = csvItem.jumpView[1]
+	moudle:Get("Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowOpen.Open(csvItem.jumpID)
+		if moudle ~= nil then
+			self:Destroy()
+		end
+		end, nil, 0.9)
+end
+
+
+return _M

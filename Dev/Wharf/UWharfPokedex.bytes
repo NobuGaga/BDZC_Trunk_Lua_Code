@@ -1,0 +1,292 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local MWharf = JRequire"Dev.Wharf.MWharf"
+local CWharf = JRequire "Dev.Wharf.CWharf"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+
+local BLACK_COLOR = Color(0.6, 0.6, 0.6, 1)
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新函数
+local _R = {}
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.NewGirlPictorial(self,data)
+	_P.RefreshGirl(self)
+	_P.ChooseGirl(self, data.girlId)
+end
+
+function _P.ChooseGirl(self, girlId)
+	local moudle = self.Moudle
+	local lastChoose = self.Girls[self.LastChooseGirlID]
+	if lastChoose ~= nil then
+		lastChoose.moudle:Get("light").Activity = false
+	end
+	local nowChoose = self.Girls[girlId]
+	if nowChoose ~= nil then
+		nowChoose.moudle:Get("light").Activity = true
+	end
+	local csvLine = Csv.Girl[girlId]
+	local body = moudle:Get("Bsx")
+	if self.girl_prefab ~= nil then
+		self.girl_prefab:Destroy()
+		self.girl_prefab = nil
+	end
+	if csvLine.prefab ~= nil and csvLine.prefab > 0 then
+		self.girl_prefab = CCommon.CreateActor(body, csvLine.prefab, CCommon.ActorFieldMap.girl_show)
+		body.SpriteName = ""
+	else
+		body.SpriteName = csvLine.homeicon
+	end		
+	
+	self.mAlreadyImg.Activity = false
+	self.mActivationBtn.Activity = false
+
+	local girlInfo = nowChoose.girlInfo
+	if girlInfo == nil then
+		body.Color = BLACK_COLOR
+		moudle:Get("getWay").Text = Csv.Text("Wharf_pokedex2")
+		moudle:Get("getWayText").Text = csvLine.getwayStr[1]
+
+		--
+		self.mActivationBtn.Activity = true
+		self.mActivationBtn.RaycastTarget = false
+		self.mActivationBtn.IsGray = true
+		self.mActivationBtnText.Text = Csv.Text("Wharf_pokedex8")
+	else
+		if MWharf.IsGirlActivated(girlId) then
+			self.mAlreadyImg.Activity = true
+			body.Color = Color.white
+			moudle:Get("getWay").Text = ""
+			moudle:Get("getWayText").Text = ""
+		else
+			body.Color = BLACK_COLOR
+			self.mActivationBtn.Activity = true
+			self.mActivationBtn.RaycastTarget = true
+			self.mActivationBtn.IsGray = false
+			self.mActivationBtnText.Text = Csv.Text("Wharf_pokedex9")
+		end
+	end
+	moudle:Get("Name").Text = csvLine.name
+	moudle:Get("Info").Text = csvLine.tips
+	local effectInfo = nowChoose.effect
+	if effectInfo ~= nil then
+		moudle:Get("Effect2").Text = Csv.Text("Wharf_addStaff")
+		moudle:Get("Effect2_0").Text = _P.GetEffectStaffName(girlId)
+		moudle:Get("Effect").Text = Csv.Text("Wharf_pokedex1")
+		local effect1 = effectInfo[1]
+		if effect1 ~= nil then
+			if effect1[1] == 1 then
+				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3]})
+			else
+				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3] / 100})
+			end
+		else
+			moudle:Get("EffectText").Text = ""
+		end
+		local effect2 = effectInfo[2]
+		if effect2 ~= nil then
+			if effect2[1] == 1 then
+				moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3]})
+			else
+				moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3] / 100})
+			end
+		else
+			moudle:Get("EffectText2").Text = ""
+		end		
+	else
+		moudle:Get("Effect").Text = ""
+		moudle:Get("EffectText").Text = ""
+		moudle:Get("EffectText2").Text = ""
+	end
+	
+	self.LastChooseGirlID = girlId
+end
+
+--界面构建
+function _M:OnCreate(girlId)
+	self.LastChooseGirlID = 0
+	self.girl_prefab = nil
+	local moudle = self:CreateMoudle(self._RootNode, "M_Inquiries_Pokedex")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	self.mActivationBtn = moudle:Get("C_Btn_a")
+	self.mActivationBtnText = moudle:Get("C_text")
+	self.mAlreadyImg = moudle:Get("Already")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--激活美女
+		CWharf.ReqActivationGirl(self.LastChooseGirlID)
+	end)
+
+	moudle:Get("C_Text").Text = Csv.Text("Wharf_pokedex")
+	moudle:Get("Tutle2").Text = Csv.Text("Wharf_pokedex4")
+
+	--美女列表
+	_P.RefreshGirl(self)
+end
+
+function _P.RefreshGirl(self)
+	local moudle = self.Moudle
+
+	local girlCsv = Csv.Girl
+	local csvs = {}
+	for girlId,_ in pairs(girlCsv) do
+		table.insert(csvs, Csv.Girl[girlId])
+	end
+	table.sort(csvs, function (a, b)
+		local aInfo = MGirl.GetGirlData(a.id)
+		local bInfo = MGirl.GetGirlData(b.id)
+		if aInfo ~= nil then
+			if bInfo ~= nil then
+				return a.sort < b.sort
+			else
+				return true
+			end
+		else
+			if bInfo ~= nil then
+				return false
+			else
+				return a.sort < b.sort
+			end
+		end
+		return a.sort < b.sort
+	end)
+	local viewContent = moudle:Get("content_2")
+	viewContent:DestroyChildren()
+
+	self.Girls = {}
+	local maxCount = 0
+	local getCount = 0
+	--绝对值
+	local effectList1 = {}
+	--百分比
+	local effectList2 = {}
+
+	local oneMoudleTab = {}
+	for _,csvLine in pairs(csvs) do
+		if girlId == nil then
+			girlId = csvLine.id
+		end
+		maxCount = maxCount + 1
+		local girlInfo = MGirl.GetGirlData(csvLine.id)
+		local oneMoudle = self:CreateMoudle(viewContent, "M_Inquiries_UMain_Item")
+		
+		self.Girls[csvLine.id] = {
+			moudle = oneMoudle,
+			girlInfo = girlInfo,
+			effect = csvLine.pictorialEffect
+		}
+
+		local head = oneMoudle:Get("head")
+		oneMoudle:Get("PKtext").Text = csvLine.name	
+		oneMoudle:Get("BG").SpriteName = csvLine.colorBg
+		oneMoudle.SelfRect:AddOnButton(function ( ... )
+			_P.ChooseGirl(self, csvLine.id)
+		end)	
+		--未拥有	
+		if girlInfo == nil then
+			head.SpriteName = csvLine.xieicon
+			head.Color = BLACK_COLOR
+			oneMoudle:Get("Question").Activity = true
+			oneMoudle:Get("queText").Text = Csv.Text("Wharf_pokedex8")
+		else
+			--已拥有
+			if MWharf.IsGirlActivated(csvLine.id) then
+				getCount = getCount + 1
+				head.SpriteName = csvLine.lockicon
+	
+				if csvLine.pictorialEffect ~= nil then
+					for _,v in pairs(csvLine.pictorialEffect) do
+						if v[1] == 1 then
+							local ty = v[2]
+							if effectList1[ty] == nil then
+								effectList1[ty] = v[3]
+							else
+								effectList1[ty] = effectList1[ty] + v[3]
+							end
+						else
+							local ty = v[2]
+							if effectList2[ty] == nil then
+								effectList2[ty] = v[3]
+							else
+								effectList2[ty] = effectList2[ty] + v[3]
+							end
+						end
+					end
+				end
+			else
+				head.SpriteName = csvLine.icon
+				head.Color = BLACK_COLOR
+				oneMoudle:Get("Question").Activity = false
+				oneMoudle:Get("red").Activity = true
+			end
+		end
+	end
+	moudle:Get("Title").Text = Csv.Text("Wharf_pokedex3", {cur = getCount, max = maxCount})
+	local effectIndex = 0
+	for k,v in pairs(effectList1) do
+		effectIndex = effectIndex + 1
+		moudle:Get("Info" .. effectIndex).Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(k), num = v})
+	end
+	for k,v in pairs(effectList2) do
+		effectIndex = effectIndex + 1
+		moudle:Get("Info" .. effectIndex).Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(k), num = v / 100})
+	end
+
+	if girlId ~= nil then
+		_P.ChooseGirl(self, girlId)
+	end
+end
+
+function _P.GetEffectStaffName(girlId)
+	local csvLine = Csv.Girl[girlId]
+	if csvLine == nil then return "" end
+	if csvLine.skills == nil then return "" end
+
+	local skills = csvLine.skills
+	for k,v in pairs(skills)do
+		local skillData = Csv.GirlSkill[v]
+		if skillData ~= nil then
+			local staffDate = Csv.Personnel[skillData.employe]
+
+			if staffDate ~= nil then
+				return staffDate.name
+			end
+		end
+	end
+	return ""
+end
+
+return _M

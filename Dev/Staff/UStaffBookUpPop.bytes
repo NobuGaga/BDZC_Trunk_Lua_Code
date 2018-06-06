@@ -1,0 +1,245 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local levelUpActorId = 10010
+local NUM_TWEEN = "T_Club_NumSacle"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(staffid,bookid,bookstar)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_BookUpPop")
+	self.mMoudle = moudle
+	self.mBookStar = bookstar
+	self.mBookLv = MStaff.GetStaffDataByID(staffid).book[bookid]
+	local book = Csv.Book[bookid]
+
+	self.TextMax1 = moudle:Get("MaxText1")
+	self.TextMax1.Text = Csv.Text("staff_lvmax")
+	self.TextMax2 = moudle:Get("MaxText2")
+	self.TextMax2.Text = Csv.Text("staff_lvmax")
+
+	local BtnClose = moudle:Get("BtnClose")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+	self:Destroy()
+	end, nil, 0.9)
+
+	local BtnUp1 = moudle:Get("BtnUp1")
+	BtnUp1:AddOnButton(function ( ... )
+		if not _P.CheckBtnIsClick(0.3) then return end
+
+		SoundMgr.Play(10001)
+		if _P.IsLevelMax(self,staffid) then
+			CCommon.ShowError(Csv.Text("staff_booklvMax"))
+		else
+			if not MBag.CheckItemEnough(book.lvUpItem, Csv.BookLv[self.mBookStar * 1000 + self.mBookLv].itemNum) then
+				return
+			end
+			CStaff.StaffBookUp(staffid,bookid,1)
+		end
+	end, nil, 0.9)
+
+	local BtnUp2 = moudle:Get("BtnUp2")
+	BtnUp2:AddOnButton(function ( ... )
+		if not _P.CheckBtnIsClick(0.3) then return end
+
+		SoundMgr.Play(10001)
+		if _P.IsLevelMax(self,staffid) then
+			CCommon.ShowError(Csv.Text("staff_booklvMax"))
+		else
+			local costExp = Csv.BookLv[self.mBookStar * 1000 + self.mBookLv].expNum
+			local staffBookExp = MStaff.GetStaffDataByID(staffid).bookexp
+			if costExp > staffBookExp then
+				WindowMgr.Create("UItemTrack", Define.AssetsType.Bookexp, costExp,staffBookExp)
+			else
+				CStaff.StaffBookUp(staffid,bookid,2)
+			end
+		end
+	end, nil, 0.9)
+
+	local TextTitle = moudle:Get("Title")
+	TextTitle.Text = Csv.Text("staff_bookup")
+
+	local TextPro1 = moudle:Get("Project1")
+	TextPro1.Text = Csv.Text("staff_pro1")
+
+	local TextPro2 = moudle:Get("Project2")
+	TextPro2.Text = Csv.Text("staff_pro2")
+
+	local TextUp1 = moudle:Get("C_text")
+	TextUp1.Text = Csv.Text("staff_up")
+
+	local TextUp2 = moudle:Get("C_text_0")
+	TextUp2.Text = Csv.Text("staff_up")
+
+	local TextName = moudle:Get("Name")
+	TextName.Text = book.name
+
+	local ImgIcon = moudle:Get("Icon")
+	ImgIcon.SpriteName = book.icon
+	local ImgColor = moudle:Get("IconColor")
+	ImgColor.SpriteName = book.colorIcon
+
+	local ImgItemIcon1 = moudle:Get("ItemIcon1")
+	ImgItemIcon1.SpriteName = Csv.Item[book.lvUpItem].icon
+	local ImgColor1 = moudle:Get("ItemColor1")
+	ImgColor1.SpriteName = Csv.Item[book.lvUpItem].colorIcon
+	ImgColor1:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBagDetailPop",book.lvUpItem)
+	end,nil,0.9)
+
+	local ImgItemIcon2 = moudle:Get("ItemIcon2")
+	ImgItemIcon2.SpriteName = Csv.Item[Define.AssetsType.Bookexp].icon
+	local ImgColor2 = moudle:Get("ItemColor2")
+	ImgColor2.SpriteName = Csv.Item[Define.AssetsType.Bookexp].colorIcon
+	ImgColor2:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBagDetailPop",Define.AssetsType.Bookexp)
+	end,nil,0.9)
+
+	for i=1,7 do
+		local star = moudle:Get("star"..i)
+		star.gameObject:SetActive(false)
+	end
+
+	for i=1,bookstar do
+		local star = moudle:Get("star"..i)
+		star.gameObject:SetActive(true)
+	end
+
+	_P.OnCreateData(self,moudle,staffid,bookid,bookstar,self.mBookLv,false)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		local nowBookLv = MStaff.GetStaffDataByID(staffid).book[bookid]
+		self.mBookLv = nowBookLv
+		_P.OnCreateData(self,moudle,staffid,bookid,bookstar,nowBookLv, false)
+	end)
+end
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+function _P.IsLevelMax(self,staffid)
+	local level = self.mBookLv
+	local maxLevel = Csv.ColorUp[MStaff.GetStaffDataByID(staffid).color].bookMaxLv
+	return level >= maxLevel
+end
+
+function _R.CreateData(self,data)
+	if data.success then
+		SoundMgr.Play(10011)
+
+		-- 播放书籍升级成功特效
+		local numEffectPanel = self.mMoudle:Get("NumEffectPanel")
+		CCommon.CreateEffect(self.mMoudle:Get("ActorPanel"), levelUpActorId, nil, function( ... )
+			self.mBookLv = data.booklv
+			_P.OnCreateData(self,self.mMoudle,data.staffid,data.bookid,self.mBookStar,data.booklv, true)
+		end)
+
+		local count = tonumber(self.TextUpNum.Text) - tonumber(self.TextNowNum.Text)
+		for i=1, count do
+			CCommon.ShowFlyText(numEffectPanel, self.NowShowText .. "+1", i * 0.2)
+		end
+	else
+		SoundMgr.Play(10012)
+		CCommon.ShowError(Csv.Text("staff_upfail"))
+	end
+end
+
+function _P.OnCreateData(self,moudle,staffid,bookid,bookstar,booklevel,isShowEffect)
+	local data = MStaff.GetStaffDataByID(staffid)
+	local book = Csv.Book[bookid]
+	local booklv = Csv.BookLv[bookstar * 1000 + booklevel]
+	local booklvNext = Csv.BookLv[bookstar * 1000 + booklevel + 1]
+
+	local TextLevel = moudle:Get("Level")
+	TextLevel.Text = Csv.Text("staff_LV",{num = booklevel})
+
+	local TextNowEffect = moudle:Get("NowEffect")
+	self.TextNowNum = moudle:Get("NowEffectNum")
+	self.NowShowText = book.addDesc
+	TextNowEffect.Text = Csv.Text("staff_bookN",{name = book.addDesc})
+	local TextUpEffect = moudle:Get("UpEffect")
+	self.TextUpNum = moudle:Get("UpEffectNum")
+	if booklvNext ~= nil then
+		TextUpEffect.Text = Csv.Text("staff_bookU",{name = book.addDesc})
+		self.TextUpNum.Text = booklvNext.aptitude
+	else
+		TextUpEffect.Text = Csv.Text("staff_bookU",{name = ""})
+		self.TextUpNum.Text = ""
+	end
+	
+	-- 字体变大效果
+	self.TextNowNum.Text = booklv.aptitude
+	if isShowEffect and self.TextNowNum.Text ~= "" then
+		local NowTween = self.TextNowNum.CachedTran:GetJTweener(NUM_TWEEN)
+		NowTween:Play()
+	end
+
+	-- 字体变大效果
+	if isShowEffect and self.TextUpNum.Text ~= "" then
+		local UpTween = self.TextUpNum.CachedTran:GetJTweener(NUM_TWEEN)
+		UpTween:Play()
+	end
+	
+	local TextCost1 = moudle:Get("Cost1")
+	if MBag.GetItemNum(book.lvUpItem) >= booklv.itemNum then
+		TextCost1.Text = Csv.Text("staff_bookC",{name = Csv.Item[book.lvUpItem].name,num = MBag.GetItemNum(book.lvUpItem),max = booklv.itemNum})
+	else
+		TextCost1.Text = Csv.Text("staff_bookC2",{name = Csv.Item[book.lvUpItem].name,num = MBag.GetItemNum(book.lvUpItem),max = booklv.itemNum})
+	end
+
+	local TextCost2 = moudle:Get("Cost2")
+	if data.bookexp >= booklv.expNum then
+		TextCost2.Text = Csv.Text("staff_bookC",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
+	else
+		TextCost2.Text = Csv.Text("staff_bookC2",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
+	end
+
+	local TextChance1 = moudle:Get("UpChance1")
+	TextChance1.Text = Csv.Text("staff_chance",{num = booklv.itemPer/100})
+
+	local TextChance2 = moudle:Get("UpChance2")
+	TextChance2.Text = Csv.Text("staff_chance",{num = booklv.exPer})
+
+	local TextBtn1 = moudle:Get("C_text")
+	local TextBtn2 = moudle:Get("C_text_0")
+	local Btn1 = moudle:Get("BtnUp1")
+	local Btn2 = moudle:Get("BtnUp2")
+	if _P.IsLevelMax(self,staffid) then
+		Btn1.Activity = false
+		Btn2.Activity = false
+		self.TextMax1.Activity = true
+		self.TextMax2.Activity = true
+	else
+		TextBtn1.Text = Csv.Text("staff_up")
+		TextBtn2.Text = Csv.Text("staff_up")
+		Btn1.RaycastTarget = true
+		Btn2.RaycastTarget = true
+	end
+end
+
+return _M

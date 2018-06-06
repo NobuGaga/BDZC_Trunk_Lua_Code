@@ -1,0 +1,64 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local CCommon = JRequire"Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.mUStoryMoudle ~= nil then
+		self.mUStoryMoudle:Destroy()
+		self.mUStoryMoudle:delete()
+		self.mUStoryMoudle = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.OnDone(self)
+	self:Destroy()
+	WindowMgr.Call("UWharfGirlRelation","CheckGirlDone")
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_PK_Success")
+	local content = moudle:Get("content")
+
+	local eventData = Csv.WharfEvent[id]
+	for k,v in pairs(eventData.reward)do
+		local rewardItem = CCommon.CreateItem(content,v[1],function ( ... )
+			WindowMgr.Create("UBagDetailPop", v[1])
+		end, {num = v[2]})
+	end
+
+	moudle:Get("BtnText").Text = Csv.Text("lastgirl_sure")
+	moudle:Get("Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		if eventData.story1 ~= nil and eventData.story1 > 0 then
+			if self.mUStoryMoudle ~= nil then
+				self.mUStoryMoudle:Destroy()
+				self.mUStoryMoudle:delete()
+				self.mUStoryMoudle = nil
+			end
+
+			self.mUStoryMoudle =  UStoryMoudle.new(moudle:Get("StoryNode"),eventData.story1,function( ... )
+				_P.OnDone(self)
+			end)
+		else
+			_P.OnDone(self)	
+		end			
+	end)
+end
+
+return _M

@@ -1,0 +1,615 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local DEGREE_ID = 10204
+local TOGGLE_ID = {UNMARRIED = 1,MARRIED = 2}
+local TOGGLE_SHEET={{id = TOGGLE_ID.UNMARRIED,name = Csv.Text("Girl_unMarried")},
+		{id = TOGGLE_ID.MARRIED,name = Csv.Text("Girl_married")}}
+
+local _M = Class(WindowBase)
+--local _M = Class()
+local _P = {}
+local _R = {}
+
+
+function _M:BeforeDestroy()
+	if self.mTabGroup ~= nil then
+		self.mTabGroup:delete()
+		self.mTabGroup = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OpenToggle(self,index)
+	local tabGroup = self.mTabGroup
+	if tabGroup ~= nil then
+		for k,v in pairs(TOGGLE_SHEET)do
+			if v.id == index then
+				tabGroup:Choose(index)
+				return
+			end
+		end
+	end
+end
+
+
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Tab4_Married")
+	self.mMoudle = moudle
+
+	local titleText = moudle:Get("C_Text")
+	titleText.Text = Csv.Func[Define.SysId.Girl_Marry].name
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+		--WindowMgr.Call("UGirl","SelectUnlockTag")
+	end, nil, 1.2)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Girl_Marry)
+	end, nil, 1.2)
+
+	local Content = moudle:Get("content")
+	self.mContent = Content
+	self.mFlyItem = moudle:Get("flyItemRect")
+
+	local parentText = moudle:Get("Relatives")--母亲/亲家
+	local parentName = moudle:Get("RelativesText")
+	local intimacy = moudle:Get("Plus") --亲密度/属性加成
+	local intimacyText = moudle:Get("PlusText") --
+	local dateText = moudle:Get("Date") --"亲密度影响属性"/时间
+
+	local sceneBg = moudle:Get("scene")
+	local ownIcon = moudle:Get("girl")
+	local otherIcon = moudle:Get("boy")
+	local noneText = moudle:Get("Nonetext")
+	local nobabyTips = moudle:Get("noBabyTips")
+	local babyTipsButton = moudle:Get("babyButton")
+
+	self.mParentText = parentText
+	self.mParentName = parentName
+	self.mIntimacy = intimacy
+	self.mIntimacyText = intimacyText
+	self.mDateText = dateText
+	self.mSceneBg = sceneBg
+	self.mOwnIcon = ownIcon
+	self.mOtherIcon = otherIcon
+	self.mNoneText = noneText
+	self.mNobabyTips = nobabyTips
+	
+
+	babyTipsButton:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UGirlBaby") 
+	end)
+----------------------------------------------
+	local unMarried = moudle:Get("unMarried")
+	local nameValue = moudle:Get("name")
+	local levelText = moudle:Get("levelText")
+	local levelValue = moudle:Get("levelNum")
+	local allAttriText = moudle:Get("allAttribute")
+	local allAttriValue = moudle:Get("allAttributeNum")
+
+	local attriText_1 = moudle:Get("AttributeText1")
+	local attriValue_1 = moudle:Get("NumText1")
+	local attriText_2 = moudle:Get("AttributeText2")
+	local attriValue_2 = moudle:Get("NumText2")
+	local attriText_3 = moudle:Get("AttributeText3")
+	local attriValue_3 = moudle:Get("NumText3")
+	local attriText_4 = moudle:Get("AttributeText4")
+	local attriValue_4 = moudle:Get("NumText4")
+
+	local timeText = moudle:Get("time")
+	local refuseText = moudle:Get("Refuse")
+	local promptText = moudle:Get("Prompt")
+
+	local marriedText = moudle:Get("C_text")
+	local marriedBtn = moudle:Get("marriedBtn")
+
+	--nameValue.Text = "未命名"
+	levelText.Text = Csv.Text("Girl_married_level")--"等级"
+	allAttriText.Text = Csv.Text("Girl_married_allAttr")--"总属性"
+	attriText_1.Text = Csv.Text("Girl_married_attr1")--"公关"
+	attriText_2.Text = Csv.Text("Girl_married_attr2")--"行政"
+	attriText_3.Text = Csv.Text("Girl_married_attr3")--"技术"
+	attriText_4.Text = Csv.Text("Girl_married_attr4")--"营销"
+
+	self.mMarriedBtn = marriedBtn
+	self.mUnMarried = unMarried
+
+	self.mNameValue =  nameValue
+	self.mLevelValue = levelValue
+	self.mAllAttriValue = allAttriValue
+	self.mAttriValue1 = attriValue_1
+	self.mAttriValue2 = attriValue_2
+	self.mAttriValue3 = attriValue_3
+	self.mAttriValue4 = attriValue_4
+
+	self.mTimeText = timeText
+	self.mRefuseText = refuseText
+	self.mPromptText = promptText
+	self.mMarriedText = marriedText
+
+---------------------------------------------
+
+	local funcs = TOGGLE_SHEET
+	local count = #funcs
+	
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	if count > 0 then
+		local lastChoose = chooseFuncId
+		local isHave = false
+
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("sheet_"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+			--注册小红点
+			--self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabGroup = tabHandle
+	end	
+	
+	self.mToggle = Toggle
+
+	local tiqinText = moudle:Get("C_text_0")
+	local tiqinRedPoint = moudle:Get("tiqinRed")
+	tiqinText.Text = Csv.Text("Girl_married_qingqiu")--"提亲请求"
+	local reqTiqinBtn = moudle:Get("reqTiqinBtn")
+	reqTiqinBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedQingqiu",data)
+	end)
+
+	self.mTiqinRedPoint = tiqinRedPoint
+	_R.CheckTiqinRed(self)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		self:RefreshTiqinCD()
+	end)
+end
+
+function _P.OnChoose(self, funcId)
+	local content = self.mContent
+	content:DestroyChildren()
+	self.mNoneText.Text = ""
+	self.mNobabyTips.Activity = false
+
+	local selectID = 0
+	if funcId == TOGGLE_ID.UNMARRIED then
+		if #MGirl.unmarrieds > 0 then
+			_P.ShowUnmarrieds(self)
+			selectID = MGirl.GetUnMarriedData(0).babyid
+			_P.SelectUnMarriedItem(self,selectID)
+		else
+			--self.mNoneText.Text = "暂时没有未婚孩子"
+			self.mNobabyTips.Activity = true
+			self.mNobabyTips.Text = Csv.Text("Girl_nobabyTips")--"当前没有未婚孩子\n请前往孩子培养教育"
+		end
+		_P.UnMarriedInfo(self,selectID)
+	elseif funcId == TOGGLE_ID.MARRIED then
+		if #MGirl.marrieds > 0 then
+			_P.ShowMarrieds(self)
+			selectID = MGirl.GetMarriedData(0).babyid
+			_P.SelectMarriedItem(self,selectID)
+		else
+			self.mNoneText.Text = Csv.Text("Girl_noMarriedBaby")--"暂时没有已婚孩子"
+		end
+		_P.MarriedInfo(self,selectID)
+	end
+	MGirl.MarriedSelectID = selectID
+	MGirl.MarriedToggleSelect = funcId
+	
+end
+
+
+function _P.MarriedInfo(self,id)
+	local data = MGirl.GetMarriedData(id)
+
+	local moudle = self.mMoudle
+	
+	local valueRect = moudle:Get("Value")
+	if data == nil then
+		valueRect.Activity = false
+		return
+	end
+	valueRect.Activity = true
+		
+	local unMarried = moudle:Get("unMarried")
+	unMarried.Activity = false
+
+	local parentText =  self.mParentText
+	local parentName =  self.mParentName 
+	local intimacy =  self.mIntimacy 
+	local intimacyText =  self.mIntimacyText
+	local dateText =  self.mDateText 
+	local sceneBg =  self.mSceneBg 
+	local ownIcon =  self.mOwnIcon 
+	local otherIcon =  self.mOtherIcon 
+
+	ownIcon.Activity = true
+	otherIcon.Activity = true
+
+	parentText.Text = Csv.Text("Girl_married_Relatives")--"亲家："
+	intimacy.Text = Csv.Text("Girl_married_attrAdd")--"属性加成："
+
+	dateText.Text = LuaUtil.TransToYMD(data.marriedTime)--data.marriedTime
+	parentName.Text = data.mateOwnerName
+	intimacyText.Text = data.mateSumAttr
+	--MGirl.GetBabyIcon(data.level.ncur,data.gender,data.IQ)
+	ownIcon.SpriteName = MGirl.GetBabyIcon(data.babyGender,data.babyDegree)
+	otherIcon.SpriteName = MGirl.GetBabyIcon(data.mateGender,data.mateDegree)
+	ownIcon:SetNativeSize()
+	otherIcon:SetNativeSize()
+	------------------------------------------
+end
+
+function _P.UnMarriedInfo(self,id)
+	local data = MGirl.GetUnMarriedData(id)
+	local moudle = self.mMoudle
+
+	local valueRect = moudle:Get("Value")
+	local dateBg = moudle:Get("dateBG")
+
+	local unMarried = moudle:Get("unMarried")
+	unMarried.Activity = true
+
+	local parentText =  self.mParentText
+	local parentName =  self.mParentName 
+	local intimacy =  self.mIntimacy 
+	local intimacyText =  self.mIntimacyText
+	local dateText =  self.mDateText 
+	local sceneBg =  self.mSceneBg 
+	local ownIcon =  self.mOwnIcon 
+	local otherIcon =  self.mOtherIcon 
+
+	if data == nil then
+		valueRect.Activity = false
+		return
+	end
+	valueRect.Activity = true
+
+	ownIcon.Activity = true
+	otherIcon.Activity = false
+
+	if data == nil then
+		valueRect.Activity = true
+		dateBg.Activity = false
+		return
+	end
+	valueRect.Activity = true
+	dateBg.Activity = true
+
+	parentText.Text = Csv.Text("Girl_married_parent")--"母亲："
+	intimacy.Text = Csv.Text("Girl_married_intimacy")--"亲密度："
+	dateText.Text = Csv.Text("Girl_married_intimacytips")--"亲密度影响属性"
+
+	local unlockGirlData = MGirl.GetGirlData(data.girlid)
+	parentName.Text = Csv.Girl[data.girlid].name
+	intimacyText.Text = unlockGirlData.intimacy
+	ownIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	ownIcon:SetNativeSize()
+------------------------------------------
+	local nameValue = self.mNameValue 
+	local levelValue = self.mLevelValue 
+	local allAttriValue = self.mAllAttriValue
+	local attriValue_1 = self.mAttriValue1
+	local attriValue_2 = self.mAttriValue2 
+	local attriValue_3 = self.mAttriValue3
+	local attriValue_4 = self.mAttriValue4
+
+	nameValue.Text = data.name
+	levelValue.Text = Csv.Const(DEGREE_ID)[data.degree]--_P.GetEducationName(data.degree)
+	allAttriValue.Text = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	attriValue_1.Text = data.attribute.Wuli
+	attriValue_2.Text = data.attribute.Zhili
+	attriValue_3.Text = data.attribute.Zhengzhi
+	attriValue_4.Text = data.attribute.Meili
+	
+	_R.ResfrehBabyType(self,data.babyid)--1无2提亲中3被拒绝
+
+	nameValue:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBabyChangeName",id,data.name,true,data.gender)
+	end)
+
+end
+
+function _P.ShowUnmarrieds(self)
+
+	local unMarrieds = MGirl.unmarrieds
+	local itemTab = {}
+	for k,v in pairs(unMarrieds) do
+		local item = _P.CreatUnMarriedItem(self,v)
+		itemTab[v.babyid] = item
+	end
+	self.mUnMarriedItems = itemTab
+end
+
+function _P.CreatUnMarriedItem(self,data)
+	local parent = self.mContent
+	local moudle = JGuiManager.GetMoudle(parent,"M_Girl_UnMarriedItem", WindowType.UI, 10)
+
+	local name = moudle:Get("name")
+	local tiqinIng = moudle:Get("tiqin")
+	--local identity = moudle:Get("identity")
+	local identityValue = moudle:Get("IdentityText")
+	--local attribute = moudle:Get("AttributeText")
+	local attributetValue = moudle:Get("AttributeText")
+	local selected = moudle:Get("Selected")
+	selected.Activity = false
+
+	--identity.Text = Csv.Text("Girl_married_identity")--"学历："
+	--attribute.Text = Csv.Text("Girl_married_attribute")--"属性："
+
+	name.Text = data.name--
+	identityValue.Text = Csv.Text("Girl_married_identityAddValue",{value = Csv.Const(DEGREE_ID)[data.degree]})--_P.GetEducationName(data.degree)
+	local allAttri = data.attribute.Wuli+data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
+	attributetValue.Text = Csv.Text("Girl_married_attributeAddValue",{value = allAttri})
+
+	local sColorByIQ = MGirl.GetBabyColorByIQ(1)
+	name.Color = sColorByIQ
+	--identity.Color = sColorByIQ
+	identityValue.Color = sColorByIQ
+	--attribute.Color = sColorByIQ
+	attributetValue.Color = sColorByIQ
+
+	if data.state == 0 then
+		tiqinIng.Text = ""
+	elseif data.state == 1 then
+		if data.tiqinCD <= 0 then
+			tiqinIng.Text = Csv.Text("Girl_married_tiqinEnd")--"提亲結束"
+		else
+			tiqinIng.Text = Csv.Text("Girl_married_tiqinIng")--"提亲中"
+		end
+	elseif data.state == 2 then
+		tiqinIng.Text = Csv.Text("Girl_married_refused")--"被拒绝"
+	end
+
+	--local ingText = moudle:Get("ing")
+	--local nameWidth = name.PreferredWidth
+	--tiqinIng.LocalPosition = Vector2((nameWidth +10),0)
+	
+	moudle.SelfRect:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.SelectUnMarriedItem(self,data.babyid)
+	end)
+
+	return moudle
+end
+
+function _P.ShowMarrieds(self)
+	local content = self.mContent
+	content:DestroyChildren()
+
+	local marrieds = MGirl.marrieds
+	local itemTab = {}
+	for k,v in pairs(marrieds) do
+		local item = _P.CreatMarriedItem(self,v)
+		itemTab[v.babyid] = item
+	end
+	self.mMarriedItems = itemTab
+end
+
+function _P.CreatMarriedItem(self,data)
+	local parent = self.mContent
+	local moudle = JGuiManager.GetMoudle(parent,"M_Girl_MarriedItem", WindowType.UI, 10)
+
+	local ownName = moudle:Get("Bname1")
+	local ownEducation = moudle:Get("BEducation1")
+	local ownEducationValue = moudle:Get("EducationText")
+	local ownAttri = moudle:Get("BAttribute1")
+	local ownAttriValue = moudle:Get("AttributeText")
+	local otherName = moudle:Get("Gname1")
+	local otherEducation = moudle:Get("GEducation1")
+	local otherEducationVlaue = moudle:Get("EducationText_0")
+	local otherAttri = moudle:Get("GAttribute1")
+	local otherAttriValue = moudle:Get("AttributeText_0")
+
+	local date = moudle:Get("date2")
+	local relatives = moudle:Get("Relatives2")
+	local relativeName = moudle:Get("RelativesText_0")
+
+	ownEducation.Text = Csv.Text("Girl_married_identity")--"学历:"
+	ownAttri.Text = Csv.Text("Girl_married_attribute")--"属性:"
+	otherEducation.Text = Csv.Text("Girl_married_identity")--"学历:"
+	otherAttri.Text = Csv.Text("Girl_married_attribute")--"属性:"
+	relatives.Text = Csv.Text("Girl_married_Relatives")--"亲家:"
+
+	ownName.Text = data.babyName
+	ownEducationValue.Text = Csv.Const(DEGREE_ID)[data.babyDegree]--_P.GetEducationName(data.degree)
+	ownAttriValue.Text = data.babySumAttr
+	otherName.Text = data.mateName
+	otherEducationVlaue.Text = Csv.Const(DEGREE_ID)[data.mateDegree]--_P.GetEducationName(data.degree)
+	otherAttriValue.Text = data.mateSumAttr
+
+	date.Text =  LuaUtil.TransToYMD(data.marriedTime)--data.marriedTime
+	relativeName.Text = data.mateOwnerName
+
+	moudle.SelfRect:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.SelectMarriedItem(self,data.babyid)
+	end)
+
+	return moudle
+end
+
+function _P.SelectUnMarriedItem(self,id)
+
+	local unMarrieds = self.mUnMarriedItems
+	local lastSelectID = MGirl.MarriedSelectID
+
+	local lastSelectItem = unMarrieds[lastSelectID]
+	if lastSelectItem ~= nil then
+		lastSelectItem:Get("Selected").Activity = false
+	end
+
+	local newSelectItem = unMarrieds[id]
+	newSelectItem:Get("Selected").Activity = true
+	MGirl.MarriedSelectID = id
+
+	_P.UnMarriedInfo(self,id)
+	self:RefreshTiqinCD()
+end
+
+function _P.SelectMarriedItem(self,id)
+	local marrieds = self.mMarriedItems
+	local lastSelectID = MGirl.MarriedSelectID
+
+	local lastSelectItem = marrieds[lastSelectID]
+	if lastSelectItem ~= nil then
+		lastSelectItem:Get("Selected").Activity = false
+	end
+
+	local newSelectItem = marrieds[id]
+	newSelectItem:Get("Selected").Activity = true
+	MGirl.MarriedSelectID = id
+
+	_P.MarriedInfo(self,id)
+end
+
+--[[
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+--]]
+
+function _R.UpdateBabyName(self,isSuccess)
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	local item = self.mUnMarriedItems[MGirl.MarriedSelectID]
+
+	local nameText = item:Get("name")
+	nameText.Text = data.name
+
+	self.mNameValue.Text = data.name
+end
+
+function _R.TerminateTiQin(self,itemData)
+	local flyItemRect = self.mFlyItem
+	CCommon.ShowFlyItem(flyItemRect,itemData.id,itemData.count)
+end
+
+function _R.RefreshToggle(self)
+	_P.OnChoose(self,MGirl.MarriedToggleSelect)
+end
+
+function _M:RefreshTiqinCD()
+	local timeText = self.mTimeText 
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	if data ~= nil then
+		if data.tiqinCD ~= nil then
+			timeText.Text = Csv.Text("Girl_married_reduceTime",{time = luaUtil.GetTimeHMS(data.tiqinCD)})--"倒计时："..luaUtil.GetTimeHMS(data.tiqinCD)
+		end
+	end
+end
+
+function _R.ResfrehBabyType(self,id)
+	local data = MGirl.GetUnMarriedData(id)
+	local item = self.mUnMarriedItems[id]
+
+    local timeText = self.mTimeText
+	local refuseText = self.mRefuseText 
+	local promptText = self.mPromptText 
+	local marriedText = self.mMarriedText 
+
+	if item ~= nil then
+		local type = data.state
+		local stateText = item:Get("tiqin")
+		
+		if type == 1 then--提亲中
+			timeText.Activity = true
+			refuseText.Activity = false
+			marriedText.Text = Csv.Text("Girl_married_endTiqin")--"终止提亲"
+			
+			if data.tiqinCD <= 0 then
+				stateText.Text = Csv.Text("Girl_married_tiqinEnd")--"提亲結束"
+				promptText.Activity = false
+			else
+				stateText.Text = Csv.Text("Girl_married_tiqinIng")--"提亲中"
+				promptText.Activity = true
+			end
+			
+			if data.tiqinPlayerNo == 0 then
+				promptText.Text = Csv.Text("Girl_married_allTiqinIng")--"正在向全服玩家提亲中..."
+			else
+				--"正在向"..data.tiqinPlayerName.."(编号："..data.tiqinPlayerNo..")提亲中..."
+				promptText.Text = Csv.Text("Girl_married_toTiqinIng",{name = data.tiqinPlayerName,num = data.tiqinPlayerNo})
+			end
+		elseif type == 2 then --被拒绝
+			refuseText.Activity = true
+			promptText.Activity = false
+			timeText.Activity = false
+			marriedText.Text = Csv.Text("Girl_married_endTiqin")--"终止提亲"
+
+			stateText.Text = Csv.Text("Girl_married_refused")--"被拒绝"
+		else 
+			refuseText.Activity = false
+			promptText.Activity = false
+			timeText.Activity = false
+			marriedText.Text = Csv.Text("Girl_married_beMarried")--"结婚"
+
+			stateText.Text = ""
+		end
+	
+		local marriedBtn = self.mMarriedBtn
+		marriedBtn:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			if type == 0 then --无
+				WindowMgr.Create("UMarriedTips",data)
+			else
+				CCommon.CheckTips(function(isSure,rg)self:OnClickEndTiqinBtn(isSure,arg,id)
+				end,{content = Csv.Text("Girl_married_sureRefused")})--确定要终止提亲吗？
+			end
+		end)
+	end
+end
+
+function _M:OnClickEndTiqinBtn(isSure,arg,id)
+	if isSure == true then
+		CGirl.ReqTerminateTiQin(id)
+	end
+end
+
+function _R.CheckTiqinRed(self)
+	if #MGirl.MarriedQingqiu <= 0 then
+		self.mTiqinRedPoint.Activity = false
+	else
+		self.mTiqinRedPoint.Activity = true
+	end
+end
+
+
+return _M

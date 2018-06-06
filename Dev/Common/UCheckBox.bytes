@@ -1,0 +1,70 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+function _M:OnCreate(title, content, sureText, onChooseCall, cancelText, items, isNeedShowNoAgainTips)
+	self:UnBlack()
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_choose")
+	local sure = moudle:Get("C_Btn_a")
+	local cancel = moudle:Get("C_Btn_e")
+	--moudle:Get("Title").Text = title
+	moudle:Get("Text").Text = content
+	moudle:Get("C_text").Text = sureText
+
+	if items == nil then
+		moudle:Get("View").Activity = false
+	else
+		moudle:Get("View").Activity = true
+		local Items = moudle:Get("Items")
+		for itemId,itemNum in pairs(items) do
+			local one = CCommon.CreateItem(Items, itemId, nil, {num = itemNum})
+			one.SelfRect:AddOnButton(function()
+				CCommon.ShowItemTips(itemId,nil)
+			end,nil,0.9)
+		end
+		self:Black()
+	end
+
+	local isChooseNoAgain = false
+
+	if isNeedShowNoAgainTips then
+		moudle:Get("ToggleText").Text = Csv.Text("common_noTips")
+		local ToggleChoose = moudle:Get("ToggleChoose")
+		ToggleChoose.Activity = isChooseNoAgain
+		moudle:Get("ToggleIcon"):AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			isChooseNoAgain = not isChooseNoAgain
+			ToggleChoose.Activity = isChooseNoAgain
+		end, nil, 0.9)
+	else
+		moudle:Get("Toggle").Activity = false
+	end
+
+	sure:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+		onChooseCall(true, isChooseNoAgain)
+	end, nil, 0.9)
+
+	if cancelText == nil then
+		local cenpos = sure.LocalPosition
+		cenpos.x = 0
+		sure.LocalPosition = cenpos
+		cancel.Activity = false
+	else
+		moudle:Get("C_text_0").Text = cancelText
+		
+		cancel:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			self:Destroy()
+			onChooseCall(false, isChooseNoAgain)		
+		end, nil, 0.9)
+	end
+
+end
+
+return _M

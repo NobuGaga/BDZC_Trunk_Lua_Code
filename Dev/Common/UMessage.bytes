@@ -1,0 +1,422 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CTalk = JRequire "Dev.Talk.CTalk"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MTalk = JRequire "Dev.Talk.MTalk"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _Func = {}
+
+local MAX_SHOWSTR_COUNT = 3
+local SHOW_TEXT_TWEEN_ALPHA_NAME = "ShowText_Alpha"
+local SHOW_TEXT_TWEEN_EVENT_KEY = {[1] = "Event_Fly_1", [2] = "Event_Fly_2"}
+
+_P.TextDispatcher = 
+{
+	[Define.ShowStrType.Error] = function (self, showStr, ... )
+		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_ShowText_Error")
+		local Text = moudle:Get("Text")
+		Text.Text = showStr
+		return moudle
+	end,
+	[Define.ShowStrType.Right] = function (self, showStr, ... )
+		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_ShowText_Right")
+		local Text = moudle:Get("Text")
+		Text.Text = showStr
+		return moudle
+	end,
+	[Define.ShowStrType.Power] = function (self, showStr, ... )
+		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_ShowText_Power")
+		local num1 = showStr[1]
+		local num2 = showStr[2]
+		local isUp = showStr[3]
+		local leng1 = string.len(tostring(num1))
+		local leng2 = string.len(tostring(num2)) + 1
+		local imgBG = moudle:Get("BG")
+		local imgShili = moudle:Get("title")
+		local rectPower = moudle:Get("powerRect")
+		local rectUp = moudle:Get("powerUp")
+		for i = 1,leng1 do
+			local img = JGuiManager.CreateImage(rectPower,"")
+			img.SpriteNameAutoScale = "yellow_num_"..string.sub(tostring(num1),i,i)
+		end
+		local strType
+		if isUp then
+			strType = "green_num_"
+			local img = JGuiManager.CreateImage(rectUp,"green_arrow")
+			img.SpriteNameAutoScale = "green_arrow"
+		else
+			strType = "red_num_"
+			local img = JGuiManager.CreateImage(rectUp,"red_arrow")
+			img.SpriteNameAutoScale = "red_arrow"
+		end
+		for j = 1,leng2 - 1 do
+			local img = JGuiManager.CreateImage(rectUp,"")
+			img.SpriteNameAutoScale = strType..string.sub(tostring(num2),j,j)
+		end
+		imgShili.LocalPosition = Vector2(-(_P.GetWidth(leng1,26,5)/2 + 20),0)
+		rectUp.LocalPosition = Vector2(_P.GetWidth(leng1,26,5)/2 + _P.GetWidth(leng2,18,5)/2 + 10,0)
+		imgBG.SizeDelta = Vector2(_P.GetWidth(leng1,26,5) + _P.GetWidth(leng2,18,5) + 10 + 81 + 200,71)
+		return moudle
+	end,
+	[Define.ShowStrType.BuyLandBattle] = function (self, showStr, ... )
+		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_Bidding_Ing_Item")
+		moudle:Get("Num").Text = showStr
+		return moudle
+	end,
+}
+
+function _P.GetWidth(fontNum,size,space)
+	return fontNum * size + (fontNum - 1) * space
+end
+
+function _P.DestoryFistShowText(self, ... )
+	local first = self.ShowingStrs[1]
+	if first ~= nil then
+		table.remove(self.ShowingStrs, 1)
+		if first.moudle ~= nil then
+			first.moudle:Destroy()
+		end		
+	end
+end
+
+--文字提示
+function _Func.ShowText(self, showType, showStr, ...)
+	if #self.ShowingStrs >= MAX_SHOWSTR_COUNT then
+		_P.DestoryFistShowText(self)
+	end
+	local count = #self.ShowingStrs
+	for k,v in pairs(self.ShowingStrs) do
+		local tween = v.tween 
+		if tween ~= nil then
+			local index = count - k + 1
+			if index == 2 then
+				tween:DOKill(SHOW_TEXT_TWEEN_EVENT_KEY[1])
+			end
+			tween:Play(SHOW_TEXT_TWEEN_EVENT_KEY[index])
+		end
+	end
+	local moudle = _P.TextDispatcher[showType](self, showStr, ...)
+	local tween = moudle.SelfRect.CachedTran:GetJTweener(SHOW_TEXT_TWEEN_ALPHA_NAME)
+	table.insert(self.ShowingStrs, {moudle = moudle, tween = tween})
+	tween:SetOnComplete(function ( ... )
+		_P.DestoryFistShowText(self)
+	end)
+	tween:Play()	
+end
+--特效
+function _Func.PlayEffect(self, effectId, pos, doneCall, spMap, textMap, dura)
+	CCommon.CreateEffect(self._RootNode, effectId, pos, doneCall, spMap, textMap, dura)
+end
+--输入状态
+function _Func.LockInput(self, state)
+	self._EventNode.RaycastTarget = state
+end
+--闪烁
+function _Func.PlayTwinkle(self, darkTime, lightTime, isLock, darkcall, doneCall)
+	if self.TwinkleRoot ~= nil then
+		self.TwinkleRoot:Destroy()
+		self.TwinkleRoot = nil
+	end
+	self.TwinkleRoot = JGuiManager.CreateEmpty(self._RootNode, "TwinkleRoot")
+	if isLock then
+		self.TwinkleRoot:SetFullSize(10)
+		self.TwinkleRoot.RaycastTarget = true
+	end
+	self.TwinkleNode = JGuiManager.CreateImage(self.TwinkleRoot, "TwinkleNode")
+	self.TwinkleNode.Type = 1
+	local size = JGuiManager.GuiRoot.Size
+	self.TwinkleNode.SizeDelta = Vector2(size.x + 4, size.y + 4)
+	self.TwinkleNode.SpriteName = "Floor_black"
+	if darkTime == nil or darkTime <= 0 then
+		if darkcall ~= nil then
+			darkcall()
+		end
+		local tween = self.TwinkleNode:DOFade(0, lightTime)
+		tween:OnComplete(function ( ... )
+			if doneCall ~= nil then
+				doneCall()
+			end
+			self.TwinkleRoot:Destroy()
+			self.TwinkleRoot = nil
+		end)
+	else
+		self.TwinkleNode.Alpha = 0
+		local tween = self.TwinkleNode:DOFade(1, darkTime)
+		tween:OnComplete(function ( ... )
+			if darkcall ~= nil then
+				darkcall()
+			end
+			local tween = self.TwinkleNode:DOFade(0, lightTime)
+			tween:OnComplete(function ( ... )
+				if doneCall ~= nil then
+					doneCall()
+				end
+				self.TwinkleRoot:Destroy()
+				self.TwinkleRoot = nil
+			end)
+		end)
+	end
+	
+end
+
+function _Func.ShowFlyItem(self, itemId, itemNum, delayTime, pos)
+	CCommon.ShowFlyItem(self._RootNode, itemId, itemNum, delayTime, pos)
+end
+
+function _Func.ShowShenJi(self, csvGod)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Shenji")
+	moudle:Get("text").SpriteName = csvGod.img
+	moudle:Get("text2").Text = csvGod.str
+	CCommon.CreateEffect(moudle:Get("FxNode"), csvGod.effect)
+	local tween = moudle.SelfRect.CachedTran:GetJTweener("T_Effect_God")
+	tween:SetOnComplete(function()
+		self:Destroy()
+	end)
+	tween:Play()	
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _Func[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate( ... )
+	self._EventNode.RaycastTarget = false
+	self:UnBlack()
+	--当前正在显示的Tips列表
+	self.ShowingStrs = {}
+	self.ShowingStrBase = JGuiManager.CreateRect(self._RootNode, "ShowingStrBase")
+end	
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------debug-----------------
+
+function _P.DebugNodeLineShow(self, list, node, space)
+	local childCount = node.childCount
+	if childCount > 0 then
+		for i=0,childCount - 1 do
+			local childTran = node:GetChild(i)
+			local text = childTran.name
+			local obj = JGuiManager.CreateText(list, text)
+			obj.Color = Color.black
+			obj.SizeDelta = Vector2(500, 30)
+			local key = childTran:ToString()
+			for i=1,space do
+				if self.DebugNodeShow[key] then
+					text = "-" .. text
+				else
+					text = "+" .. text
+				end
+			end
+			obj.Text = text
+			local acivie = childTran.gameObject.activeSelf
+			local acBtn = JGuiManager.CreateText(obj, "btn")
+			acBtn.LocalPosition  = Vector2(obj.PreferredWidth, 0)
+			acBtn.Color = Color.black
+			acBtn.SizeDelta = Vector2(80, 30)
+			if acivie then
+				acBtn.Text = "[隐藏]"
+			else
+				acBtn.Text = "[显示]"
+			end
+			acBtn:AddOnButton(function( ... )
+				SoundMgr.Play(10001)
+				if acBtn ~= nil and childTran ~= nil then
+					local acivie = childTran.gameObject.activeSelf
+					acivie = not acivie
+					childTran.gameObject:SetActive(acivie)
+					if acivie then
+						acBtn.Text = "[隐藏]"
+					else
+						acBtn.Text = "[显示]"
+					end
+				end
+			end, nil, 0.9)
+			if self.DebugNodeShow[key] then
+				_P.DebugNodeLineShow(self, list, childTran, space + 1)
+			end
+			obj:AddOnButton(function( ... )
+				SoundMgr.Play(10001)
+				if list ~= nil then
+					if self.DebugNodeShow[key] then
+						self.DebugNodeShow[key] = nil
+					else
+						self.DebugNodeShow[key] = true
+					end
+					_P.DebugNodeShow(self, list)
+				end
+			end, nil, 0.9)
+		end
+	end
+end
+
+function _P.DebugNodeShow(self, list)
+	list:DestroyChildren()			
+	_P.DebugNodeLineShow(self, list, JGuiManager.GuiRoot.WindowBase.CachedTran, 1)
+end
+
+_P.DebugBtn = 
+{
+	[1] = {
+		Text = "控件列表",
+		DOFunc = function(self, moudle)
+			self.DebugNodeShow = {}
+			moudle:Get("View").Activity = true
+			local list = moudle:Get("List")
+			_P.DebugNodeShow(self, list)
+		end
+	},
+	-- [2] = {
+	-- 	Text = "分辨率调整",
+	-- 	DOFunc = function(self, moudle)
+	-- 		moudle:Get("View").Activity = true
+	-- 		local list = moudle:Get("List")
+	-- 		list:DestroyChildren()
+	-- 		local lastPer = math.floor(CS.GameManager.Inst.ResolutionPer * 10)
+	-- 		for i=2,20 do
+	-- 			local text = JGuiManager.CreateText(list, tostring(i))
+	-- 			if i == lastPer then
+	-- 				text.Color = Color.red
+	-- 			else
+	-- 				text.Color = Color.black
+	-- 			end
+	-- 			text.Text = (i * 10) .. "%100"
+	-- 			text:AddOnButton(function( ... )
+	-- 				CS.GameManager.Inst:SetResolution(i / 10)
+	-- 			end, nil, 0.9)
+	-- 		end
+	-- 	end
+	-- },
+	[2] = {
+		Text = "内存列表",
+		DOFunc = function(self, moudle)
+			moudle:Get("View").Activity = true
+			local list = moudle:Get("List")
+			list:DestroyChildren()
+			local Profiler = CS.UnityEngine.Profiling.Profiler
+			local txt = JGuiManager.CreateText(list, "GetMonoHeapSize")
+			txt.Color = Color.black
+			txt.Text = "GetMonoHeapSize:" .. Profiler.GetMonoHeapSizeLong()
+        	txt = JGuiManager.CreateText(list, "GetMonoUsedSizeLong")
+			txt.Color = Color.black
+			txt.Text = "GetMonoUsedSizeLong:" .. Profiler.GetMonoUsedSizeLong()
+        	txt = JGuiManager.CreateText(list, "GetMonoHeapSizeLong")
+			txt.Color = Color.black
+			txt.Text = "GetMonoHeapSizeLong:" .. Profiler.GetMonoHeapSizeLong()
+        	txt = JGuiManager.CreateText(list, "GetTempAllocatorSize")
+			txt.Color = Color.black
+			txt.Text = "GetTempAllocatorSize:" .. Profiler.GetTempAllocatorSize()
+        	txt = JGuiManager.CreateText(list, "GetTotalAllocatedMemoryLong")
+			txt.Color = Color.black
+			txt.Text = "GetTotalAllocatedMemoryLong:" .. Profiler.GetTotalAllocatedMemoryLong()
+        	txt = JGuiManager.CreateText(list, "GetTotalReservedMemoryLong")
+			txt.Color = Color.black
+			txt.Text = "GetTotalReservedMemoryLong:" .. Profiler.GetTotalReservedMemoryLong()
+        	txt = JGuiManager.CreateText(list, "GetTotalUnusedReservedMemoryLong")
+			txt.Color = Color.black
+			txt.Text = "GetTotalUnusedReservedMemoryLong:" .. Profiler.GetTotalUnusedReservedMemoryLong()
+			txt = JGuiManager.CreateText(list, "Lua")
+			txt.Color = Color.black
+			txt.Text = "Lua:" .. collectgarbage("count")			
+		end
+	},
+	[3] = {
+		Text = "GC",
+		DOFunc = function(self, moudle)
+			CS.GameManager.Inst:GC()
+		end
+	},
+	-- [4] = {
+	-- 	Text = "界面Mem",
+	-- 	DOFunc = function(self, moudle)
+	-- 		WindowMgr.WindowGCCollect = not WindowMgr.WindowGCCollect
+	-- 	end
+	-- },
+}
+function _Func.ShowDebug(self)
+	if self.Debug == nil then
+		local moudle = self:CreateMoudle(self._RootNode, "M_Game_Debug")
+		moudle:Get("InputBtnText").Text = "发送"
+		local input = moudle:Get("Input")
+		moudle:Get("InputBtn"):AddOnButton(function ()
+			SoundMgr.Play(10001)
+			if input ~= nil then
+				local text = input.Text
+				if text ~= nil and text ~= "" then
+					CTalk.SendNewTalk(MTalk.Channel.ServerMsg,text)
+				end
+				input.Text = ""
+			end			
+		end, nil, 0.9)
+		self.Debug = moudle
+		self.DebugBtns = {}
+		moudle.SelfRect.LocalPosition = Vector2(-CS.JGui.JGuiManager.GuiRoot.Width / 2, CS.JGui.JGuiManager.GuiRoot.Height / 2)
+		CS.GameManager.Inst:RegistFpsShow(moudle:Get("Fps"), 0.5)
+		local Btns = moudle:Get("Btns")
+		Btns.Activity = false
+		moudle.SelfRect:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			if Btns ~= nil then
+				local tmpActive = Btns.Activity 
+				tmpActive = not tmpActive
+				Btns.Activity = tmpActive
+
+				if tmpActive then
+					moudle:Get("View").Activity = false
+					local index = 0
+					self.DebugChooseBtn = 0
+					for k,v in pairs(_P.DebugBtn) do
+						index = index + 1
+						local btn = moudle:Get("Btn_"..k)
+						btn.Activity = true
+						moudle:Get("Text_"..k).Text = v.Text
+						btn:AddOnButton(function( ... )
+							SoundMgr.Play(10001)
+							if btn ~= nil then
+								if self.DebugChooseBtn ~= k then
+									self.DebugChooseBtn = k
+									
+									for k_t,_ in pairs(_P.DebugBtn) do
+										if k_t == k then
+											moudle:Get("Btn_"..k_t).Color = Color.red
+										else
+											moudle:Get("Btn_"..k_t).Color = Color.white
+										end
+									end
+									v.DOFunc(self, moudle)
+								else
+									self.DebugChooseBtn = 0
+									btn.Color = Color.white
+									moudle:Get("List"):DestroyChildren()
+									moudle:Get("View").Activity = false
+								end
+							end
+						end, nil, 1.2)
+					end
+					if index < 8 then
+						for i=index + 1,8 do
+							moudle:Get("Btn_"..i).Activity = false
+						end
+					end
+				end
+			end
+		end, nil, 0.9)
+	end	
+end
+
+return _M

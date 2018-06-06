@@ -1,0 +1,333 @@
+-- 目标系统主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local Linear = CS.DG.Tweening.Ease.Linear
+local FLY_TYPE = CS.JTween.JTweenerType.LocalAngleZ
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ITEM_COUNT = 12
+local ROUND_MAX = 2 --先快速转两圈
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy( ... )
+	CActivity.ReqCharitableClose()
+end
+
+function _P.SetBtnState(self)
+	self.LeftBtn.IsGray = self.isPlaying
+	self.LeftBtn.RaycastTarget = not self.isPlaying
+	self.RightBtn.IsGray = self.isPlaying
+	self.RightBtn.RaycastTarget = not self.isPlaying
+end
+
+function _P.InitBtn(self)
+	self.LeftBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local BagNum = MBag.GetItemNum(self.onecostType)
+		if BagNum >= self.onecostNum then
+			_P.ToReqLottery(self, 1)
+		else
+			CCommon.ShowError(Csv.Text("charitable_love_limit"))
+		end
+	end)
+	self.RightBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local BagNum = MBag.GetItemNum(self.tencostType)
+		if BagNum >= self.tencostNum then
+			_P.ToReqLottery(self, 10)
+		else
+			CCommon.ShowError(Csv.Text("charitable_love_limit"))
+		end
+	end)
+
+	local moreBtn = self.mModule:Get("More")
+	moreBtn.Text = Csv.Text("lottery_4")
+	moreBtn:AddOnButton(function ( ... )
+		WindowMgr.Create("UCharitableFruitTipPanel")
+	end, nil, 1.2)
+
+end
+
+function _P.LightOne(self,count,roundCount,roundMax)
+	local roundCount = roundCount
+	local roundMax = roundMax
+	local count = count
+	if roundCount < roundMax and count > ITEM_COUNT then
+		roundCount = roundCount + 1
+		count = 1
+	end
+	if roundCount >= roundMax then --最后一圈
+		local item1 = self.mModule:Get("Ing1")
+		item1:AddOnTime(function ()
+		_P.EndDrow(self)
+		end, nil, 0.1)
+		return 
+	end
+	local itemIng = self.mModule:Get("Ing"..count)
+	itemIng:AddOnTime(function ()
+		self.mModule:Get("Ing"..count).Alpha = 1
+		local tween = itemIng.CachedTran:GetJTweener("T_Charitable_Alpha")
+		tween:Play()
+		count = count + 1
+		_P.LightOne(self,count,roundCount,roundMax)
+		end, nil, 0.1)
+	-- AddOnUpdate(function( ... )
+	-- 	for i=1,12 do
+	-- 		local tween = self.mModule:Get("Ing"..i).CachedTran:GetJTweener("T_Charitable_Alpha")
+	-- 		tween:SetDelayTime(i * 0.2)
+	-- 		if i == 12 then
+	-- 			tween:
+	-- 		end
+	-- 		tween:Play()
+	-- 	end
+	-- end, nil, 0.2)
+end
+
+function _P.EndDrow(self)
+	--找到要获得的那个
+	_P.LastRound(self,1,self.find_index)
+end
+
+function _P.LastRound(self,count,find)
+	local count = count
+	local find = find
+	local itemIng = self.mModule:Get("Ing"..count)
+	if count == find then
+		--抽10个
+		if #self.drowData.index > 1 then
+			local drowrewardItems = {}
+			for i=1, #self.drowData.index do
+				local one = {itemId = Csv.CharityItem[self.drowData.index[i]].item, itemNum = Csv.CharityItem[self.drowData.index[i]].num}
+				drowrewardItems[i] = one
+			end
+			self.isPlaying = false
+			_P.SetBtnState(self)
+			WindowMgr.Create("UCharitableTenReward", drowrewardItems)
+		else
+			itemIng:AddOnTime(function ()
+				self.mModule:Get("Ing"..count).Alpha = 1
+				local findween = itemIng.CachedTran:GetJTweener("T_Charitable_Shine")
+				findween:SetOnComplete(function()
+					self.isPlaying = false
+					_P.SetBtnState(self)
+					self.mModule:Get("Ing"..count).Alpha = 0 
+					CCommon.ShowFlyItem(self._RootNode, self.rewardItems[self.drowData.index[1]].itemId, 
+					self.rewardItems[self.drowData.index[1]].itemNum, 0, 
+					self.mModule:Get("IconBox"..count).RootCanvasPos)
+				end)
+				findween:Play()
+			end, nil, 0.3)
+		end
+	else
+		itemIng:AddOnTime(function ()
+			self.mModule:Get("Ing"..count).Alpha = 1
+			local tween = itemIng.CachedTran:GetJTweener("T_Charitable_Alpha")
+			tween:Play()
+			count = count + 1
+			_P.LastRound(self,count,find)
+		end, nil, 0.3)	
+	end
+end
+
+function _P.ToReqLottery(self, type)
+	if self.isPlaying then return end
+	local endTime = self.mData.state.endTime
+	if HeartBeat.ServSecond() > endTime then
+		CCommon.ShowError(Csv.Text("timelimit_close"))
+		return
+	end
+
+	CActivity.ReqCharitableDrop(type)
+end
+
+function _R.OnDrowCallBack(self, data)
+	self.find_index = self.rewardIndex[data.index[1]]
+	self.drowData = data
+	self.isPlaying = true
+	_P.SetBtnState(self)
+	local startIndex = math.random(1,ITEM_COUNT)
+	if #data.index > 1 then
+		_P.LightOne(self,startIndex,0,1)
+	else
+		_P.LightOne(self,startIndex,0,ROUND_MAX)
+	end
+end
+
+function _R.OnFruitMsg(self, actId)
+	local msgs = MActivity.CharitableMessage
+	if msgs == nil or #msgs < 1 then
+		if self.MsgText ~= nil and self.MsgStop then
+			self.MsgText:DOKill()
+			self.MsgIndex = 0
+			self.MsgText.Text = ""
+		end
+	elseif #msgs > self.MsgIndex then
+		if self.MsgText ~= nil and (self.MsgIndex == 0 or self.MsgStop) then
+			_P.DoMessage(self)
+		end
+	end	
+end
+
+function _P.DoMessage(self)
+	local msgs = MActivity.CharitableMessage
+	if msgs == nil or #msgs < 1 then
+		self.MsgIndex = 0
+		if self.MsgText ~= nil then
+			self.MsgText.Text = ""
+			self.MsgText:DOKill()
+		end
+		return
+	end
+	if msgs ~= nil and #msgs > self.MsgIndex and self.MsgText ~= nil then
+		self.MsgText:DOKill()
+		if self.MsgStop then
+			self.MsgStop = false
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 230, 0)
+			
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 460, 3)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				_P.DoMessage(self)
+			end)
+		else
+			self.MsgText.LocalPosition = Vector2.zero
+			self.MsgIndex = self.MsgIndex + 1
+			local msgInfo = msgs[self.MsgIndex]
+			local itemCsv = Csv.Item[msgInfo.itemId]
+			self.MsgText.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})	
+			if self.MsgIndex == #msgs then
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth/2 - 230, 3)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					self.MsgStop = true
+					_P.DoMessage(self)
+				end)
+			else
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 460, 6)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					_P.DoMessage(self)
+				end)
+			end
+		end		
+	elseif self.MsgText ~= nil then
+		self.MsgStop = true
+		self.MsgText:DOKill()
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 230, 0)
+	end
+end
+
+--界面构造
+function _M:OnCreate(data)
+	self.ActId = data.actId
+	self.mData = data
+	self.isPlaying = false
+	local module = self:CreateMoudle(self._RootNode, "M_Charitable_Fruit")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.MsgText = module:Get("MsgText")
+	self.MsgIndex = 0
+	self.MsgStop = false
+	module:Get("C_Text").Text = Csv.Text("charitable_2")
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	
+	self.AssetText = module:Get("AssetNum_2")
+	self.TimeText = module:Get("Time")
+	self.LeftBtn = module:Get("C_Btn_a_0")
+	self.RightBtn = module:Get("C_Btn_b_0")
+	_P.SetBtnState(self)
+	
+	local CharityCsv = Csv.Charity[self.ActId]
+	module:Get("Record").Text = Csv.Text("charitable_record")
+	self.onecostType = CharityCsv.oneCost[1]
+	self.tencostType = CharityCsv.tenCost[1]
+	self.onecostNum = CharityCsv.oneCost[2]
+	self.tencostNum = CharityCsv.tenCost[2]
+	module:Get("PriceNum1").Text = tostring(CharityCsv.oneCost[2])
+	module:Get("PriceNum2").Text = tostring(CharityCsv.tenCost[2])
+	module:Get("C_text").Text = Csv.Text("charitable_act_one")
+	module:Get("C_text_0").Text = Csv.Text("charitable_act_ten")
+	self.TimeText = module:Get("Time")
+	self.TimeText.Text = Csv.Text("timelimit_last_time", {startTime = LuaUtil.TransToMD(self.mData.state.startTime),
+					endTime = LuaUtil.TransToMD(self.mData.state.endTime) .. " " .. LuaUtil.TransToHMS(self.mData.state.endTime)})
+	local itemCsv = Csv.Item[CharityCsv.oneCost[1]]
+	self.AssetNum = MBag.GetItemNum(CharityCsv.oneCost[1])
+	self.AssetText.Text = tostring(self.AssetNum)
+	module:Get("AssetIcon_2").SpriteName = itemCsv.icon
+	module:Get("Price1").SpriteName = itemCsv.icon
+	module:Get("Price2").SpriteName = itemCsv.icon
+	self.itemId = itemCsv.id
+
+	_P.InitBtn(self)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == self.itemId then
+			module:Get("AssetNum_2").Text = LuaUtil.NumberFormat(MBag.GetItemNum(self.itemId))
+		end
+	end)
+
+	self.rewardItems = {}
+	self.rewardIndex = {}
+	for index=1,ITEM_COUNT do
+		local CharityItemCsv = Csv.CharityItem[CharityCsv.items[index]]
+		local itemId = CharityItemCsv.item
+		local itemCsv = Csv.Item[itemId]
+		local itemSp = module:Get("IconBox"..index)
+		local itemIng = module:Get("Ing"..index)
+		local itemOne = {
+			itemId = CharityItemCsv.item,
+			itemNum = CharityItemCsv.num
+		}
+		self.rewardIndex[CharityItemCsv.id] = index
+		self.rewardItems[CharityItemCsv.id] = itemOne
+		itemIng.Alpha = 0
+		itemSp.SpriteName = itemCsv.colorIcon
+		module:Get("Icon"..index).SpriteName = itemCsv.icon
+		module:Get("Num"..index).Text = "x" .. CharityItemCsv.num
+		itemSp:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			CCommon.ShowItemTips(itemId)
+		end)
+	end
+	CActivity.ReqCharitableOpen()
+
+end
+
+return _M

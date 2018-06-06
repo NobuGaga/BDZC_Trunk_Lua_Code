@@ -1,0 +1,63 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MGirl = JRequire "Dev.Girl.MGirl"
+--local UGirlBaby= JRequire"Dev.Girl.GirlBaby"
+--local UGirlMarried = JRequire"Dev.Girl.GirlMarried"
+local MMain = JRequire "Dev.Main.MMain"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class()
+local _P = {}
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Tab3", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local babyBtn = moudle:Get("babyBtn")
+	local babyRedpoint = moudle:Get("redPoint1")
+	local babyBtnName = moudle:Get("Name1")
+	local babyBtnTips = moudle:Get("tips1")
+	
+	local marriedBtn = moudle:Get("marriedBtn")
+	local marriedRedPoint = moudle:Get("redPoint2")
+	local marriedBtnName = moudle:Get("Name2")
+	local marriedBtnTips = moudle:Get("tips2")
+
+	babyBtnName.Text = Csv.Func[Define.SysId.Girl_Baby].name
+	marriedBtnName.Text = Csv.Func[Define.SysId.Girl_Marry].name
+
+	babyBtnTips.Text = Csv.Const(10208)
+	marriedBtnTips.Text = Csv.Const(10209)
+
+	babyBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if MMain.FuncIsOpen(Define.SysId.Girl_Baby) then
+			WindowMgr.Create("UGirlBaby",data)
+		else
+			CCommon.ShowError(Csv.Func[Define.SysId.Girl_Baby].conditionDesc)
+		end
+	end)
+
+	marriedBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if MMain.FuncIsOpen(Define.SysId.Girl_Marry) then
+			WindowMgr.Create("UGirlMarried")
+		else
+			CCommon.ShowError(Csv.Func[Define.SysId.Girl_Marry].conditionDesc)
+		end
+	end)
+
+	--babyBtn.Activity = MMain.FuncIsOpen(Define.SysId.Girl_Baby)
+	--marriedBtn.Activity = MMain.FuncIsOpen(Define.SysId.Girl_Marry)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

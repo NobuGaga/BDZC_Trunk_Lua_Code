@@ -1,0 +1,650 @@
+--@RefType [Dev.Girl.MGirl.bytes#_M]
+local MGirl = JRequire"Dev.Girl.MGirl"
+local EventCenter = JRequire "Dev.EventCenter"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+local CCommon = JRequire"Dev.Common.CCommon"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cGirlRandomDate							=	1,--随机约会 
+	cGirlDate								=	2,--消耗请求约会
+	cGirlUseGift							=	3,--送礼 
+	cGirlSkillUp							=	4,--技能升级 
+	cGirlOneKeyDate							=	5,--一键约会 
+	cGirlEventSelect						=	6,--约会事件选择
+	--寶寶
+	cBabySetName		= 7, -- 起名/改名	CSetBabyName
+	cBabyTeach			= 8, -- 教育        CBabyTeach
+	cBabyTeachOneKey	= 9, -- 一键教育	
+	cBabyAddSeats		= 10,--宝宝席位扩建
+	cBabyRandomName		= 11,--随机名称 CBabyRandomName
+	cBabyGraduate		= 12,--毕业 CBabyGraduate
+
+	--联姻
+	cZhaoQin                             =   13,--招亲 	CZhaoQin
+	cZhaoQinRefresh                      =   14,--刷新招亲 	CZhaoQinRefresh
+	cTiQin                               =   15,--提亲	 CTiQin
+	cTerminateTiQin                      =   16,--终止提亲	 CTerminateTiQin
+	cRefuseTiQin                         =   17,--拒绝提亲	CRefuseTiQin
+	cMarrySomeone                        =   18,--结婚	CMarrySomeone
+
+	--认识美女
+	cChatGirl							=	19,--玩家对美女的回复
+	cRollDice							=	20,--掷骰子
+	cRecoverEnergy						=	21,--恢复酒量
+	cDatePlayGame						=	22,--玩约会游戏
+	cDateGameOver						=	23,--结束约会游戏
+	cPostMoments						=	24,--发布朋友圈
+	cCommentMoments						=	25,--评论朋友圈
+	cDateGameStart						=	26,--开始约会游戏
+	cGirlRename							=	27,--美女改名 PGirl.CGirlRename
+------------------------------------------------------------------------------
+	sGirlList								=	1,--已解锁美女列表 
+	sGirlUpDate								=	2,--美女信息更新 
+	sGirlDate								=	3,--约会 
+	sGirlOneKeyDate							=	4,--一键约会返回 
+	sGirlUpdateCharm						=	5,--增加魅力 
+	sGirlUpdateIntimacy						=	6,--增加亲密度 
+	sGirlNewGirl							=   7,--获得新美女
+	sGirlUpdateFriend						=   8,--更新美女友谊值
+	sGirlUpdateSkill						=   9,--更新美女技能等级
+	sGirlDateEvent							=   10,--约会事件返回
+	sEnergy									=   11,--
+	--寶寶
+	sBabyList			= 12, -- 宝宝列表    SBabyList	
+	sBabySetName		= 13, -- 改名反馈	SSetBabyName
+	sBabyUpdate			= 14, -- 宝宝更新	SBabyUpdate
+	sNewBaby            = 15, -- 获得新宝宝  SNewBaby
+	sBabyRandomName     = 16,--随机名字 SBabyRandomName
+	sBabyUpdateSeats		= 17,-- 更新宝宝席位上限 SUpdateSeats
+	sBabyGraduate       = 18,--毕业 SBabyGraduate
+	sBabyTech			= 19,--教育反馈SBabyTech
+
+	--联姻
+	sUnmarriedBabyList                   =   20,--未婚列表	SUnmarriedBabyList
+	sMarriedBabyList                     =   21,--已婚列表 	SMarriedBabyList
+	sTiQinList                           =   22,--提亲请求列表	STiQinList
+	sMBabyUpdate                         =   23,--未婚宝宝更新	SMBabyUpdate
+	sNewCouple                           =   24,--新婚夫妻	SNewCouple
+	sZhaoQin                             =   25,--招亲返回	SZhaoQin
+	sTerminateTiQin                      =   26,--终止提亲返回	STerminateTiQin
+	sMarrySomeone                        =   27,--结婚返回	SMarrySomeone
+	sRefuseTiQin                         =   28,--拒绝提亲返回
+	sNewMBaby                            =   29,--新的未婚宝宝
+
+	--认识美女
+	sNewGirlKnown						=	30,--新结识美女
+	sUpdateGirlKnown					=	31,--更新结识美女
+	sChatGirl							=	32,--美女回复对话
+	sRollDice							=	33,--掷骰子
+	sRecoverEnergy						=	34,--恢复酒量
+	sDatePlayGame                       =   35,--玩约会游戏
+	sDateGameOver                       =   36,--结束约会游戏
+	sPostMoments                        =   37,--发布朋友圈
+	sCommentMoments                     =   38,--评论朋友圈
+	sNewMoments							=	39,--朋友圈新动态PMoments
+	sChatNewMsg							=	40,--聊天新消息
+	sDateGameStart						=	41,--开始约会游戏
+	sGirlRename							=	42,--美女改名 PGirl.SGirlRename
+}
+
+--清空模块
+function _M.ModuleClean()
+	MGirl.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cGirlRandomDate] = "",
+		[ECmdId.cGirlDate] = "PGirl.CDate",
+		[ECmdId.cGirlUseGift] = "PGirl.CUseGift",
+		[ECmdId.cGirlSkillUp] = "PGirl.CSkillUp",
+		[ECmdId.cGirlOneKeyDate] = "",
+		[ECmdId.cGirlEventSelect] = "PGirl.CGirlEventSelect",
+		--
+		[ECmdId.cBabySetName] = "PGirl.CSetBabyName",
+		[ECmdId.cBabyTeach] = "PGirl.CBabyTeach",
+		[ECmdId.cBabyTeachOneKey] = "",
+		[ECmdId.cBabyAddSeats] = "",
+		[ECmdId.cBabyRandomName] = "PGirl.CBabyRandomName",
+		[ECmdId.cBabyGraduate] = "PGirl.CBabyGraduate",
+
+		[ECmdId.cZhaoQin] = "PGirl.CZhaoQin",
+		[ECmdId.cZhaoQinRefresh] = "PGirl.CZhaoQinRefresh",
+		[ECmdId.cTiQin] = "PGirl.CTiQin",
+		[ECmdId.cTerminateTiQin] = "PGirl.CTerminateTiQin",
+		[ECmdId.cRefuseTiQin] = "PGirl.CRefuseTiQin",
+		[ECmdId.cMarrySomeone] = "PGirl.CMarrySomeone",
+
+		[ECmdId.cChatGirl] = "PGirl.CChatGirl",
+		[ECmdId.cRollDice] = "PGirl.CRollDice",
+		[ECmdId.cRecoverEnergy] = "PGirl.CRecoverEnergy",
+		[ECmdId.cDatePlayGame] = "PGirl.CDatePlayGame",
+		[ECmdId.cDateGameOver] = "PGirl.CDateGameOver",
+		[ECmdId.cPostMoments] = "PGirl.CPostMoments",
+		[ECmdId.cCommentMoments] = "PGirl.CCommentMoments",
+		[ECmdId.cDateGameStart] = "PGirl.CDateGameStart",
+		[ECmdId.cGirlRename] = "PGirl.CGirlRename"
+	}
+	local recv = {
+		[ECmdId.sGirlList]		=	{proto = "PGirl.SInit",		handle = _M.Init},
+		[ECmdId.sGirlUpDate]	=	{proto = "PGirl.PGirlMsg",	handle = _P.RepGirlUpdate},
+		[ECmdId.sGirlDate]	=	{proto = "PGirl.SDate",	handle = _P.RepDate},
+		[ECmdId.sGirlOneKeyDate]		=	{proto = "PGirl.SOneKeyDate",	handle = _P.RepOneKeyDate},
+		[ECmdId.sGirlUpdateCharm]		=	{proto = "PGirl.SUpdateCharm",	handle = _P.RepUpdateCharm},
+		[ECmdId.sGirlUpdateIntimacy]		=	{proto = "PGirl.SUpdateIntimacy",	handle = _P.RepUpdateIntimacy},
+		[ECmdId.sGirlNewGirl]		=	{proto = "PGirl.PGirlMsg",	handle = _P.RepNewGirl},
+		[ECmdId.sGirlUpdateFriend]		=	{proto = "PGirl.SUpdateFriend",	handle = _P.RepUpdateFriend},
+		[ECmdId.sGirlUpdateSkill]		=	{proto = "PGirl.SUpdateSkill",	handle = _P.RepUpdateSkill},
+		[ECmdId.sGirlDateEvent]		=	{proto = "PGirl.SDateEvent",	handle = _P.RepDateEvent},--SEnergy
+		[ECmdId.sEnergy]		=	{proto = "PGirl.SEnergy",	handle = _P.RepEnergy},
+		--
+		[ECmdId.sBabyList]		=	{proto = "PGirl.SBabyList",	handle = _P.RepBabyList},
+		[ECmdId.sBabySetName]		=	{proto = "PGirl.SSetBabyName",	handle = _P.RepBabyName},
+		[ECmdId.sBabyUpdate]		=	{proto = "PGirl.SBabyUpdate",	handle = _P.RepBabyUpdate},
+		[ECmdId.sNewBaby]		=	{proto = "PGirl.SBabyUpdate",	handle = _P.RepNewBaby},
+		[ECmdId.sBabyUpdateSeats]	=	{proto = "PGirl.SBabyUpdateSeats",	handle = _P.RepUpdateSeats},
+		[ECmdId.sBabyRandomName]	=	{proto = "PGirl.SBabyRandomName",	handle = _P.RepBabyRandomName},
+		[ECmdId.sBabyGraduate]	=	{proto = "PGirl.SBabyGraduate",	handle = _P.RepBabyGraduate},
+		[ECmdId.sBabyTech]	=	{proto = "PGirl.SBabyTech",	handle = _P.RepBabyTeach},
+
+		[ECmdId.sUnmarriedBabyList]	=	{proto = "PGirl.SUnmarriedBabyList",	handle = _P.RepUnmarriedList},
+		[ECmdId.sMarriedBabyList]	=	{proto = "PGirl.SMarriedBabyList",	handle = _P.RepMarriedList},
+		[ECmdId.sTiQinList]	=	{proto = "PGirl.STiQinList",	handle = _P.RepTiQinList},
+		[ECmdId.sMBabyUpdate]	=	{proto = "PGirl.SMBabyUpdate",	handle = _P.RepUnmarriedUpdate},
+		[ECmdId.sNewCouple]	=	{proto = "PGirl.SNewCouple",	handle = _P.RepNewCouple},
+		[ECmdId.sZhaoQin]	=	{proto = "PGirl.SZhaoQin",	handle = _P.RepZhaoQin},
+		[ECmdId.sTerminateTiQin]	=	{proto = "PGirl.STerminateTiQin",	handle = _P.RepTerminateTiQin},
+		[ECmdId.sMarrySomeone]	=	{proto = "PGirl.SMarrySomeone",	handle = _P.RepMarrySomeone},
+		[ECmdId.sRefuseTiQin]	=	{proto = "PGirl.SRefuseTiQin",	handle = _P.RefuseTiQin},
+		[ECmdId.sNewMBaby]	=	{proto = "PGirl.SNewMBaby",	handle = _P.NewUnmarried},
+		
+		[ECmdId.sNewGirlKnown] = {proto = "PGirl.PGirlKnown",handle = _P.RepNewGirlKnown},
+		[ECmdId.sUpdateGirlKnown] = {proto = "PGirl.PGirlKnown",handle = _P.RepUpdateGirlKnown},
+		[ECmdId.sChatGirl] = {proto = "PGirl.SChatGirl",handle = _P.RepChatGirl},
+		[ECmdId.sRollDice] = {proto = "PGirl.SRollDice",handle = _P.RepRollDice},
+		[ECmdId.sRecoverEnergy] = {proto = "PGirl.SRecoverEnergy",handle = _P.RepRecoverEnergy},
+		[ECmdId.sDatePlayGame] = {proto = "PGirl.SDatePlayGame",handle = _P.RepDatePlayGame},
+		[ECmdId.sDateGameOver] = {proto = "PGirl.SDateGameOver",handle = _P.RepDateGameOver},
+		[ECmdId.sPostMoments] = {proto = "PGirl.SPostMoments",handle = _P.RepPostMoments},
+		[ECmdId.sCommentMoments] = {proto = "PGirl.SCommentMoments",handle = _P.RepCommentMoments},
+		[ECmdId.sNewMoments] = {proto = "PGirl.PMoments",handle = _P.RepNewMoment},
+		[ECmdId.sChatNewMsg] = {proto = "PGirl.SChatNewMsg",handle = _P.RepChatNewMsg},
+		[ECmdId.sDateGameStart]	= {proto = "PGirl.SDateGameStart",handle = _P.RepDateGameStart},
+		[ECmdId.sGirlRename]	= {proto = "PGirl.SGirlRename",handle = _P.RepGirlRename},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Girl, send, recv, isReload)
+end
+
+--
+------------------------------------------------
+
+EventCenter.RegistCallEvent(Define.EventListenId.ServerError,function(handle, sysId, msgId)
+	if sysId == Define.SysId.Girl then
+		if msgId == ECmdId.cGirlRandomDate then
+			WindowMgr.Call("UGirlUnlock", "OnRandomDateError")
+		end
+	end
+end, true)
+--
+
+function _M.ReqRandomDate()
+	
+	MGirl.FriendChange = 0 --友谊值增加量
+	_M.Send(ECmdId.cGirlRandomDate)
+end
+
+function _M.ReqDate(id)
+	MGirl.FriendChange = 0 --友谊值增加量
+	_M.Send(ECmdId.cGirlDate,{girlid = id})
+end
+
+function _M.ReqUseGift(girlID,itemID)
+	_M.Send(ECmdId.cGirlUseGift,{girlid = girlID,itemid = itemID})
+end
+
+function _M.ReqSkillUp(girlID,skillID)
+	_M.Send(ECmdId.cGirlSkillUp,{girlid = girlID,skillid = skillID})
+end
+
+function _M.ReqOneKeyDate()
+	MGirl.FriendChange = 0 --友谊值增加量
+	_M.Send(ECmdId.cGirlOneKeyDate)
+end
+
+function _M.ReqDateEvent(index)
+	_M.Send(ECmdId.cGirlEventSelect,{selectID = index})
+end
+
+--认识美女
+--------------------
+function _M.ReqChatGirl(_type,_girlid,_dialogueId)
+	_M.Send(ECmdId.cChatGirl,{type = _type,girlid = _girlid,dialogueId = _dialogueId})
+end
+
+function _M.ReqRollDice(_girlid)
+	_M.Send(ECmdId.cRollDice,{girlid = _girlid})
+end
+
+function _M.ReqRecoverEnergy(_girlid,_type)
+	_M.Send(ECmdId.cRecoverEnergy,{girlid = _girlid,type = _type})
+end
+
+function _M.ReqDatePlayGame(_type,_girlid,_objid)
+	_M.Send(ECmdId.cDatePlayGame,{type = _type,girlid = _girlid,objId = _objid})
+end
+
+function _M.ReqDateGameOver(_type,_girlid)
+	_M.Send(ECmdId.cDateGameOver,{type = _type,girlid = _girlid})
+end
+
+function _M.ReqPostMoments(_id,_girlid)
+	_M.Send(ECmdId.cPostMoments,{id = _id,girlid = _girlid})
+end
+
+function _M.ReqCommentMoments(_id,_commentId)
+	_M.Send(ECmdId.cCommentMoments,{id = _id,commentId = _commentId})
+end
+
+function _M.ReqDateGameStart(_type,_girlid)
+	_M.Send(ECmdId.cDateGameStart,{type = _type,girlid = _girlid})
+end
+--------------------
+
+--寶寶
+function _M.ReqSetBabyName(id,Name)
+	_M.Send(ECmdId.cBabySetName,{babyid = id,name = Name})
+end
+
+function _M.ReqBabyTeach(id)
+	_M.Send(ECmdId.cBabyTeach,{babyid = id})
+end
+
+function _M.ReqBabyTeachOneKey()
+	_M.Send(ECmdId.cBabyTeachOneKey)
+end
+
+function _M.ReqAddSeats()
+	_M.Send(ECmdId.cBabyAddSeats)
+end
+
+function _M.ReqRandomBabyName(id)
+	_M.Send(ECmdId.cBabyRandomName,{babyid = id})
+end
+
+function _M.ReqBabyGraduate(id)
+	_M.Send(ECmdId.cBabyGraduate,{babyid = id})
+end
+
+--美女改名
+function _M.ReqChangeGirlName(id,_name,costId)
+	_M.Send(ECmdId.cGirlRename,{girlid = id,name = _name,costItemId = costId})
+end
+
+-----服务器返回--------
+
+function _M.Init(data)
+	if data ~= nil then
+		if data.girlList ~= nil then
+			MGirl.Init(data.girlList)
+		else
+			MGirl.Init({})
+		end
+		if data.knownList ~= nil then
+			MGirl.InitKnowGirl(data.knownList)
+		else
+			MGirl.InitKnowGirl({})
+		end
+		if data.moments ~= nil then
+			MGirl.InitMoments(data.moments)
+		end
+	else	
+		MGirl.Init({})
+	end
+
+	
+	MGirl.InitKnownGirlByUnlock(data.girlList) --已认识的加到手机
+	_M.CheckUnlockRedpoint()
+
+	--初始化
+	if WindowMgr.IsCreated("UGirl") then
+		WindowMgr.Create("UGirl") 
+	elseif WindowMgr.IsCreated("UGirlUnlock") then
+		WindowMgr.Create("UGirlUnlock")
+	end
+end
+
+function _P.RepDate(data)
+	MGirl.CleanDate() -- 清理约会数据
+	MGirl.Energy(data.energy)
+	MGirl.EnergyLeftTick(data.gainEnergyLeftTick)
+	if data.date.crit == true then
+		MGirl.isDateCrit = true
+	end
+	if data.date.randevent == true then
+		MGirl.dateEventID = data.date.randEventId
+	end
+	if data.date.room == true then
+		MGirl.isDateRoom = true
+	end
+	if data.date.makebaby == true then
+		MGirl.isBaby = true
+		MGirl.AddBaby(data.date.girlid) --新增一个宝宝数量
+		WindowMgr.Call("UGirlDetail","RefreshBaby")
+	end
+	--DateEvent
+	_M.CheckUnlockRedpoint()
+	WindowMgr.Call("UGirlUnlock","DateEvent",data.date.girlid,data.energy,data.gainEnergyLeftTick)
+end
+
+function _P.RepOneKeyDate(data)
+	if data.dateList ~= nil then
+		WindowMgr.Call("UOnekeyDate","GetOnekeyDate",data.dateList)
+	end
+
+	MGirl.Energy(data.energy)
+	MGirl.EnergyLeftTick(data.gainEnergyLeftTick)
+
+	_M.CheckUnlockRedpoint()
+end
+
+function _P.RepGirlUpdate(data)
+	MGirl.UpdateGirls(data)
+end
+
+function _P.RepNewGirl(data)
+	MGirl.NewGirl(data)
+	CTrigger.OnGetNewGirl(data.id)
+end
+
+function _P.RepUpdateCharm(data)
+	MGirl.UpdateCharm(data)
+	WindowMgr.Call("UGirlDetail","RefreshCharm",data.charm,data.changecharm)
+	WindowMgr.Call("UGirlGiftPop","RefreshCharm",data.charm,data.changecharm)
+	WindowMgr.Call("UGirlUnlock","RefreshCharm",data.girlid,data.charm,data.changecharm)
+end
+
+function _P.RepUpdateIntimacy(data)
+	MGirl.UpdateIntimacy(data)
+	WindowMgr.Call("UGirlDetail","RefreshIntimacy",data.intimacy,data.changeintimacy)
+	WindowMgr.Call("UGirlGiftPop","RefreshIntimacy",data.intimacy,data.changeintimacy)
+	WindowMgr.Call("UGirlUnlock","RefreshIntimacy",data.girlid,data.intimacy,data.changeintimacy)
+end
+
+function _P.RepUpdateFriend(data)
+	MGirl.UpdateFriend(data)
+	WindowMgr.Call("UGirlDetail","RefreshFriend",data.friend)
+	WindowMgr.Call("UGirlSkillPop","RefreshFriend",data.friend)
+	WindowMgr.Call("UGirlUnlock","CheckItemRed",data.girlid)
+end
+
+function _P.RepUpdateSkill(data)
+	MGirl.UpdateSkill(data)
+	WindowMgr.Call("UGirlSkillPop","RefreshSkillItem",data.girlid,data.skillid)
+	WindowMgr.Call("UGirlDetail","RefreshRedPoint")
+	WindowMgr.Call("UGirlUnlock","CheckItemRed",data.girlid)
+end
+
+function _P.RepDateEvent(data)
+	--CCommon.ShowError(Csv.Text("Girl_friendName")..Csv.Text("Girl_skill_add")..data.award)
+	WindowMgr.Call("UGirlDate","GetDateEvent",data.award)
+end
+
+function _P.RepEnergy(data)
+	MGirl.Energy(data.energy)
+	MGirl.EnergyLeftTick(data.gainEnergyLeftTick)
+	MGirl.GetMaxEnergy(data.maxEnergy)
+	MGirl.GetEnergyCD(data.gainEnergyCD)
+
+	_M.CheckUnlockRedpoint()
+end
+
+--认识美女
+--------------------------------------------------
+function _P.RepNewGirlKnown(data)
+	MGirl.NewGirlKnown(data)
+
+	if not _P.CheckWharfGirl(data.id) then
+		CTrigger.OnGetKnownGirl(data.id)
+	end
+end
+
+function _P.RepUpdateGirlKnown(data)
+	MGirl.UpdateGirlKnown(data)
+end
+
+function _P.RepChatGirl(data)
+	if data.type == 2 then
+		WindowMgr.Call("UGirlLastTalk","RefreshTalk",data)
+	elseif data.type == 1 then
+		WindowMgr.Call("UGirlLastTalk","RefreshTalk",data)
+	end 
+end
+
+function _P.RepRollDice(data)
+	WindowMgr.Call("UGirlLastGame","RollDice",data)
+end
+
+function _P.RepRecoverEnergy(data)
+	WindowMgr.Call("UGirlLastGame","RecoverEnergy",data)
+end
+
+function _P.RepDatePlayGame(data)
+end
+
+function _P.RepDateGameOver(data)
+end
+
+function _P.RepPostMoments(data)
+	MGirl.NewMoment({id = data.id,commentId = 0})
+	WindowMgr.Call("UGirl","ShowPosItem",data.id)
+end
+
+function _P.RepCommentMoments(data)
+	MGirl.UpdateMoment(data)
+end
+
+function _P.RepNewMoment(data)
+	MGirl.NewMoment(data)
+end
+
+function _P.RepChatNewMsg(data)
+	MGirl.RefreshUnlockGirlTalk(data)
+end
+
+function _P.RepDateGameStart(data)
+	print("开始约会游戏!!")
+end
+
+--------------------------------------------------
+
+--寶寶
+function _P.RepBabyList(data)
+	MGirl.GetBabySeats(data.seats)
+	if data.babyList ~= nil then
+		MGirl.GetBabyList(data.babyList)
+	end
+end
+
+function _P.RepBabyName(data)
+	MGirl.ChangeBabyName(data.isSuccess)
+
+	WindowMgr.Call("UGirlBaby","UpdateBabyName",data.isSuccess)
+	WindowMgr.Call("UGirlMarried","UpdateBabyName",data.isSuccess)
+	WindowMgr.Call("UBabyChangeName","ResetName",data)
+end
+
+function _P.RepBabyUpdate(data)
+	MGirl.UpdateBaby(data.baby)
+	--_R.UpdateBaby(self,data)
+	WindowMgr.Call("UGirlBaby","UpdateBabyData",data.baby)
+end
+
+function _P.RepNewBaby(data)
+	MGirl.GetNewBaby(data.baby)
+end
+
+function _P.RepUpdateSeats(data)
+	MGirl.UpdateSeats(data.seats)
+
+	WindowMgr.Call("UGirlBaby","UpdateSeats")
+end
+
+function _P.RepBabyRandomName(data)
+	--直接给改名界面
+	WindowMgr.Call("UBabyChangeName","GetRanDomName",data.name)
+end
+
+function _P.RepBabyGraduate(data)
+	if data.isSuccess == true then
+		MGirl.BabyGraduate(data.baby.babyid)
+		WindowMgr.Create("UBabyGraduationShow",data.baby)
+		WindowMgr.Call("UGirlBaby","BabyGraduate",data.baby.babyid)
+	end
+end
+
+function _P.RepBabyTeach(data)
+	WindowMgr.Call("UGirlBaby","BabyTeachOptional",data)
+end
+
+-----------------------------------------------
+--联姻-----------------------------
+-------------------------
+
+function _M.ReqZhaoQin(id)
+	_M.Send(ECmdId.cZhaoQin,{babyid = id})
+end
+
+function _M.ReqZhaoQinRefresh(id)
+	_M.Send(ECmdId.cZhaoQinRefresh,{babyid = id})
+end
+
+function _M.ReqTiQin(id,itemID,_palyerNo)
+	_M.Send(ECmdId.cTiQin,{babyid = id,costItemId = itemID,playerNo = _palyerNo})
+end
+
+function _M.ReqTerminateTiQin(id)
+	_M.Send(ECmdId.cTerminateTiQin,{babyid = id})
+end
+
+function _M.ReqRefuseTiQin(id)
+	_M.Send(ECmdId.cRefuseTiQin,{babyid = id})
+end
+
+function _M.ReqMarrySomeone(id,targetID,itemID)
+	_M.Send(ECmdId.cMarrySomeone,{babyid = id,otherBabyId = targetID,costItemId = itemID})
+end
+
+--
+
+function _P.RepUnmarriedList(data)
+	MGirl.InitUnmarriedList(data.babyList)
+end
+
+function _P.RepMarriedList(data)
+	MGirl.InitMarriedList(data.cpList)
+end
+
+function _P.RepTiQinList(data)
+	MGirl.SetQingqiuList(data.babyList)
+	WindowMgr.Call("UMarriedQingqiu","RefreshQingqiu")
+end
+
+function _P.RepUnmarriedUpdate(data)
+	MGirl.UpdateUnmarriedBaby(data.baby)
+	if data.baby.tiqinCD ~= nil then
+	end
+	--UnmarriedBabyUpdatedata.babyid
+	WindowMgr.Call("UGirlMarried","ResfrehBabyType",data.baby.babyid)
+end
+
+function _P.NewUnmarried(data)
+	MGirl.NewUnMarriedBaby(data.baby)
+	--MGirl.NewMarriedBaby(data)
+end
+
+function _P.RepNewCouple(data)
+	MGirl.NewMarriedBaby(data.couple)
+
+	WindowMgr.Call("UMarriedQingqiu","CloseWin")
+	WindowMgr.Call("UMarriedSelectCost","CloseWin")
+	WindowMgr.Call("UMarriedZhaoqin","CloseWin")
+	WindowMgr.Call("UMarriedTiqin","CloseWin")
+
+	if WindowMgr.IsCreated("UGirlMarried") then
+		WindowMgr.Create("UBabyMarriedShow",data.couple.babyid)
+	end
+end
+
+function _P.RepZhaoQin(data)
+
+	if data.refreshCD ~= nil then
+		MGirl.SetZhaoqinCD(data.refreshCD)
+	end
+	MGirl.SetZhaoqinList(data.babyList)
+	
+	WindowMgr.Call("UMarriedZhaoqin","RefreshZhaoqin",data.babyList)
+	--RefreshZhaoqin
+end
+
+function _P.RepTerminateTiQin(data)
+	WindowMgr.Call("UGirlMarried","TerminateTiQin",data.itemRefund)
+end
+
+function _P.RepMarrySomeone(data)
+	MGirl.MarryBack(data.babyid,data.success)
+	WindowMgr.Call("UGirlMarried","RefreshToggle")
+	--CloseWin--UMarriedZhaoqin--UMarriedTiqin
+	if data.success == true then
+		MGirl.RefuseQingqiu(MGirl.SelectQingqiuID)--结婚成功删除请求
+	end
+end
+
+function _P.RefuseTiQin(data)
+	--RefreshJujue
+	if data.success == true then
+		if data.babyid == 0 then
+			WindowMgr.Call("UMarriedQingqiu","RefreshJujueAll",data)
+		else
+			WindowMgr.Call("UMarriedQingqiu","RefreshJujue",data)
+		end
+	end
+end
+
+function _P.RepGirlRename(data)
+	MGirl.RefreshGirlName(data)
+	WindowMgr.Call("UGirlChangeName","CloseView")
+end
+
+------------------------------------------------------------------------------------
+
+function _M.CheckUnlockRedpoint()
+	local isRedpoint = false
+	if MGirl.CheckCanDate() == true and MMain.FuncIsOpen(Define.SysId.Girl) then
+		isRedpoint = true
+	end
+
+	MGirl.redPoint = isRedpoint
+	CMain.UpdateRedpoint(isRedpoint,MGirl.TOGGLE_ID.GIRL)
+	if WindowMgr.IsCreated("UWorldMap") then
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	end
+end
+
+function _P.CheckWharfGirl(id)
+	local wharfGirls = Csv.Const(16001)
+
+	for k,v in pairs(wharfGirls)do
+		local wharfPeopleData = Csv.WharfPeople[v]
+		if wharfPeopleData.girlId == id then
+			return true
+		end
+	end
+	return false
+end
+
+return _M

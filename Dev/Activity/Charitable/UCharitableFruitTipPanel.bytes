@@ -1,0 +1,47 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MAX_COUNT = 10
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Charitable_Fruit_TC")
+	module:Get("BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	module:Get("Title").Text = Csv.Text("lottery_10")
+
+	local msgs = MActivity.CharitableMessage
+	if msgs ~= nil and #msgs > 0 then
+		local content = module:Get("content")
+		local index = 0
+		for i=#msgs,1,-1 do
+			index = index + 1
+			local msgInfo = msgs[i]
+			local itemCsv = Csv.Item[msgInfo.itemId]
+			local textWidget = self:CreateMoudle(content, "M_Luck_Draw_TC_Item")
+			textWidget.SelfRect.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
+
+			if index == MAX_COUNT then
+				break
+			end
+		end
+	end
+end
+
+return _M

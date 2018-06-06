@@ -1,0 +1,170 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local UBagGoods = JRequire "Dev.Bag.UBagGoods"
+local UBagSynthetic = JRequire "Dev.Bag.UBagSynthetic"
+local UBagFashion = JRequire "Dev.Bag.UBagFashion"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+	MBag.LastChooseItem = nil
+end
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if funcId == Define.SysId.Bag_Goods then
+		self.ChooseMoudle = UBagGoods.new(self.PageNode)
+	elseif funcId == Define.SysId.Bag_Synthetic then
+		self.ChooseMoudle = UBagSynthetic.new(self.PageNode)
+	elseif funcId == Define.SysId.Bag_Fashion then
+		self.ChooseMoudle = UBagFashion.new(self.PageNode)
+	end
+
+	MBag.LastChoose = funcId
+	_P.SetBGSize(self,funcId)
+end
+
+--界面构建
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bag_UMain")
+	self.mMoudle = moudle
+	moudle:Get("C_Text").Text = Csv.Text("bag_title")
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self.ChooseMoudle:Destroy()
+		self:Destroy()
+	end, nil, 1.2)
+	local node = moudle:Get("PageNode")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(self._SysId, true)
+	local count = #funcs
+	if count > 0 then
+		local lastChoose = chooseFuncId or MBag.LastChoose
+		local isHave = false
+
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+
+			--注册小红点
+			self:RegistRedpoint(moudle:Get("redpoint_" .. index), v.id)
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.tabHandle = tabHandle
+	end
+	if count < 3 then
+		for i=count + 1,3 do
+			moudle:Get("Toggle"..i).Activity = false
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if MBag.LastChoose == Define.SysId.Bag_Goods then
+			local csvItem = Csv.Item[itemid]
+			if csvItem.type == Define.BagType.Prop then
+				self.ChooseMoudle:RefreshItemNum(itemid,itemcount,isAdd)
+			end
+		end
+	end)
+end
+
+function _P.SetBGSize(self,funId)
+	-- local ImgBg = self.mMoudle:Get("BG2")
+	-- local sizeY = 829
+	-- if funId == Define.SysId.Bag_Synthetic then
+	-- 	sizeY = 1125
+	-- end
+	-- ImgBg.transform.sizeDelta = Vector2(740,sizeY)
+end
+
+function _R.StaffChange(self,data)
+	WindowMgr.Create("UBagStaffChange",data)
+end
+
+function _R.GirlChange(self,data)
+	WindowMgr.Create("UBagGirlChange",data)
+end
+
+function _R.UsePackage(self,list)
+	if MBag.LastChoose == Define.SysId.Bag_Goods then
+		self.ChooseMoudle:ShowUsePackage(list)
+	end
+end
+
+function _R.UpdateFashionState(self,data)
+	if MBag.LastChoose == Define.SysId.Bag_Fashion then
+		self.ChooseMoudle:UpdateFashionState(data)
+	end
+end
+
+function _R.AddNewStaff(self,staffid)
+	local csvStaff = Csv.Personnel[staffid]
+	if csvStaff ~= nil then
+		CCommon.ShowRight(Csv.Text("bag_cgjh",{name = csvStaff.name}))
+	end
+end
+
+function _R.OnBagMergeSuccess(self)
+	if MBag.LastChoose == Define.SysId.Bag_Synthetic then
+		self.ChooseMoudle:BagMergeSuccess()
+	end
+end
+
+function _R.RefreshSelect(self)
+	if MBag.LastChoose == Define.SysId.Bag_Goods then
+		self.ChooseMoudle:RefreshSelect()
+	end
+end
+
+function _R.ShowSellGeted(self)
+	if MBag.LastChoose == Define.SysId.Bag_Goods then
+		self.ChooseMoudle:ShowSellGeted()
+	end
+end
+
+return _M

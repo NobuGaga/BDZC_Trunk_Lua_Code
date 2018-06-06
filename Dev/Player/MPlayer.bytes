@@ -1,0 +1,272 @@
+local _M = {}
+_M.PlayerLevelUpRedpoint = false
+_M.IsNotOpenPop = nil
+_M.HeadTable = {}
+_M.LastChoose = nil
+_M.HeadAllAttr = nil
+
+local function InitPlayerInfo()
+	local info =
+	{
+		id = 0,		--编号
+		name = "TEST",	--名称
+		power = 0,	--势力
+		vip = 0,	--VIP等级
+		level = 1,	--当前等级
+		exp = 0,	--当前经验
+		avatar = 
+		{
+			head = 101,
+			body = 1,
+		},--外观     
+		attr = {},	--属性
+		sex = 1,
+		titleID = 0,--称号id 0没有穿
+		dress = {},
+		titleList = {},
+		serverId = 0, --区服ID
+	}
+	for _,v in pairs(Define.AttrType) do
+		info.attr[v] = 0
+	end
+	return info
+end
+_M.PlayerInfo = InitPlayerInfo()
+
+_M.NoticeIndex = 0
+_M.NoticeList = {}
+
+function _M.Clean()
+	_M.NoticeIndex = 0
+	_M.NoticeList = {}
+	_M.PlayerLevelUpRedpoint = false
+	_M.IsNotOpenPop = nil
+	_M.PlayerInfo = InitPlayerInfo()
+	_M.HeadTable = {}
+	_M.LastChoose = nil
+	_M.HeadAllAttr = nil
+end
+
+function _M.EnqueueNotice(level, hierarchy, effectType, str, loop)
+	table.insert(_M.NoticeList, {index = _M.NoticeIndex, level = level, hierarchy = hierarchy, effectType = effectType, str = str, loop = loop})
+	_M.NoticeIndex = _M.NoticeIndex + 1
+
+	if #_M.NoticeList > 0 then
+		table.sort(_M.NoticeList, function(a, b)
+			if a.level == b.level then
+				return a.index < b.index
+			end
+			return a.level > b.level
+		end)
+	end
+end
+
+function _M.PeekNotice()
+	if #_M.NoticeList > 0 then
+		return _M.NoticeList[1]
+	end
+	return nil
+end
+
+function _M.DequeueNotice()
+	if #_M.NoticeList > 0 then
+		local first = _M.NoticeList[1]
+		first.loop = first.loop - 1
+		if first.loop < 1 then
+			table.remove(_M.NoticeList, 1)
+		end
+		return first
+	end	
+	return nil
+end
+
+function _M.GetId()
+	return _M.PlayerInfo.id
+end
+
+function _M.GetSex()
+	return _M.PlayerInfo.sex
+end
+
+function _M.GetName()
+	return _M.PlayerInfo.name
+end
+
+function _M.GetLevel()
+	return _M.PlayerInfo.level
+end
+
+function _M.GetPower()
+	return _M.PlayerInfo.power
+end
+
+function _M.GetExp()
+	return _M.PlayerInfo.exp
+end
+
+function _M.GetServerId()
+	return _M.PlayerInfo.serverId
+end
+
+function _M.GetVip()
+	return _M.PlayerInfo.vip
+end
+
+function _M.GetAttrList()
+	return _M.PlayerInfo.attr
+end
+
+function _M.GetAttr(key)
+	return _M.PlayerInfo.attr[key] or _M.PlayerInfo.attr[Define.AttrIndex[key]]
+end
+
+function _M.GetTitleID()
+	return _M.PlayerInfo.titleID
+end
+
+function _M.GetHeadID()
+	return _M.PlayerInfo.avatar.head
+end
+
+function _M.GetBodyID()
+	return _M.PlayerInfo.avatar.body
+end
+
+function _M.GetDress()
+	return _M.PlayerInfo.dress
+end
+
+function _M.GetTitleList()
+	return _M.PlayerInfo.titleList
+end
+
+_M.Attr2StrCache = nil
+function _M.Attr2Str(key)
+	if _M.Attr2StrCache == nil then
+		_M.Attr2StrCache = 
+		{
+			[Define.AttrType.Wuli] = Csv.Text("staff_attri1"),
+			[Define.AttrType.Zhengzhi] = Csv.Text("staff_attri3"),
+			[Define.AttrType.Meili] = Csv.Text("staff_attri4"),
+			[Define.AttrType.Zhili] = Csv.Text("staff_attri2")
+		}
+	end
+	return _M.Attr2StrCache[key] or _M.Attr2StrCache[Define.AttrIndex[key]]
+end
+
+function _M.GetAvatar( ... )
+	return _M.PlayerInfo.avatar
+end
+
+--获取头资源
+function _M.GetHeadSp()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.head]
+	return avatarCsv["asset_".._M.PlayerInfo.sex]
+end
+
+function _M.GetBodySp()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.body]
+
+	if _M.PlayerInfo.titleID > 0 then
+		local fashionData = Csv.Title[_M.PlayerInfo.titleID]
+		avatarCsv = Csv.Avatar[fashionData.avatarId]
+	end
+	
+	return avatarCsv["asset_".._M.PlayerInfo.sex]
+end
+
+--获取头图标
+function _M.GetHeadIcon()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.head]
+	return avatarCsv["icon_".._M.PlayerInfo.sex]
+end
+--获取小头图标
+function _M.GetSHeadIcon()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.head]
+	return avatarCsv["createIcon_".._M.PlayerInfo.sex]
+end
+
+function _M.GetHeadPrefabID()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.head]
+	return avatarCsv["prefab_".._M.PlayerInfo.sex]
+end
+
+function _M.GetBodyPrefabID()
+	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.body]
+	return avatarCsv["prefab_".._M.PlayerInfo.sex]
+end
+
+function _M.GetPrefabID(avatarId, sex)
+	local avatarCsv = Csv.Avatar[avatarId]
+	return avatarCsv["prefab_"..sex]
+end
+
+function _M.HeadIconFromSex(avatarId, sex, isCreateIcon)
+	local csv = Csv.Avatar[avatarId]
+	if sex == Define.Sex.Female then
+		if isCreateIcon then
+			return csv.createIcon_1
+		else
+			return csv.icon_1
+		end
+	else
+		if isCreateIcon then
+			return csv.createIcon_2
+		else
+			return csv.icon_2
+		end
+	end
+end
+
+function _M.GetSpFromSex(avatarId, sex)
+	local avatarCsv = Csv.Avatar[avatarId]
+	if sex == Define.Sex.Female then
+		return avatarCsv.asset_1
+	else
+		return avatarCsv.asset_2
+	end
+end
+
+function _M.GetOtherHeadIcon(head,sex)
+	local avatarCsv = Csv.Avatar[head]
+	return avatarCsv["createIcon_"..sex]
+end
+
+function _M.GetOtherHeadYuanIcon(head,sex)
+	local avatarCsv = Csv.Avatar[head]
+	return avatarCsv["icon_"..sex]
+end
+
+function _M.GetOtherHeadAsset(head,sex)
+	local avatarCsv = Csv.Avatar[head]
+	return avatarCsv["asset_"..sex]
+end
+
+function _M.SetHeadTable(data)
+	local headTable = _M.HeadTable
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			headTable[v] = {headid = v}
+		end
+	end
+	_M.SetHeadAllAttr(data.attr)
+end
+
+function _M.UpdateHeadTable(data)
+	local headTable = _M.HeadTable
+	if data.headid ~= nil then
+		headTable[data.headid] = {headid = data.headid}
+	end
+	_M.SetHeadAllAttr(data.attr)
+end
+
+function _M.SetHeadAllAttr(attr)
+	local headAllAttr = _M.HeadAllAttr or {}
+	headAllAttr.Wuli = attr.Wuli
+	headAllAttr.Zhili = attr.Zhili
+	headAllAttr.Zhengzhi = attr.Zhengzhi
+	headAllAttr.Meili = attr.Meili
+	_M.HeadAllAttr = headAllAttr
+end
+
+return _M

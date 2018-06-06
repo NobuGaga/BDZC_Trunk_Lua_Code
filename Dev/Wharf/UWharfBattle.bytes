@@ -1,0 +1,148 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire"Dev.Common.CCommon"
+local CWharf = JRequire "Dev.Wharf.CWharf"
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+local MCar = JRequire "Dev.Car.MCar"
+
+local EffectID = 16
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ChallengeResult(self,data)
+	if data.result == 1 then
+
+	else
+
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_PK")
+	local closeBtn = moudle:Get("C_Btn_c")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+
+	moudle:Get("C_text").Text = Csv.Text("Wharf_battle_fight")
+	moudle:Get("C_text_0").Text = Csv.Text("Wharf_battle_cancel")
+
+	local tips1 = moudle:Get("text1")
+	local tips2 = moudle:Get("text")
+
+	local bg1 = moudle:Get("Bg1")
+	local bg2 = moudle:Get("Bg2")
+	local content = moudle:Get("content")
+
+	local enemySp = moudle:Get("Bsx1")
+	local ownSp = moudle:Get("Bsx2")
+	local ownHead = moudle:Get("head")
+	local enemyPowerText = moudle:Get("ZdlNum")
+	local ownPowerText = moudle:Get("ZdlNum_0")
+	local enemyTalk = moudle:Get("Tips")
+	
+	local enemyData = Csv.WharfEvent[id]
+
+	local enemyPower = enemyData.npcPower
+	local ownPower =_P.GetTypePower(self,enemyData.npcPowerType)
+
+	enemyTalk.Text = enemyData.talk
+	enemyPowerText.Text = _P.GetPowerName(enemyData.npcPowerType) .."："..enemyPower--Csv.Text("Wharf_battle_power",{num = enemyPower})
+	ownPowerText.Text = _P.GetPowerName(enemyData.npcPowerType) .."："..ownPower--Csv.Text("Wharf_battle_power",{num = ownPower})
+	tips1.Text = Csv.Text("Wharf_battle_tips",{name = enemyData.name,type = enemyData.npcTypeName})
+	tips2.Text = Csv.Text("Wharf_battle_level",{level = _P.GetBattleLevel(self,enemyPower,ownPower)})
+
+	enemySp.SpriteName = enemyData.bigIcon
+	enemySp.LocalPosition = Vector2(enemyData.bigIconPox[1],enemyData.bigIconPox[2])
+	enemySp.SizeDelta = Vector2(enemyData.bigIconSize[1],enemyData.bigIconSize[2])
+	--enemySp:SetNativeSize()
+	ownSp.SpriteName = MPlayer.GetBodySp()
+	ownHead.SpriteName = MPlayer.GetHeadSp()
+
+	local fightBtn = moudle:Get("C_Btn_b")
+	fightBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		--发送挑战协议
+		--Wharf_noCar
+		if enemyData.npcPowerType == 2 then
+			if MCar.GetTotalPowerNum() <= 0 then
+				CCommon.CheckTips(function(isSure,rg)
+					self:OnNoCar(isSure, arg)
+				end,{content = Csv.Text("Wharf_noCar")},nil,"UItemCheckBox")
+				return
+			end
+		end
+		CWharf.ReqChallenge(id)
+		WindowMgr.Create("UWharfBattling",id)
+	end)
+	
+	for k,v in pairs(enemyData.reward)do
+		local rewardItem = CCommon.CreateItem(content,v[1],function ( ... )
+			WindowMgr.Create("UBagDetailPop", v[1])
+		end, {num = v[2]})
+	end
+
+	-- local effectMoudle = CCommon.CreateEffect(moudle.SelfRect,EffectID,Vector2(0,240),nil,{M_Effect_Achieve_Get = "mn_079"},nil,nil,0.2)
+	-- effectMoudle:Get("M_Effect_Achieve_Get").SizeDelta = Vector2(255,225)
+	local fxNode = moudle:Get("FxNode")
+	fxNode:AddOnTime(function ( ... )
+		CCommon.CreateEffect(fxNode, 10135)
+	end, nil, 0.2)
+	moudle.SelfRect:AddOnTime(function()
+		moudle.SelfRect:DOShakeAnchorPos(0.5,10,50,200)
+	end,nil,0.4)
+end
+
+function _M:OnNoCar(isSure, arg)
+	if isSure == true then
+		--进入别墅，进入车界面
+		WindowMgr.Call("UMain","SwitchCenterBtns",false)
+		WindowMgr.Create("UHomeMap")
+		WindowMgr.Create("UCarMainPanel")
+	end
+end
+
+function _P.GetTypePower(self,type)
+	if type == 1 then
+		return MAircraft.AllPower
+	elseif type == 2 then
+		return MCar.GetTotalPowerNum()
+	else
+		return MPlayer.GetPower()
+	end
+end
+
+function _P.GetPowerName(type)
+	if type == 1 then
+		return Csv.Text("Wharf_battle_type_1")
+	elseif type == 2 then
+		return Csv.Text("Wharf_battle_type_2")
+	else
+		return Csv.Text("Wharf_battle_type_3")
+	end
+end
+
+function _P.GetBattleLevel(self,enemyPower,ownPower)
+	if enemyPower >= ownPower then
+		return "<color=#ff5d8c>"..Csv.Text("Wharf_battle_difficult").."</color>"
+	else
+		return "<color=#5d99ff>"..Csv.Text("Wharf_battle_easy").."</color>"
+	end
+end
+
+return _M

@@ -1,0 +1,51 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(actId)
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local csv = Csv.ActiveAward[actId]
+	local moudle = self:CreateMoudle(self._RootNode, "M_Daily_Preview")
+	moudle:Get("border").RaycastTarget = true
+	moudle:Get("back_btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("text1").Text = Csv.Text("quest_actPre")
+	moudle:Get("text2").Text = Csv.Text("quest_actPreGet")
+	moudle:Get("text3").Text = Csv.Text("quest_unlock")
+	moudle:Get("text4").Text = Csv.Text("quest_act1", {num = csv.unlock})
+
+	local items = moudle:Get("Items")
+	if csv.show ~= nil then
+		local itemCsv
+		local color
+		local item
+		for _,v in pairs(csv.show) do
+			itemCsv = Csv.Item[v]
+			color = JGuiManager.CreateImage(items, tostring(v))
+			color.SpriteNameAutoScale = itemCsv.colorIcon
+
+			item = JGuiManager.CreateImage(color, "icon")
+			item.SpriteNameAutoScale = itemCsv.icon
+
+			color:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("UBagDetailPop",v)
+			end, nil, 1.2)
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,42 @@
+-- 员工光环技能详情界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(aureoleConf)
+	local module = self:CreateMoudle(self._RootNode, "M_Activity_Item")
+	if aureoleConf == nil or module == nil then return end
+
+	module:Get("Title").Text = Csv.Text("jianchen_skill_title")
+	local closeBtn = module:Get("C_backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("JnIcon").SpriteName = aureoleConf.icon
+
+	local boxImg = module:Get("JnBox")
+	boxImg.Activity = aureoleConf.iconColor
+	if aureoleConf.iconColor then
+		boxImg.SpriteName = aureoleConf.iconColor
+	end
+	module:Get("Name").Text = aureoleConf.name
+	module:Get("Tips").Text = aureoleConf.skillDesc
+end
+
+
+return _M

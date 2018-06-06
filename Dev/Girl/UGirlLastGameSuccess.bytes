@@ -1,0 +1,50 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(data)
+	--[[
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UGirlLastDate",data.girlid)
+	end)
+	--]]
+	
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Game_Success")
+
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	
+	moudle:Get("BtnText").Text = Csv.Text("lastgirl_gotodate")
+
+	local tips = moudle:Get("text1")
+	local goBtn = moudle:Get("Btn")
+	goBtn:AddOnButton(function(...)
+		WindowMgr.Create("UGirlLastDate",data.girlid)
+	end)
+
+	local girlData = Csv.KnowGirl[data.girlid]
+	tips.Text = girlData.successTips
+	moudle:Get("C_Text").Text = girlData.name --Csv.Text("lastgirl_talktitle")
+	
+end
+
+return _M

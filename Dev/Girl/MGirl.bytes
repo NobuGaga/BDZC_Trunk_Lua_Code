@@ -1,0 +1,1324 @@
+local CCommon = JRequire"Dev.Common.CCommon"
+local EventCenter = JRequire "Dev.EventCenter"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MWharf = JRequire"Dev.Wharf.MWharf"
+local _M = {}
+local _P = {}
+
+_M.GIRL_GIFT_ID = Csv.Const(Define.Const.GirlGiftIDs)--美女礼物id固定
+_M.GIRL_REFRESH_DATE_ID = Csv.Const(Define.Const.GirlRefreshDateID) --美女清約會CD
+_M.TOGGLE_ID = {GIRL = 10201,KNOWN = 10205,FUJIN = 10202,FRIENDROUND = 10206}
+
+_M.redPoint = false
+_M.MaxEnergy = 3
+_M.EnergyCD = 1800--cd
+
+_M.UnlockGirls = {} --解锁美女
+_M.lockGirls = {}  --锁住美女
+_M.selectToggle = 1
+_M.energy = 0 -- 精力
+_M.gainEnergyLeftTick = 0 --恢复精力倒计时(单位秒)
+
+_M.isDateCrit = false --约会暴击
+_M.dateEventID = 0--约会事件
+_M.isDateRoom = false--约会开房
+_M.isBaby = false --触发生娃
+_M.dateBabyID = 0--约会生娃
+
+
+_M.isRandomDate = false --是否随机约会
+_M.isRefreshTime = false --是否在倒计时
+_M.Handle = nil
+_M.isRefreshBabyTick = false --是否在倒计时
+_M.BabyHandle = nil
+
+_M.UnlockRedPoint = false
+_M.FriendChange = 0--友谊值增加量
+
+-----------------------------
+---------子嗣---------------
+----------------------------
+_M.babyVitaCD = Csv.Const(20)[7]--3600
+_M.babyMaxSeats = 0 --最大席位
+_M.babyTab = {}--_M.TextGetBaby()
+_M.newBaby = {} --新宝宝
+_M.selectBaby = 1 --當前選擇寶寶
+_M.babyName = "" --临时存储宝宝名称
+_M.newBabyID = 0
+_M.babyRedPoint = false -- 宝宝红点
+_M.babyTeachList = {} --宝宝一键恢复列表
+
+-----------------------------
+---------联姻---------------
+----------------------------
+_M.unmarrieds = {}
+_M.marrieds = {}
+_M.MarriedQingqiu = {} --结婚请求列表
+_M.ZhaoqinList = {}
+_M.MarriedToggleSelect = 0 --选择页签
+_M.MarriedSelectID = 0 -- 结婚界面选择孩子id
+_M.ZhaoqinCD = 0 --招亲CD
+_M.TiqinSelectID = 0
+_M.SelectQingqiuID = 0 --
+_M.MarriedScuessList = {}--存储结婚成功列表
+
+
+-----------------------
+--认识美女------------
+------------------
+_M.knowGirl = {}
+_M.isCanTalk = false
+_M.lastDateScore = 0
+_M.moments = {}
+_M.isKnowTick = false
+_M.knowHandle = nil
+_M.knownRed = false
+_M.friendRed = false
+_M.selfFriendRed = false
+_M.lastTalkRed = false
+
+--手机部分
+_M.isShowPhoneActor = false
+--改名
+_M.girlNames = {}
+
+---------------------------------
+function _M.Clean()
+	luaUtil.CloseTimeHandle()
+
+	if _M.isRefreshTime then
+		EventCenter.UnRegistCallEvent(_M.Handle )
+	end
+	if _M.isKnowTick then
+		EventCenter.UnRegistCallEvent(_M.knowHandle)
+	end
+	if _M.isRefreshBabyTick then
+		EventCenter.UnRegistCallEvent(_M.BabyHandle)
+	end
+
+	_M.redPoint = false
+	_M.UnlockGirls = {}
+	_M.lockGirls = {}
+	_M.selectToggle = 1
+	_M.energy = 0 
+	_M.gainEnergyLeftTick = 0 
+
+	_M.isDateCrit = false
+	_M.dateEventID = 0
+	_M.isDateRoom = false
+	_M.isBaby = false
+	_M.dateBabyID = 0
+
+	_M.Handle = nil
+	_M.BabyHandle = nil
+
+	_M.UnlockRedPoint = false
+	_M.FriendChange = 0
+	_M.isRefreshTime = false
+	_M.isRefreshBabyTick = false
+
+	--------
+	_M.babyMaxSeats = 0 --最大席位
+	_M.babyTab = {}--_M.TextGetBaby()
+	_M.newBaby = {} --新宝宝
+	_M.selectBaby = 1 --當前選擇寶寶
+	_M.babyName = "" --临时存储宝宝名称
+	_M.newBabyID = 0
+	_M.babyRedPoint = false -- 宝宝红点
+	_M.babyTeachList = {}
+	-------------
+	_M.unmarrieds = {}
+	_M.marrieds = {}
+	_M.MarriedQingqiu = {} --结婚请求列表
+	_M.ZhaoqinList = {}
+	_M.MarriedToggleSelect = 0 --选择页签
+	_M.MarriedSelectID = 0 -- 结婚界面选择孩子id
+	_M.ZhaoqinCD = 0 --招亲CD
+	_M.TiqinSelectID = 0
+	_M.SelectQingqiuID = 0 --
+	_M.MarriedScuessList = {}--存储结婚成功列表
+
+	------------------
+	_M.isCanTalk = false
+	_M.lastDateScore = 0
+	_M.knowGirl = {}
+	_M.moments = {}
+	
+	_M.knowHandle = nil
+	_M.isKnowTick = false
+	_M.lastTalkRed = false
+
+	_M.isShowPhoneActor = false
+	_M.girlNames = {}
+end
+
+--
+
+function _M.Init(GirlsTable)
+	--获取解锁列表
+	_M.UnlockGirls = {}
+	for k,v in pairs(GirlsTable)do
+		local data = {
+			id = v.id,
+			intimacy = v.intimacy,
+			charm = v.charm,
+			friend = v.friend,
+			children = v.children,
+			skills = v.skills,
+			chat = v.chat,
+			name = _P.SetGirlName(v.id,v.name),
+		}
+		table.insert(_M.UnlockGirls,data)
+	end
+
+	_M.lockGirls = {}
+	
+	local lockGirlsID = Csv.Girl
+	for key,var in pairs(lockGirlsID) do
+		if _M.CheckKeyInTable(GirlsTable,key) == false then	
+			table.insert(_M.lockGirls, {id = key})
+		end
+	end
+
+	_M.MaxEnergy = Csv.Vip[MPlayer.GetVip()].grilDateEnergy
+	if _M.MaxEnergy <= 3 then
+		_M.MaxEnergy = 3
+	end
+
+	--亲密度更新检测朋友圈状态
+	_M.CheckFriendRoundRed()
+	WindowMgr.Call("UWharf","UpdatePokeRed")--检测
+end
+
+function _M.Energy(energy)
+	_M.energy = energy
+	if energy > 0 then -- ResetEnergy
+		WindowMgr.Call("UGirlUnlock","ResetEnergy",energy)
+		CGirl.CheckUnlockRedpoint()
+	end
+end
+
+function _M.EnergyLeftTick(tick)
+	_M.gainEnergyLeftTick = HeartBeat.ServSecond() + tick --应该是一个时间戳
+	if tick > 0 then
+		_M.RefreshTime()
+	end
+end
+
+function _M.GetMaxEnergy(max)
+	_M.MaxEnergy = max
+end
+
+function _M.GetEnergyCD(max)
+	_M.EnergyCD = max
+end
+
+--更新约会
+
+
+function _M.CleanDate()
+	_M.isDateCrit = false
+	_M.dateEventID = 0
+	_M.isDateRoom = false
+	_M.isBaby = false
+	_M.dateBabyID = 0
+	
+end
+
+--PGirlMsg
+function _M.UpdateGirls(data)
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == data.id then
+			v = data
+		end
+	end
+	_M.UnlockGirls = unlockTab
+end
+
+--PGirlMsg
+function _M.NewGirl(data)
+	local unlockTab = _M.UnlockGirls
+	table.insert(unlockTab,data)
+
+	local lockTab = {}
+	local lockGirlsID = Csv.Girl
+	for key,var in pairs(lockGirlsID) do
+		if _M.CheckKeyInTable(unlockTab,key) == false then	
+			table.insert(lockTab, {id = key} )
+		end
+	end
+	_M.lockGirls = lockTab
+	_M.UnlockGirls = unlockTab
+	--更新美女消息
+	_P.RefuseKnowGirl(data.id)
+	WindowMgr.Call("UWharf","UpdatePokeRed")
+end
+
+--约会生娃新增宝宝
+function _M.AddBaby(id)
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == id then
+			v.children = v.children +1
+		end
+	end
+	_M.UnlockGirls = unlockTab
+end
+
+--更新親密度
+function _M.UpdateIntimacy(data)
+
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == data.girlid then
+			v.intimacy = data.intimacy
+		end
+	end
+	_M.UnlockGirls = unlockTab
+
+	--亲密度更新检测朋友圈状态
+	_M.CheckFriendRoundRed()
+end
+
+function _M.UpdateCharm(data)
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == data.girlid then
+			v.charm = data.charm
+		end
+	end
+	_M.UnlockGirls = unlockTab
+end
+
+function _M.UpdateFriend(data)
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == data.girlid then
+			v.friend = data.friend
+			_M.FriendChange = data.changefriend
+			if data.changefriend > 0 then
+				--CCommon.ShowError(Csv.Text("Girl_friendName")..Csv.Text("Girl_skill_add")..data.changefriend)
+			end
+		end
+	end
+	_M.UnlockGirls = unlockTab
+end
+
+function _M.UpdateSkill(data)
+	local unlockTab = _M.UnlockGirls
+	for k,v in pairs(unlockTab) do
+		if v.id == data.girlid then
+			for sk,sv in pairs(v.skills) do
+				if sv.key == data.skillid then
+					sv.value = data.skilllv
+				end
+			end
+		end
+	end
+	_M.UnlockGirls = unlockTab
+end
+
+function _M.RefreshTime()
+	local tick = _M.gainEnergyLeftTick
+
+	if _M.isRefreshTime == false then
+		if  _M.energy < _M.MaxEnergy and  tick>0 then
+			_M.isRefreshTime = true
+
+			_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+
+				tick = _M.gainEnergyLeftTick - HeartBeat.ServSecond()
+				if tick <= 0 then
+					if _M.energy <  _M.MaxEnergy then
+						_M.Energy(_M.energy+1)
+					end
+					if _M.energy >= _M.MaxEnergy then
+						EventCenter.UnRegistCallEvent(eventHandle)
+						_M.isRefreshTime = false
+					else
+						_M.EnergyLeftTick(_M.EnergyCD)
+					end
+				end
+			end)
+		end
+	end
+end
+
+
+--工具函数
+
+function _M.GetGirlData(id)
+	local unlockTab = _M.UnlockGirls
+	if unlockTab ~= nil then
+		for k,v in pairs(unlockTab) do
+
+			if v.id == id then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.CheckKeyInTable(table,_key)
+	if table ~= nil then
+		for key,var in pairs(table) do
+			if table[key].id == _key then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetSkillLvByID(girlID,skillID)
+	local tables = _M.UnlockGirls
+	if tables ~= nil then
+		for k,v in pairs(_M.UnlockGirls) do
+			if v.id == girlID then
+				for _skillID,_skillLv in pairs(v.skills) do
+					if _skillLv.key == skillID then
+						return _skillLv.value
+					end
+				end
+			end
+		end
+	end
+	return 1
+end
+
+function _M.GetGirlSkillAttr(type)
+	if type == 1 then
+		return Csv.Text("Girl_skill_type1")
+	elseif type == 2 then
+		return Csv.Text("Girl_skill_type2")
+	elseif type == 3 then
+		return Csv.Text("Girl_skill_type3")
+	elseif type == 4 then
+		return Csv.Text("Girl_skill_type4")
+	end
+end
+
+function _M.GetGirlDateCost(id)
+	local cost = 0
+	local unlockTab = _M.UnlockGirls
+	if unlockTab ~= nil then
+		for k,v in pairs(unlockTab) do
+			if v.id == id then
+				cost = v.intimacy *10
+			end
+		end
+	end
+
+	if cost >= 1000 then
+		cost = 1000
+	end
+
+	return cost
+end
+
+function _M.ShowErrorByChange(name,value)
+	if value >0 then
+		CCommon.ShowError(name..Csv.Text("Girl_skill_add")..value)
+	end
+end
+
+function _M.CheckCanDate()
+	if _M.energy >0 then
+		return true
+	end
+	return false
+end
+
+function _M.CheckUnlockGift()
+	local girls = _M.UnlockGirls
+	local gifts = _M.GIRL_GIFT_ID
+	
+	if girls ~= nil then
+		for k,v in pairs(gifts) do
+			local itemNum = MBag.GetItemNum(v)
+			if itemNum > 0 then
+				return true
+			end 
+		end
+	end
+	return false
+end
+
+function _M.CheckSkill()
+	local girls = _M.UnlockGirls
+
+	local skills = {}
+	local skillCost = 0
+	local level = 0
+	local Csvdata = {}
+	local Costdata = {}
+	if girls ~= nil then
+		for k,v in pairs(girls) do
+			skills = v.skills
+			for sk,sv in pairs(skills) do
+				Csvdata = Csv.GirlSkill[sv.key]
+				Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+sv.value+1]
+				skillCost = Costdata.cost
+
+				if skillCost <= v.friend and  sv.value > 0 then
+					return true
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+function _M.CheckSkillByGirl(girlID)
+	local girls = _M.UnlockGirls
+
+	local skills = {}
+	local skillCost = 0
+	local level = 0
+	local Csvdata = {}
+	local Costdata = {}
+	if girls ~= nil then
+		for k,v in pairs(girls) do
+			if v.id == girlID then
+				skills = v.skills
+				for sk,sv in pairs(skills) do
+					Csvdata = Csv.GirlSkill[sv.key]
+					Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+sv.value]
+					if Costdata ~= nil and Costdata.cost ~= 0 then
+						skillCost = Costdata.cost
+
+						if skillCost <= v.friend and  sv.value > 0 then
+							return true
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return false
+end
+
+--已解锁聊天--
+function _M.ChatNewMsg(data)
+	for k,v in pairs(_M.UnlockGirls)do
+		if v.id == data.girlid then
+			local chatDialo = v.chat.dialogues
+			if chatDialo == nil then
+				chatDialo = {}
+			end
+			table.insert(chatDialo,data.dialogueId)
+			v.chat.dialogues = chatDialo
+		end
+	end
+end
+
+function _M.AddChatMsg(data)
+	for k,v in pairs(_M.UnlockGirls)do
+		if v.id == data.girlid then
+			local chatDialo = v.chat.dialogues
+			if chatDialo == nil then
+				chatDialo = {}
+			end
+			table.insert(chatDialo,data.dialogueId)
+			v.chat.dialogues = chatDialo
+		end
+	end
+end
+
+---------------------------------------------------------------
+------------------最近联系-------------------------------------
+--------------------------------------------------------------
+function _M.InitKnowGirl(data)
+	_M.knowGirl = {}
+	for k,v in pairs(data)do
+		local knowData = {girlid = v.id,
+						intimacy = v.intimacy,
+						charm = v.charm,
+						friend = v.friend,
+						state = v.state,
+						chat = v.chat,
+						game = v.game,
+						cd = v.cd }
+		if knowData.cd ~= nil then
+			knowData.cd = v.cd+ HeartBeat.ServSecond()
+		end
+		table.insert(_M.knowGirl,knowData)
+	end
+
+	_M.RefreshKnowTick()
+	_M.CheckKnowRedPoint()
+end
+
+function _M.InitKnownGirlByUnlock(unlockGirls)
+	--已解锁的美女状态设为4
+	if unlockGirls ~= nil then
+		for k,v in pairs(unlockGirls)do
+			local unlockData = {girlid = v.id,
+							intimacy = v.intimacy,
+							charm = v.charm,
+							friend = v.friend,
+							state = 4, 
+							chat = v.chat}
+			table.insert(_M.knowGirl,unlockData)
+		end
+	end
+	_M.CheckKnowRedPoint()
+end
+
+function _M.NewGirlKnown(data)
+	local knowData = {girlid = data.id,
+					intimacy = data.intimacy,
+					charm = data.charm,
+					friend = data.friend,
+					state = data.state,
+					chat = data.chat,
+					game = data.game,
+					cd = data.cd}
+	table.insert(_M.knowGirl,knowData)
+	_M.CheckKnowRedPoint()
+
+	--移除寻访中美女列表
+	MWharf.RemoveGirl(data.id)
+
+	--手机提醒
+	_M.isShowPhoneActor = true
+	WindowMgr.Call("UMain","ShowPhoneAnim")
+end
+
+function _M.UpdateGirlKnown(data)
+	for k,v in pairs(_M.knowGirl)do
+		if v.girlid == data.id then
+			v.intimacy = data.intimacy
+			v.charm = data.charm
+			v.friend = data.friend
+			v.state = data.state
+			v.chat = data.chat
+			if data.game ~= nil then
+				v.game = {
+					recoverEnergy = data.game.recoverEnergy,
+					ownEnergy = data.game.ownEnergy,
+					ownMaxEnergy = data.game.ownMaxEnergy,
+					girlEnergy = data.game.girlEnergy,
+				}--data.game
+			end
+			if data.cd ~= nil then
+				v.cd = data.cd +  HeartBeat.ServSecond()
+			end
+			WindowMgr.Call("UGirl","UpdateKnowGirl",v)
+			WindowMgr.Call("UGirlLastGame","UpdateData")
+		end
+	end
+	_M.RefreshKnowTick()
+	_M.CheckKnowRedPoint()
+
+end
+
+function _P.RefuseKnowGirl(id)
+	for k,v in pairs(_M.knowGirl)do
+		if v.girlid == id then
+			v.state = 4
+			WindowMgr.Call("UGirl","RefuseKnowGirl",v)
+		end
+	end
+	
+	_M.CheckKnowRedPoint()
+end
+
+--已解锁美女聊天回复
+function _M.RefreshUnlockGirlTalk(data)
+	for k,v in pairs(_M.knowGirl)do
+		if v.girlid == data.girlid then
+			local chatDialo = v.chat.dialogues
+			if chatDialo == nil then
+				chatDialo = {}
+			end
+			table.insert(chatDialo,data.dialogueId)
+			v.chat.dialogues = chatDialo
+			
+			--解锁美女聊天
+			WindowMgr.Call("UGirl","RefreshGirlTalk",v)
+			
+			--手机提醒
+			if not WindowMgr.IsCreated("UGirl") then
+				_M.isShowPhoneActor = true
+				WindowMgr.Call("UMain","ShowPhoneAnim")
+			end
+		end
+	end
+	_M.CheckKnowRedPoint()
+end
+
+function _M.InitMoments(data)
+	_M.moments = {}
+	for k,v in pairs(data)do
+
+		local moment = {id = v.id,commentId = v.commentId}
+		table.insert(_M.moments,moment)
+	end
+	_M.CheckFriendRoundRed()
+end
+
+function _M.NewMoment(data)
+	if _M.GetMoments(id) == nil then
+		table.insert(_M.moments,data)
+	end
+
+	_M.CheckFriendRoundRed()
+end
+
+function _M.UpdateMoment(data)
+	if _M.moments ~= nil then
+		for k,v in pairs(_M.moments)do
+			if v.id == data.id then
+				v.commentId = data.commentId
+			end
+		end
+	end
+	_M.CheckFriendRoundRed()
+end
+
+---工具--
+function _M.GetKnowGirlData(id)
+	if _M.knowGirl ~=nil then
+		for k,v in pairs(_M.knowGirl)do
+			if v.girlid == id then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.CheckNewMoment(id)
+
+end
+
+function _M.GetMoments(id)
+	if _M.moments ~= nil then
+		for k,v in pairs(_M.moments)do
+			if v.id == id then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.CheckKnowRedPoint()
+	_M.knownRed = false
+	if _M.knowGirl ~=nil then
+		for k,v in pairs(_M.knowGirl)do
+			if v.state <= 3 then
+				if v.cd == nil or v.cd <= 0 then
+					_M.knownRed = true
+				end
+			else
+				--亲密度触发聊天红点
+				local talkID = 0
+				if v.chat.dialogues ~= nil then
+					for k2,v2 in pairs(v.chat.dialogues)do
+						talkID = v2
+					end
+			
+					local talkData = Csv.GirlTalk[talkID]
+					if talkData.nextTalk ~= nil then
+						if #talkData.nextTalk > 0 then
+							_M.knownRed = true
+						end
+					end
+				end
+			end
+		end
+	end
+	CMain.UpdateRedpoint(_M.knownRed,_M.TOGGLE_ID.KNOWN)
+	_M.CheckPhoneRed()
+	return false
+end
+
+function _M.CheckFriendRoundRed()
+	_M.friendRed = false
+	_M.selfFriendRed = false
+
+	if _M.moments ~= nil then
+		for k,v in pairs(_M.moments)do
+			local posData = Csv.GirlPost[v.id]
+			if posData ~= nil then
+				if posData.type ~= 0 then
+					if v.commentId == nil or v.commentId == 0 then
+						_M.friendRed = true
+					end
+				else
+				end	
+			end
+		end
+	end
+
+	--自身发表朋友圈
+	local posTab = _M.GetPosIds()
+	if #posTab > 0 then
+		_M.friendRed = true
+		_M.selfFriendRed = true
+	end
+	
+	WindowMgr.Call("UGirl","RefreshSelfFriendRed")
+	CMain.UpdateRedpoint(_M.friendRed,_M.TOGGLE_ID.FRIENDROUND)
+	_M.CheckPhoneRed()
+	return false
+end
+
+
+function _M.CheckPhoneRed()
+	if _M.friendRed or _M.knownRed or _M.lastTalkRed then
+		CMain.UpdateRedpoint(true,Define.SysId.Phone)
+	else
+		CMain.UpdateRedpoint(false,Define.SysId.Phone)
+	end
+end
+
+--对话倒计时
+function _M.RefreshKnowTick()
+	if _M.isKnowTick == false then
+		local tick = _P.GetKnowGirlTick()
+		if tick>0 then
+			_M.isKnowTick = true
+			_M.knowHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local _tick = _P.GetKnowGirlTick()
+				if _tick > 0 then
+					for k,v in pairs(_M.knowGirl)do
+						if v.cd ~= nil and v.cd >0 then
+							local _cd = v.cd - HeartBeat.ServSecond()
+							if _cd <= 0 then
+								v.cd = 0
+
+								WindowMgr.Call("UGirl","UpdateKnowGirl",v)
+								_M.CheckKnowRedPoint()
+							end
+						end
+					end
+				else
+					_M.isKnowTick = false
+					EventCenter.UnRegistCallEvent(eventHandle)
+				end
+			end)
+		end
+	end
+end
+function _P.GetKnowGirlTick()
+	local tick = 0
+	for k,v in pairs(_M.knowGirl)do
+		if v.cd ~= nil and v.cd >0 then
+			tick = v.cd
+		end
+	end
+	return tick
+end
+
+function _M.GetPosIds()
+	local unluckGirl = _M.UnlockGirls
+	
+	local girlPosId = {}
+	for k,v in pairs(unluckGirl)do
+		local girlData = Csv.Girl[v.id].intimacy_posts
+		for k2,v2 in pairs(girlData)do
+			if v.intimacy >= v2[1] then
+				local _posId = v2[2]
+				local data = Csv.GirlPost[_posId]
+				if data ~= nil then
+					if _M.GetMoments(_posId) == nil and data.type == 0 then
+						table.insert(girlPosId,{posId = _posId,girlid = v.id})
+					end
+				end
+			end
+		end
+	end
+	return girlPosId
+end
+
+--------------------------------------------------------------
+-------
+----------------------------------------------------------------
+
+
+---------------------------------------------------------------
+------------------子嗣系统-------------------------------------
+--------------------------------------------------------------
+
+function _M.GetBabySeats(seats)
+	_M.babyMaxSeats = seats --最大席位
+end
+
+function _M.GetBabyList(babyList)
+	if babyList ~= nil then
+		_M.babyTab = babyList
+	else
+		_M.babyTab = {}
+	end
+	--检测活力倒计时
+	for k,v in pairs(_M.babyTab)do
+		if v.energy.ncur<v.energy.nmax then
+			if v.energyRecoverCD > 0 then
+				v.energyRecoverCD = v.energyRecoverCD + HeartBeat.ServSecond()
+			end
+		end
+	end
+	_M.RefreshBabyTick()
+	_M.CheckBabyRedPoint()	
+end
+
+function _M.UpdateBaby(data)
+	local index = _M.GetBabyIndexByid(data.babyid)
+
+	if index > 0 then
+		_M.babyTab[index] = data
+
+		--检测活力倒计时
+		if data.energy.ncur<data.energy.nmax then
+			if data.energyRecoverCD > 0 then
+				data.energyRecoverCD = data.energyRecoverCD + HeartBeat.ServSecond()
+				_M.babyTab[index].energyRecoverCD = data.energyRecoverCD
+			end
+		end
+		_M.RefreshBabyTick()
+		_M.CheckBabyRedPoint()
+	end
+end
+
+function _M.GetNewBaby(data)
+	_M.newBaby = data
+	_M.newBabyID = data.babyid
+	table.insert(_M.babyTab,data)
+
+	_M.CheckBabyRedPoint()
+end
+
+function _M.ChangeBabyName(isSuccess)
+	if WindowMgr.IsCreated("UGirlBaby") then
+		local index = _M.GetBabyIndexByid(_M.selectBaby)
+		_M.babyTab[index].name = _M.babyName
+	elseif WindowMgr.IsCreated("UGirlMarried") then
+		local index = _M.GetUnMarriedIndex(_M.MarriedSelectID)
+		_M.unmarrieds[index].name = _M.babyName
+	end
+end
+
+function _M.UpdateSeats(_seats)
+	_M.babyMaxSeats = _seats --最大席位
+end
+
+function _M.BabyGraduate(id)
+	local index = _M.GetBabyIndexByid(id)
+	table.remove(_M.babyTab,index)
+
+	_M.CheckBabyRedPoint()
+end
+
+--工具---
+function _M.GetBabyIndexByid(id)
+	for k,v in pairs(_M.babyTab) do
+		if v.babyid == id then
+			return k
+		end
+	end
+	return 0
+end
+
+function _M.GetBabyDataByID(id)
+	for k,v in pairs(_M.babyTab) do
+		if v.babyid == id then
+			return v
+		end
+	end
+	return nil
+end
+
+function _M.CheckBabyRedPoint()
+
+	_M.babyRedPoint = false
+	if _M.babyTab ~= nil then
+		for k,v in ipairs(_M.babyTab)do
+			if v.energy.ncur > 0 or v.level.ncur >= v.level.nmax then
+				_M.babyRedPoint = true
+			end
+		end
+	end
+	
+	CMain.UpdateRedpoint(_M.babyRedPoint,Define.SysId.Girl_Baby)
+	if WindowMgr.IsCreated("UWorldMap") then
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	end
+end
+
+--
+--宝宝倒计时
+function _M.RefreshBabyTick()
+	if _M.isRefreshBabyTick == false then
+		local tick = _P.GetBabyTick()
+		if tick>0 then
+			_M.isRefreshBabyTick = true
+			_M.BabyHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local _tick = _P.GetBabyTick()
+				if _tick > 0 then
+					for k,v in pairs(_M.babyTab)do
+						if v.energy.ncur<v.energy.nmax then
+							local _cd = v.energyRecoverCD - HeartBeat.ServSecond()
+							v.energyRecoverCD = _cd + HeartBeat.ServSecond()
+							if _cd <= 0 then
+								v.energy.ncur = v.energy.ncur +1
+								--推送活力更新
+								WindowMgr.Call("UGirlBaby","UpdateBabyData",v)
+								_M.CheckBabyRedPoint()
+								if v.energy.ncur<v.energy.nmax then
+									v.energyRecoverCD = _M.babyVitaCD + HeartBeat.ServSecond()
+								end
+								
+							end
+						end
+					end
+				else
+					_M.isRefreshBabyTick = false
+					EventCenter.UnRegistCallEvent(eventHandle)
+				end
+			end)
+		end
+	end
+end
+
+function _M.CheckOneKeyRecover()
+	if #_M.babyTab <= 0 then
+		return false
+	end
+	for k,v in pairs(_M.babyTab)do
+		if v.name ~= "" then
+			 if v.level.ncur < v.level.nmax then
+			 		if v.energy.ncur > 0 then
+			 			return false
+			 		end
+			 end
+		end
+	end
+	return true
+end
+
+function _M.BabyRecoverCount()
+	if #_M.babyTab <= 0 then
+		return 0
+	end
+	local count = 0
+	for k,v in pairs(_M.babyTab)do
+		if v.level.ncur < v.level.nmax then
+			if v.energy.ncur <= 0 then
+				count = count +1
+			end
+		end
+	end
+	return count
+end
+
+function _M.CheckOnekeyTeach()
+	for k,v in pairs(_M.babyTab)do
+		if v.energy.ncur>0 then
+			if v.level.ncur<v.level.nmax then
+				if v.name ~= "" then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+function _P.GetBabyTick()
+	local tick = 0
+	for k,v in pairs(_M.babyTab)do
+		if v.energy.ncur<v.energy.nmax then
+			if tick < v.energyRecoverCD then
+				tick = v.energyRecoverCD
+			end
+		end
+	end
+	return tick
+end
+
+
+---------------------------------------------------------------
+------------------联姻系统-------------------------------------
+--------------------------------------------------------------
+
+function _M.InitUnmarriedList(dataList)--不为nil
+	if dataList ~= nil then
+		_M.unmarrieds = dataList
+	else
+		_M.unmarrieds = {}
+	end
+	_P.CheckBabyTiqinCD(0)
+end
+
+function _M.InitMarriedList(dataList)--不为nil
+	if dataList ~= nil then
+		_M.marrieds = dataList
+	else
+		_M.marrieds = {}
+	end
+end
+
+function _M.SetQingqiuList(dataList)--不为nil
+	if dataList ~= nil then
+		_M.MarriedQingqiu = dataList
+	else
+		_M.MarriedQingqiu = {}
+	end
+end
+
+function _M.NewUnMarriedBaby(data)
+	if _M.unmarrieds == nil then
+		_M.unmarrieds = {}
+	end
+	table.insert(_M.unmarrieds,data)
+end
+
+function _M.UpdateUnmarriedBaby(data)
+	local dataList = _M.unmarrieds
+	for k,v in pairs(dataList) do
+		if v.babyid == data.babyid then
+			dataList[k] = data
+		end
+	end
+	_M.unmarrieds = dataList
+	_P.CheckBabyTiqinCD(0)
+end
+
+function _M.NewMarriedBaby(data)
+	if _M.marrieds == nil then
+		_M.marrieds = {}
+	end
+	table.insert(_M.marrieds,data)
+	_P.RefuseUnmarried(data.babyid)
+end
+
+function _M.SetZhaoqinList(dataList)
+	if dataList ~= nil then
+		_M.ZhaoqinList = dataList
+	else
+		_M.ZhaoqinList = {}
+	end
+	
+end
+
+function _M.MarryBack(id,isSucess)
+	if isSucess == true then
+		_P.RefuseUnmarried(id)
+		table.insert(_M.MarriedScuessList,id)
+	end
+end
+
+function _M.TerminateTiqin(id,itemData)
+end
+
+function _M.SetZhaoqinCD(tick)
+	_M.ZhaoqinCD = tick
+
+	if tick > 0 then
+		luaUtil.RefreshTime(tick,_P.ReduceZhaoqinCD)
+	end
+end
+
+function _P.ReduceZhaoqinCD(_tick)
+	if _M.ZhaoqinCD > 0 then
+		_M.ZhaoqinCD = _M.ZhaoqinCD -1
+	end
+end
+
+
+function _P.CheckBabyTiqinCD(_tick)
+	for k,v in pairs(_M.unmarrieds)do
+		if v.state == 1 then
+			if v.tiqinCD ~= nil and v.tiqinCD >0 then
+				v.tiqinCD = v.tiqinCD -1 
+				luaUtil.RefreshTime(v.tiqinCD,_P.CheckBabyTiqinCD)
+			end
+		end
+	end
+end
+
+------------------------------------------------------------
+
+function _M.GetUnMarriedData(id)
+	if _M.unmarrieds ~= nil then
+		for k,v in pairs(_M.unmarrieds)do
+			
+			if v.babyid == id then
+				return v
+			end
+		end
+		if #_M.unmarrieds > 0 then
+			return _M.unmarrieds[1]
+		end 
+	end
+	return nil
+end
+
+function _M.GetUnMarriedIndex(id)
+	if _M.unmarrieds ~= nil then
+		for k,v in pairs(_M.unmarrieds)do
+			if v.babyid == id then
+				return k
+			end
+		end 
+	end
+	return nil
+end
+
+function _M.GetMarriedData(id)
+	if _M.marrieds ~= nil then
+		for k,v in pairs(_M.marrieds)do
+			if v.babyid == id then
+				return v
+			end
+		end
+		if #_M.marrieds > 0 then
+			return _M.marrieds[1]
+		end 
+	end
+	return nil
+end
+
+function _P.RefuseUnmarried(id)
+	for k,v in pairs(_M.unmarrieds)do
+		if v.babyid == id then
+			table.remove(_M.unmarrieds,k)
+		end
+	end
+end
+
+function _M.RefuseQingqiu(id)
+	for k,v in pairs(_M.MarriedQingqiu) do
+		if v.babyid == id then
+			table.remove(_M.MarriedQingqiu,k)
+		end
+	end
+	WindowMgr.Call("UGirlMarried","CheckTiqinRed")
+end
+
+function _M.RefuseAllQingqiu()
+	_M.MarriedQingqiu = {}
+	WindowMgr.Call("UGirlMarried","CheckTiqinRed")
+end
+
+function _M.GetMarriedID()
+	if _M.MarriedScuessList ~= nil then
+		if #_M.MarriedScuessList > 0 then
+			for k,v in pairs(_M.MarriedScuessList) do
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.RemoveMarriedID(id)
+	for k,v in pairs(_M.MarriedScuessList) do
+		if v == id then
+			table.remove(_M.MarriedScuessList,k)
+		end
+	end
+end
+
+
+function _M.GetBabyIcon(gender,degree)
+
+	if gender == 1 then --女
+		return Csv.Const(10210)[degree]
+	else
+		return Csv.Const(10211)[degree]
+	end
+end
+
+function _M.GetBabyIconPos(gender,degree)
+	
+		if gender == 1 then --女
+			return Csv.Const(10212)[degree]
+		else
+			return Csv.Const(10213)[degree]
+		end
+	end
+
+function _M.GetMarriedGoldCost(degree)
+	return Csv.BabyDegree[degree].marriageGoldCost
+end
+
+function _M.GetEducationName(degree)
+	return	Csv.Const(10204)[degree]--_P.GetEducationName(data.degree)
+end
+
+function _M.GetBabyColorByIQ(iq)
+	local _color = Csv.Const(10205)[iq+1]
+	if _color ~= nil then
+		if #_color >= 3 then
+			return Color(_color[1]/255,_color[2]/255,_color[3]/255)
+		end
+	end
+	return Color(0,0,0)
+end
+
+-------------美女改名--------------------------------
+function _P.SetGirlName(id,name)
+	
+	if name ~= nil then
+		_M.girlNames[id] = name
+		return name
+	else
+		local girlData = Csv.Girl[id]
+		if girlData ~= nil then
+			return girlData.name
+		else
+			return ""
+		end
+	end 
+end
+
+function _M.RefreshGirlName(data)
+	_M.girlNames[data.girlid] = data.name
+	for k,v in pairs(_M.UnlockGirls)do
+		if v.id == data.girlid then
+			v.name = data.name
+		end
+	end
+	WindowMgr.Call("UGirlDetail","RefreshName")
+	WindowMgr.Call("UGirlUnlock","OnRefreshName",data.girlid)
+end
+
+function _M.GetGirlName(id)
+	local unlockGirls = _M.UnlockGirls
+	for k,v in pairs(unlockGirls)do
+		if v.id == id then
+			if v.name ~= nil and v.name ~= "" then
+				return v.name
+			end
+		end
+	end
+	
+	local girlData = Csv.Girl[id]
+	if girlData ~= nil then
+		return girlData.name
+	else
+		return ""
+	end
+end
+
+function _M.CheckGirlFirstName(id)
+	if _M.girlNames[id] ~= nil then
+		return false
+	end
+	return true
+end
+
+return _M

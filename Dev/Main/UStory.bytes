@@ -1,0 +1,32 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+function _M:BeforeDestroy( ... )
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:Destroy()
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end	
+end
+
+function _M:EndDestroy( ... )
+	if self.DoneCall ~= nil then
+		self.DoneCall()
+	end
+end
+
+function _M:OnCreate(id, doneCall, info)
+	self:UnBlack()
+	self._EventNode.RaycastTarget = false
+	self.DoneCall = doneCall
+	self.StoryMoudle = UStoryMoudle.new(self._RootNode, id, function ()
+		self:Destroy()
+	end, info)
+end
+
+return _M

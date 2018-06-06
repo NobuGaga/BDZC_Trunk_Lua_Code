@@ -1,0 +1,55 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local JGuiManager = CS.JGui.JGuiManager
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local _M = Class(WindowBase)
+local _P = {}
+
+--界面构建
+function _M:OnCreate(...)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Final1")
+	self.mMoudle = moudle
+
+	local data = MRelations.ReportData
+	if data.allaward ~= nil then
+		local content = moudle:Get("IconContent")
+		for k,v in pairs(data.allaward) do
+			-- local awardMoudle = JGuiManager.GetMoudle(content, "M_Common_Item")
+			-- local csvItem = Csv.Item[v.key]
+			-- awardMoudle.SelfRect.SpriteName = csvItem.colorIcon
+			-- awardMoudle:Get("Icon").SpriteName = csvItem.icon
+			-- awardMoudle:Get("Num").Text = v.value
+			CCommon.CreateItem(content,v.key,nil,{num = v.value},Define.SysId.Relations)
+		end
+	end
+	moudle:Get("text_Item").Text = Csv.Text("relations_point")
+	moudle:Get("Numtext").Text = Csv.Text("relations_addnum",{num = data.allpoint})
+
+	moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
+
+	moudle:Get("BtnText").Text = Csv.Text("relations_kua")
+	local TextTalk = moudle:Get("StaffText")
+	if data.state == 1 then
+		TextTalk.Text = Csv.Text("relations_overall",{name = data.name})
+	else
+		TextTalk.Text = Csv.Text("relations_overnum",{name = data.name})
+	end
+
+	moudle:Get("Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+end
+
+function _M:BeforeDestroy()
+	MRelations.ReportData = nil
+end
+
+return _M

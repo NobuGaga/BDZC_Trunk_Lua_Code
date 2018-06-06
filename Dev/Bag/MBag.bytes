@@ -1,0 +1,354 @@
+local MParliament = JRequire "Dev.Parliament.MParliament"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+local _M = {}
+local _P = {}
+
+_M.LastChoose = 1
+_M.LastChooseItem  = nil
+_M.LastUseItemid = 0
+_M.LastUseItemcount = 0
+_M.LastChooseFashion = nil
+_M.UsingFashionID = 0
+_M.MergeUpdateItemTable = {}
+_M.MergeRedPoint = false
+_M.SellGetData = nil
+
+
+--物品类型:{id:{num = xxx}}
+_M.Items = {
+
+	[Define.BagType.Assets] = {
+		[Define.AssetsType.Gold] = {itemid = 1, itemcount = 0},
+		[Define.AssetsType.Record] = {itemid = 2, itemcount = 0},
+		[Define.AssetsType.Coin] = {itemid = 3, itemcount = 0},
+		[Define.AssetsType.Food] = {itemid = 4, itemcount = 0},
+		[Define.AssetsType.Soldier] = {itemid = 5, itemcount = 0},
+	},
+
+	[Define.BagType.Prop] = {},
+	[Define.BagType.Dress] = {},
+}
+
+_M.MergeItems = {}
+_M.FashionItems = {}
+
+function _M.Clean( ... )
+	_M.LastChoose = 1
+	_M.LastChooseItem  = nil
+	_M.LastUseItemid = 0
+	_M.LastUseItemcount = 0
+	_M.LastChooseFashion  = nil
+	_M.UsingFashionID = 0
+	_M.Items = {}
+	_M.MergeUpdateItemTable = {}
+	_M.MergeRedPoint = false
+	_M.SellGetData = nil
+end
+
+function _M.BagInit(list)
+	_M.Items = {}
+	if list ~= nil then
+		for _,v in pairs(list) do
+			_M.Update(v,true)
+		end
+	end
+end
+
+function _M.Update(data,isAdd)
+	local id = data.itemid
+	local csv = Csv.Item[id]
+	assert(csv ~= nil , id)
+	local typeItems = _M.Items[csv.type]
+	if typeItems == nil then
+		typeItems = {}
+		_M.Items[csv.type] = typeItems
+	end
+	local info = typeItems[id]
+	if info == nil then
+		info = {itemid = id, itemcount = math.floor(data.itemcount)}
+		typeItems[id] = info
+	else
+		if isAdd then
+			info.itemcount = info.itemcount + math.floor(data.itemcount)
+		else
+			info.itemcount = info.itemcount - math.floor(data.itemcount)
+		end
+	end
+end
+
+function _M.BagMergeInit(mergelist)
+	for k,csv in pairs(Csv.Merge) do
+		if csv.isShowBag and csv.isShowBag == 1 then
+			_M.MergeItems[k] = {mergeid = k,count = 0}
+		end
+	end
+	if mergelist ~= nil then
+		for _,v in pairs(mergelist) do
+			_M.UpdateMerge(v)
+		end
+	end
+	local mergeUpdateItemTable = _M.MergeUpdateItemTable
+	for _,v in pairs(_M.MergeItems) do
+		local csvMerge = Csv.Merge[v.mergeid]
+		if csvMerge ~= nil then
+			local items = csvMerge.cost_item
+			if items ~= nil then
+				for k,v in pairs(items) do
+					mergeUpdateItemTable[v[1]] = true
+				end
+			end
+		end
+	end
+end
+
+function _M.UpdateMerge(data)
+	local mergeItems = _M.MergeItems
+	local info = mergeItems[data.mergeid]
+	if info == nil  then
+		info = {mergeid = data.mergeid,count = data.count}
+		mergeItems[data.mergeid] = info
+	else
+		info.count = info.count + data.count
+	end
+end
+
+function _M.BagFashionInit()
+	--策划说所有的时装都有称号(2018-05-02)
+	local fashionItems = _M.FashionItems
+	for k,_ in pairs(Csv.Title) do
+		local _count =  MParliament.GetTitleCount(k)
+		local info = {itemid = k,count = _count}
+		fashionItems[k] = info
+	end
+
+	-- local fashionIDs = Csv.Const(10401)
+	-- for i = fashionIDs[1],fashionIDs[2] do
+	-- 	local _count =  MParliament.GetTitleCount(i)
+	-- 	local info = {itemid = i,count = _count}
+	-- 	fashionItems[i] = info
+	-- end
+end
+
+function _M.BagAddFashion(id)
+	local fashionItems = _M.FashionItems
+
+	local _count =  MParliament.GetTitleCount(id)
+	local info = {itemid = id,count = _count}
+	fashionItems[id] = info
+end
+
+function _M.BagRemoveFashion(id)
+	local fashionItems = _M.FashionItems
+
+	if MPlayer.GetTitleID() == id then
+		MPlayer.PlayerInfo.titleID = 0
+	end
+
+	if fashionItems[id] ~= nil then
+		local _count =  MParliament.GetTitleCount(id)
+		local info = {itemid = id,count = _count}
+		fashionItems[id] = info
+	end
+
+	local info = {title = {titleID = id,time = 0},type = 4}
+	WindowMgr.Call("UBag", "UpdateFashionState",info)
+end
+
+function _M.GetFashionData(id)
+	local fashionItems = _M.FashionItems
+	
+	if fashionItems[id] ~= nil then
+		return fashionItems[id]
+	end
+	return nil
+end
+
+--根据类型获取背包物品列表
+function _M.GetBagItems(bagType, isNeedSort)
+	local list = {}
+	local typeItems = _M.Items[bagType]
+	if typeItems ~= nil then
+		for _,v in pairs(typeItems) do
+			table.insert(list, v)
+		end
+		if isNeedSort and #list > 0 then
+			local csv = Csv.Item
+			local a_csv
+			local b_csv
+			table.sort(list, function( a, b )
+				a_csv = csv[a.itemid]
+				b_csv = csv[b.itemid]
+
+				if a_csv.sort == b_csv.sort then
+					return a.itemid < b.itemid
+				end
+				return a_csv.sort < b_csv.sort
+			end)
+		end
+	end
+	return list
+end
+
+-- 根据使用类型获取背包物品列表
+function _M.GetBagItemsByUseType(useType, isNeedSort)
+	local list = {}
+	local typeItems = _M.Items[3]
+	if typeItems ~= nil then
+		for _,v in pairs(typeItems) do
+			local itemConf = Csv.Item[v.itemid]
+			if itemConf and itemConf.useType == useType and v.itemcount > 0 then
+				table.insert(list, v)
+			end
+		end
+		
+		if isNeedSort and #list > 0 then
+			local csv = Csv.Item
+			local a_csv
+			local b_csv
+			table.sort(list, function( a, b )
+				a_csv = csv[a.itemid]
+				b_csv = csv[b.itemid]
+
+				if a_csv.sort == b_csv.sort then
+					return a.itemid < b.itemid
+				end
+				return a_csv.sort < b_csv.sort
+			end)
+		end
+	end
+	return list
+end
+
+--获取某个物品信息
+function _M.Get(itemId)
+	local csv = Csv.Item[itemId]
+	assert(csv ~= nil , itemId)
+	local typeItems = _M.Items[csv.type]
+	if typeItems ~= nil then
+		return typeItems[itemId]
+	end
+	return nil
+end
+
+--获取某个物品数量
+function _M.GetItemNum(itemId)
+	local info = _M.Get(itemId)
+	if info ~= nil then 
+		return info.itemcount
+	end
+	return 0
+end
+
+--获取消耗的物品是否足够
+function _M.GetCostState(costTable,isSingle)
+	local str = ""
+	local state = true
+	if not isSingle then
+		for k,v in ipairs(costTable) do
+			local id = v[1]
+			local count = v[2]
+			local havecount = _M.GetItemNum(id)
+			if havecount < count then
+				str = Csv.Text("bag_errNoEnough",{name = Csv.Item[id].name})
+				return false,str
+			end
+		end
+		return true,str
+	else
+		local id = costTable[1]
+		local count = costTable[2]
+		local havecount = _M.GetItemNum(id)
+		if havecount < count then
+			str = Csv.Text("bag_errNoEnough",{name = Csv.Item[id].name})
+			return false,str
+		end
+		return true,str
+	end
+end
+
+--{id:1,num:1000}
+function _M.CheckItemEnough(id, num)
+	local havecount = _M.GetItemNum(id)
+	if havecount < num then
+		if id == Define.AssetsType.Gold then
+			--钻石
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					WindowOpen.Open(Define.SysId.Recharge)
+				end
+			end, {content = Csv.Text("common_recharge")})
+		else
+			local trackCsv = Csv.ItemTrack[id]
+			if trackCsv ~= nil then
+				WindowMgr.Create("UItemTrack", id, num)
+			else
+				CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = Csv.Item[id].name}))
+			end
+		end
+		return false
+	end
+	return true
+end
+--[[1,999],[2,999]]
+function _M.CheckItemEnoughForArray(items)
+	for k,v in ipairs(items) do
+		if "table" == type(v) then
+			if not _M.CheckItemEnough(v[1], v[2]) then
+				return false
+			end
+		else 
+			if not _M.CheckItemEnough(k, v) then
+				return false
+			end
+		end
+	end
+	return true
+end
+--[{id:1,num:999},{id:2,num:999}]
+function _M.CheckItemEnoughForIN(items)
+	for k,v in ipairs(items) do
+		if not _M.CheckItemEnough(v.id, v.num) then
+			return false
+		end
+	end
+	return true
+end
+--[{id:1,count:999},{id:2,count:999}]
+function _M.CheckItemEnoughForIC(items)
+	for k,v in ipairs(items) do
+		if not _M.CheckItemEnough(v.id, v.count) then
+			return false
+		end
+	end
+	return true
+end
+--[{key:1,value:999},{key:2,value:999}]
+function _M.CheckItemEnoughForKV(items)
+	for k,v in ipairs(items) do
+		if not _M.CheckItemEnough(v.key, v.value) then
+			return false
+		end
+	end
+	return true
+end
+
+function _M.GetDressForSysId(sysID)
+	local tab = {}
+	local dressTable = _M.Items[Define.BagType.Dress]
+	if dressTable ~= nil then
+		for k,v in pairs(dressTable) do
+			if v.itemcount > 0 then
+				local csvItem = Csv.Item[v.itemid]
+				if csvItem ~= nil and csvItem.dressSysId == sysID then
+					table.insert(tab,v)
+				end
+			end
+		end
+	end
+	return tab
+end
+
+return _M

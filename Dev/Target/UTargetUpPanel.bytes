@@ -1,0 +1,413 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MTarget = JRequire "Dev.Target.MTarget"
+local CTarget = JRequire "Dev.Target.CTarget"
+
+local StaffSizeVer = Vector2(650, 650)
+local GrilMoveDown = 100
+local StaffMoveUp = 310
+
+local _M = Class()
+local _P = {}
+
+
+function _M:ctor(parent, index)
+	_P.SetData(self, index)
+	if not self.mData then return end
+
+	local moduleData = _P.GetModuleData(self)
+	if not moduleData then return end
+
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, moduleData.name, WindowType.UI, 0)
+	self.mModule = module
+	_P.OnCreateView(self, moduleData.type)
+end
+
+
+function _P.OnCreateView(self, moduleType)
+	local module = self.mModule
+	local data = self.mData
+
+	if moduleType == 1 or moduleType == 2 then
+		_P.SetOnePersonData(self, module, data)
+	elseif moduleType == 3 then
+		_P.SetTwoPersonData(self, module, data)
+	end
+
+	if data.goalType == MTarget.TargetTypeEnum.CompanyUp then
+		-- 头衔晋升
+		_P.SetTitleUpData(self, module, data)
+	elseif data.goalType == MTarget.TargetTypeEnum.PowerUp then
+		-- 实力提升
+		_P.SetPowerUpData(self, module, data)
+	elseif data.goalType == MTarget.TargetTypeEnum.VipUp then
+		-- Vip特权
+		_P.SetVipUpData(self, module, data)
+	end
+end
+
+
+-- 拿到当前类型，单个员工、单个美女、两个员工（或美女）三种类型
+function _P.GetModuleData(self)
+	local data = self.mData
+	local showNum = 0
+	if data.girls then showNum = showNum + #data.girls end
+	if data.staffs then showNum = showNum + #data.staffs end
+
+	if showNum == 1 then
+		if data.staffs then
+			return {type = 1, name = "M_Target_1"}
+		else
+			return {type = 2, name = "M_Target_2"}
+		end
+	elseif showNum >= 2 then
+		return {type = 3, name = "M_Target_3"}
+	end
+end
+
+
+function _P.SetData(self, index)
+	local upData = MTarget.TargetTable[index]
+	if upData == nil then return end
+
+	self.upData = upData
+	self.mData = MTarget.GetNextData(upData.type, upData.index)
+end
+
+
+-- 设置单个人数据，仅本身数据
+function _P.SetOnePersonData(self, module, data)
+	local giveText = module:Get("ArtText3")
+	local giveValueText = module:Get("ArtText4")
+	local aptiText = module:Get("Quality")
+	local aptiValueText = module:Get("QualityNum")
+	local skillText = module:Get("Expertise")
+	local skillValueText = module:Get("ExpertiseText")
+	local staffImg = module:Get("BSX")
+
+	giveText.Text = Csv.Text("Target_company_give")
+	if data.staffs and #data.staffs > 0 then
+		aptiText.Text = Csv.Text("welfare_qqAll")
+		skillText.Text = Csv.Text("welfare_qqBest")
+		local staffConf = Csv.Personnel[data.staffs[1]]
+		if staffConf then
+			giveValueText.Text = staffConf.name
+			staffImg.SpriteName = staffConf.asset
+			aptiValueText.Text = MWelfare.GetAllApitude(staffConf.book)
+			skillValueText.Text = staffConf.specialty
+		end
+	end
+
+	if data.girls and #data.girls > 0 then
+		aptiText.Text = Csv.Text("welfare_qqQuality")
+		skillText.Text = Csv.Text("welfare_qqExpertise")
+		local girlConf = Csv.Girl[data.girls[1]]
+		if girlConf then
+			giveValueText.Text = girlConf.name
+			staffImg.SpriteName = girlConf.homeicon
+			aptiValueText.Text = girlConf.charm
+			skillValueText.Text = _P.GetGirlSkillName(girlConf.skills)
+		end
+	end
+end
+
+
+-- 设置头衔晋升数据
+function _P.SetTitleUpData(self, module, data)
+	module:Get("ArtText1").Text = Csv.Text("Target_company_achive")
+	module:Get("C_text").Text = Csv.Text("Target_company_get")
+
+	-- 当前头衔
+	local nowExp = MPlayer.GetExp()
+	local nowLevel = MPlayer.GetLevel()
+	local isLast = (self.upData.index == data.id)
+	local isCanGet = nowLevel >= data.companyId
+	local curCompanyConf = Csv.Company[nowLevel]
+	local companyConf = Csv.Company[data.companyId]
+	local maxPro = 0
+	if curCompanyConf then
+		module:Get("CurText").Text = Csv.Text("Target_company_curTitle", {num = curCompanyConf.name})
+	end
+
+	if not isLast then
+		local lastCompanyConf = Csv.Company[data.companyId - 1]
+		if lastCompanyConf then
+			if lastCompanyConf.cost then maxPro = lastCompanyConf.cost
+			else maxPro = 0 end
+		end
+	end
+	
+	local achiveValueText = module:Get("ArtText2")
+	if companyConf then
+		achiveValueText.Text = companyConf.name
+	end
+
+	local slide = module:Get("slider")
+	local fullProgress = module:Get("Fill2")
+	local progress = module:Get("Fill")
+	local proText = module:Get("SlidertTxt")
+	if isCanGet then
+		slide.Value = 1
+		proText.Text = Csv.Text("Target_company_ziben",{curNum = (isLast and nowExp) or maxPro, maxNum = ((maxPro == 0 and Csv.Text("staff_max")) or maxPro)})
+	else
+		slide.Value = nowExp / maxPro
+		proText.Text = Csv.Text("Target_company_ziben",{curNum = nowExp, maxNum = ((maxPro == 0 and Csv.Text("staff_max")) or maxPro)})
+	end
+
+	local getBtn = module:Get("getBtn")
+	getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 领取奖励
+		if nowLevel >= data.companyId then
+			CTarget.GainAwardReq(data.id, data.goalType)
+		else
+			CCommon.ShowError(Csv.Text("Target_company_getErr", {name = achiveValueText.Text})) -- 先提升头衔
+		end
+	end, nil, 0.95)
+
+	local isMax = nowExp >= maxPro
+	getBtn.Activity = not isLast
+	getBtn.IsGray = not isCanGet
+	getBtn.RaycastTarget = isCanGet
+
+	if isCanGet then
+		fullProgress.Activity = true
+		progress.Activity = false
+	else
+		fullProgress.Activity = isMax
+		progress.Activity = not isMax
+	end
+
+	local getImg = module:Get("getImg")
+	getImg.Activity = isLast
+end
+
+
+-- 实力提升
+function _P.SetPowerUpData(self, module, data)
+	module:Get("ArtText1").Text = Csv.Text("Target_power_achive")
+	module:Get("C_text").Text = Csv.Text("Target_company_get")
+
+	-- 当前实力
+	local curPower = MPlayer.GetPower()
+	module:Get("CurText").Text = Csv.Text("Target_power_curTitle", {num = curPower})
+	
+	local achiveValueText = module:Get("ArtText2")
+	local maxPro = data.power
+	achiveValueText.Text = maxPro
+
+	local slide = module:Get("slider")
+	local fullProgress = module:Get("Fill2")
+	local progress = module:Get("Fill")
+	local proText = module:Get("SlidertTxt")
+	slide.Value = curPower / maxPro
+	proText.Text = Csv.Text("Target_power_shili", {curNum = curPower, maxNum = maxPro})
+
+	local getBtn = module:Get("getBtn")
+	getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		-- 领取奖励
+		CTarget.GainAwardReq(data.id, data.goalType)
+	end, nil, 0.95)
+
+	local isLast = (self.upData.index == data.id)
+	local isCanGet = curPower >= maxPro
+	getBtn.Activity = not isLast
+	getBtn.IsGray = not isCanGet
+	getBtn.RaycastTarget = isCanGet
+
+	fullProgress.Activity = isCanGet
+	progress.Activity = not isCanGet
+
+	local getImg = module:Get("getImg")
+	getImg.Activity = isLast
+end
+
+
+function _P.SetVipUpData(self, module, data)
+	module:Get("ArtText1").Text = Csv.Text("Target_vip_achive")
+	local btnText = module:Get("C_text")
+
+	-- 当前实力
+	local curExp = MRecharge.VipData.exp
+	module:Get("CurText").Text = Csv.Text("Target_vip_curTitle", {num = "VIP" .. MPlayer.GetVip()})
+	
+	local achiveValueText = module:Get("ArtText2")
+	local vipConf = Csv.Vip[data.vipId]
+	local maxPro = 0
+	if vipConf then
+		maxPro = vipConf.upExp
+		achiveValueText.Text = "VIP" .. data.vipId
+	end
+
+	local slide = module:Get("slider")
+	local fullProgress = module:Get("Fill2")
+	local progress = module:Get("Fill")
+	local proText = module:Get("SlidertTxt")
+	slide.Value = curExp / maxPro
+	proText.Text = Csv.Text("Target_vip_shili", {curNum = curExp, maxNum = maxPro})
+
+	local isLast = (self.upData.index == data.id)
+	local isCanGet = curExp >= maxPro
+	local getBtn = module:Get("getBtn")
+	getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if isCanGet then
+			WindowOpen.Open(Define.SysId.VIPWelfare)
+		else
+			WindowMgr.Create("URecharge")
+		end
+	end, nil, 0.95)
+
+	fullProgress.Activity = isCanGet
+	progress.Activity = not isCanGet
+
+	if isCanGet then
+		btnText.Text = Csv.Text("Target_vip_go")
+	else
+		btnText.Text = Csv.Text("Target_vip_goPay")
+	end
+
+	local getImg = module:Get("getImg")
+	getBtn.Activity = not isLast
+	getImg.Activity = isLast
+end
+
+
+function _P.SetTwoPersonData(self, module, data)
+	local giveText = module:Get("ArtText3")
+	local giveValueText = module:Get("ArtText4")
+	local aptiText1 = module:Get("Quality1")
+	local aptiValueText1 = module:Get("QualityNum1")
+	local skillText1 = module:Get("Expertise1")
+	local skillValueText1 = module:Get("ExpertiseText1")
+	local aptiText2 = module:Get("Quality2")
+	local aptiValueText2 = module:Get("QualityNum2")
+	local skillText2 = module:Get("Expertise2")
+	local skillValueText2 = module:Get("ExpertiseText2")
+	local staffImg1 = module:Get("Person1")
+	local staffImg2 = module:Get("Person2")
+	giveText.Text = Csv.Text("Target_company_give")
+
+	local targetType = _P.GetTwoPersonType(data)
+	if targetType == 1 then -- 两个员工
+		if data.staffs and #data.staffs > 1 then
+			aptiText1.Text = Csv.Text("welfare_qqAll")
+			skillText1.Text = Csv.Text("welfare_qqBest")
+			aptiText2.Text = Csv.Text("welfare_qqAll")
+			skillText2.Text = Csv.Text("welfare_qqBest")
+
+			local staffConf1 = Csv.Personnel[data.staffs[1]]
+			if staffConf1 then
+				staffImg1.SpriteName = staffConf1.asset
+				aptiValueText1.Text = MWelfare.GetAllApitude(staffConf1.book)
+				skillValueText1.Text = staffConf1.specialty
+			end
+
+			local staffConf2 = Csv.Personnel[data.staffs[2]]
+			if staffConf2 then
+				staffImg2.SpriteName = staffConf2.asset
+				staffImg2.SizeDelta = StaffSizeVer
+				staffImg2.LocalPosition = Vector2(staffImg2.LocalPosition.x, staffImg2.LocalPosition.y + StaffMoveUp)
+				aptiValueText2.Text = MWelfare.GetAllApitude(staffConf2.book)
+				skillValueText2.Text = staffConf2.specialty
+			end
+
+			giveValueText.Text = staffConf1.name .. '、' .. staffConf2.name
+		end
+	elseif targetType == 2 then -- 两个美女
+		if data.girls and #data.girls > 1 then
+			aptiText1.Text = Csv.Text("welfare_qqQuality")
+			skillText1.Text = Csv.Text("welfare_qqExpertise")
+			aptiText2.Text = Csv.Text("welfare_qqQuality")
+			skillText2.Text = Csv.Text("welfare_qqExpertise")
+
+			local girlConf1 = Csv.Girl[data.girls[1]]
+			if girlConf1 then
+				staffImg1.SpriteNameAutoScale = girlConf1.homeicon
+				staffImg1.LocalPosition = Vector2(staffImg1.LocalPosition.x, staffImg1.LocalPosition.y - GrilMoveDown)
+				aptiValueText1.Text = girlConf1.charm
+				skillValueText1.Text = _P.GetGirlSkillName(girlConf1.skills)
+			end
+
+			local girlConf2 = Csv.Girl[data.girls[2]]
+			if girlConf2 then
+				staffImg2.SpriteName = girlConf2.homeicon
+				aptiValueText2.Text = girlConf2.charm
+				skillValueText2.Text = _P.GetGirlSkillName(girlConf2.skills)
+			end
+
+			giveValueText.Text = girlConf1.name .. '、' .. girlConf2.name
+		end
+	elseif targetType == 3 then -- 一员工，一美女
+		local nameStr = ''
+		if data.staffs and #data.staffs > 0 then
+			aptiText1.Text = Csv.Text("welfare_qqAll")
+			skillText1.Text = Csv.Text("welfare_qqBest")
+			local staffConf = Csv.Personnel[data.staffs[1]]
+			if staffConf then
+				nameStr = staffConf.name .. '、'
+				staffImg1.SpriteName = staffConf.asset
+				aptiValueText1.Text = MWelfare.GetAllApitude(staffConf.book)
+				skillValueText1.Text = staffConf.specialty
+			end
+		end
+	
+		if data.girls and #data.girls > 0 then
+			aptiText2.Text = Csv.Text("welfare_qqQuality")
+			skillText2.Text = Csv.Text("welfare_qqExpertise")
+			local girlConf = Csv.Girl[data.girls[1]]
+			if girlConf then
+				nameStr = nameStr .. girlConf.name
+				staffImg2.SpriteName = girlConf.homeicon
+				aptiValueText2.Text = girlConf.charm
+				skillValueText2.Text = _P.GetGirlSkillName(girlConf.skills)
+			end
+		end
+
+		giveValueText.Text = nameStr
+	end
+end
+
+
+-- 类型1：两个员工，类型2：两个美女，类型3：1员工1美女
+function _P.GetTwoPersonType(data)
+	if (data.staffs and #data.staffs > 0) and (not data.girls) then
+		return 1
+	elseif (data.girls and #data.girls > 0) and (not data.staffs) then
+		return 2
+	else
+		return 3
+	end
+end
+
+
+-- 获取美女技能专长描述
+function _P.GetGirlSkillName(skills)
+	if #skills > 0 then
+		local girlSkillData = Csv.GirlSkill[skills[1]]
+		local staffID = girlSkillData.employe
+		local staffData = Csv.Personnel[staffID]
+		if staffData ~= nil then
+			return staffData.name
+		end
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

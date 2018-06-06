@@ -1,0 +1,86 @@
+--@RefType [SDK.BaseSDK.bytes#_M]
+local BaseSDK = require "SDK.BaseSDK"
+--@RefType [SDK.SDKFuncName.bytes#_M]
+local SDKFuncName = JRequire "SDK.SDKFuncName"
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local rapidjson = require "rapidjson"
+
+------------------------------CS类引用------------------------------
+local ISDKManager = CS.Utility.ISDKManager
+
+local _M = Class(BaseSDK)
+
+------------------------------请求接口------------------------------
+function _M.ReqLogin()
+	local data = {func = SDKFuncName.SDKLogin}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+--收集数据
+function _M.ReqCollectData(type, serverID, serverName, roleID, roleName, roleLevel)
+	if SDKCollectType.LvUpRole == type or SDKCollectType.ExitRole == type then
+		return
+	end
+	local data = {func = SDKFuncName.SDKCollectData, type = type, serverID = serverID, 
+				  serverName = serverName, roleID = roleID, roleName = roleName, roleLevel = roleLevel}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+function _M.ReqPay(productID, price, gold, productName, num, roleID, roleName, serverID, sbID, param)
+	local tempParam = roleID .. "|" .. roleName .. "|" .. productID .. "|" .. sbID .. "|" .. gold
+	if nil == param then
+		param = tempParam
+	else
+		param = tempParam .. "|" .. param
+	end
+	local data = {func = SDKFuncName.SDKPay, price = price, productName = productName, 
+				  num = num, roleID = roleID, serverID = serverID, param = param, productID = productID,
+				  account = MLogin.Account, charName = roleName }
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+------------------------------回调接口------------------------------
+--登录回调
+function _M.OnLogin(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	if nil ~= jsonTab then
+		if nil ~= jsonTab.errmessage then
+			CCommon.ShowError(jsonTab.errmessage)
+		else
+			MLogin.Account = jsonTab.account
+			MLogin.Password = jsonTab.password
+			GameSetting.AreaId = jsonTab.areaid
+			if GameSetting.AreaId == nil then
+				GameSetting.AreaId = ""
+			end
+			GameSetting.SetOpenid(jsonTab.openid)
+			GameSetting.SetSbid(jsonTab.sbid)
+		end
+	end
+end
+
+------------------------------通用接口------------------------------
+--复制文本到粘贴板
+function _M.CopyText(text)
+	local data = {func = SDKFuncName.CopyText, text = text}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+--获取粘贴板上的文本
+function _M.PasteText()
+	local data = {func = SDKFuncName.PasteText}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+return _M

@@ -1,0 +1,54 @@
+local _M = {}
+
+_M.LastChoose = nil
+_M.ShopTable = {}					--商城列表
+
+
+function _M.Clean( ... )
+	_M.LastChoose = nil
+	_M.ShopTable = {}
+end
+
+function _M.CreateList(data)
+	local shopTable = {}
+	if data.result ~= nil then
+		for k,v in pairs(data.result) do
+			local typeShop = shopTable[v.type]
+			if typeShop == nil then
+				typeShop = {}
+				shopTable[v.type] = typeShop
+			end
+			local info = typeShop[v.index]
+			if info == nil then
+				info = {type = v.type,index = v.index,times = v.times,closetime = v.closetime}
+				typeShop[v.index] = info
+			else
+				info.times = v.times
+			end
+		end
+	end
+	_M.ShopTable = shopTable
+end
+
+function _M.OnGetBuy(data)
+	local shopTable = _M.ShopTable
+	local typeShop = shopTable[data.result.type]
+	if typeShop ~= nil then
+		local info = typeShop[data.result.index]
+		if info ~= nil then
+			info.times = data.result.times
+		end
+	end
+end
+
+function _M.OnDayout()
+	local shopTable = _M.ShopTable
+	for k,v in pairs(shopTable) do
+		for key,value in pairs(v) do
+			value.times = 0
+		end
+	end
+	_M.ShopTable = shopTable
+end
+
+return _M

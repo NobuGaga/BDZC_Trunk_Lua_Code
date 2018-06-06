@@ -5,6 +5,7 @@ local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local CPlayer = JRequire "Dev.Player.CPlayer"
+local MAircraft = JRequire "Dev.Aircraft.MAircraft"
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -71,7 +72,8 @@ function _P.CreateList(self,sysId)
 	local content = self.mMoudle:Get("Content")
 	local dressTable = _P.GetSortTable(MBag.GetDressForSysId(sysId))
 	for k,v in ipairs(dressTable) do
-		local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
+    	if sysId ~= Define.SysId.Aircraft or not MAircraft.IsAircraftSkinUnActivative(v.itemid) then
+       local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
 		local csvItem = Csv.Item[v.itemid]
 		if csvItem ~= nil and csvItem.attrId ~= nil then
 			local icon = dressMoudle:Get("Icon")
@@ -106,6 +108,7 @@ function _P.CreateList(self,sysId)
 			end,nil,1)
 		end
 		self.ItemTable[v.itemid] = dressMoudle
+        end
 	end
 end
 

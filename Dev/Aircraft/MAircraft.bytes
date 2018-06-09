@@ -312,9 +312,11 @@ function _P.RefreshAllPower()
 		end
 		if nil ~= _M.SkinList then
 			for _, skinID in pairs(_M.SkinList) do
-				local score = _M.SkinScore[skinID]
-				if nil ~= score then
-					_M.AllPower = _M.AllPower + score
+				if not _M.IsAircraftSkinUnActivative(skinID) then
+					local score = _M.SkinScore[skinID]
+					if nil ~= score then
+						_M.AllPower = _M.AllPower + score
+					end
 				end
 			end
 		end
@@ -390,41 +392,43 @@ function _P.RefreshSkinSchoolBuff()
 		local csvAircraftSkin = Csv.AircraftSkin
 		_M.PowerSkinAllBuff = {}
 		for _, skinID in pairs(_M.SkinList) do
-			local csvValue = csvAircraftSkin[skinID]
-			if nil ~= csvValue then
-				local get = csvValue.get
-				if nil ~= get then
-					for index, value in pairs(get) do
-						if nil ~= value[1] and nil ~= value[2] then
-							if _M.SchoolSysID == value[1] then
-								_M.SkinSchoolAllBuff = _M.SkinSchoolAllBuff + math.modf(value[2] / 100)
-								break
+			if not _M.IsAircraftSkinUnActivative(skinID) then
+				local csvValue = csvAircraftSkin[skinID]
+				if nil ~= csvValue then
+					local get = csvValue.get
+					if nil ~= get then
+						for index, value in pairs(get) do
+							if nil ~= value[1] and nil ~= value[2] then
+								if _M.SchoolSysID == value[1] then
+									_M.SkinSchoolAllBuff = _M.SkinSchoolAllBuff + math.modf(value[2] / 100)
+									break
+								end
+							else
+								error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
 							end
-						else
-							error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
 						end
+					else
+						error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get 错误")
 					end
-				else
-					error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get 错误")
-				end
 
-				local attr = csvValue.attr
-				if nil ~= attr then
-					for index, value in pairs(attr) do
-						if nil ~= value[1] and nil ~= value[2] then
-							if nil == _M.PowerSkinAllBuff[value[1]] then
-								_M.PowerSkinAllBuff[value[1]] = 0
+					local attr = csvValue.attr
+					if nil ~= attr then
+						for index, value in pairs(attr) do
+							if nil ~= value[1] and nil ~= value[2] then
+								if nil == _M.PowerSkinAllBuff[value[1]] then
+									_M.PowerSkinAllBuff[value[1]] = 0
+								end
+								_M.PowerSkinAllBuff[value[1]] = _M.PowerSkinAllBuff[value[1]] + value[2]
+							else
+								error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr " .. index .. " 位置配置错误")
 							end
-							_M.PowerSkinAllBuff[value[1]] = _M.PowerSkinAllBuff[value[1]] + value[2]
-						else
-							error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr " .. index .. " 位置配置错误")
 						end
+					else
+						error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr 错误")
 					end
 				else
-					error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 attr 错误")
+					error("表 AircraftSkin 没有对应的ID " .. skinID)
 				end
-			else
-				error("表 AircraftSkin 没有对应的ID " .. skinID)
 			end
 		end
 		_P.RefreshPowerBuff()
@@ -463,6 +467,7 @@ function _P.CreateAircraftUnActivateSkinList(skinList)
 	else
 		_M.UnActivateSkinList = {}
 	end
+	_P.RefreshSkinSchoolBuff()
 end
 
 --刷新飞机未激活皮肤数据
@@ -483,13 +488,22 @@ end
 function _M.DeleteAircraftUnActivateSkin(skinID)
 	if nil ~= skinID and nil ~= _M.UnActivateSkinList then
 		_M.IsUpdataSkinList = true
-		_M.UnActivateSkinList[skinID] = false
+		_M.UnActivateSkinList[skinID] = nil
+		_P.RefreshSkinSchoolBuff()
 	end
 end
 
---飞机皮肤是否已激活
+--飞机皮肤是否未激活
 function _M.IsAircraftSkinUnActivative(skinID)
+	if nil == _M.UnActivateSkinList then
+		return false
+	end
 	return _M.UnActivateSkinList[skinID]
+end
+
+--是否有可激活飞机皮肤
+function _M.IsAircraftHaveUnActivative()
+	return nil ~= _M.UnActivateSkinList and nil ~= next(_M.UnActivateSkinList)
 end
 
 --刷新已激活飞机皮肤列表

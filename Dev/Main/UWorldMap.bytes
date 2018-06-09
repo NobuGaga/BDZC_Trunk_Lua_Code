@@ -444,7 +444,10 @@ function _R.SetCompanyIcon(self)
 	local pointGirl = MGirl.redPoint
 	local pointCar = MCar.CarRedPoint
 	local pointPatrol = MCompany.PatrolRedPoint
-	local pointAircraft = not MAircraft.IsStuding
+	local pointAircraft = not MAircraft.IsStuding or MAircraft.IsAircraftHaveUnActivative()
+	if GameSetting.IsiOSCommit then
+		pointAircraft = false
+	end
 	local pointBaby = MGirl.babyRedPoint
 
 	if pointManage and MMain.FuncIsOpen(Define.SysId.Manage) then

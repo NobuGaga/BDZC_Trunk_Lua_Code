@@ -245,7 +245,16 @@ function _P.SelectGirl(self,id)
 	
 	local girlData = Csv.Girl[wharfPeopleData.girlId]
 
-	self.mIconSp.SpriteName = girlData.homeicon
+	if self.PrefabTable ~= nil then
+		self.PrefabTable:Destroy()
+		self.PrefabTable = nil
+	end
+	if girlData.prefab ~= nil and girlData.prefab > 0 then
+		self.mIconSp.SpriteName = ""
+		self.PrefabTable = CCommon.CreateActor(self.mIconSp, girlData.prefab, CCommon.ActorFieldMap.wharf)
+	else
+		self.mIconSp.SpriteName = girlData.homeicon
+	end
 	self.mNameLab.Text = girlData.colorname
 	self.mOffer.Text = girlData.job
 	self.mBg.SpriteName = girlData.homebg

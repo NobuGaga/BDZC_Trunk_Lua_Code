@@ -115,6 +115,7 @@ function _P.InitItem(self, index, data)
 	item.background = itemMoudle:Get("background")
 	item.textLastTime = itemMoudle:Get("textLastTime")
 	item.textTimeCounter = itemMoudle:Get("textTimeCounter")
+	item.textTimeCounterT = itemMoudle:Get("textTimeCounterT")
 	item.cornerLeft = itemMoudle:Get("CornerLeft")
 	item.textCorner = itemMoudle:Get("textCorner")
 	itemMoudle:Get("textBtnOpen").Text = Csv.Text("timelimit_open_tips")
@@ -149,10 +150,12 @@ function _P.RefreshItemTime(item)
 	local time = item.time - HeartBeat.ServSecond()
 	local isFinish = time <= 0
 	if isFinish then
-		item.textTimeCounter.Text = Csv.Text("rankreward_finish")
+		item.textTimeCounterT.Text = Csv.Text("rankreward_finish")
 		item.cornerLeft.SpriteName = "cb_008"
+		item.textTimeCounter.Text = ""
 	else
-		item.textTimeCounter.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("rankreward_count_time"))
+		item.textTimeCounterT.Text = Csv.Text("rankreward_count_time")
+		item.textTimeCounter.Text = LuaUtil.GetTimeHMS(time)
 	end
 	return isFinish
 end

@@ -125,6 +125,9 @@ function _P.RefreshView(self,data)
 	for k,v in ipairs(sortTable) do
 		local posMoudle = JGuiManager.GetMoudle(content,"M_Election_RedEnvelopes_Item")
 		local csvVote = Csv.Vote[v.voteID]
+		if csvVote ~= nil and csvVote.icon ~= nil then
+			posMoudle:Get("M_Election_RedEnvelopes_Item").SpriteName = csvVote.icon
+		end
 		local csvTitle
 		if csvVote ~= nil and csvVote.titleID ~= nil then
 			csvTitle = Csv.Title[csvVote.titleID]

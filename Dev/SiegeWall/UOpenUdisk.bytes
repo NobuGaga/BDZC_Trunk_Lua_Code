@@ -34,6 +34,21 @@ function _M:OnCreate(data)
 		end
 	end
 
+	local udiskData = Csv.SiegeTreasury[data.id]
+
+	local rewardItems = {}
+	for k,v in pairs(udiskData.openRewards)do
+		table.insert(rewardItems,{id = v[1],count = v[2]})
+	end
+	local _jifen = 0
+	local _score = 0
+	_jifen = udiskData.openPoint
+	if MSiege.Phase == udiskData.stage then
+		_score = udiskData.openPoint
+	end
+
+	local rewardData = {items = rewardItems,jifen = _jifen,score = _score}
+
 	local index = 1
 	local isShowReward = false
 	moudle.SelfRect:AddOnUpdate(function()
@@ -42,7 +57,7 @@ function _M:OnCreate(data)
 				nums[index].Text = math.random(0,9)..""
 				index = index+1
 			else
-				WindowMgr.Create("UGetItems",data,true)
+				WindowMgr.Create("UGetItems",rewardData,true)
 			end
 		end
 	end,nil,0.5)

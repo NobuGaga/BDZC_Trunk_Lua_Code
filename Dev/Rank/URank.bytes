@@ -3,6 +3,8 @@ local MRank = JRequire "Dev.Rank.MRank"
 local CRank = JRequire "Dev.Rank.CRank"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -48,29 +50,31 @@ function _M:OnCreate(...)
 	end,nil,1)
 	self.mImgDoor = ImgDoor
 
-	local ImgDoor3 = moudle:Get("door3")
-	local FullActorPanel = moudle:Get("FullActorPanel")
-	self.ImgZhiWen3 = moudle:Get("zhiwen3")
-	ImgDoor3:AddOnButton(function(...)
-		SoundMgr.Play(10033)
-		self:Lock()
-		-- 打开排行版特效
-		ImgDoor3.RaycastTarget = false
-		self.ImgZhiWen3.Activity = false
-		CCommon.CreateEffect(FullActorPanel, FULLACTORID, nil, function( ... )
-			_P.OpenDoor3(self)
-		end)
-	end,nil,1)
-	self.mImgDoor3 = ImgDoor3
+	if MPlayer.IsCross() then
+		local ImgDoor3 = moudle:Get("door3")
+		local FullActorPanel = moudle:Get("FullActorPanel")
+		self.ImgZhiWen3 = moudle:Get("zhiwen3")
+		ImgDoor3:AddOnButton(function(...)
+			SoundMgr.Play(10033)
+			self:Lock()
+			-- 打开排行版特效
+			ImgDoor3.RaycastTarget = false
+			self.ImgZhiWen3.Activity = false
+			CCommon.CreateEffect(FullActorPanel, FULLACTORID, nil, function( ... )
+				_P.OpenDoor3(self)
+			end)
+		end,nil,1)
+		self.mImgDoor3 = ImgDoor3
+	else
+		moudle:Get("door4").IsGray = true
+		moudle:Get("door5").IsGray = true
+		moudle:Get("zhiwen3").IsGray = true
+	end
 
 	moudle:Get("Back_Btn"):AddOnButton(function(...)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
-
-	-- moudle:Get("door4").IsGray = true
-	-- moudle:Get("door5").IsGray = true
-	-- moudle:Get("zhiwen3").IsGray = true
 end
 
 function _P.OpenDoor(self)

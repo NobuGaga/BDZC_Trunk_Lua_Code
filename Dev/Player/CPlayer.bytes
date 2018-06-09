@@ -67,6 +67,7 @@ local CmdId =
 	sOpenChangeHead   = 24, --打开换头界面 PPlayer.SOpenChangeHead
 	sLiveHead         = 25, --兑换头像 PPlayer.SLiveHead
 	sChangeHead       = 26, --修改头像 PPlayer.SChangeHead
+	sCrossSrv = 27, --是否跨服
 }
 
 function _M.ModuleClean()
@@ -121,6 +122,7 @@ function _M.ModuleInit(isReload)
 		[CmdId.sOpenChangeHead] = {	proto = "PPlayer.SOpenChangeHead",			handle = _P.RepOpenChangeHead},
 		[CmdId.sLiveHead] = {	proto = "PPlayer.SLiveHead",					handle = _P.RepLiveHead},
 		[CmdId.sChangeHead] = {	proto = "PPlayer.SChangeHead",					handle = _P.RepChangeHead},
+		[CmdId.sCrossSrv] = {	proto = "PPlayer.SCrossSrv",					handle = _P.OnCrossSrv},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Player, send, recv, isReload)	
@@ -507,6 +509,11 @@ function _P.RepChangeHead(data)
 		WindowMgr.Call("UPlayerChangeHead","ChangeHead")
 		CCommon.ShowRight(Csv.Text("player_change16"))
 	end
+end
+
+function _P.OnCrossSrv(data)
+	local info = MPlayer.PlayerInfo
+	info.iscross = data.iscross
 end
 
 return _M

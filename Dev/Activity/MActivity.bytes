@@ -24,7 +24,7 @@ _M.CharityGetState =
 	CanNotGet = 3,--不能领取
 }
 
-_M.AdvantureTypeEnum = {
+_M.AdventureTypeEnum = {
 	Person = 1,
 	Gang = 2,
 }
@@ -71,6 +71,8 @@ _M.ActIdForType = {}				-- 活动类型对应活动ID
 _M.LotteryMessage = {}				-- 抽奖消息
 _M.XinGuanRed = false
 _M.SevenDayTargetPageRedIndex = -1	-- 七日目标今日目标页签红点Index
+_M.MaxStageNum = tonumber(Csv.Const(20151))
+_M.InvestmentRed = false
 
 function _M.Clean()
 	_M.ActList = {}
@@ -84,6 +86,7 @@ function _M.Clean()
 	_M.XinGuanStatus = {}
 	_M.LotteryMessage = {}
 	_M.XinGuanRed = false
+	_M.InvestmentRed = false
 end
 
 function _M.ClearForType(actType)
@@ -228,6 +231,158 @@ function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
 				actData.rankPro = selfValue
 			end
 		end
+	end
+end
+
+function _M.UpdatePersonEvent(actId,data)
+	if _M.ActList[actId] ~= nil then
+		--看下事件是不是满了
+		local count = 0
+		for k,v in pairs(_M.ActList[actId].personalEventlist) do
+			count = count + 1
+		end
+		if count == Csv.Const(20101)[2] then
+			local removeIndex = -1
+			for k,v in pairs(_M.ActList[actId].personalEventlist) do
+				if removeIndex == -1 then
+					removeIndex = v.eventsIndex
+				end
+				if removeIndex > v.eventsIndex then
+					removeIndex = v.eventsIndex
+				end
+			end
+			--移除
+			_M.ActList[actId].personalEventlist[removeIndex] = nil
+		end
+		local event = _M.GetNewPersonEvent(data)
+		_M.ActList[actId].personalEventlist[event.eventsIndex] = event
+		_M.ActList[actId].nextUpdateTime = data.triggerTime + Csv.Const(20101)[1]
+		_M.ActList[actId].isNew = true
+	end
+end
+
+function _M.UpdateGangEvent(actId,data)
+	if _M.ActList[actId] ~= nil then
+		local event = _M.GetNewGangEvent(data)
+		_M.ActList[actId].shopEventList[event.eventsIndex] = event
+		_M.ActList[actId].isNew = true
+	end
+end
+
+function _M.GetNewPersonEvent(data)
+	local eventInfo = {}
+	local adventureItemCsv = Csv.AdventureMainEvent[data.eventId]
+	for i=1, #data.eventInfo do
+		local item = {
+			index = data.eventInfo[i].index,
+			attrInfo = {}
+		}
+		if data.eventInfo[i].attrInfo ~= nil then
+			for k,v in pairs(data.eventInfo[i].attrInfo) do
+				local one = {
+					type = v.type,
+					val = v.value,
+					extra = v.extra,
+				}
+				item.attrInfo[k] = one
+			end
+			eventInfo[i] = item
+		end
+	end
+	local one = {
+		title = adventureItemCsv.title,
+		start = adventureItemCsv.start,
+		quality = adventureItemCsv.quality,
+		desc = adventureItemCsv.desc,
+		eventInfo = eventInfo,
+		eventId = data.eventId,
+		eventsIndex = data.eventsIndex,
+	}
+	return one
+end
+
+function _M.GetNewGangEvent(data)
+	-- print("商会事件")
+	-- LuaUtil.DumpTable(data)
+	local one = {}
+	local tplayerlist = {}
+	one.eventId = data.eventId
+	one.eventsIndex = data.eventsIndex
+	one.triggerTime = data.triggerTime
+	one.type = data.type --1 进行中的 2是领奖的
+	one.playerInfo = {
+		icon = data.playerInfo.icon,
+		level = data.playerInfo.level,
+		power = data.playerInfo.power,
+		devote = data.playerInfo.devote,
+		job = data.playerInfo.job,
+		name = data.playerInfo.name,
+		sex = data.playerInfo.sex,
+		playerId = data.playerInfo.playerId,
+	}
+	if data.playerlist ~= nil then
+		for k, v in pairs(data.playerlist) do
+			local playerInfo = {
+				icon = v.icon,
+				level = v.level,
+				power = v.power,
+				devote = v.devote,
+				staffId = v.staffId,
+				job = v.job,
+				name = v.name,
+				sex = v.sex,
+				playerId = v.playerId,
+			}
+			table.insert(tplayerlist, playerInfo)
+		end
+	end
+	--需求
+	one.eventInfo = {
+		--params -1为任意员工，其他为指定员工 不管只读第一个
+		type = data.eventInfo.attrInfo[1].type,
+		val = data.eventInfo.attrInfo[1].value,
+		params = data.eventInfo.attrInfo[1].params,
+	}
+	one.playerlist = tplayerlist
+	return one
+end
+
+--获取奇遇已使用员工列表
+function _M.GetAdvUseList(actId)
+	if _M.ActList[actId] ~= nil then
+		return _M.ActList[actId].staffjoinlist
+	end
+end
+
+--奇遇更新商城数据
+function _M.UpdateAdvShop(data)
+	local shopData = _M.ActList[data.actId].shop
+	if shopData ~= nil then
+		for k,v in pairs(shopData.itemList) do
+			if v.index == data.index then
+				v.buyCount = data.buyCount
+				break
+			end
+		end
+	end
+end
+
+function _M.RemoveGangEvent(actId,data)
+	if _M.ActList[actId] ~= nil then
+		_M.ActList[actId].shopEventList[data.eventIndex] = nil
+	end
+end
+
+--奇遇刷新后商店数据更新
+function _M.SetShopAdvData(data)
+	LuaUtil.DumpTable(data)
+	_M.ActList[data.actId].shop = data
+end
+
+--获取奇遇加班员工列表
+function _M.GetAdvOverList(actId)
+	if _M.ActList[actId] ~= nil then
+		return _M.ActList[actId].staffoverlist
 	end
 end
 

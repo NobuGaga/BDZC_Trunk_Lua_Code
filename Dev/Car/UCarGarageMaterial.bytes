@@ -19,6 +19,7 @@ function _M:ctor(parent)
 	self._RootNode = parent
 	local module = JGuiManager.GetMoudle(self._RootNode, "M_Car_Garage_Material", WindowType.UI, 0)
 	self.mModule = module
+	self.ImgSelect = module:Get("H")
 	
 	self.hasRect = module:Get("InfoRect")
 	self.noneRect = module:Get("NoneTips")
@@ -69,6 +70,8 @@ end
 
 
 function _P.CreateListData(self)
+	self.ImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+	self.ImgSelect.Activity = false
 	local contentTransform = self.mModule:Get("Content")
 	contentTransform:DestroyChildren()
 
@@ -77,17 +80,18 @@ function _P.CreateListData(self)
 
 	self.mAllMatData = {}
 	self.batchSellIdList = {}
+	self.mRawData = {}
 	for i,v in ipairs(matList) do
 		self.mAllMatData[i] = _P.OnCreateItem(self, contentTransform, v, i)
 	end
 
 	local hasItemNum = #matList
 	local emptyNum = 0
-	if hasItemNum < 30 then
-		emptyNum = 30 - hasItemNum
+	if hasItemNum < 16 then
+		emptyNum = 16 - hasItemNum
 	else
-		if hasItemNum % 5 > 0 then
-			emptyNum = 5 - hasItemNum % 5
+		if hasItemNum % 4 > 0 then
+			emptyNum = 4 - hasItemNum % 4
 		end
 	end
 
@@ -183,6 +187,15 @@ function _P.OnSelectMatData(self, data, isUpdate, index)
 	self.noneRect.Activity = not data and (not self.IsBatch)
 
 	_P.SetItemData(self, data)
+
+	local item = self.mAllMatData[index]
+	if item ~= nil then
+		local itemModule = item.module
+		self.ImgSelect:SetParent(itemModule.SelfRect.CachedTran)
+		self.ImgSelect.LocalPosition = Vector2(0,0)
+		self.ImgSelect.CachedTran:SetSiblingIndex(0)
+		self.ImgSelect.Activity = true
+	end
 end
 
 

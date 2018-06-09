@@ -448,6 +448,26 @@ function _M:OnCreate()
 	-- if MBattle.IsFirstBattle() then
 	-- 	_P.ShowFirstEnter(self)
 	-- end
+
+	local vip = MPlayer.GetVip()
+	local csvVip = Csv.Vip[vip]
+	if csvVip ~= nil then
+		local imgBord = moudle:Get("VipBox")
+		if csvVip.imgBord ~= nil then
+			imgBord.Activity = true
+			imgBord.SpriteName = csvVip.imgBord
+		else
+			imgBord.Activity = false
+		end
+
+		local imgNum = moudle:Get("VipNum")
+		if csvVip.icon ~= nil then
+			imgNum.Activity = true
+			imgNum.SpriteName = csvVip.icon
+		else
+			imgNum.Activity = false
+		end
+	end
 end
 
 function _P.RefreshBuild(self)

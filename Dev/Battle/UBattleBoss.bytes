@@ -282,7 +282,16 @@ function _P.OnChooseStaff(self, staffId)
 	if staffId > 0 then
 		local info = MStaff.GetStaffDataByID(staffId)
 		local staffCsv = Csv.Personnel[staffId]
-		self.Own.Body.SpriteName = staffCsv.asset
+		if self.Own.BobySpine ~= nil then
+			self.Own.BobySpine:Destroy()
+			self.Own.BobySpine = nil
+		end
+		if staffCsv ~= nil and staffCsv.prefab ~= nil and staffCsv.prefab > 0 then
+			self.Own.BobySpine = CCommon.CreateActor(self.Own.Body, staffCsv.prefab, CCommon.ActorFieldMap.battle_boss_self)
+			self.Own.Body.SpriteName = ""
+		else
+			self.Own.Body.SpriteName = staffCsv.asset
+		end
 		self.Own.Power.Text = tostring(info.power)
 	else
 		self.Own.Body.SpriteName = DEFAULT_BODY_NAME
@@ -335,7 +344,18 @@ function _M:OnCreate()
 	end, nil, 0.9)
 
 	moudle:Get("BG_Img").SpriteName = Csv.BattleIcon[csv.scene].str
-	moudle:Get("BossImg").SpriteName = Csv.BattleIcon[csv.icon].str
+	local csvBattleIcon = Csv.BattleIcon[csv.icon]
+	if csvBattleIcon.staffID ~= nil and csvBattleIcon.staffID ~= 0 then
+		local csvPersonnel = Csv.Personnel[csvBattleIcon.staffID]
+		if csvPersonnel ~= nil and csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
+			CCommon.CreateActor(moudle:Get("BossImg"), csvPersonnel.prefab, CCommon.ActorFieldMap.battle_boss_enemy)
+			moudle:Get("BossImg").SpriteName = ""
+		else
+			moudle:Get("BossImg").SpriteName = csvBattleIcon.str
+		end
+	else
+		moudle:Get("BossImg").SpriteName = csvBattleIcon.str
+	end
 	moudle:Get("tab").SpriteName = Csv.BattleIcon[csv.tableImg].str
 	moudle:Get("new_text").Text = Csv.Text("battle_begin")
 	self.Enemy = 

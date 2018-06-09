@@ -15,12 +15,15 @@ local _M = Class(WindowBase)
 local _P = {}
 local CostItemID = tonumber(Csv.Const(Define.Const.CompanyManageCostID))
 local EFFECT_ID = 18
-local BtnStr1 = "HX_ty_024_1"
-local BtnStr2 = "ty_024_1"
+local BtnStr1 = "HXbian_001_23"
+local BtnStr2 = "HXbian_001_22"
 local GainItemSoundId = {11000, 11000, 11000}
 
 local COLOR_B = Color(93/255,153/255,255/255,1)
 local COLOR_R = Color(255/255,93/255,140/255,1)
+
+--美女图片名或者动画ID
+local GirlAssetOrSpineID = Csv.Const(20152)
 
 local _R = {}
 --事件派发
@@ -113,6 +116,15 @@ function _M:OnCreate(...)
 		else
 			helpBtn.Activity = false
 		end
+	end
+
+	local girlNode = moudle:Get("bigGirlSpine")
+	local csvEffect = Csv.Effect[GirlAssetOrSpineID]
+	if csvEffect and csvEffect.prefab then
+		CCommon.CreateActor(girlNode, GirlAssetOrSpineID, CCommon.ActorFieldMap.company_girl)
+		girlNode.SpriteName = ""
+	else
+		girlNode.SpriteName = GirlAssetOrSpineID
 	end
 end
 
@@ -313,12 +325,12 @@ function _P.UpdateTime(self)
 						moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time - HeartBeat.ServSecond())
 						moudle:Get("text_8").Color = COLOR_R
 						moudle:Get("C_text").Text = Csv.Text("company_revert")
-						moudle:Get("Btn").SpriteName = BtnStr1
+						moudle:Get("btn_new").SpriteName = BtnStr1
 					else
 						moudle:Get("text_8").Text = Csv.Text("company_exp",{num = data.times,max = maxTimes})
 						moudle:Get("text_8").Color = COLOR_B
 						moudle:Get("C_text").Text = Csv.Text("company_get"..k)
-						moudle:Get("Btn").SpriteName = BtnStr2
+						moudle:Get("btn_new").SpriteName = BtnStr2
 					end
 				end
 			end
@@ -342,7 +354,7 @@ function _P.PlayEffect(self,getid,moudleid)
 	for k,v in pairs(self.EffectIndex) do
 		if k == getid then
 			for i=1,30 do
-				local x = math.random(-250,250)
+				local x = math.random(-200,200)
 				local y = math.random(-65,65)
 				local delay = math.random(5,20)/100
 				CCommon.CreateEffect(trans, v, Vector2(x,y), nil, nil, nil, nil, delay)

@@ -28,7 +28,7 @@ function _M:Dispatch(funcName, ...)
 end
 
 
-function _M:OnCreate(stageId, actId)
+function _M:OnCreate(actId,stageId)
 	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Treasury")
 	self.mModule = module
 
@@ -38,6 +38,7 @@ function _M:OnCreate(stageId, actId)
 		self:Destroy()
 	end, nil, 1.2)
 
+	self.mData = {}
 	self.StageId = stageId
 	module:Get("C_Title").Text = Csv.Text("siege_treasure_title")
 
@@ -51,12 +52,15 @@ function _M:OnCreate(stageId, actId)
 	_P.InitPageData(self)
 	_P.OnSetListData(self)
 
-	-- CSiege.EnterTreasureReq(actId, stageId)
+	 CSiege.EnterTreasureReq(actId, stageId)
+
+	 --[[
 	_R.OnGetTreasureList(self, {
 		point = 355,
 		disklist = {{id = 34020, playerid = 100000, playername = "测试1", qualityid = 3}, {id = 34021, playerid = 100000, playername = "测试2", qualityid = 2}, {id = 34022, playerid = 100000, playername = "测试3", qualityid = 1}},
 		orderdata = {id = 34013, leavecount = 99}
 	})
+	--]]
 end
 
 
@@ -280,6 +284,7 @@ function _P.CreateTreasureItem(self, itemGrid, itemName, data)
 	local showNumText = itemModule:Get("ShengyuText")
 	local priceRect = itemModule:Get("spend")
 	local treasureConf = Csv.SiegeTreasury[data.id]
+	print("__treasureConf_______",data.id)
 	if self.curSelectPage == MSiege.TreasureEnum.Mine then
 		local hasNum = MBag.GetItemNum(data.id)
 		local isNone = hasNum <= 0
@@ -380,6 +385,10 @@ end
 
 
 function _R.OnGetTreasureList(self, data)
+	if data.orderdata ~= nil then
+		print("__OnGetTreasureList___________",data.orderdata.id,data.orderdata.leavecount)
+	end
+
 	self.mData = data
 	_P.SetPointData(self)
 end

@@ -1,0 +1,165 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_SuperStaff_Main")
+	self.mMoudle = moudle
+	self.PrefabTable = {}
+
+	local listData = _P.GetListData().listData
+	local sortTable = {}
+	for i = 1,3 do
+		local btn = moudle:Get("Btn"..i)
+		if btn ~= nil then
+			btn.Activity = false
+		end
+	end
+	for k,v in ipairs(listData) do
+		local activityConf = Csv.ActivityJaonChen[v.actId]
+		local btn = moudle:Get("Btn"..activityConf.typeId)
+		if btn ~= nil then
+			btn.Activity = true
+			moudle:Get("Click"..activityConf.typeId):AddOnButton(function()
+				_P.OnClickBtn(self,v.actId)
+			end,nil,0.9)
+			table.insert(sortTable,v.actId)
+		end
+	end
+	
+	self.SortTable = sortTable
+	_P.OnClickBtn(self,sortTable[1])
+
+	moudle:Get("BackBtn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+end
+
+function _P.OnClickBtn(self,index)
+	if index ~= nil then
+		local moudle = self.mMoudle
+		for i = 1,3 do
+			moudle:Get("Light"..i).Activity = false
+		end
+		local activityConf = Csv.ActivityJaonChen[index]
+		if activityConf ~= nil then
+			moudle:Get("Light"..activityConf.typeId).Activity = true
+			local btn = moudle:Get("Btn"..index)
+			if btn ~= nil then
+				btn.CachedTran:SetSiblingIndex(2)
+			end
+		end
+		self.ActId = index
+		_P.CreateStaff(self,index)
+	end
+end
+
+function _P.CreateStaff(self,index)
+	local moudle = self.mMoudle
+	local activityConf = Csv.ActivityJaonChen[index]
+	if activityConf ~= nil then
+		local staffList = activityConf.attrid
+		for i = 1,5 do
+			moudle:Get("StaffBg"..i).Activity = false
+		end
+		for i = 1,#staffList do
+			local allStaffData = MActivity.GetFromId(index)
+			local staffData = _P.GetStaffData(allStaffData,staffList[i])
+			if staffData ~= nil then
+				local csvPerson = Csv.Personnel[staffData.attrid]
+				if csvPerson ~= nil then
+					moudle:Get("StaffBg"..i).Activity = true
+					moudle:Get("StaffName"..i).Text = csvPerson.name
+
+					if self.PrefabTable[i] ~= nil then
+						self.PrefabTable[i]:Destroy()
+						self.PrefabTable[i] = nil
+					end
+					if csvPerson.prefab ~= nil and csvPerson.prefab > 0 then
+						moudle:Get("StaffIcon"..i).SpriteName = ""
+						self.PrefabTable[i] = CCommon.CreateActor(moudle:Get("StaffIcon"..i), csvPerson.prefab, CCommon.ActorFieldMap.super_small)
+					else
+						moudle:Get("StaffIcon"..i).SpriteName = csvPerson.asset
+					end	
+
+					moudle:Get("StaffBg"..i):AddOnButton(function()
+						_P.OnClickStaff(self,staffData)
+					end,nil,0.9)
+				end
+			end
+		end
+	end
+end
+
+function _P.OnClickStaff(self,staffData)
+	WindowMgr.Create("USuperStaffDetail",self.ActId,staffData)
+end
+
+function _P.GetStaffData(allStaffData,staffid)
+	for k,v in pairs(allStaffData.list) do
+		if v.attrid == staffid then
+			return v
+		end
+	end
+	return nil
+end
+
+function _P.CheckIsShowBtn(listData,index)
+	if listData ~= nil then
+		for k,v in pairs(listData) do
+			print(v.actId)
+			local activityConf = Csv.ActivityJaonChen[v.actId]
+			if activityConf ~= nil and activityConf.typeId == index then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _P.GetListData()
+	local jianchenList = MActivity.GetListFromType(Define.ActivityType.JianChen)
+	local jinguoList = MActivity.GetListFromType(Define.ActivityType.JinGuo)
+	local listData = {}
+	local listCount = 0
+	if jianchenList ~= nil then
+		for k,v in pairs(jianchenList) do
+			listData[v.actId] = v
+			listCount = listCount + 1
+		end
+	end
+
+	if jinguoList ~= nil then
+		for k,v in pairs(jinguoList) do
+			listData[v.actId] = v
+			listCount = listCount + 1
+		end
+	end
+
+	table.sort(listData, function(a, b)
+		local activityConf1 = Csv.ActivityJaonChen[a.actId]
+		local activityConf2 = Csv.ActivityJaonChen[b.actId]
+
+		return activityConf1.sortId < activityConf2.sortId
+	end)
+
+	return {listData = listData, listCount = listCount}
+end
+
+return _M

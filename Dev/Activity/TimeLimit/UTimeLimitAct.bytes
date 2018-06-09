@@ -189,6 +189,7 @@ function _P.InitItem(self, index, data)
 		end
 	end
 
+	item.proTextT = itemMoudle:Get("textLimitT")
 	item.proText = itemMoudle:Get("textLimit")
 	item.maxPro = data.maxVal
 	item.getedPos = itemMoudle:Get("GetPos")
@@ -265,6 +266,7 @@ function _P.RefreshItemProState(self, item, isGeted)
 		csvTips = "timelimit_limit_not"
 	end
 	item.proText.Text = Csv.Text(csvTips, {text = self.proTextTips, cur = self.curPro, max = item.maxPro})
+	item.proTextT.Text = self.proTextTips
 
 	item.btnGet.Activity = not isGeted
 	item.getedPos.Activity = isGeted

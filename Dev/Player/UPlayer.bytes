@@ -88,7 +88,7 @@ function _P.RefreshAttr(self)
 		self.AttrInfo[k].Text = MPlayer.GetAttr(k)
 	end
 
-	self.Power.Text = Csv.Text("palyer_myPower",{num = tostring(MPlayer.GetPower())})
+	self.Power.Text = tostring(MPlayer.GetPower())
 end
 
 function _P.RefreshAssets(self)
@@ -145,6 +145,7 @@ function _M:OnCreate()
 	moudle:Get("C_Text").Text = Csv.Text("palyer_title")
 
 	moudle:Get("text2").Text = Csv.Text("player_ID", {id = MPlayer.GetId()})
+	moudle:Get("powerTitle").Text = Csv.Text("palyer_myPower")
 
 	self.Power = moudle:Get("power")
 	self.Body = moudle:Get("body")

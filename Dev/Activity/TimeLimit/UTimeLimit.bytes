@@ -163,6 +163,7 @@ function _P.InitItem(self, index, data)
 	item.textLastTime = itemMoudle:Get("textLastTime")
 	item.textTimeCounter = itemMoudle:Get("textTimeCounter")
 	itemMoudle:Get("btnText").Text = Csv.Text("timelimit_open_tips")
+	itemMoudle:Get("textTimeCounterT").Text = Csv.Text("activity_StaffActivity_remaintime")
 	itemMoudle:Get("btnOpen"):AddOnButton(function()
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UTimeLimitAct", item.actId, item.rankType)
@@ -196,7 +197,7 @@ function _P.RefreshItemTime(item)
 	if isFinish then
 		time = 0
 	end
-	item.textTimeCounter.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("timelimit_count_time"))
+	item.textTimeCounter.Text = LuaUtil.GetTimeHMS(time)
 	return isFinish
 end
 

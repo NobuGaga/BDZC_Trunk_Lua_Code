@@ -95,8 +95,8 @@ function _P.SetPlayerInfo(self, infoData)
 	self.mModule:Get("SponsorText").Text = infoData.name
 	self.mModule:Get("TypeText").Text = clubConf.name
 	self.mModule:Get("SeatText").Text = infoData.joinCount .. '/' .. ((infoData.clubtype == 1 and 10) or 50)
+	local timeRect = self.mModule:Get("TimeText")
 	if infoData.leftTime > 0 then
-		local timeRect = self.mModule:Get("TimeText")
 		timeRect.Text = LuaUtil.GetTimeHMS(self.infoData.leftTime)
 
 		_P.OnClearTimer(self)
@@ -104,6 +104,8 @@ function _P.SetPlayerInfo(self, infoData)
 		self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
 			_P.OnUpdateTime(self, timeRect)
 		end, nil, 1)
+	else
+		timeRect.Text = '00:00:00'
 	end
 end
 

@@ -9,6 +9,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MSiege = JRequire"Dev.SiegeWall.MSiege"
 local MMain = JRequire "Dev.Main.MMain"
 local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CSiege = JRequire"Dev.SiegeWall.CSiege"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -21,8 +22,12 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(chooseFuncId)
+function _R.UpdateList(self)
+	_P.OnChoose(self, self.selectFun)
+end
 
+function _M:OnCreate(selectPhase)
+	self.mSelectPhase = selectPhase
 	local moudle = self:CreateMoudle(self._RootNode,"M_Wghej_Enemy")
 	
 	local closeBtn = moudle:Get("C_Back_Btn")
@@ -44,6 +49,7 @@ function _M:OnCreate(chooseFuncId)
 	local colorDefault = Color(0/255,195/255,255/255,1)
 
 	local funcs = MMain.GetOpenedFuncs(Define.SysId.Siege_UBoss, true) --{{id = 1,name = "全服boss"},{id = 2,name = "商会boss"}}
+	self.mFuncs = funcs
 	local countToggle = #funcs
 	if countToggle > 0 then
 		local isHave = false
@@ -59,6 +65,13 @@ function _M:OnCreate(chooseFuncId)
 			if lastChoose == v.id then
 				isHave = true
 			end
+
+			--阵营boss
+			if selectPhase ~= 2 then
+				moudle:Get("toggle_3").Activity = false
+			else
+				moudle:Get("toggle_3").Activity = true
+			end 
 		end
 		if not isHave then
 			lastChoose = funcs[1].id
@@ -69,6 +82,9 @@ function _M:OnCreate(chooseFuncId)
 end
 
 function _P.OnChoose(self, funcId)
+	if funcId == nil then
+		funcId = self.mFuncs[1].id
+	end
 	if self.selectFun ~= nil then
 		if self.selectFun == funcId then
 			return
@@ -77,6 +93,10 @@ function _P.OnChoose(self, funcId)
 		end
 	end
 	self.mContent:DestroyChildren()
+
+	if self.mSelectPhase ~= MSiege.Phase then
+		return
+	end
 
 	local bossItems = {}
 	local bossList = _P.GetBossByType(funcId)
@@ -92,13 +112,14 @@ function _P.GetBossByType(type)
 	local bossList = MSiege.BossList
 
 	local list = {}
+	local myType = MSiege.GetTeamType(commerceID)
 	for k,v in pairs(bossList)do
 		local bossData = Csv.SiegeBoss[v.id]
 		if bossData.start >= 7 then --7星boss除外
 			table.insert(list,v)
 		else
 			if type == Define.SysId.Siege_Boss_Server then
-				if MCommerce.MyCommerceId ~= 0 then
+				if MCommerce.MyCommerceId > 0 then
 					if v.commerceId ~= MCommerce.MyCommerceId then
 						table.insert(list,v)
 					end
@@ -110,6 +131,16 @@ function _P.GetBossByType(type)
 				if MCommerce.MyCommerceId ~= 0 then
 					if v.commerceId == MCommerce.MyCommerceId then
 						table.insert(list,v)
+					end
+				else
+					print("你还没加入商会！")
+				end
+			elseif type == Define.SysId.Siege_Boss_Team then
+				if MCommerce.MyCommerceId ~= 0 then
+					if myType ~= nil then
+						if v.type == myType then
+							table.insert(list,v)
+						end
 					end
 				else
 					print("你还没加入商会！")
@@ -146,9 +177,19 @@ function _P.CreateBossItem(self,data)
 	JinDu.Text = ""..jindu.."%"
 	FinderText.Text = Csv.Text("siege_boss_finder")
 	FinderName.Text = data.discoverer
+	buffIcon.Activity = false
 	
-	if MSiege.Buffs ~= nil then
-		buffIcon.Activity = true
+	local specialBuff = MSiege.GetBuffInfo(1)
+	
+	if specialBuff ~= nil then
+		if specialBuff.value > 0 then
+			buffIcon.Activity = true
+			local buffData = Csv.SiegeBuff[specialBuff.key]
+
+			if buffData ~= nil then
+				buffIcon.SpriteName = buffData.icon
+			end
+		end
 	else
 		buffIcon.Activity = false
 	end
@@ -165,7 +206,7 @@ function _P.CreateBossItem(self,data)
 
 	fightText.Text = Csv.Text("siege_boss_fight")
 	fightBtn:AddOnButton(function()
-		print("挑战boss__________",data.indexID)
+		CSiege.ReqInitFight(data.indexID)
 		WindowMgr.Create("USiegeBattle",data)
 	end)
 

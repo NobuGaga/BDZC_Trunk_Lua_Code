@@ -190,16 +190,13 @@ end
 --设置列表数据
 function _P.OnSetListData(self)
 	local rankList = {}
-	local isPerson = self.curSelectToggle == MActivity.AdvantureTypeEnum.Person
+	local isPerson = self.curSelectToggle == MActivity.AdventureTypeEnum.Person
 	if isPerson then
 		rankList = self.mRankrewardData
 	else
 		rankList = self.mGangrewardData
 	end
-	print("ranklist")
-	LuaUtil.DumpTable(self.mRankrewardData)
-	LuaUtil.DumpTable(self.mGangrewardData)
-	LuaUtil.DumpTable(rankList)
+
 	local itemGrid = self.mModule:Get("content")
 	itemGrid:DestroyChildren()
 
@@ -215,17 +212,16 @@ end
 
 -- 设置是否可以领取
 function _P.SetGetBtnData(self)
-	if self.mData.selfGetState == nil then return end
 	local text
 	local isFinish = self.time - HeartBeat.ServSecond() <= 0
-	local getState = self.mData.selfGetState
+	local isPerson = (self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal)
+	local getState = (isPerson and self.activityData.selfGetState) or self.activityData.gangGetState
 	local isCanNotGet = getState == MActivity.RewardGetState.CanNotGet
 	local isGeted = getState == MActivity.RewardGetState.Geted
-	
 	local isCanGet = getState == MActivity.RewardGetState.CanGet
 	self.timeRect.Activity = not isFinish
 	self.getBtnText.Activity = isFinish
-
+	self.mModule:Get("redpoint").Activity = isCanGet
 	if isFinish then
 		if isCanNotGet then
 			text ="rankreward_can_not_get"
@@ -240,6 +236,7 @@ function _P.SetGetBtnData(self)
 	else
 		self.getBtnText.Text = ""
 	end
+	
 	local isLight = isFinish and isCanGet
 	self.getBtn.IsGray = not isLight
 	self.getBtn.RaycastTarget = isLight
@@ -261,7 +258,8 @@ end
 
 --设置个人排名（商会排名）数据
 function _P.SetRankData(self)
-	local isPerson =(self.curSelectToggle == MActivity.AdvantureTypeEnum.Person)
+	print("SetState")
+	local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
 	local rankText = self.mModule:Get("rankNum")
 	if isPerson then
 		if self.selfRankNum and self.selfRankNum > 0 then
@@ -285,26 +283,32 @@ end
 
 -- 自己活动排行版回调后
 function _R.OnGetSelfRankData(self, data)
-	-- self.selfRankNum = data.selfrank
-	-- self.mRankData.selfrank = data.selfrank
-	-- self.mRankData.ranklist = data.ranklist
+	-- print("个人排名返回")
+	CRank.GetRankList(self.gangRankType, true)
+	self.selfRankNum = data.selfrank
+	_P.SetRankData(self)
 end
 
 function _R.OnUpdateData(self, actId)
+	-- print("数据刷新")
 	local data = MActivity.GetFromId(actId)
 	self.mData = data
 	_P.SetGetBtnData(self)
 end
 
+function _R.OnGetGangRankData(self,data)
+	-- print("商会排名返回")
+	self.gangRankNum = data.selfrank
+end
+
 function _R.OnSelfRankData(self,data)
-	self.mselfRankData = data
+	-- print("个人排名")
+	-- self.mselfRankData = data
 	_P.SetRankData(self)
 	_P.SetGetBtnData(self)
 end
 
 function _R.UpdateRed(self)
-	local redRect = self.mModule:Get("redpoint")
-	redRect.Activity = MActivity.CharitableRed
 	local data = MActivity.GetFromId(self.actId)
 	self.mData = data
 	_P.SetGetBtnData(self)
@@ -350,16 +354,16 @@ function _P.InitPageData(self)
 
 	self.personSelectImg:AddOnButton(function()
 		SoundMgr.Play(10001)
-		_P.OnClickPage(self, MActivity.AdvantureTypeEnum.Person)
+		_P.OnClickPage(self, MActivity.AdventureTypeEnum.Person)
 	end, nil, 0.95)
 	self.gangSelectImg:AddOnButton(function()
 		SoundMgr.Play(10001)
-		_P.OnClickPage(self, MActivity.AdvantureTypeEnum.Gang)
+		_P.OnClickPage(self, MActivity.AdventureTypeEnum.Gang)
 	end, nil, 0.95)
 end
 
 function _P.OnSetPageText(self)
-	local isPerson =(self.curSelectToggle == MActivity.AdvantureTypeEnum.Person)
+	local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
 
 	self.personSelectImg.SpriteName = ((isPerson and _LightImg) or _DefaultImg)
 	self.gangSelectImg.SpriteName = ((not isPerson and _LightImg) or _DefaultImg)
@@ -371,7 +375,7 @@ function _P.OnSetPageText(self)
 	self.personText.FontSize = ((isPerson and _LightFontSize) or _DefaultFontSize)
 	self.gangText.FontSize = ((not isPerson and _LightFontSize) or _DefaultFontSize)
 
-	-- _P.SetRankData(self)
+	_P.SetRankData(self)
 end
 
 
@@ -393,18 +397,16 @@ function _M:OnCreate(data)
 		self:Destroy()
 	end, nil, 1.2)
 
-
-	-- self.activityData = data
-	-- self.actId = data.actId
-	self.actId = 40000
+	self.activityData = data
+	self.actId = data.actId
 	self.adventureConf = Csv.Adventure[self.actId]
-	self.selfRankType = self.adventureConf.rankType
-	self.gangRankType = self.selfRankType + 1
+	self.selfRankType = self.adventureConf.rankPersonalType
+	self.gangRankType = self.adventureConf.rankCommerceType
 
 	_P.GetRankData(self, self.actId)
-	-- CRank.GetRankList(self.selfRankType, true)
+	CRank.GetRankList(self.selfRankType, true)
 
-	self.curSelectToggle = MActivity.AdvantureTypeEnum.Person
+	self.curSelectToggle = MActivity.AdventureTypeEnum.Person
 
 	module:Get("textSelfRank").Text = Csv.Text("xinguan_rank_selfRank")
 	local personText = module:Get("C_text1")
@@ -423,43 +425,43 @@ function _M:OnCreate(data)
 	self.getBtnText = module:Get("noneText")
 	self.personSelectImg = module:Get("Btn_c1")
 	self.gangSelectImg = module:Get("Btn_c2")
-	-- local personBtn = module:Get("btnRank")
-	-- personBtn:AddOnButton(function ( ... )
-	-- 	SoundMgr.Play(10001)
+	local personBtn = module:Get("btnRank")
+	personBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
 
-	-- 	local isPerson =(self.curSelectToggle == MActivity.ActivityType.Adventure)
-	-- 	if isPerson then
-	-- 		WindowMgr.Create("UAdventureRankDetail", self.selfRankType, true)
-	-- 	else
-	-- 		WindowMgr.Create("UAdventureRankDetail", self.gangRankType, false)
-	-- 	end
-	-- end, nil, 0.95)
+		local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
+		if isPerson then
+			WindowMgr.Create("UAdventureRankDetail", self.selfRankType, true)
+		else
+			WindowMgr.Create("UAdventureRankDetail", self.gangRankType, false)
+		end
+	end, nil, 0.95)
 	
-	-- self.getBtn = module:Get("btnGet")
-	-- self.getBtn:AddOnButton(function ( ... )
-	-- 	SoundMgr.Play(10001)
-	-- 	local isPerson =(self.curSelectToggle == MActivity.ActivityType.Adventure)
-	-- 	CActivity.GetRewardReq(activityData.actId, (isPerson and 1) or 2)
-	-- end, nil, 0.95)
+	self.getBtn = module:Get("btnGet")
+	self.getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
+		CActivity.GetRewardReq(self.activityData.actId, (isPerson and 1) or 2)
+	end, nil, 0.95)
 
-	-- local state = activityData.state
-	-- local time = state.lefttime - HeartBeat.ServSecond()
-	-- self.time = state.lefttime
+	local state = self.activityData.state
+	local time = state.lefttime - HeartBeat.ServSecond()
+	self.time = state.lefttime
 
-	-- _P.RefreshTime(self)
-	-- if time > 0 then
-	-- 	self.countTime = self.timeText:AddOnUpdate(function() 
-	-- 		if _P.RefreshTime(self) then
-	-- 			if self.countTime then
-	-- 				self.countTime:Destroy()
-	-- 				self.countTime = nil
-	-- 			end
-	-- 			if activityData.actType == Define.ActivityType.Adventure then
-	-- 				MActivity.IsUpdateTime1 = true
-	-- 			end
-	-- 		end
-	-- 	end, nil, 1)
-	-- end
+	_P.RefreshTime(self)
+	if time > 0 then
+		self.countTime = self.timeText:AddOnUpdate(function() 
+			if _P.RefreshTime(self) then
+				if self.countTime then
+					self.countTime:Destroy()
+					self.countTime = nil
+				end
+				if self.activityData.actType == Define.ActivityType.Adventure then
+					MActivity.IsUpdateTime1 = true
+				end
+			end
+		end, nil, 1)
+	end
 
 	_P.InitPageData(self)
 	_P.OnSetListData(self)

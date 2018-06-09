@@ -42,7 +42,8 @@ function _M:OnCreate()
 	local moudle = self:CreateMoudle(self._RootNode, "M_Bidding_Ranking")
 	self.Moudle = moudle
 	moudle:Get("C_Text").Text = Csv.Text("buyland_rank_title")
-	moudle:Get("OwnName").Text = Csv.Text("buyland_rank_playername")
+	--moudle:Get("OwnName").Text = Csv.Text("buyland_rank_playername")
+	moudle:Get("RankBgText").Text = Csv.Text("finance_OwnRanking")
 	moudle:Get("NameText").Text = MPlayer.GetName()
 
 	moudle:Get("ranking").Text = Csv.Text("buyland_rank_columname1")
@@ -77,14 +78,14 @@ function _P.OnChoose(self, funcId)
 	elseif funcId == 2 then
 		self.Moudle:Get("Tips").Text = ""
 	end
-	self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
-	self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
+	-- self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
+	-- self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
 	CRank.GetRankList(RankID[funcId],true)
 end
 
 function _P.SetBottomData(self,funcId)
-	self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
-	self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
+	-- self.Moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
+	-- self.Moudle:Get("OwnFraction").Text = Csv.Text("buyland_rank_landnum")
 	local rankid = RankID[funcId]
 	local rankinfo = MRank.RankTable[rankid]
 	if rankinfo ~= nil then

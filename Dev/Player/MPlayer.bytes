@@ -25,6 +25,7 @@ local function InitPlayerInfo()
 		dress = {},
 		titleList = {},
 		serverId = 0, --区服ID
+		iscross = false, --是否跨服
 	}
 	for _,v in pairs(Define.AttrType) do
 		info.attr[v] = 0
@@ -193,6 +194,10 @@ end
 
 function _M.GetBodyPrefabID()
 	local avatarCsv = Csv.Avatar[_M.PlayerInfo.avatar.body]
+	if _M.PlayerInfo.titleID > 0 then
+		local fashionData = Csv.Title[_M.PlayerInfo.titleID]
+		avatarCsv = Csv.Avatar[fashionData.avatarId]
+	end
 	return avatarCsv["prefab_".._M.PlayerInfo.sex]
 end
 
@@ -267,6 +272,10 @@ function _M.SetHeadAllAttr(attr)
 	headAllAttr.Zhengzhi = attr.Zhengzhi
 	headAllAttr.Meili = attr.Meili
 	_M.HeadAllAttr = headAllAttr
+end
+
+function _M.IsCross()
+	return _M.PlayerInfo.iscross
 end
 
 return _M

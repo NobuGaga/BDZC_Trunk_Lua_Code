@@ -65,7 +65,8 @@ function _M:OnCreate(data)
 		moudle:Get("B1attrTitle" .. v).Text = MPlayer.Attr2Str(v)
 		moudle:Get("B1attrNum" .. v).Text = tostring(data.attr[k])
 	end
-	moudle:Get("power").Text = Csv.Text("palyer_allPower",{num = tostring(data.power)})
+	moudle:Get("power").Text = tostring(data.power)
+	moudle:Get("powerTitle").Text = Csv.Text("palyer_allPower")
 
 	moudle:Get("B2attrTitle1").Text = Csv.Text("player_exp")
 	moudle:Get("B2attrNum1").Text = tostring(data.exp)
@@ -115,7 +116,7 @@ function _M:OnCreate(data)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UCarGarageGive", MCar.GarageTypeEnum.Give, nil, data)
 	end,nil,0.9)
-	sellBtn.Activity = (data.id ~= MPlayer.GetId() and data.serverId ~= MPlayer.GetServerId())
+	sellBtn.Activity = (data.id ~= MPlayer.GetId() and data.serverId == MPlayer.GetServerId())
 end
 
 function _P.RefreshDress(self,data)

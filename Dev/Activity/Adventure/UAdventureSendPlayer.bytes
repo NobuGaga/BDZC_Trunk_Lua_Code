@@ -19,14 +19,18 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(data)
+function _M:OnCreate(data,staffshoplist,actvityData)
 	local module = self:CreateMoudle(self._RootNode, "M_Adventure_ChooseStaff")
 	self.mModule = module
 
 	self.mData = data
-	LuaUtil.DumpTable(data)
+	self.activityData = actvityData
+	self.actId = actvityData.actId
+	self.mData.staffshoplist = {}
+	self.mData.staffshoplist = staffshoplist
+	-- LuaUtil.DumpTable(data)
 	self.mRawTableItems = {}
-	self.mCondition = data.eventInfo.attrInfo
+	self.mCondition = data.eventInfo
 	local closeBtn = module:Get("BackBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -58,7 +62,7 @@ function _P.GetSortStaffs(self,rawTable, suitData)
 	table.sort(sortTable,function(a,b)
 		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
 	end)
-	print("sortTable",#sortTable)
+	-- print("sortTable",#sortTable)
 	return sortTable
 end
 
@@ -67,17 +71,18 @@ function _P.CheckIsSuit(self,suitData, data)
 	local checkSum = 1 	--符合度
 	local checkSeed = 1000 --防止单属性偏差过大
 	local csvPerson = Csv.Personnel[data.id]
-	for i=1,#suitData do
-		--四种基本属性：公关，行政，技术，营销 走一套
-		if suitData[i].type <= 4 then
-			local dataVal = MStaff.GetAttrByType(data.id, suitData[i].type)
-			checkSum = checkSum + (dataVal - suitData[i].val) * checkSeed
-			--指定员工
-			if suitData[i].params ~= -1 then
-				if data.id ~= suitData[i].params then
-					checkSum = 0
-				end
+	if suitData.type <= 4 then
+		local dataVal = MStaff.GetAttrByType(data.id, suitData.type)
+		checkSum = checkSum + (dataVal - suitData.val) * checkSeed
+		--指定员工
+		if suitData.params ~= -1 then
+			if data.id ~= suitData.params then
+				checkSum = 0
 			end
+		end
+		--使用过
+		if _P.IsUse(self,data.id) then
+			return 1
 		end
 	end
 	return checkSum
@@ -107,7 +112,11 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 	local sendBtn = itemMoudle:Get("C_Btn_b")
 	sendBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		_P.OnClickSendItem(self,data)
+		if self.activityData.shopEventtimes <= 0 then
+			CCommon.ShowError(Csv.Text("adventure_main_limit"))
+		else
+			_P.OnClickSendItem(self,data)
+		end
 		end, nil, 1)
 	local TextName = itemMoudle:Get("name")
 	TextName.Text = MStaff.GetStaffName(data.id)
@@ -115,7 +124,11 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 	--TODO:资质图标
 	_P.SetStaffItem(self,suitdata,data,itemMoudle)
 	local unSuit = itemMoudle:Get("Tips")
-	unSuit.Text = Csv.Text("adventure_unsuit")
+	if not _P.IsUse(self,data.id) then
+		unSuit.Text = Csv.Text("adventure_unsuit")
+	else
+		unSuit.Text = Csv.Text("adventure_joined")
+	end
 	--	只用判断符不符合条件并且可不可用
 	if _P.CheckIsSuit(self,suitdata,data) > 0 and not _P.IsUse(self,data.id) then
 		unSuit.Activity = false
@@ -132,7 +145,7 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 end
 
 function _P.SetStaffItem(self,suitData,data,module)
-	local suitType = suitData[1].type
+	local suitType = suitData.type
 	--如果没有配四种属性默认取第一种把
 	if suitType > 4 then 
 		suitType = MActivity.AdvReqTypeEnum.Gongguan
@@ -152,16 +165,22 @@ end
 
 -- 是否已经使用过
 function _P.IsUse(self,id)
-	return false
+	local result = false
+	for k,v in pairs(self.mData.staffshoplist) do
+		if v == id then
+			result = true
+			break
+		end
+	end
+	return result
 end
 
 -- 派遣员工
 function _P.OnClickSendItem(self,data)
 	--请求派遣
-	-- CActivity.ReqAdvGangEventEnd(self.mData.actId, self.mData.eventIndex,data.id)
-	print("派遣了id为"..data.id.."的员工")
+	CActivity.ReqAdvGangEventEnd(self.actId, self.mData.eventsIndex,data.id,self.mData.eventId)
+	-- print("派遣了id为"..data.id.."的员工")
 	self:Destroy()
-	-- _P.FindNext(self)
 end
 
 return _M

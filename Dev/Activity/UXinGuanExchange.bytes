@@ -26,13 +26,13 @@ function _M:OnCreate(data)
 	self.mModule = module
 
 	self.exchangeData = data
-	local closeBtn = module:Get("C_BackBtn")
+	local closeBtn = module:Get("closeBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
 
-	--module:Get("C_Text").Text = Csv.Text("xinguan_exchange_title")
+	module:Get("C_Text").Text = Csv.Text("xinguan_exchange_title")
 	module:Get("Point").Text = Csv.Text("xinguan_exchange_point")
 	module:Get("PointNum").Text = self.exchangeData.point
 

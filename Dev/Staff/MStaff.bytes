@@ -428,6 +428,16 @@ function _M.DoGetAllApitude(data)
 	return allAptitude
 end
 
+function _M.DoGetAllApitudeInit(staffid)
+	local allAptitude = 0
+	local books = Csv.Personnel[staffid].book
+	for k,v in pairs(books) do
+		local aptitude = Csv.BookLv[v[2]*1000 + 1].aptitude
+		allAptitude = allAptitude + aptitude
+	end
+	return allAptitude
+end
+
 function _M.StaffChangeByItem(data)
 	if data.list ~= nil then
 		for k,v in pairs(data.list) do

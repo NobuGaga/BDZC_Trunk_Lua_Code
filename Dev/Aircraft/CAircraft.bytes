@@ -178,6 +178,9 @@ function _P.OnAircraftActivate(data)
 	if nil ~= data then
 		MAircraft.DeleteAircraftUnActivateSkin(data.skinID)
 		WindowMgr.Call("UAircraft", "RefreshAircraftSkinInfo")
+		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
+		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
 		WindowMgr.Call("UAircraftSkin", "OnActivateSuccess", data.skinID)
 	else
 		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneActivate .. "返回空")

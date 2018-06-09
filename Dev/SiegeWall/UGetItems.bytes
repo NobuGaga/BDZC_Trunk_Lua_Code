@@ -23,7 +23,6 @@ function _M:OnCreate(data,isCloseUdisk)
 		SoundMgr.Play(10001)
 		self:Destroy()
 		if isCloseUdisk ~= nil and isCloseUdisk == true then
-			print("isCloseUdisk______",isCloseUdisk)
 			WindowMgr.Call("UGetUDisk","CloseView")
 		end
 	end,nil,0.9)
@@ -31,14 +30,20 @@ function _M:OnCreate(data,isCloseUdisk)
 	local jifen = moudle:Get("Tips1")
 	local gongxian = moudle:Get("Tips2")
 
-	jifen.Text = Csv.Text("siege_get_jifen",{num = data.jifen})
-	gongxian.Text = Csv.Text("siege_get_gongxian",{num = data.score})
-
+	if data.jifen > 0 then
+		jifen.Text = Csv.Text("siege_get_jifen",{num = data.jifen})
+	end
+	if data.score > 0 then
+		gongxian.Text = Csv.Text("siege_get_gongxian",{num = data.score})
+	end
+	
 	local content = moudle:Get("content")
 	if data.items ~= nil then
 		for k,v in pairs(data.items) do
 			CCommon.CreateItem(content, v.id, nil, {num = v.count})
 		end
+	else
+		print("没有获得道具！！！")
 	end
 end
 return _M

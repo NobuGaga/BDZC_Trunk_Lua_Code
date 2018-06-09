@@ -1,0 +1,447 @@
+-- 银行投资界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local JTweenerManager = CS.JTween.JTweenerManager
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local GET_EFFECT_ID = "T_Effect_Get"
+local SIGN_EFFECT_ID = 10151
+local GOLD_EFFECT_ID = 26
+local LEFT_SCALE_EFFECT_ID = "T_Parliament_LeftArrow"
+local RIGHT_SCALE_EFFECT_ID = "T_Parliament_RightArrow"
+local GO_EFFECT_ID = "T_Effect_Investment_Go"
+local BACK_EFFECT_ID = "T_Effect_Investment_Back"
+local Width = 750
+local MaxInvestmentInfoNum = tonumber(Csv.Const(107)[3])
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Bank_Main")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("C_Text").Text = Csv.Text("investment_title")
+
+	local actId = MActivity.ActIdForType[Define.ActivityType.Investment]
+	if actId ~= nil then
+		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
+	end
+
+	local timeText = module:Get("Time")
+	timeText.Text = Csv.Text("investment_time", {startYMD = _P.ChangeToYMD(self.ActInfo.state.startTime),
+												   endYMD = _P.ChangeToYMD(self.ActInfo.state.endTime)})
+	
+	module:Get("GoldText").Text = MBag.GetItemNum(Define.AssetsType.Gold)
+	module:Get("ViewTitleText").Text = Csv.Text("investment_viewtitle")
+	module:Get("ViewTitleText1").Text = Csv.Text("investment_viewtitle")
+	module:Get("WinText").Text = Csv.Text("investment_win")
+
+	self.InfoList = {}
+	self.CurSelectIndex = self.ActInfo.curIndex
+	local proNum = _P.OnGetProByIndex(self, self.ActInfo.getlist)
+	_P.SetViewData(self, false, proNum)
+	_P.SetViewData(self, true, proNum)
+
+	local leftBtn = module:Get("LeftBtn")
+	leftBtn.CachedTran:GetJTweener(LEFT_SCALE_EFFECT_ID):Play()
+	leftBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.OnClickLeft(self)
+	end, nil, 0.9)
+	self.LeftBtn = leftBtn
+
+	local rightBtn = module:Get("RightBtn")
+	rightBtn.CachedTran:GetJTweener(RIGHT_SCALE_EFFECT_ID):Play()
+	rightBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.OnClickRight(self)
+	end, nil, 0.9)
+	self.RightBtn = rightBtn
+	_P.SetTwoBtnState(self)
+
+	-- -- 请求获取中奖信息
+	CActivity.InvestmentInfoReq()
+end
+
+
+function _P.ChangeToYMD(times)
+	return os.date("%Y/%m/%d", times)
+end
+
+
+function _P.OnCreateInfoItem(data, itemGrid)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Futures_Main_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("Info").Text = Csv.Text("investment_winShow", {name = data.playername, num = string.format("%.1f", data.pro)})
+end
+
+
+-- 是否是旧投资，proNum旧投资获得的奖励倍数
+function _P.SetViewData(self, isUp, proNum)
+	local module = self.mModule
+	local investmentConf = Csv.Financing[self.ActId * 100 + self.CurSelectIndex]
+	if investmentConf == nil then return end
+
+	local addStr = (isUp and '1') or ''
+	module:Get("OwnerText" .. addStr).Text = Csv.Text("investment_jia", {name = investmentConf.name})
+	module:Get("FriendText" .. addStr).Text = Csv.Text("investment_yi", {name = MPlayer.GetName()})
+	module:Get("ShowText" .. addStr).Text = investmentConf.show
+	module:Get("OwnerTextXia" .. addStr).Text = Csv.Text("investment_jia", {name = investmentConf.name})
+	module:Get("FriendTextXia" .. addStr).Text = Csv.Text("investment_yi", {name = ''})
+
+	local nameText = module:Get("FriendName" .. addStr)
+	nameText.Text = MPlayer.GetName()
+
+	local getRect = module:Get("GetRect" .. addStr)
+	local signRect = module:Get("SignRect" .. addStr)
+	local finishText = module:Get("FinishText" .. addStr)
+	finishText.Text = Csv.Text("investment_finish")
+	if proNum then
+		getRect.Activity = true
+		nameText.Activity = true
+		signRect.Activity = false
+		module:Get("GaizhangText" .. addStr).Text = Csv.Text("investment_proShow", {num = string.format("%.1f", proNum)})
+
+		local isLast = self.CurSelectIndex == MActivity.MaxStageNum
+		finishText.Activity = isLast
+	else
+		getRect.Activity = false
+		nameText.Activity = false
+		signRect.Activity = true
+		finishText.Activity = false
+
+		module:Get("LimitText" .. addStr).Text = Csv.Text("investment_vipSign", {num = investmentConf.viplevel})
+		module:Get("SignText" .. addStr).Text = Csv.Text("investment_sign")
+		local signBtn = module:Get("SignBtn" .. addStr)
+		signBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10002)
+			_P.OnClickToSign(self, investmentConf.viplevel, investmentConf.gold)
+		end, nil, 0.9)
+	end
+end
+
+
+function _P.OnClickToSign(self, needVip, needGold)
+	local curVipLevel = MPlayer.GetVip()
+	if curVipLevel < needVip then
+		CCommon.CheckTips(function(isSure,rg)
+			if isSure then
+				WindowMgr.Create("URecharge")
+			end
+		end, {content = Csv.Text("investment_signErr")})
+	else
+		-- 金币不足
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needGold) then
+			return
+		end
+
+		-- 投资请求
+		CActivity.InvestmentGetReq(self.CurSelectIndex)
+	end
+end
+
+
+function _P.SetTwoBtnState(self)
+	self.LeftBtn.Activity = self.CurSelectIndex > 1
+	self.RightBtn.Activity = self.CurSelectIndex < self.ActInfo.curIndex
+end
+
+
+function _P.OnClickLeft(self)
+	if self.CurSelectIndex <= 1 then
+		return
+	end
+
+	self.CurSelectIndex = self.CurSelectIndex - 1
+	_P.SetCurData(self, true)
+end
+
+
+function _P.OnClickRight(self)
+	if self.CurSelectIndex >= self.ActInfo.curIndex or self.CurSelectIndex >= MActivity.MaxStageNum then
+		return
+	end
+
+	self.CurSelectIndex = self.CurSelectIndex + 1
+	_P.SetCurData(self, false)
+end
+
+
+function _P.SetCurData(self, isLeft)
+	local proNum = _P.OnGetProByIndex(self, self.ActInfo.getlist)
+	if isLeft then
+		_P.SetViewData(self, false, proNum) -- paper1先赋新值
+	end
+
+	_P.OnPlayMoveAnim(self, isLeft, function( ... )
+		if not isLeft then
+			_P.SetViewData(self, false, proNum) -- paper1完成后赋新值
+		else
+			_P.SetViewData(self, true, proNum)
+		end
+		_P.SetTwoBtnState(self)
+	end, proNum)
+end
+
+
+function _P.OnGetProByIndex(self, listData)
+	if listData == nil then return false end
+	
+	for k,v in pairs(listData) do
+		if v.index == self.CurSelectIndex then
+			return v.pro
+		end
+	end
+end
+
+
+-- 播放移动动画
+function _P.OnPlayMoveAnim(self, isLeft, OnClose, proNum)
+	self:Lock()
+
+	local moveImg1 = self.mModule:Get("Paper1")
+	local moveImg2 = self.mModule:Get("Paper2")
+	if isLeft then
+		if self.BackTweener then
+			self.BackTweener:DOKill()
+			self.BackTweener = nil
+		end
+
+		if self.GoTweener then
+			self.GoTweener:Restore()
+		end
+
+		local goTweener = moveImg2.CachedTran:GetJTweener(GO_EFFECT_ID)
+		self.GoTweener = goTweener
+
+		goTweener:SetOnComplete(function()
+			self:Unlock()
+
+			if OnClose ~= nil then
+				OnClose()
+			end
+			moveImg2.LocalPosition = Vector2(0, 115)
+			moveImg2.LocalEulerAngles = Vector3.zero
+		end)
+		goTweener:Play()
+	else
+		moveImg2.LocalPosition = Vector2(-750, 1000)
+		moveImg2.LocalEulerAngles = Vector3(0, 0, 15)
+		_P.SetViewData(self, true, proNum)
+
+		if self.GoTweener then
+			self.GoTweener:DOKill()
+			self.GoTweener = nil
+		end
+
+		if self.BackTweener then
+			self.BackTweener:Restore()
+		end
+
+		local backTweener = moveImg2.CachedTran:GetJTweener(BACK_EFFECT_ID)
+		self.BackTweener = backTweener
+
+		backTweener:SetOnComplete(function()
+			self:Unlock()
+
+			if OnClose ~= nil then
+				OnClose()
+			end
+		end)
+		backTweener:Play()
+	end
+end
+
+
+function _R.InvestmentInfoBack(self, data)
+	local infoContent = self.mModule:Get("content2")
+	infoContent:DestroyChildren()
+
+	if data == nil or data.infolist == nil then
+		return
+	end
+
+	local count = 1 
+	for k,v in ipairs(data.infolist) do
+		if count <= MaxInvestmentInfoNum then
+			_P.OnCreateInfoItem(v, infoContent)
+		else
+			break
+		end
+		count = count + 1
+	end
+	self.InfoList = data.infolist
+end
+
+
+function _R.OnSignBack(self, data)
+	self:Lock()
+
+	local module = self.mModule
+	local signRect = module:Get("SignRect")
+	local signRect1 = module:Get("SignRect1")
+	signRect.Activity = false
+	signRect1.Activity = false
+
+	-- 先播放钻石减少动画
+	local investmentConf = Csv.Financing[self.ActId * 100 + self.CurSelectIndex]
+	local goldText = module:Get("GoldText")
+	local curGoldNum = tonumber(goldText.Text) or 0
+	local changeGoldNum = curGoldNum - investmentConf.gold
+	local nextGoldNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	local goldTween = JTweenerManager.IntTween(curGoldNum, changeGoldNum, 0.15, function(value)
+		if goldText ~= nil then goldText.Text = value end
+	end, function()
+		if goldText ~= nil then goldText.Text = changeGoldNum end
+
+		-- 播放签字动画
+		local nameText = module:Get("FriendName")
+		local nameText1 = module:Get("FriendName1")
+		nameText.Activity = true
+		nameText1.Activity = true
+		
+		local signActorPanel = module:Get("SignActorPanel")
+		CCommon.CreateEffect(signActorPanel, SIGN_EFFECT_ID, nil, function( ... ) 
+			-- 盖章
+			local proNum = string.format("%.1f", _P.OnGetProByIndex(self, data.getlist))
+			module:Get("GaizhangText1").Text = Csv.Text("investment_proShow", {num = proNum})
+			module:Get("GaizhangText").Text = Csv.Text("investment_proShow", {num = proNum})
+
+			local getRect1 = module:Get("GetRect1")
+			local getRect = module:Get("GetRect")
+			getRect1.Alpha = 0
+			getRect1.LocalScale = Vector3(3, 3, 1)
+			getRect1.Activity = true
+			getRect.Activity = true
+
+			if self.GaizhangTweener then
+				self.GaizhangTweener:Restore()
+			end
+
+			local gaizhangTweener = getRect1.CachedTran:GetJTweener(GET_EFFECT_ID)
+			self.GaizhangTweener = gaizhangTweener
+
+			gaizhangTweener:SetOnComplete(function()
+				-- 钻石飞上去的动画
+				SoundMgr.PlayNonStopUI(11000)
+				
+				local goldMoveRect = module:Get("GetAnim")
+				for i=1, 10 do
+					local x = math.random(-100, 100)
+					local y = math.random(-60, 60)
+					local delay = math.random(5, 20) / 100
+					local effectModule = CCommon.CreateEffect(goldMoveRect, GOLD_EFFECT_ID, Vector2(x, y), nil, nil, nil, nil, delay)
+					effectModule.SelfRect.SpriteNameAutoScale = 'xf_tb_003'
+				end
+
+				self.mModule.SelfRect:AddOnTime(function()
+					-- 读数
+					local goldAddTween = JTweenerManager.IntTween(changeGoldNum, nextGoldNum, 0.3, function(value)
+						if goldText ~= nil then goldText.Text = value end
+					end, function()
+						if goldText ~= nil then goldText.Text = nextGoldNum end
+
+						-- 翻页动画(最后一个不需要翻页)
+						local curIndex = (data.curIndex > MActivity.MaxStageNum and MActivity.MaxStageNum) or data.curIndex
+						self.CurSelectIndex = curIndex
+						self.ActInfo = MActivity.GetFromId(self.ActId)
+
+						local isOld = _P.OnGetProByIndex(self, self.ActInfo.getlist)
+						if self.CurSelectIndex ~= MActivity.MaxStageNum or (not isOld) then
+							_P.SetCurData(self, isLeft)
+						else
+							local finishText = module:Get("FinishText")
+							local finishText1 = module:Get("FinishText1")
+							finishText.Activity = true
+							finishText1.Activity = true
+						end
+						self:Unlock()
+					end)
+
+					goldAddTween:SetTarget(goldText.CachedTran)
+				end, nil, 1)
+			end)
+
+			gaizhangTweener:Play()
+		end)
+	end)
+
+	goldTween:SetTarget(goldText.CachedTran)
+end
+
+
+function _R.OnNewInfoPush(self, data)
+	local infolist = {}
+	local count = 1
+	for k,v in ipairs(self.InfoList) do
+		if count > MaxInvestmentInfoNum then
+			break
+		end
+		infolist[#infolist + 1] = v
+	end
+
+	if #infolist >= MaxInvestmentInfoNum then
+		table.remove(infolist, #infolist)
+	end
+	table.insert(infolist, 1, data)
+
+	_P.AddOnNewInfo(self, infolist)
+end
+
+
+function _R.OnUpdateViewState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+	end
+end
+
+
+function _P.AddOnNewInfo(self, infolist)
+	self.mModule:Get("content2"):AddOnTime(function()
+		_R.InvestmentInfoBack(self, {infolist = infolist})
+	end, nil, 1.7)
+end
+
+
+return _M

@@ -31,6 +31,7 @@ end
 function _M:OnCreate(typeEnum, carIndex, playerData, carid)
 	local module = self:CreateMoudle(self._RootNode, "M_Car_Garage_Give")
 	self.mModule = module
+	self.imgSelect = module:Get("H")
 	self.typeEnum = typeEnum
 	self.carIndex = carIndex
 	self.playerData = playerData
@@ -61,8 +62,10 @@ function _M:OnCreate(typeEnum, carIndex, playerData, carid)
 	self.tipText.Text = Csv.Text("car_garage_tip")
 	self.btnText = module:Get("C_text")
 	self.hasRect = module:Get("InfoRect")
+	self.hasRect.Activity = false
 	self.noneRect = module:Get("NoneTips")
 	self.noneRect.Text = Csv.Text("car_garage_none")
+	self.noneRect.Activity = true
 	_P.CreateListData(self)
 
 	local clickBtn = module:Get("Btn")
@@ -76,6 +79,9 @@ end
 
 function _P.CreateListData(self)
 	local contentTransform = self.mModule:Get("Content")
+	self.RawItemTable = {}
+	self.imgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+	self.imgSelect.Activity = false
 	contentTransform:DestroyChildren()
 
 	local carList
@@ -87,16 +93,23 @@ function _P.CreateListData(self)
 	if carList == nil then return end
 
 	for i,v in ipairs(carList) do
-		_P.OnCreateItem(self, contentTransform, v, typeEnum)
+		self.RawItemTable[v.id] = _P.OnCreateItem(self, contentTransform, v, typeEnum)
+		if not self.SelectCarData then
+			if v then
+				_P.OnSelectCarData(self, v)
+			else
+				_P.UpdateCarInfo(self)
+			end
+		end
 	end
 
 	local hasItemNum = #carList
 	local emptyNum = 0
-	if hasItemNum < 30 then
-		emptyNum = 30 - hasItemNum
+	if hasItemNum < 16 then
+		emptyNum = 16 - hasItemNum
 	else
-		if hasItemNum % 5 > 0 then
-			emptyNum = 5 - hasItemNum % 5
+		if hasItemNum % 4 > 0 then
+			emptyNum = 4 - hasItemNum % 4
 		end
 	end
 
@@ -162,14 +175,7 @@ function _P.OnCreateItem(self, itemGrid, data)
 		end, nil, 0.9)
 
 		qualityImg.RaycastTarget = data
-
-		if not self.SelectCarData then
-			if data then
-				_P.OnSelectCarData(self, data)
-			else
-				_P.UpdateCarInfo(self)
-			end
-		end
+		return itemModule
 	end
 end
 
@@ -238,7 +244,7 @@ end
 function _P.UpdateCarInfo(self, data)
 	self.hasRect.Activity = data
 	self.noneRect.Activity = not data
-
+	
 	if data then
 		local itemConf = Csv.Item[data.carid]
 		local carConf = Csv.Car[data.carid]
@@ -247,6 +253,12 @@ function _P.UpdateCarInfo(self, data)
 		self.mModule:Get("GoodsDesc").Text = carConf.desc
 		_P.SetCarAttrData(self, data)
 		_P.SetCarGraphData(self, carConf, data)
+		if self.RawItemTable[data.id] ~= nil then
+			self.imgSelect:SetParent(self.RawItemTable[data.id].SelfRect.CachedTran)
+			self.imgSelect.LocalPosition = Vector2(0,0)
+			self.imgSelect.CachedTran:SetSiblingIndex(0)
+			self.imgSelect.Activity = true
+		end
 	end
 end
 

@@ -118,7 +118,7 @@ function _M:OnCreate(onChooseCall)
 			local data = MStaff.GetStaffDataByID(staffId)
 			local staffName = csv.name						
 			local childMoudle = self:CreateMoudle(content, "M_ChooseStaff_Item")
-			childMoudle:Get("head").SpriteName = csv.asset
+			childMoudle:Get("head").SpriteName = csv.asset3
 			childMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[info.color]
 			childMoudle:Get("name").Text = staffName
 			--childMoudle:Get("Grade").Text = text1Title
@@ -166,6 +166,21 @@ function _M:OnCreate(onChooseCall)
 				redBtnTextWidget = redBtnTextWidget
 			} 
 			_R.OnUnlock(self, staffId)
+
+			for i = 1,4 do
+				local icon = childMoudle:Get("icon"..i)
+				if icon ~= nil then
+					icon.Activity = false
+				end
+			end
+
+			for k,v in ipairs(csv.specialtyIcon) do
+				local icon = childMoudle:Get("icon"..k)
+				if icon ~= nil then
+					icon.Activity = true
+					icon.SpriteName = v
+				end
+			end
 		end
 	end	
 end

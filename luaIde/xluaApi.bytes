@@ -19,33 +19,6 @@ function CS.HotUp:RegistCsv(csvName) end
 function CS.HotUp:HotReload() end
 
 --@SuperType [luaIde#CS.System.Object]
-CS.LuaValueInfo = {}
---[[
-	@return [luaIde#CS.LuaValueInfo]
-]]
-function CS.LuaValueInfo() end
---[[
-	CS.System.String
-	 Get 	 Set 
---]]
-CS.LuaValueInfo.name = nil
---[[
-	CS.System.String
-	 Get 	 Set 
---]]
-CS.LuaValueInfo.valueType = nil
---[[
-	CS.System.String
-	 Get 	 Set 
---]]
-CS.LuaValueInfo.valueStr = nil
---[[
-	CS.System.Boolean
-	 Get 	 Set 
---]]
-CS.LuaValueInfo.isValue = nil
-
---@SuperType [luaIde#CS.System.Object]
 CS.LuaDebugTool = {}
 --[[
 	@return [luaIde#CS.LuaDebugTool]
@@ -53,9 +26,40 @@ CS.LuaDebugTool = {}
 function CS.LuaDebugTool() end
 --[[
 	@obj CS.System.Object
+	@key CS.System.String
+	@return [luaIde#CS.System.Object]
+--]]
+function CS.LuaDebugTool:getCSharpValue(obj,key) end
+--[[
+	@values CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{SearchValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
+	return CS.System.Collections.Generic.List`1{{LuaValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
+--]]
+function CS.LuaDebugTool:convertLuaValueInfos(values) end
+--[[
+	@obj CS.System.Object
 	return CS.System.Collections.Generic.List`1{{LuaValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
 --]]
 function CS.LuaDebugTool:getUserDataInfo(obj) end
+--[[
+	@t CS.System.Type
+	return CS.LuaIdeDebugInsTypeEnum
+--]]
+function CS.LuaDebugTool:getInsType(t) end
+--[[
+	@obj CS.System.Object
+	return CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{SearchValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
+--]]
+function CS.LuaDebugTool:SearchDataInfo(obj) end
+--[[
+	@obj CS.System.Object
+	return CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{SearchValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
+--]]
+function CS.LuaDebugTool:getListValues(obj) end
+--[[
+	@obj CS.System.Object
+	return CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{SearchValueInfo, Scripts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
+--]]
+function CS.LuaDebugTool:getDictionaryValues(obj) end
 
 --@SuperType [luaIde#CS.UnityEngine.MonoBehaviour]
 CS.GameManager = {}
@@ -476,6 +480,294 @@ CS.UnityEngine.TextureFormat.RG16 = 62
 	 Get 	 Set 
 --]]
 CS.UnityEngine.TextureFormat.R8 = 63
+
+--@SuperType [luaIde#CS.UnityEngine.Behaviour]
+CS.UnityEngine.Video.VideoPlayer = {}
+--[[
+	@return [luaIde#CS.UnityEngine.Video.VideoPlayer]
+]]
+function CS.UnityEngine.Video.VideoPlayer() end
+--[[
+	CS.UnityEngine.Video.VideoSource
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.source = nil
+--[[
+	CS.System.String
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.url = nil
+--[[
+	CS.UnityEngine.Video.VideoClip
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.clip = nil
+--[[
+	CS.UnityEngine.Video.VideoRenderMode
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.renderMode = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Camera]
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.targetCamera = nil
+--[[
+	CS.UnityEngine.RenderTexture
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.targetTexture = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Renderer]
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.targetMaterialRenderer = nil
+--[[
+	CS.System.String
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.targetMaterialProperty = nil
+--[[
+	CS.UnityEngine.Video.VideoAspectRatio
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.aspectRatio = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.targetCameraAlpha = nil
+--[[
+	CS.UnityEngine.Texture
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.texture = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.isPrepared = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.waitForFirstFrame = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.playOnAwake = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.isPlaying = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canSetTime = nil
+--[[
+	CS.System.Double
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.time = nil
+--[[
+	CS.System.Int64
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.frame = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canStep = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canSetPlaybackSpeed = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.playbackSpeed = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.isLooping = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canSetTimeSource = nil
+--[[
+	CS.UnityEngine.Video.VideoTimeSource
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.timeSource = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canSetSkipOnDrop = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.skipOnDrop = nil
+--[[
+	CS.System.UInt64
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.frameCount = nil
+--[[
+	CS.System.Single
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.frameRate = nil
+--[[
+	CS.System.UInt16
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.audioTrackCount = nil
+--[[
+	CS.System.UInt16
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.controlledAudioTrackMaxCount = nil
+--[[
+	CS.System.UInt16
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.controlledAudioTrackCount = nil
+--[[
+	CS.UnityEngine.Video.VideoAudioOutputMode
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.audioOutputMode = nil
+--[[
+	CS.System.Boolean
+	 Get 
+--]]
+CS.UnityEngine.Video.VideoPlayer.canSetDirectAudioVolume = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.UnityEngine.Video.VideoPlayer.sendFrameReadyEvents = nil
+function CS.UnityEngine.Video.VideoPlayer:Prepare() end
+function CS.UnityEngine.Video.VideoPlayer:Play() end
+function CS.UnityEngine.Video.VideoPlayer:Pause() end
+function CS.UnityEngine.Video.VideoPlayer:Stop() end
+function CS.UnityEngine.Video.VideoPlayer:StepForward() end
+--[[
+	@trackIndex CS.System.UInt16
+	return CS.System.String
+--]]
+function CS.UnityEngine.Video.VideoPlayer:GetAudioLanguageCode(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	return CS.System.UInt16
+--]]
+function CS.UnityEngine.Video.VideoPlayer:GetAudioChannelCount(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	@enabled CS.System.Boolean
+--]]
+function CS.UnityEngine.Video.VideoPlayer:EnableAudioTrack(trackIndex,enabled) end
+--[[
+	@trackIndex CS.System.UInt16
+	return CS.System.Boolean
+--]]
+function CS.UnityEngine.Video.VideoPlayer:IsAudioTrackEnabled(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	return CS.System.Single
+--]]
+function CS.UnityEngine.Video.VideoPlayer:GetDirectAudioVolume(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	@volume CS.System.Single
+--]]
+function CS.UnityEngine.Video.VideoPlayer:SetDirectAudioVolume(trackIndex,volume) end
+--[[
+	@trackIndex CS.System.UInt16
+	return CS.System.Boolean
+--]]
+function CS.UnityEngine.Video.VideoPlayer:GetDirectAudioMute(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	@mute CS.System.Boolean
+--]]
+function CS.UnityEngine.Video.VideoPlayer:SetDirectAudioMute(trackIndex,mute) end
+--[[
+	@trackIndex CS.System.UInt16
+	@return [luaIde#CS.UnityEngine.AudioSource]
+--]]
+function CS.UnityEngine.Video.VideoPlayer:GetTargetAudioSource(trackIndex) end
+--[[
+	@trackIndex CS.System.UInt16
+	@source CS.UnityEngine.AudioSource
+--]]
+function CS.UnityEngine.Video.VideoPlayer:SetTargetAudioSource(trackIndex,source) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_prepareCompleted(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_prepareCompleted(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_loopPointReached(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_loopPointReached(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_started(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_started(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_frameDropped(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_frameDropped(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.ErrorEventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_errorReceived(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.ErrorEventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_errorReceived(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_seekCompleted(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.EventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_seekCompleted(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.FrameReadyEventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:add_frameReady(value) end
+--[[
+	@value CS.UnityEngine.Video.VideoPlayer.FrameReadyEventHandler
+--]]
+function CS.UnityEngine.Video.VideoPlayer:remove_frameReady(value) end
 
 --@SuperType [luaIde#CS.UnityEngine.Profiling.Sampler]
 CS.UnityEngine.Profiling.CustomSampler = {}
@@ -4276,7 +4568,7 @@ function CS.JGuiMovie() end
 --]]
 CS.JGuiMovie.TextureNode = nil
 --[[
-	CS.UnityEngine.Video.VideoPlayer
+	@RefType [luaIde#CS.UnityEngine.Video.VideoPlayer]
 	 Get 	 Set 
 --]]
 CS.JGuiMovie.MoviePlayer = nil
@@ -9384,6 +9676,139 @@ function CS.Spine.Unity.Modules.SkeletonRenderSeparator:AddToSkeletonRenderer(sk
 	@sortingOrderIncrement CS.System.Int32
 --]]
 function CS.Spine.Unity.Modules.SkeletonRenderSeparator:AddPartsRenderer(sortingOrderIncrement) end
+
+--@SuperType [luaIde#CS.UnityEngine.MonoBehaviour]
+CS.Spine.Unity.Modules.SlotBlendModes = {}
+--[[
+	@return [luaIde#CS.Spine.Unity.Modules.SlotBlendModes]
+]]
+function CS.Spine.Unity.Modules.SlotBlendModes() end
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SlotBlendModes.Applied = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Material]
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SlotBlendModes.multiplyMaterialSource = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Material]
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SlotBlendModes.screenMaterialSource = nil
+function CS.Spine.Unity.Modules.SlotBlendModes:Apply() end
+function CS.Spine.Unity.Modules.SlotBlendModes:Remove() end
+function CS.Spine.Unity.Modules.SlotBlendModes:GetTexture() end
+
+--@SuperType [luaIde#CS.UnityEngine.MonoBehaviour]
+CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow = {}
+--[[
+	@return [luaIde#CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow]
+]]
+function CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow() end
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow.detachedShadow = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Transform]
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow.parent = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow.hideShadow = nil
+--[[
+	CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow.PhysicsSystem
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityKinematicShadow.physicsSystem = nil
+
+--@SuperType [luaIde#CS.Spine.Unity.SkeletonUtilityConstraint]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint = {}
+--[[
+	@return [luaIde#CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint]
+]]
+function CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint() end
+--[[
+	CS.UnityEngine.LayerMask
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.groundMask = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.use2D = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.useRadius = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.castRadius = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.castDistance = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.castOffset = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.groundOffset = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint.adjustSpeed = nil
+function CS.Spine.Unity.Modules.SkeletonUtilityGroundConstraint:DoUpdate() end
+
+--@SuperType [luaIde#CS.Spine.Unity.SkeletonUtilityConstraint]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint = {}
+--[[
+	@return [luaIde#CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint]
+]]
+function CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint() end
+--[[
+	CS.UnityEngine.Transform{}
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint.eyes = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint.radius = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Transform]
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint.target = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Vector3]
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint.targetPosition = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint.speed = nil
+function CS.Spine.Unity.Modules.SkeletonUtilityEyeConstraint:DoUpdate() end
 
 CS.System.Object = {}
 --[[

@@ -149,10 +149,15 @@ function _P.InitPageData(self)
 		SoundMgr.Play(10001)
 		_P.OnClickPage(self, MSiege.RankTypeEnum.Killed)
 	end, nil, 0.95)
+
+	self.curSelectToggle = MSiege.RankTypeEnum.Personal
 end
 
 
 function _P.OnSetListData(self)
+	if self.mData == nil then
+		return
+	end
 	local rankList = _P.GetSortList(self.mData[self.curSelectToggle])
 
 	local itemGrid = self.mModule:Get("content")
@@ -204,7 +209,10 @@ function _P.GetRankData(self, actId, stageId)
 	local personConf = Csv.SiegePersonRank[actId * 100 + stageId]
 	local gangConf = Csv.SiegeGangRank[actId * 100 + stageId]
 	local killerConf = Csv.SiegeKillShow[actId * 100 + stageId]
-	if personConf == nil or gangConf == nil or killerConf == nil then return {} end
+	if personConf == nil or gangConf == nil or killerConf == nil then 
+		print("找不到对应的活动数据表____SiegePersonRank，SiegeGangRank，SiegeKillShow________",actId * 100 + stageId)
+		return {} 
+	end
 
 	self.mData = {}
 	local personList = {}
@@ -222,6 +230,7 @@ function _P.GetRankData(self, actId, stageId)
 		personList[i] = itemData
 	end
 	self.mData[MSiege.RankTypeEnum.Personal] = personList
+	
 
 	for i,v in ipairs(gangConf.from) do
 		local itemData = {

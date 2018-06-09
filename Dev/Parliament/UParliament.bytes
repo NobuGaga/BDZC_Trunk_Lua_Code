@@ -328,6 +328,7 @@ function _P.InitBody(self)
 			CPlayer.LookPlayerReq(posData.playerID)
 		end
 	end, nil, 1)
+	self.bosySpine = self.moudle:Get("bosySpine")
 	self.Head = self.moudle:Get("PosHead")
 
 	self.Words = self.moudle:Get("Words")
@@ -355,11 +356,18 @@ function _P.InitBody(self)
 	self.PosNameText = self.moudle:Get("PosNameText")
 	self.PlayerNameBox = self.moudle:Get("NameBox")
 	self.PlayerNameText = self.moudle:Get("NameText")
-	_P.SetDefaultBody(self)
 end
 
 --设置默认形象
 function _P.SetDefaultBody(self, dataIndex)
+	if self.bodySpine ~= nil then
+        self.bodySpine:Destroy()
+        self.bodySpine = nil
+	end
+	if self.headSpine ~= nil then
+        self.headSpine:Destroy()
+        self.headSpine = nil
+    end
 	self.Body.SpriteName = DefaultBody
 	self.Body.Color = ColorBlack
 	self.Body.RaycastTarget = false
@@ -395,15 +403,30 @@ end
 --设置形象
 function _P.SetBody(self, dataIndex, posData)
 	local csvData = Csv.Title[dataIndex]
-	local body = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
-	if nil ~= body then
+	local body, bodyPrefab = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
+	if self.bodySpine ~= nil then
+        self.bodySpine:Destroy()
+        self.bodySpine = nil
+    end
+	if nil ~= bodyPrefab and 0 ~= bodyPrefab then
+		self.bodySpine = CCommon.CreateActor(self.bosySpine, bodyPrefab, CCommon.ActorFieldMap.parliament_body)
+		self.Body.SpriteName = ""
+		self.Body.RaycastTarget = true
+	elseif nil ~= body then
 		self.Body.SpriteName = body
 		self.Body.Color = ColorWhite
 		self.Body.RaycastTarget = true
 	end
 
-	local head = MParliament.GetBodyByIDSex(posData.head, posData.sex)
-	if nil ~= head then
+	local head, heaPrefab = MParliament.GetBodyByIDSex(posData.head, posData.sex)
+	if self.headSpine ~= nil then
+        self.headSpine:Destroy()
+        self.headSpine = nil
+    end
+	if nil ~= heaPrefab and 0 ~= heaPrefab then
+		self.headSpine = CCommon.CreateActor(self.Head, heaPrefab, CCommon.ActorFieldMap.parliament_head)
+		self.Head.SpriteName = ""
+	elseif nil ~= head then
 		self.Head.SpriteName = head
 		self.Head.Color = ColorWhite
 	end

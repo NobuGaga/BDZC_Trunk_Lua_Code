@@ -2,6 +2,8 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local CRelations = JRequire "Dev.Relations.CRelations"
 local MRelations = JRequire "Dev.Relations.MRelations"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
 local _M = Class(WindowBase)
 
 --界面构建
@@ -17,7 +19,11 @@ function _M:OnCreate(data)
 	local initData = MRelations.InitData
 	if initData ~= nil and initData.staffid ~= nil then
 		local csvStaff = Csv.Personnel[initData.staffid]
-		moudle:Get("BSX").SpriteName = csvStaff.asset
+		if csvStaff.prefab ~= nil and csvStaff.prefab > 0 then
+			CCommon.CreateActor(moudle:Get("BSX"), csvStaff.prefab, CCommon.ActorFieldMap.staff_lobby_box)
+		else
+			moudle:Get("BSX").SpriteName = csvStaff.asset
+		end		
 	end
 
 	moudle:Get("choose1"):AddOnButton(function()

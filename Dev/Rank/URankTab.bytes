@@ -42,8 +42,10 @@ function _P.SetBottomData(self,funcId)
 	local moudle = self.mMoudle
 	local TextValue = moudle:Get("text4_1")
 	local TextValueBattle = moudle:Get("text4_2")
+	local heart = moudle:Get("heart")
 	TextValue.Text = ""
 	TextValueBattle.Text = ""
+	heart.Activity = false
 	if rankinfo ~= nil then
 		if rankinfo.rankid == Define.RankType.Power then
 			TextValue.Text = rankinfo.selfvalue
@@ -57,6 +59,7 @@ function _P.SetBottomData(self,funcId)
 			end
 		elseif rankinfo.rankid == Define.RankType.Intimacy then
 			TextValue.Text = rankinfo.selfvalue
+			heart.Activity = true
 		end
 		moudle:Get("text2_1").Text = rankinfo.selfrank
 		_P.ChangeShipState(self,rankinfo.isworshiped)

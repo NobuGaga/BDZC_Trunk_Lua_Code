@@ -66,13 +66,13 @@ function _P.OnCreateMailList(self)
 	local mailTableDatas = _P.GetSortMails(MMail.MailTable)
 	self.mSortMailDatas = mailTableDatas
 	if self.mSortMailDatas == nil or #self.mSortMailDatas == 0 then
-		self.mModule:Get("C_front").Activity = true
+		self.mModule:Get("hide").Activity = false
 		self.mModule:Get("texttop").Text = Csv.Text("mail_current")
 		self.mModule:Get("NumText").Text = "0"
 		self.mModule:Get("C_Btn_b").Activity = false
 		return
 	else
-		self.mModule:Get("C_front").Activity = false
+		self.mModule:Get("hide").Activity = true
 		self.mModule:Get("C_Btn_b").Activity = true
 	end
 
@@ -225,6 +225,15 @@ function _P.OnClickItem(self, data)
 				if effectMoudle then
 					self.attachRewards[k] = effectMoudle
 				end
+			end
+		end
+	end
+	if data then
+		for k,v in pairs(self.idToMoudle) do
+			if k == self.mailData.mailid then
+				v:Get("H").Activity = true
+			else
+				v:Get("H").Activity = false
 			end
 		end
 	end

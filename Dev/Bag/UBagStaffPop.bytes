@@ -53,10 +53,11 @@ function _M:OnCreate(itemid)
 		local staff = {}
 		local staffMoudle = JGuiManager.GetMoudle(content,"M_bag_ChooseStaff_Item")
 		local csvStaff = Csv.Personnel[v.id]
-		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[v.color]
-		staffMoudle:Get("Head").SpriteName = csvStaff.asset
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[v.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset3
 		staffMoudle:Get("textName").Text = csvStaff.name
-		staffMoudle:Get("textLevel").Text = Csv.Text("school_level",{num = v.level})
+		staffMoudle:Get("textLevel").Text = v.level
+		staffMoudle:Get("Level").Text = Csv.Text("palyer_levelup")
 		staffMoudle:Get("C_text").Text = Csv.Text("bag_use")
 		local BtnUp = staffMoudle:Get("C_Btn_b")
 		BtnUp:AddOnButton(function()
@@ -67,17 +68,20 @@ function _M:OnCreate(itemid)
 		local btnPos = BtnUp.LocalPosition
 		if csvItem.useType == 6 then
 			staffMoudle:Get("combat").Text = Csv.Text("bag_attrAll",{num = MStaff.GetAllAttr(v.id)})
-			staffMoudle:Get("IconRect").Activity = true
-			for k,v in ipairs(csvStaff.specialtyIcon) do
-				staffMoudle:Get("icon"..k).Activity = true
-				staffMoudle:Get("icon"..k).SpriteName = v
-			end
 		elseif csvItem.useType == 2 then
-			BtnUp.LocalPosition = Vector2(btnPos.x,0)
+			--BtnUp.LocalPosition = Vector2(btnPos.x,0)
 			staffMoudle:Get("combat").Text = Csv.Text("bag_bookexp",{num = v.bookexp})
 		elseif csvItem.useType == 12 then
-			BtnUp.LocalPosition = Vector2(btnPos.x,0)
+			--BtnUp.LocalPosition = Vector2(btnPos.x,0)
 			staffMoudle:Get("combat").Text = Csv.Text("bag_skillexp",{num = v.skillexp})
+		end
+		staffMoudle:Get("IconRect").Activity = true
+		for i = 1,4 do
+			staffMoudle:Get("icon"..i).Activity = false
+		end
+		for k,v in ipairs(csvStaff.specialtyIcon) do
+			staffMoudle:Get("icon"..k).Activity = true
+			staffMoudle:Get("icon"..k).SpriteName = v
 		end
 
 

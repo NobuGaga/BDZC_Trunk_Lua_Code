@@ -20,7 +20,7 @@ local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_
 local PointerRotateActs = {0, -53, -110, -178, -232}
 local DefaultColor = Color(243/255, 210/255, 47/255, 1)
 local LightColor = Color(0/255, 195/255, 1, 1)
-local StarPosVec = {{136, 290},{148, 308},{151.6, 332.1},{148, 356.6},{137.5, 374.1}}
+local StarPosVec = {{59, 257},{71, 275},{74.4, 294},{70.8, 312.6},{61.3, 328}}
 local StarUpAtorId = 10080
 local LevelUpAtorId = 10081
 local CarPointerAngleRotate = "T_Car_PointerAngleZ"
@@ -60,6 +60,7 @@ end
 function _M:OnCreate(...)
 	local module = self:CreateMoudle(self._RootNode, "M_Car_Main")
 	self.mModule = module
+	module:Get("ZDLNumTips").Text = Csv.Text("car_tipsall")
 
 	SoundMgr.Play(10030)
 	local closeBtn = module:Get("C_Back_Btn")
@@ -229,7 +230,7 @@ function _P.UpdateParkingData(itemModule, data)
 			local carConf = Csv.Car[carData.carid]
 			if itemConf then
 				qualityImg.SpriteName = itemConf.colorIcon
-				qualityImg.SizeDelta = Vector2(120, 120)
+				qualityImg.SizeDelta = Vector2(140, 140)
 				itemModule:Get("CarIcon").SpriteName = carConf.icon
 				itemModule:Get("CarLv").Text = "Lv" .. carData.level
 				itemModule:Get("CarStarLv").Text = Csv.Text("car_main_jieji") .. carData.star
@@ -242,7 +243,7 @@ function _P.UpdateParkingData(itemModule, data)
 		isShowRed = MCar.CheckShowRed(data.state, carData)
 	else
 		qualityImg.SpriteName = "ty_018"
-		qualityImg.SizeDelta = Vector2(120, 120)
+		qualityImg.SizeDelta = Vector2(140, 140)
 
 		isShowRed = MCar.CheckShowRed(data.state, nil)
 	end
@@ -492,7 +493,7 @@ function _P.OnCreateStaffItem(self, itemGrid, staffData, index)
 	local staffItem = {}
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_Main_Staff_Item", WindowType.UI, 0)
 	if itemModule ~= nil then
-		local iconBtn = itemModule.SelfRect
+		local iconBtn = itemModule:Get("BG")
 		iconBtn:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			_P.OnClickStaffItem(self, index)
@@ -528,9 +529,11 @@ function _P.UpdateOneStaffData(self, itemModule, staffData)
 	if staffData then
 		local staffConf = Csv.Personnel[staffData.value]
 		if staffConf then
-			iconImg.SpriteName = staffConf.asset
+			iconImg.SpriteName = staffConf.asset3
 			staffName.Text = staffConf.name
 		end
+	else
+		staffName.Text = Csv.Text("car_main_up")
 	end
 end
 

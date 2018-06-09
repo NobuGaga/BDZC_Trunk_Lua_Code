@@ -54,7 +54,7 @@ function _M:OnCreate()
 	moudle:Get("Btn_e"):AddOnButton(function(...)
 		SoundMgr.Play(10001)
 		local ranktype = Define.CrossRankType.Power
-		if funcId == 2 then
+		if self.SelectFuncID == 2 then
 			ranktype = Define.CrossRankType.Commerce
 		end
 		CRank.GetAward(ranktype,false)
@@ -95,8 +95,8 @@ function _R.ResetList(self, data)
 			if self.SelectFuncID == 1 then
 				self.Moudle:Get("text1_1").Text = data.selfName
 				self.Moudle:Get("text2_1").Text = data.selfrank
-				self.Moudle:Get("text3_1").Text = Csv.Company[MPlayer.GetLevel()].name
-				self.Moudle:Get("text4_1").Text = MPlayer.GetPower()
+				self.Moudle:Get("text3_1").Text = MPlayer.GetPower()
+				self.Moudle:Get("text4_1").Text = Csv.Company[MPlayer.GetLevel()].name
 
 				local vip = data.vip
 				local imgKuang = self.Moudle:Get("VipBox")
@@ -156,7 +156,7 @@ end
 
 function _R.GetAward(self,data)
 	local ranktype = Define.CrossRankType.Power
-	if funcId == 2 then
+	if self.SelectFuncID == 2 then
 		ranktype = Define.CrossRankType.Commerce
 	end
 	if data.rankid == ranktype then

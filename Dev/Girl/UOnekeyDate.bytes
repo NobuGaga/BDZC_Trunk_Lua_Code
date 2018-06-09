@@ -39,7 +39,7 @@ function _R.GetOnekeyDate(self,data)
 		end
 	end
 	for k,v in pairs(dateList) do
-		_P.CreatItem(content,v)
+		_P.CreatItem(self,content,v)
 	end
 end
 
@@ -72,7 +72,7 @@ function _M:OnCreate(id)
 	moudle:Get("BtnText").Text = Csv.Text("lastgirl_iknown")
 end
 
-function _P.CreatItem(parent,value)
+function _P.CreatItem(self,parent,value)
 	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_Random_Item", WindowType.UI, 10)
 
 	local bodyIcon = moudle:Get("BSX")
@@ -83,8 +83,20 @@ function _P.CreatItem(parent,value)
 	local name = moudle:Get("name")
 	title2.Activity = false
 
+	if self.spineList == nil then
+		self.spineList = {}
+	end
+	if self.spineList[value.data.girlid] then
+		self.spineList[value.data.girlid]:Destroy()
+		self.spineList[value.data.girlid] = nil
+	end
 	local girlData = Csv.Girl[value.data.girlid]
-	bodyIcon.SpriteName = girlData.dateIcon
+	if girlData ~= nil and girlData.prefab ~= nil and girlData.prefab > 0 then
+		self.spineList[value.data.girlid] = CCommon.CreateActor(bodyIcon, girlData.prefab, CCommon.ActorFieldMap.girl_one)
+		bodyIcon.SpriteName = ""
+	else
+		bodyIcon.SpriteName = girlData.dateIcon
+	end
 	name.Text = girlData.name
 
 	title1.Text = Csv.Text("Girl_friend")

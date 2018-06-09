@@ -403,7 +403,18 @@ function _P.SetCenterData(self)
 		-- 根据进度设置美女状态图片
 		local maxBossBgNum = #self.xinGuanConf.bossBg
 		local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
-		self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+		local spineActorId = self.xinGuanConf.spineActorId[bgRow]
+		if self.BobySpine ~= nil then
+			self.BobySpine:Destroy()
+			self.BobySpine = nil
+		end
+
+		if spineActorId > 0 then
+			self.BobySpine = CCommon.CreateActor(self.bobyRect, spineActorId)
+			self.bobyRect.SpriteName = ""
+		else
+			self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+		end
 	else
 		-- 根据进度设置boss对话
 		local maxTalkNum = #self.xinGuanConf.bossTalk
@@ -444,7 +455,18 @@ function _P.SetBossBobyData(self, talkRow, progressValue)
 	-- 根据进度设置美女状态图片
 	local maxBossBgNum = #self.xinGuanConf.bossBg
 	local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
-	self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+	local spineActorId = self.xinGuanConf.spineActorId[bgRow]
+	if self.BobySpine ~= nil then
+		self.BobySpine:Destroy()
+		self.BobySpine = nil
+	end
+
+	if spineActorId > 0 then
+		self.BobySpine = CCommon.CreateActor(self.bobyRect, spineActorId)
+		self.bobyRect.SpriteName = ""
+	else
+		self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
+	end
 end
 
 
@@ -554,7 +576,7 @@ function _R.OnNewToRestBack(self, data)
 	end)
 	fadeTweener:Play()
 
-	self.fadeImg:AddOnTime(function()
+	self.mModule:Get("Bxs"):AddOnTime(function()
 		self.mData.bossBlood = data.bossBlood
 		_P.OnSetListData(self)
 		_P.SetCenterData(self)

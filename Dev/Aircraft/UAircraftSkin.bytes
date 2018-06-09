@@ -145,7 +145,8 @@ function _P.CreateSkinItem(self, skinID)
 	skin.skinID = skinID
 
 	skin.moudle = JGuiManager.GetMoudle(self.content, ItemName)
-	skin.moudle.SelfRect:AddOnButton(function()
+	skin.border = skin.moudle:Get("bg")
+	skin.border:AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickSkinItem(self, index)
 	end)
@@ -155,7 +156,7 @@ function _P.CreateSkinItem(self, skinID)
 
 	local graySprite = {}
 	graySprite[#graySprite + 1] = skin.icon
-	graySprite[#graySprite + 1] = skin.moudle.SelfRect
+	graySprite[#graySprite + 1] = skin.border
 	skin.graySprite = graySprite
 
 	self.skinList[index] = skin
@@ -169,18 +170,19 @@ function _P.CreateBaseSkinItem(self, itemID)
 	local index = #self.selectBorder + 1
 
 	local moudle = JGuiManager.GetMoudle(self.content, ItemName)
-	moudle.SelfRect:AddOnButton(function()
+	local border = moudle:Get("bg")
+	border:AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickSkinItem(self, index)
 	end)
 	local isNotOwn = 0 == MBag.GetItemNum(itemID)
-	moudle.SelfRect.IsGray = isNotOwn
+	border.IsGray = isNotOwn
 
 	self.baseSkinList[index] = itemID	
 
 	local spriteName, color = _P.GetSkinSpriteAndColor(self, index)
 	if nil ~= color then
-		moudle.SelfRect.SpriteName = color
+		border.SpriteName = color
 	end
 	local icon = moudle:Get("Icon")
 	icon.SpriteName = spriteName
@@ -265,7 +267,7 @@ function _P.RefreshSkinItem(self, index, skinID, isOwn)
 			skin.icon.SpriteName = spriteName
 		end
 		if nil ~= color then
-			skin.moudle.SelfRect.SpriteName = color
+			skin.border.SpriteName = color
 		end
 		for _, graySprite in pairs(skin.graySprite) do
 			graySprite.IsGray = not isOwn
@@ -494,6 +496,8 @@ function _R.OnSelectAircraftSkin(self)
 	self.gearSkinCorner[self.selectIndex].SpriteName = GearItemIcon
 	self.lastGearIndex = self.selectIndex
 	CCommon.ShowRight(Csv.Text("aircraft_skin_change_success", {name = self.textSkinName.Text}))
+
+	_P.RefreshChangeBtnText(self)
 end
 
 --激活飞机皮肤成功

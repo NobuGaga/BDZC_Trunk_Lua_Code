@@ -65,9 +65,10 @@ end
 --开始动画
 function _P.OnInitAnim(self,start,target)
 	self.qipao.Activity = true
-	local fill = target / 100
+	local fill = math.min(1, target / 100)
 	self.slider:DOFillAmount(fill, 1.8)
-	local t = JTweenerManager.IntTween(self.startVal, self.target, 1.8, function(value)
+	local targetInt = math.ceil(target)
+	local t = JTweenerManager.IntTween(start, targetInt, 1.8, function(value)
 		self.sliderText.Text = Csv.Text("adventure_handleing", {num = value}) 
 	end, function()
 		self.qipao.Activity = false
@@ -79,6 +80,9 @@ end
 function _P.OnCharterAnim(self,isReverse)
 	self.contenBg.Activity = false
 	self.continueBtn.Activity = false
+	-- print("talk:", _P.GetContent(self))
+	self.content.Text = _P.GetContent(self)
+	self.curStage = self.curStage + 1
 	if isReverse then
 		self.character:DOAnchorPosX(BEGIN_POSX, 0.4)
 	else
@@ -92,13 +96,53 @@ function _P.OnCharterAnim(self,isReverse)
 	end
 end
 
+function _P.GetContent(self)
+	--第一次直接取评价值
+	if self.curStage == 1 then
+		return _P.GetContentByPoint(self,self.mData.compatibility)
+	else
+		local index = math.min(self.curStage, #self.randMatch)
+		local randV = self.randMatch[index]
+		return  _P.GetRandContent(self,randV)
+	end
+	
+end
+
+function _P.GetContentByPoint(self,random)
+	-- print("randv",random)
+	-- LuaUtil.DumpTable(self.talkGroup)
+	if random <= self.talkGroup[1].value then
+		return self.talkGroup[1].key
+	end
+	for index=1,#self.talkGroup do
+		if random > self.talkGroup[index].value then
+			local findIndex = math.min(index+1,#self.talkGroup)
+			return self.talkGroup[findIndex].key
+		end
+	end
+end
+
+function _P.GetRandContent(self,randv)
+	-- print("randv",randv)
+	-- LuaUtil.DumpTable(self.talkRandGroup)
+	if randv <= self.talkRandGroup[1].value then
+		return self.talkRandGroup[1].key
+	end
+	for index=1,#self.talkRandGroup do
+		if randv > self.talkRandGroup[index].value then
+			local findIndex = math.min(index+1,#self.talkRandGroup)
+			return self.talkRandGroup[findIndex].key
+		end
+	end
+end
+
 function _P.GetNextTarget(self)
 	--已经第三阶段
 	if self.stage[#self.stage] == self.target then
 		return self.mData.compatibility * 100
 	else
 		for i=1,#self.stage do
-			print("self", self.mData.compatibility * 100)
+			-- print("self", self.mData.compatibility * 100)
 			if self.stage[i] == self.target and 
 			self.stage[i+1] < self.mData.compatibility * 100 then
 				return self.stage[i+1]
@@ -154,11 +198,32 @@ function _M:OnCreate(data,OnClose)
 		module:Get("QIPAO"..i).Alpha = 0
 	end
 
+	self.randMatch = {}
+	for k,v in pairs(data.randMatch) do
+		self.randMatch[k] = v 
+	end
+
+	self.talkGroup = {}
+	for k,v in pairs(self.advEventCsv.talkGroup) do
+		table.insert(self.talkGroup,{key = k, value = v})
+	end
+	table.sort(self.talkGroup, function(a,b)
+		return a.value > b.value
+	end)
+
+	self.talkRandGroup = {}
+	for k,v in pairs(self.advEventCsv.talkrandomGroup) do
+		table.insert(self.talkRandGroup,{key = k, value = v})
+	end
+	table.sort(self.talkRandGroup, function(a,b)
+		return a.value > b.value
+	end)
+
 	--TODO:妹子图片走配置
-	self.character.SpriteName = "boss_10114"
+	self.character.SpriteName = self.advEventCsv.talkIcon
 
 	self.target = self.stage[1]
-
+	self.curStage = 1
 	self.continueBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		_P.OnContinue(self)

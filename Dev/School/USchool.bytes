@@ -240,7 +240,17 @@ function _P.RefreshSeatItem(self, index)
 	local isThisSeatStudy = MAircraft.IsStuding and not isEmpty
 	seat.body.Activity = not isEmpty
 	if not isEmpty then
-		seat.body.SpriteName = Csv.Personnel[data.staffid].asset
+		if seat.spine ~= nil then
+			seat.spine:Destroy()
+			seat.spine = nil
+		end
+		local csvPersonnel = Csv.Personnel[data.staffid]
+		if csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
+			seat.spine = CCommon.CreateActor(seat.body, csvPersonnel.prefab, CCommon.ActorFieldMap.staff_aircraft)
+			seat.body.SpriteName = ""
+		else
+			seat.body.SpriteName = csvPersonnel.asset
+		end
 	end
 	seat.book.Activity = isThisSeatStudy
 	seat.talkBox.Activity = isThisSeatStudy

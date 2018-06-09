@@ -8,6 +8,10 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MSiege = JRequire"Dev.SiegeWall.MSiege"
+local CSiege = JRequire"Dev.SiegeWall.CSiege"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local MBag = JRequire "Dev.Bag.MBag"
 
 local T_UDISK_FLY = "T_Udisk_fly"
 
@@ -23,15 +27,14 @@ function _M:Dispatch(funcName, ...)
 end
 
 function _R.ShowOpenUDisk(self,data)
-
+	WindowMgr.Create("UOpenUdisk",data)
 end
 
 function _R.CloseView(self)
-	print("CloseView!!!")
 	self:Destroy()
 end
 
-function _M:OnCreate(data)
+function _M:OnCreate(data,istreasure)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Upan")
 	self.Moudle = moudle
 
@@ -64,15 +67,27 @@ function _M:OnCreate(data)
 	end,nil,0.9)
 
 	OpenBtn:AddOnButton(function()
-		WindowMgr.Create("UOpenUdisk",data)
+		
+		local udiskData = Csv.SiegeTreasury[data.uDiskID]
+		local keyCount = MBag.GetItemNum(udiskData.passwordId)
+		print("udiskID________",data.uDiskID,keyCount)
+
+		CSiege.OpenUdiskReq(data.uDiskID,MPlayer.GetId(),istreasure)
 	end,nil,0.9)
 
 	DonateBtn:AddOnButton(function()
-		local tween = uDiskIcon.CachedTran:GetJTweener("T_UDISK_FLY")
-		tween:SetOnComplete(function ( ... )
-			self:Destroy()
-		end)
-		tween:Play()
+		if MCommerce.MyCommerceId > 0 then
+			CSiege.DonateReq(data.uDiskID)
+
+			local tween = uDiskIcon.CachedTran:GetJTweener("T_UDISK_FLY")
+			tween:SetOnComplete(function ( ... )
+				self:Destroy()
+			end)
+			tween:Play()
+		else
+			CCommon.ShowError(Csv.Text("talk_noCommerce"))
+		end
+		
 	end,nil,0.9)
 
 	

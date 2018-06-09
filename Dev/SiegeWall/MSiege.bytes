@@ -24,18 +24,17 @@ _M.RankTypeEnum = {
 }
 
 _M.ActivityId = 1 --活动id
-_M.Phase = 2 --阶段
-_M.OpenTime = 1800 --开启CD(等待中开始)
-_M.PointCD = 1800
+_M.Phase = 1 --阶段
+_M.OpenTime = 0 --开启CD(等待中开始)
+_M.PointCD = 0
 _M.Progress = {} --进度，列表，第二阶段有3个进度
-_M.LastUdisk = {ncur = 99,nmax = 100} --nil --剩余U盘数量，总数
-_M.Buffs = {{key = 3,value = 1},{key = 1,value = 2},{key = 2,value = 3}}
+_M.LastUdisk = nil --剩余U盘数量，总数
+_M.Buffs = {}
 _M.lastEnmey = 0 --剩余敌人数量，第三阶段
 _M.BigBoss = {} --第二阶段3只
-_M.Teams = {{type = 1,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
-			{type = 2,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
-			{type = 3,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}}} --阵营信息
+_M.Teams = {}
 _M.RecoveStaffs = {} --已使用过复活的员工（策划说同一阶段同个员工只能复活一次）
+_M.DieStaffs = {} --已死亡的员工（每个boss都不一样）
 _M.BossList = {}
 
 _M.ActionPoint = 0--行动点
@@ -43,7 +42,11 @@ _M.RecoveTime = 0 --恢复时间
 _M.isRecoveTick = false
 _M.RecoveHandle = nil 
 _M.SelectHero = nil
-
+_M.BossList = {}
+--[[
+_M.Teams = {{type = 1,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
+			{type = 2,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
+			{type = 3,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}}} --阵营信息	
 _M.BossList = {{indexID = 1,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "1",commerceId = 1},
 				{indexID = 2,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "2",commerceId = MCommerce.MyCommerceId},
 				{indexID = 3,id = 3,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "3",commerceId = 1},
@@ -54,11 +57,9 @@ _M.BossList = {{indexID = 1,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discove
 				{indexID = 8,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "8",commerceId = 1},
 				{indexID = 9,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "9",commerceId = 1},
 				{indexID = 10,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "10",commerceId = 1},}
-
+--]]
 _M.isFighting = false
 _M.selectBossId = 0
-_M.StaffStateTab = {} 
-_M.StaffLifeNum = {}
 _M.BossPower = {}
 _M.AllStageData = {}
 
@@ -72,8 +73,6 @@ function _M.Clean()
 	_M.SelectHero = nil
 	_M.isFighting = false
 
-	_M.StaffStateTab = {} 
-	_M.StaffLifeNum = {}
 	_M.BossPower = {}
 	_M.AllStageData = {}
 	_M.BossList = {}
@@ -87,7 +86,7 @@ function _M.SetAcitvityPhase(_acitvityId,_phase)
 
 	_M.MaxPoint = Csv.Siege[_acitvityId].maxTimes
 	_M.PointCD = Csv.Siege[_acitvityId].CD
-	_M.OpenTime = 1800 + HeartBeat.ServSecond()
+	_M.OpenTime = 0
 	if _phase ~= nil then
 		CSiege.ReqSiegeStage() --请求阶段
 	end
@@ -112,9 +111,11 @@ function _M.SetSiegeStageMsg(data)
 	_M.Buffs = {}
 	if data.buffs ~= nil then
 		for k,v in pairs(data.buffs)do
-			table.insert(_M.Buffs,{key = v.key,value = v.value})
+			_M.Buffs[k] = v.value
+			--table.insert(_M.Buffs,{key = v.key,value = v.value})
 		end
 	end
+	print("___M.Buffs____",#_M.Buffs)
 
 	_M.lastEnmey = 0
 	if data.enemy ~= nil then
@@ -132,7 +133,7 @@ function _M.SetSiegeStageMsg(data)
 	_M.RecoveStaffs  = {}
 	if data.staffs ~= nil then
 		for k,v in pairs(data.staffs)do
-			table.insert(_M.RecoveStaffs,v)
+			_M.RecoveStaffs[v] = true
 		end
 	end
 
@@ -173,10 +174,10 @@ end
 
 function _M.SetNewBuff(data)
 	if data.buff ~= nil then
-		for k,v in pairs(_M.Buffs)do
-			if v.key == data.buff.key then
-				v.value = v.value + data.buff.value
-			end
+		if _M.Buffs[data.buff.key] ~= nil then
+			_M.Buffs[data.buff.key] = _M.Buffs[data.buff.key] + 1
+		else
+			_M.Buffs[data.buff.key] = 1
 		end
 	end
 end
@@ -222,6 +223,7 @@ function _P.BossMsg(msg)
 	local _staffId = {}
 	if msg.staffId ~= nil then
 		for k,v in pairs(msg.staffId)do
+			print("BossMsg__________________",v)
 			table.insert(_staffId,v)
 		end
 	end
@@ -237,31 +239,49 @@ function _P.BossMsg(msg)
 end
 
 -------------
-function _M.UnlockStaff(staffID, staffLifeNum)
-	if _M.StaffStateTab[staffID] then
-		_M.StaffStateTab[staffID] = nil
-	end
-
-	if staffLifeNum ~= nil then
-		_M.StaffLifeNum[staffLifeNum.id] = staffLifeNum.count
-	end
-end
-
-function _M.GetStaffList(staffList, staffLifeNum)
-	_M.StaffStateTab = {}
-	_M.StaffLifeNum = {}
-	if staffList ~= nil then
-		for k,v in pairs(staffList)do
-			_M.StaffStateTab[v] = true
+function _M.UnlockStaff(data)
+	_M.RecoveStaffs = {}
+	if data.staffs ~= nil then
+		for k,v in pairs(data.staffs)do
+			_M.RecoveStaffs[v] = true
 		end
 	end
-	if staffLifeNum ~= nil then
-		for k,v in pairs(staffLifeNum)do
-			_M.StaffLifeNum[v.id] = v.count
+
+	local dieStaff = _M.DieStaffs
+	print("___________",data.staffid)
+	if dieStaff ~= nil then
+		if dieStaff[data.staffid] ~= nil then
+			dieStaff[data.staffid] = nil
 		end
+	else
+		dieStaff = {}
 	end
+	_M.DieStaffs = dieStaff
 end
 
+function _M.SetDieStaffs(staffs)
+	local dieStaff = {}
+	if staffs ~= nil then
+		for k,v in pairs(staffs)do
+			dieStaff[v] = true
+		end
+	end
+	_M.DieStaffs = dieStaff
+end
+
+function _M.NewDieStaff(staffid)
+	local dieStaff = _M.DieStaffs
+	if dieStaff ~= nil then
+		dieStaff[staffid] = true
+	else
+		dieStaff = {}
+		dieStaff[staffid] = true
+	end
+	print("_NewDieStaff____________",staffid,#dieStaff)
+	_M.DieStaffs = dieStaff
+end
+
+--每个boss有自己的员工
 --v={state:1派遣，2恢复,3,无效，times}
 function _M.SelectStaff()
 	local staffList = MStaff.StaffTable
@@ -269,8 +289,12 @@ function _M.SelectStaff()
 	local biggerMods = {}
 	local smallerMods = {}
 	local _mod = 0
+
+	local dieStaffs = _M.DieStaffs
+	
 	for k,v in pairs(staffList) do
-		if _M.StaffStateTab[k] then
+		print("selectStaff___________________",k,dieStaffs[k])
+		if dieStaffs[k] then
 			
 		else
 			_mod = v.power-_M.BossPower.ncur
@@ -305,6 +329,8 @@ function _M.SelectStaff()
 	return nil
 end
 
+--------------------------------------------------------------------------
+
 function _M.GetTreasureListByStage(stageId)
 	local listData = {}
 	for k,v in pairs(Csv.SiegeTreasury) do
@@ -319,10 +345,42 @@ end
 -- 设置各阶段兑换商店、排行版领取状态数据
 function _M.SetAllStageData(stageList)
 	local listData = {}
-	for k,v in pairs(stageList) do
-		listData[v.stage] = v
+	if stageList ~= nil then
+		for k,v in pairs(stageList) do
+			listData[v.stage] = v
+		end
 	end
 	_M.AllStageData = listData
+end
+
+---------------------------------------------------------
+function _M.GetBuffInfo(index)
+	local buffs = _M.Buffs
+	print("GetBuffInfo!!!",#buffs)
+	for k,v in pairs(buffs)do
+		local buffData = Csv.SiegeBuff[k]
+		print("_____",buffData.index,index,k)
+		if buffData.index == index then
+			return {id = k,value = v}
+		end
+	end
+	return nil
+end
+
+function _M.GetTeamType(commerceID)
+	if _M.Teams ~= nil then
+		for k,v in pairs(_M.Teams)do
+			local type = v.type
+			if v.commerce ~= nil then
+				for k2,v2 in pairs(v.commerce)do
+					if v2.key == commerceID then
+						return type
+					end
+				end
+			end
+		end
+	end
+	return nil
 end
 
 return _M

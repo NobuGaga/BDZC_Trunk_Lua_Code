@@ -12,6 +12,8 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MSiege = JRequire"Dev.SiegeWall.MSiege"
+local CSiege = JRequire"Dev.SiegeWall.CSiege"
+local MBag = JRequire "Dev.Bag.MBag"
 -----------------------------
 
 local Linear = CS.DG.Tweening.Ease.Linear
@@ -20,6 +22,10 @@ local UnityTime = CS.UnityEngine.Time
 
 local attackActorId = 10038
 local FIGHT_ROUND = Csv.Const(15005)
+
+local STRENGTH_BUFF_ID = 1
+local KILL_BUFF_ID = 2
+local KILL_ITEM_ID = 34013
 --------------------------
 local DEFAULT_BODY_NAME = "staff_choose"
 
@@ -46,11 +52,13 @@ function _M:Dispatch(funcName, ...)
 end
 
 function _R.InitFight(self,data)
-	print("InitFight__________",data.boss.id)
+	_P.ReadyFight(self,data.boss)
+	_P.ShowRank(self,data.hurtList)	
+	_P.ShowOwnHurt(self,data.ownHurt)
 end
 
 function _R.RefreshBuff(self,data)
-	print("RefreshBuff_________",data.buff.key)
+	_P.RefreshBuffs(self)
 end
 
 --战斗结算后返回更新
@@ -122,7 +130,11 @@ function _M:OnCreate(data)
 	----------------------
 	local bossData = Csv.SiegeBoss[data.id]
 	self.mBossData = bossData
+	MSiege.selectBossId = data.indexID
 
+	MSiege.SetDieStaffs(data.staffId)
+
+	local bgImg = moudle:Get("BG")
 	local diyuText = moudle:Get("diyupanghang")
 	local leftTitle1 = moudle:Get("leftTitle1")
 	local rightTitle1 = moudle:Get("rightTitle1")
@@ -140,6 +152,7 @@ function _M:OnCreate(data)
 	smallTitle2.Text = bossData.name
 	smallTitleBg1.Activity = false
 	smallTitleBg2.Activity = false
+	bgImg.SpriteName = bossData.bg
 
 	self.mDiyuText = diyuText
 
@@ -154,14 +167,15 @@ function _M:OnCreate(data)
 	moudle:Get("C_text").Text=Csv.Text("finance_change")
 	changeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		WindowMgr.Create("USiegeSelectStaff", function (staffId)
+		WindowMgr.Create("USiegeSelectStaff",function (staffId)
 			if self.mMoudle ~= nil then
+				
 				_P.OnChooseStaff(self, staffId,moudle)
 			end
 		end)
 	end, nil, 0.9)
 
-	self.mData = data
+	
 	_P.ReadyFight(self,data)--等待返回调用
 
 	--开始战斗
@@ -171,42 +185,190 @@ function _M:OnCreate(data)
 		
 		--开始战斗
 		if MSiege.SelectHero ~= nil then
-			print("___开始战斗！")
-			_R.UpdateFight(self,{hurt = 10,jifen = 1,score = 1})
+			CSiege.ReqSiegeFight(MSiege.SelectHero.id,data.indexID)
+			MSiege.NewDieStaff(MSiege.SelectHero.id)
+			--_R.UpdateFight(self,{hurt = 10,jifen = 1,score = 1})
 		else
 			CCommon.ShowError(Csv.Text("finance_unselectStaff"))--"请选择一个员工出战！"
 		end
 	end, nil, 0.9)
 
 	--------buff--------------------------------------
+
 	local buffIcons = {}
 	for i = 1,3,1 do
 		local _icon = moudle:Get("Icon"..i)
 		local _num = moudle:Get("IconNum"..i)
 		buffIcons[i] = {icon = _icon,num = _num}
-		
-		_icon.Activity = false
+
+		if i > 1 then
+			_icon:AddOnButton(function()
+				if i == 2 then
+					_P.OnBuyStrengthBuff(self,i)
+				elseif i == 3 then
+					_P.OnBuyKillBuff(self,i)
+				end
+			end,nil,1.2)
+		end
 	end
 	self.mBuffIcons = buffIcons
 
-	local buffs = MSiege.Buffs
-	for k,v in pairs(buffs)do
-		local buffData = Csv.SiegeBuff[v.key]
-		print("!!!")
-		 if buffIcons[buffData.index] ~= nil then
-			buffIcons[buffData.index].icon.Activity = true
-			buffIcons[buffData.index].icon.SpriteName = buffData.icon
-			buffIcons[buffData.index].num.Text = math.ceil(buffData.powerAdd/10000) * v.value.."%"
+	_P.RefreshBuffs(self)
+end
 
-			if buffData.isBuy then
-				buffIcons[buffData.index].icon:AddOnButton(function()
-					
-				end,nil,1.2)
+------------------BUFF-----------------------------------------------
+function _P.RefreshBuffs(self)
+	local buffIcons = self.mBuffIcons
+	for k,v in pairs(buffIcons)do
+		local buffInfo = MSiege.GetBuffInfo(k)
+		if k == 1 then
+			v.icon.Activity = false
+			if buffInfo == nil then
+				v.icon.Activity = false
+			else
+				if buffInfo.value > 0 then
+					local buffData = Csv.SiegeBuff[buffInfo.id]
+
+					if buffData ~= nil then
+						v.icon.Activity = true
+						v.icon.SpriteName = buffData.icon
+						v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
+					end
+				end
+			end
+		elseif k == 2 then
+			if buffInfo == nil then
+				--无buff无特效
+				
+			else
+				local buffData = Csv.SiegeBuff[buffInfo.id]
+
+				if buffData ~= nil then
+					v.icon.Activity = true
+					v.icon.SpriteName = buffData.icon
+					v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
+
+					--特效
+					if buffInfo.value >= buffData.max then
+
+					else
+
+					end
+				end
+			end
+		elseif k == 3 then
+			if buffInfo == nil then
+				--无buff无特效
+				
+			else
+				local buffData = Csv.SiegeBuff[buffInfo.id]
+
+				if buffData ~= nil then
+					v.icon.Activity = true
+					v.icon.SpriteName = buffData.icon
+					v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
+
+					--特效
+					if buffInfo.value >= buffData.max then
+						
+					else
+
+					end
+				end
 			end
 		end
 	end
-
 end
+
+function _P.OnBuyStrengthBuff(self,index)
+	local buffInfo = MSiege.GetBuffInfo(index)
+	local data = Csv.SiegeBuff[STRENGTH_BUFF_ID]
+
+	if buffInfo ~= nil and data ~= nil then
+		if buffInfo.value >= data.max then
+			CCommon.ShowError(Csv.Text("siege_buybuff_Max"))
+			return
+		end
+	end
+	
+	local _cost = _P.GetBuffCost(data,buffInfo)
+	local itemDate = Csv.Item[Define.AssetsType.Gold]
+	local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
+
+	if data ~= nil then
+		if hasGold >= _cost then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure then
+					CSiege.ReqBuyBuffInBattle(STRENGTH_BUFF_ID)
+				end
+			end,{content = Csv.Text("siege_buybuff_Tips1",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
+		else
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure then
+					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+				end
+			end,{content = Csv.Text("siege_buybuff_Tips2",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
+		end
+	else
+		print("找不到数据,id______",STRENGTH_BUFF_ID)
+	end
+end
+
+function _P.OnBuyKillBuff(self,index)
+	local buffInfo = MSiege.GetBuffInfo(index)
+	local data = Csv.SiegeBuff[KILL_BUFF_ID]
+
+	if buffInfo ~= nil and data ~= nil then
+		if buffInfo.value >= data.max then
+			CCommon.ShowError(Csv.Text("siege_buybuff_Max"))
+			return
+		end
+	end
+	
+	local hasItem = MBag.GetItemNum(KILL_ITEM_ID)
+	if hasItem > 0 then
+		CSiege.ReqBuyBuffInBattle(STRENGTH_BUFF_ID)
+	else
+		local _cost = _P.GetBuffCost(data,buffInfo)
+		local itemDate = Csv.Item[Define.AssetsType.Gold]
+		local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
+		
+		if hasGold >= _cost then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure then
+					CSiege.BuyOrderReq()
+				end
+			end,{content = Csv.Text("siege_buybuff_Tips1",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
+		else
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure then
+					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
+				end
+			end,{content = Csv.Text("siege_buybuff_Tips2",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
+		end
+	end
+end
+
+function _P.GetBuffCost(data,info)
+	
+	if data == nil then
+		return 0
+	end
+	
+	if info == nil then
+		return data.cost[1][2]
+	end
+
+	local level = info.value
+	for k,v in pairs(data.cost) do
+		if level == v[1] then
+			return v[2]
+		end
+	end
+	return data.cost[#data.cost][2]
+end
+
+-----------------------------------------------------------------------------------------------
 
 function _P.OnChooseStaff(self, staffId,moudle)
 	self.ChoosedStaffId = staffId
@@ -228,6 +390,7 @@ function _P.ReadyFight(self,data)
 	if data == nil then
 		return
 	end
+	self.mData = data
 	self.mBossTalkBox.Activity = false
 	self.mHeroTalkBox.Activity = false
 	self.mBloodBg.Activity = true
@@ -247,14 +410,14 @@ function _P.ReadyFight(self,data)
 	ownInfo.Activity = true
 	diyuText.Activity = true
 
-	bossIcon.SpriteName = self.mBossData.icon--
+	bossIcon.SpriteName = self.mBossData.body--
 	bloodValue.Text = math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"
 	--_P.CreateOwnRank(self,data.own)
 	
 	MSiege.BossPower = data.bossBlood
 	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
 	
-	local heroData = MSiege.SelectStaff()
+	local heroData = MSiege.SelectStaff() --每个boss的员工不通用
 	if heroData ~= nil then
 		local PersonnelData = Csv.Personnel[heroData.id]
 		self.mHeroIcon.SpriteName = PersonnelData.asset
@@ -294,7 +457,6 @@ function _P.ShowFight(self,data,callBack)
 	local hurt = data.hurt
 	local oneHurt = math.floor(hurt / fightCount)
 	local startBlood = MSiege.BossPower.ncur
-	print("___________",hurt)
 	self.BossTalkList =  _P.GetBossTalk()
 	local staffCsv = Csv.Personnel[MSiege.SelectHero.id]
 	if staffCsv ~= nil then
@@ -412,6 +574,14 @@ end
 
 
 -------------数据---------------------------------------------
+function _P.ShowOwnHurt(self,hurt)
+	local moudle = self.mMoudle
+	local ownHurt = moudle:Get("OwnInfoText")
+	local ownName = moudle:Get("OwnNameText")
+	ownName.Text = MPlayer.GetName()
+	ownHurt.Text = Csv.Text("finance_battleget_fb2",{num = hurt})
+end
+
 function _P.ShowRank(self,listData)
 	local rankView = self.mRankView
 	local content = self.mAllContent
@@ -430,12 +600,12 @@ function _P.ShowRank(self,listData)
 	local itemTable = {}
 	if rankData ~= nil then
 		for k,v in pairs(rankData) do
-			_P.CreatRankItem(ontent,v)
+			_P.CreatRankItem(content,v)
 		end
 	end
 end
 
-function _P.CreatRankItem(type,content,data)
+function _P.CreatRankItem(content,data)
 	local itemMoudle = JGuiManager.GetMoudle(content,"M_FB_PKRankItem", WindowType.UI, 10)
 	
 	local name = itemMoudle:Get("nameText")
@@ -447,5 +617,8 @@ function _P.CreatRankItem(type,content,data)
 	itemMoudle.SelfRect.CachedTran:SetSiblingIndex(0)
 	return itemMoudle
 end
+
+-------------------------------------------------------------
+
 
 return _M

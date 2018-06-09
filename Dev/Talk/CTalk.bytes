@@ -137,7 +137,8 @@ function _P.OnOfflineMsg(data)
 		for playerKey,playerValue in pairs(data.msgList) do
 			local oneData = playerValue.talkList
 			if oneData ~= nil and next(oneData.talkList) ~= nil then
-				for msgKey,msgValue in pairs(oneData.talkList) do
+				for i=#oneData.talkList,1,-1 do -- 倒序
+					local msgValue = oneData.talkList[i]
 					if msgValue.from == 2 and MFriend.CheckRelation(msgValue.sender, MFriend.RelationType.BlackList) then
 						return
 					end

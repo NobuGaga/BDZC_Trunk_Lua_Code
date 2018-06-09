@@ -136,7 +136,21 @@ function _R.OnUpdateExp(self)
 	--背景
 	moudle:Get("BG").SpriteName = csv.scene
 	--人物
-	moudle:Get("BSX").SpriteName = csv.actor
+	if csv.dbname ~= nil then
+		if self.StaffPrefab ~= nil then
+			self.StaffPrefab:Destroy()
+			self.StaffPrefab = nil
+		end
+		self.StaffPrefab = CCommon.CreateActor(moudle:Get("BSX"), csv.dbname, CCommon.ActorFieldMap.commerce_main)
+		moudle:Get("BSX").SpriteName = ""
+	else
+		if self.StaffPrefab ~= nil then
+			self.StaffPrefab:Destroy()
+			self.StaffPrefab = nil
+		end
+		moudle:Get("BSX").SpriteName = csv.actor
+	end
+
 	--等级
 	moudle:Get("lvNum").Text = tostring(data.level)
 	--经验
@@ -145,6 +159,7 @@ function _R.OnUpdateExp(self)
 	--成员数
 	moudle:Get("MoneyNum_0").Text = data.memberNum .. "/" .. csv.count
 end
+
 function _R.OnUpdateMoney(self)
 	local data = MCommerce.MyCommerceInfo
 	local moudle = self.Moudle
@@ -160,6 +175,7 @@ end
 function _R.OnUpdatemeCanFight(self)
 	_P.BtnLightUpdate[Define.SysId.Commerce_Battle](self)
 end
+
 function _R.OnUpdatemeMyInfo(self)
 	local myInfo = MCommerce.MyCommerceInfo.myInfo
 	local moudle = self.Moudle

@@ -131,6 +131,7 @@ function _P.InitViewButton(self)
 		WindowMgr.Create("UAircraftSkin")
 	end)
 	self.moudle:Get("textBtnSkin").Text = Csv.Text("aircraft_skin")
+	self.redpointSkin = self.moudle:Get("redpointSkin")
 end
 
 --初始化倒计时文本
@@ -565,6 +566,7 @@ end
 function _R.RefreshAircraftRedPoint(self)
 	_P.RefreshTimeState(self)
 	self.redpoint.Activity = not MAircraft.IsStuding
+	self.redpointSkin.Activity = MAircraft.IsAircraftHaveUnActivative()
 end
 
 return _M

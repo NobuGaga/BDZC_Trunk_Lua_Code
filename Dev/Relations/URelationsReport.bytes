@@ -69,7 +69,13 @@ function _M:OnCreate(...)
 	local data = MRelations.ReportData
 	self.mData = data
 	local csvMyStaff = Csv.Personnel[data.mstaffinfo.staffid]
-	moudle:Get("OBSX").SpriteName = csvMyStaff.asset
+
+	if csvMyStaff.prefab ~= nil and csvMyStaff.prefab > 0 then
+		CCommon.CreateActor(moudle:Get("OBSX"), csvMyStaff.prefab, CCommon.ActorFieldMap.staff_lobby_pk_own)
+	else
+		moudle:Get("OBSX").SpriteName = csvMyStaff.asset
+	end
+
 	moudle:Get("BloodNum2").Text = Csv.Text("company_exp",{num = data.blood.blood,max = data.blood.maxblood})
 	moudle:Get("bar2").FillAmount = data.blood.blood/data.blood.maxblood
 	moudle:Get("StaffName1").Text = Csv.Text("relations_stafflv",{name = MStaff.GetStaffName(csvMyStaff.id),num = data.mstaffinfo.level})
@@ -82,7 +88,13 @@ function _M:OnCreate(...)
 	if data.ostaffinfo.staffName ~= nil then
 		otherStaffName = data.ostaffinfo.staffName
 	end
-	moudle:Get("DBSX").SpriteName = csvOtherStaff.asset
+
+	if csvOtherStaff.prefab ~= nil and csvOtherStaff.prefab > 0 then
+		CCommon.CreateActor(moudle:Get("DBSX"), csvOtherStaff.prefab, CCommon.ActorFieldMap.staff_lobby_pk_that)
+	else
+		moudle:Get("DBSX").SpriteName = csvOtherStaff.asset
+	end
+
 	moudle:Get("BloodNum1").Text = Csv.Text("company_exp",{num = data.oblood.blood,max = data.oblood.maxblood})
 	moudle:Get("bar1").FillAmount = data.oblood.blood/data.oblood.maxblood
 	moudle:Get("StaffName1_0").Text = Csv.Text("relations_stafflv",{name = otherStaffName,num = data.ostaffinfo.level})

@@ -7,13 +7,21 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-local MAX_EVENT = 6 --最大事件上限数量
-
+local MAX_EVENT = Csv.Const(20101)[2] --最大事件上限数量
+local MAX_COUNT = Csv.Const(20101)[3] --解决事件次数上限
+local MAX_LUCKY = Csv.Const(20101)[8] --幸运值最大值
+local QIYUCOIN = 34102				 --奇遇币ID
+local QUALITY1 = Color(47/255,32/255,231/255,1)
+local QUALITY2 = Color(228/255,7/255,231/255,1)
+local QUALITY3 = Color(236/255,111/255,14/255,1)
+local QUALITY4 = Color(240/255,0/255,0/255,1)
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -30,10 +38,15 @@ end
 
 function _P.SetView(self)
 	_P.SetListData(self)
+	_P.SetOwnData(self)
 end
 
---设置热度值
-function _P.SetHotVal(self)
+--设置下方个人数据
+function _P.SetOwnData(self)
+	self.slider.FillAmount = self.mData.hotval / MAX_LUCKY
+	local vip = MPlayer.GetVip()
+	local extraTime = Csv.Vip[vip].adventureMainCount
+	self.leftTimes.Text = Csv.Text("adventure_left_times",{num = self.mData.personalEventTimes,all = MAX_COUNT + extraTime})--VIP
 end
 
 --刷新中间事件格子
@@ -41,29 +54,10 @@ function _P.SetListData(self)
 	local contentTransform = self.mModule:Get("Content")
 	contentTransform:DestroyChildren()
 
-	self.eventTableDatas = _P.GetEventData(self)
-	for k,v in ipairs(self.eventTableDatas) do
-		self.mRawTableItems[v.id] = _P.OnCreateItem(self, v, contentTransform)
+	self.eventTableDatas = self.mData.personalEventlist
+	for k,v in pairs(self.eventTableDatas) do
+		self.mRawTableItems[v.eventsIndex] = _P.OnCreateItem(self, v, contentTransform)
 	end
-end
-
-function _P.GetEventData(self)
-	local eventDatas = {}
-	--构造假数据
-	for i=1,4 do
-		local one = {
-			actId = 40000,
-			id = 1000+i,
-			eventsIndex = i,
-			eventInfo = {{index = 1, attrInfo = {{type = 2, val = 40},{type = 5, val = 1}}},
-			{index = 2, attrInfo = {{type = 3, val = 50},{type = 6, val = 1}}},
-			{index = 3, attrInfo = {{type = 4, val = 40},{type = 6, val = 2}}},
-			},
-			eventTriggerTime = HeartBeat.ServSecond()
-		}
-		eventDatas[i] = one
-	end
-	return eventDatas
 end
 
 function _P.RefreshTime(self)
@@ -77,10 +71,31 @@ function _P.RefreshTime(self)
 	return isFinish
 end
 
-function _P.OnTimeUpdate(self)
-	print("时间到了！！！！！")
+--移除1个事件
+function _P.RemoveEvent(self,eventsIndex)
+	--还要通知M
+	self.mData.personalEventlist[eventsIndex] = nil
+	_P.SetListData(self)
 end
 
+--更新事件
+function _R.UpdateEvent(self,data)
+	self.mData = MActivity.GetFromId(self.ActId)
+	_P.SetListData(self)
+end
+
+--更新个人事件数据
+function _R.UpdateOwnData(self)
+	self.mData = MActivity.GetFromId(self.ActId)
+	_P.SetListData(self)
+	_P.SetOwnData(self)
+end
+
+--红点
+function _R.UpdateRed(self)
+	self.redpoint1.Activity = MActivity.AdventureRankRed
+	self.redpoint2.Activity = MActivity.AdventureShopRed
+end
 
 --创建格子
 function _P.OnCreateItem(self,data,contentTransform)
@@ -90,19 +105,17 @@ function _P.OnCreateItem(self,data,contentTransform)
 	itemMoudle:Get("Tips").Text = Csv.Text("adventure_time_tips")
 
 	if _P.IsNeedUpdate(self,data.eventsIndex) then
-		print("UpdateIndex", data.eventsIndex)
 		self.timeText = itemMoudle:Get("Time")
-		self.time = HeartBeat.ServSecond() + 1800
+		self.time = self.mData.nextUpdateTime
 		self.timeText.Text = CS.Utility.Utils.FormatSeconds(self.time - HeartBeat.ServSecond(), Csv.Text("xinguan_rank_countdown"))
 		itemMoudle:Get("TimeBg").Activity = true
 		self.countTime = self.timeText:AddOnUpdate(function() 
 			if _P.RefreshTime(self) then
 				if self.countTime then
-					--时间到了
-					print("时间到了")
-					_P.OnTimeUpdate(self)
+					--时间到了移除事件
 					self.countTime:Destroy()
 					self.countTime = nil
+					_P.RemoveEvent(self,data.eventsIndex)
 				end
 			end
 		end, nil, 1)
@@ -112,14 +125,18 @@ function _P.OnCreateItem(self,data,contentTransform)
 
 	itemMoudle:Get("OutBox"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		_P.OnClickItem(data)
+		_P.OnClickItem(data,self.mData)
 		end, nil, 1)
 
-	local csvEvent = Csv.AdventureMainEvent[data.id]
-
+	local csvEvent = Csv.AdventureMainEvent[data.eventId]
+	
 	local eventName = csvEvent.title
+	local star = csvEvent.star
+	for i=1,star do
+		itemMoudle:Get("Star"..i).Activity = true
+	end
 	local quality = csvEvent.quality
-
+	itemMoudle:Get("OutBox").Color = _P.GetOutColor(self, quality)
 	local ImgIcon = itemMoudle:Get("iCON")
 	ImgIcon.SpriteName = csvEvent.icon
 	itemMoudle:Get("Name").Text = eventName
@@ -128,78 +145,52 @@ function _P.OnCreateItem(self,data,contentTransform)
 	return event
 end
 
-function _P.IsNeedUpdate(self,id)
-	local minIndex = self.eventTableDatas[1].eventsIndex
-	for i=1,#self.eventTableDatas do
-		if minIndex > self.eventTableDatas[i].eventsIndex then
-			minIndex = self.eventTableDatas[i].eventsIndex
-		end
+function _P.GetOutColor(self, type)
+	local switch = {
+		[1] = function()
+			return QUALITY1
+		end,
+		[2] = function()
+			return QUALITY2
+		end,
+		[3] = function()
+			return QUALITY3
+		end,
+		[4] = function()
+			return QUALITY4
+		end,
+	}
+
+	local func = switch[type]
+	if func ~= nil then
+		return func()
 	end
-	return minIndex == id --and #self.eventTableDatas == MAX_EVENT
 end
 
-function _P.OnClickItem(data)
+function _P.IsNeedUpdate(self,eventsIndex)
+	local minIndex = -1
+	local count = 0
+	for k,v in pairs(self.mData.personalEventlist) do
+		if minIndex == -1 then
+			minIndex = v.eventsIndex
+		end
+		if minIndex > v.eventsIndex then
+			minIndex = v.eventsIndex
+		end
+		count = count + 1
+	end
+	return minIndex == eventsIndex and count == MAX_EVENT
+end
+
+function _P.OnClickItem(data,activityData)
 	if data ~= nil then
-		WindowMgr.Create("UAdventureStaff", data)
+		WindowMgr.Create("UAdventureStaff", data,activityData)
 	end
 end
 
 --隔天刷新次数
 function _P.OnDayout(self)
 
-end
-
-function _P.CreateFadeData(self)
-	local data = {}
-	local shopEventList = {}
-	local shopRewardEventList = {}
-	for i=1,10 do
-		local one = {
-			actId = 40000,
-			eventsIndex = i,
-			eventId = 1001,
-			eventInfo = {
-				index = 1,
-				attrInfo = {{type = 1, val = 20, params = 10001}}
-			},
-			playerlist = {},
-			triggerTime = HeartBeat.ServSecond() + i,
-			playerInfo = {
-				icon = "S_Boy_001",
-				level = 10,
-				power = 200,
-				devote = 5000,
-				staffId = 10002,
-				job = 1,
-				name = "test",
-			},
-			type = i%2,
-		}
-
-		for i=1,3 do
-			local player = {
-				icon = "S_Boy_001",
-				level = 10+i,
-				power = 400,
-				devote = 1000,
-				staffId = 10002,
-				job = 2,
-				name = "player"..i
-			}
-			table.insert(one.playerlist, player)
-		end
-		if one.type == 0 then
-			shopRewardEventList[one.eventsIndex] = one
-		else
-			shopEventList[one.eventsIndex] = one
-		end
-	end
-	data.shopRewardEventList = shopRewardEventList
-	data.shopEventList = shopEventList
-	data.actId = 40000
-	print("shopRewardEventList", #data.shopRewardEventList)
-	print("shopEventList", #data.shopEventList)
-	return data
 end
 
 --界面构造
@@ -217,20 +208,21 @@ function _M:OnCreate(...)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URuleTips",Define.SysId.Adventure)
 		end, nil, 1.2)
-	-- self.ActId = 0
-	-- local data = MActivity.GetListFromType(Define.ActivityType.Adventure)
-	-- if data ~= nil then
-	-- 	for k,v in pairs(data) do
-	-- 		self.ActId = k
-	-- 		break
-	-- 	end
-	-- else
-	-- 	error("Advanture info is nil")
-	-- 	return
-	-- end
-	-- self.mData = data[self.ActId]
-
-	local adventureConf = Csv.Adventure[40000]--activityId
+	self.ActId = 40000
+	local data = MActivity.GetListFromType(Define.ActivityType.Adventure)
+	if data ~= nil then
+		for k,v in pairs(data) do
+			self.ActId = k
+			break
+		end
+	else
+		error("Advanture info is nil")
+		return
+	end
+	self.mData = data[self.ActId]
+	local state = self.mData.state
+	
+	local adventureConf = Csv.Adventure[self.ActId]
 	if not adventureConf then 
 		error("adventure config is nil")
 		return 
@@ -243,6 +235,7 @@ function _M:OnCreate(...)
 	module:Get("C_text").Text = Csv.Text("adventure_rank")
 	module:Get("C_text_0").Text = Csv.Text("adventure_score_shop")
 	module:Get("C_text_1").Text = Csv.Text("adventure_shop_event")
+	module:Get("Tips").Text = Csv.Text("adventure_exchange_score",{num = MBag.GetItemNum(QIYUCOIN)})
 	self.timeText = module:Get("TimeText")
 	self.hotText = module:Get("IconName")
 	self.hotText.Text = Csv.Text("adventure_hot")
@@ -257,16 +250,20 @@ function _M:OnCreate(...)
 	self.LkBtn = module:Get("LuckIcon")
 	self.TipsBox.Activity = false
 	self.scoreText.Text = adventureConf.popDesc
+	self.redpoint1 = module:Get("redpoint1_0")
+	self.redpoint2 = module:Get("redpoint2_0")
+	self.timeText.Text = Csv.Text("charitable_main_data")..Csv.Text("charitable_main_dateInfo", 
+	{startTime = LuaUtil.TransToYMD(state.startTime),endTime = LuaUtil.TransToYMD(state.startTime + adventureConf.settleTime)})
 	-- hotOb = module:Get("HotObj")
 
 	self.rankBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
 		--打开排行榜界面
-		-- if HeartBeat.ServSecond() >= self.mData.state.endTime then
-		-- 	CCommon.ShowError(Csv.Text("timelimit_close"))
-		-- else
+		if HeartBeat.ServSecond() >= self.mData.state.endTime then
+			CCommon.ShowError(Csv.Text("timelimit_close"))
+		else
 			WindowMgr.Create("UAdventureRank", self.mData)
-		-- end
+		end
 	end, nil, 1.2)
 
 	self.vipBtn:AddOnButton(function(...)
@@ -279,7 +276,7 @@ function _M:OnCreate(...)
 	self.exchangeBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
 		--打开兑换界面
-			WindowMgr.Create("UAdventureExchangePanel")
+			WindowMgr.Create("UAdventureExchangePanel",self.mData)
 		-- end
 	end, nil, 1.2)
 
@@ -287,22 +284,33 @@ function _M:OnCreate(...)
 	self:RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
 		_P.OnDayout(self)
 	end)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == QIYUCOIN then
+			module:Get("Tips").Text = Csv.Text("adventure_exchange_score",{num = MBag.GetItemNum(QIYUCOIN)})
+		end
+	end)
 	
 	self.shopEventBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
-		--打开后续界面
-		-- if HeartBeat.ServSecond() >= self.mData.state.endTime then
-		-- 	CCommon.ShowError(Csv.Text("timelimit_close"))
-		-- else
-			WindowMgr.Create("UAdventureFollow", _P.CreateFadeData(self))
-		-- end
+		--打开后续界面(判断是否又加入商会)
+		if HeartBeat.ServSecond() >= self.mData.state.endTime then
+			CCommon.ShowError(Csv.Text("timelimit_close"))
+		else
+			if MCommerce.IsJoinCommerce() then
+				WindowMgr.Create("UAdventureFollow", self.mData)
+			else
+				CCommon.ShowError(Csv.Text("adventure_gang_tips"))
+			end
+		end
 	end,nil,1.2)
 	
 	self.LkBtn:AddOnPress(function(obj, arg, data)
 		self.TipsBox.Activity = data.isPress
-		-- hotOb:SetActive(data.isPress)
 	end)
-	_P.SetListData(self)
+	_P.SetView(self)
+	--红点初始化
+	_R.UpdateRed(self)
 end
 
 return _M

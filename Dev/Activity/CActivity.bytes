@@ -108,7 +108,8 @@ local CMD_ID =
 	cAdventureShopRefresh =	33, 	--(奇遇)刷新商城	PActivity.CAdventureShopRefresh
 	cAdventureShopBuy = 34,			--(奇遇)商城购买（兑换）PActivity.CAdventureShopBuy
 	cAdventureStaffOver = 35,		--(奇遇)奇遇员工加班 PActivity.CStaffOverTime
-
+	cFinancingInfo = 36,			--(银行投资)请求获取中奖信息
+	cFinancingGet = 37,				--(银行投资)请求投资 PActivity.CFinancingGet
 
 	sInit = 1,						--初始化 PActivity.SActivity
 	sUpdate = 2,					--更新 PActivity.SActivity
@@ -148,6 +149,10 @@ local CMD_ID =
 	sAdventureShopRefresh =	36,		--(奇遇)刷新商城 PClub.SAdventureShopRefresh
 	sAdventureShopBuy =	37,			--(奇遇)商城购买 PClub.SAdventureShopBuy
 	sAdventureStaffOver = 38,		--(奇遇)员工加班返回 PActivity.SStaffOverTime
+	sFinancingInfo = 39,			--(银行投资)请求获取中奖信息返回 PActivity.SFinancingInfo
+	sFinancingGet = 40,				--(银行投资)请求投资返回 PActivity.SFinancingGet
+	sNewFinancingInfo = 41,			--(银行理财)中奖信息推送 PActivity.POneGetInfo
+	sAdventureSendLucky = 42,		--(奇遇)幸运值推送	PActivity.SAdventureLucky
 }
 
 function _M.ModuleClean()
@@ -189,6 +194,8 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cAdventureShopRefresh]	 = "PActivity.CAdventureShopRefresh",
 		[CMD_ID.cAdventureShopBuy]		 = "PActivity.CAdventureShopBuy",
 		[CMD_ID.cAdventureStaffOver]	 = "PActivity.CStaffOverTime",
+		[CMD_ID.cFinancingInfo]	 	 	 = "",
+		[CMD_ID.cFinancingGet]			 = "PActivity.CFinancingGet",
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -224,13 +231,17 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sCharityScoreMessage]	 = {proto = "PActivity.SCharityMessage",		handle = _P.OnChairtyScoreMsg},--(慈善活动)慈善活动积分推送
 		[CMD_ID.sAdventureOpenRank]		 = {proto = "PActivity.SAdventureOpenRank",		handle = _P.OnAdvRank},		--(奇遇)打开排行榜返回
 		[CMD_ID.sAdventureEventCompelete] = {proto = "PActivity.SAdventureEventCompelete", handle = _P.OnAdvPerson}, --(奇遇)完成个人事件返回
-		[CMD_ID.sAdventureGangEventCompelete] = {proto = "PActivity.SAdventureEventCompelete", handle = _P.OnAdvGang}, --(奇遇)完成公会事件返回
+		[CMD_ID.sAdventureGangEventCompelete] = {proto = "PActivity.SAdventureGangEventCompelete", handle = _P.OnAdvGang}, --(奇遇)完成公会事件返回
 		[CMD_ID.sAdventureGongGetReward] = {proto = "PActivity.PGangEventRewardItemInfo", handle = _P.OnAdvGetGangReward}, --(奇遇)领取后续事件奖励返回
 		[CMD_ID.sAdventureNewEventSend]  = {proto = "PActivity.PEventItemInfo",			handle = _P.OnNewEvent},		--(奇遇)新个人事件推送
 		[CMD_ID.sAdventureGangEventSend] = {proto = "PActivity.PGangEventItemInfo",		handle = _P.OnNewGangEvent},	--(奇遇)新商会事件推送
-		[CMD_ID.sAdventureShopRefresh]	 = {proto = "PActivity.SAdventureShopRefresh",	handle = _P.OnAdvShopRefrash},	--(奇遇)兑换商城刷新		
-		[CMD_ID.sAdventureShopBuy]		 = {proto = "PActivity.SAdventureShopBuy",		handle = _P.OnAdvShopBuy},		--(奇遇)商城购买返回
+		[CMD_ID.sAdventureShopRefresh]	 = {proto = "PActivity.PAdventureShop",			handle = _P.OnAdvShopRefrash},	--(奇遇)兑换商城刷新		
+		[CMD_ID.sAdventureShopBuy]		 = {proto = "PActivity.PAdventureShopItem",		handle = _P.OnAdvShopBuy},		--(奇遇)商城购买返回
 		[CMD_ID.sAdventureStaffOver]	 = {proto = "PActivity.SStaffOverTime",			handle = _P.OnAdvStaffOver},	--(奇遇)员工加班返回
+		[CMD_ID.sFinancingInfo]	 		 = {proto = "PActivity.SFinancingInfo",			handle = _P.OnGetFinancingInfo}, 	--(银行投资)请求获取中奖信息返回
+		[CMD_ID.sFinancingGet]	 		 = {proto = "PActivity.SFinancingGet",			handle = _P.OnSignBack},	--(银行投资)请求投资返回
+		[CMD_ID.sNewFinancingInfo]	 	 = {proto = "PActivity.POneGetInfo",			handle = _P.OnNewInfoPush},	--(银行投资)请求投资返回
+		[CMD_ID.sAdventureSendLucky]	 = {proto = "PActivity.SAdventureLucky",		handle = _P.OnHotVal},		--(奇遇)热度值推送
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Activity, func_send, func_recv, isReload)
@@ -354,8 +365,8 @@ function _M.ReqCharitableGetRank()
 end
 
 --奇遇活动完成事件
-function _M.ReqAdvPersonEvent(actId,eventId,staffIds)
-	_M.Send(CMD_ID.cAdventureEventCompelete,{actId = actId, eventId = eventId, staffIds = staffIds})
+function _M.ReqAdvPersonEvent(actId,eventIndex,staffIds,eventId)
+	_M.Send(CMD_ID.cAdventureEventCompelete,{actId = actId, eventIndex = eventIndex, staffIds = staffIds,eventId = eventId})
 end
 
 --奇遇打开排行榜
@@ -364,8 +375,8 @@ function _M.ReqRankOpen()
 end
 
 --奇遇完成后续事件
-function _M.ReqAdvGangEventEnd(actId, eventIndex, staffId)
-	_M.Send(CMD_ID.cAdventureGangEventCompelete,{actId = actId, eventIndex = eventIndex, staffId = staffId})
+function _M.ReqAdvGangEventEnd(actId, eventIndex, staffId, eventId)
+	_M.Send(CMD_ID.cAdventureGangEventCompelete,{actId = actId, eventIndex = eventIndex, staffId = staffId, eventId = eventId})
 end
 
 --奇遇刷新兑换商城
@@ -567,115 +578,70 @@ end
 
 		local AdventureCsv = Csv.Adventure[data.actId]
 		--更新个人事件列表
-		LuaUtil.DumpTable(data)
-		info.personEventList = {}
+		-- LuaUtil.DumpTable(data.personalEventlist)
+		info.personalEventlist = {}
 		for k,v in pairs(data.personalEventlist) do
-			local adventureItemCsv = Csv.AdventureMainEvent[v.eventId]
-			local eventInfo = {}
-			for i=1, #v.eventInfo do
-				local attrInfo = {}
-				local item = {
-					index = v.eventInfo[i].index,
-				}
-				for t,p in pairs(v.eventInfo.attrInfo) do
-					local one = {
-						type = p.type,
-						val = p.value,
-					}
-					attrInfo[i] = one
-				end
-				item.attrInfo = attrInfo
-				eventInfo[i] = item
-			end
-			local one = {
-				title = adventureItemCsv.title,
-				start = adventureItemCsv.start,
-				quality = adventureItemCsv.quality,
-				desc = adventureItemCsv.desc,
-				eventInfo = eventInfo,
-			}
-			info.personEventList[v.eventsIndex] = one
+			local one = MActivity.GetNewPersonEvent(v)
+			info.personalEventlist[one.eventsIndex] = one
 		end
+
 		--活动信息
 		info.hotval = data.hotval
 		info.selfGetState = data.rewardState
 		info.gangGetState = data.gangrewardState
-		info.personeventTimes = data.personalEventTimes
+		info.personalEventTimes = data.personalEventTimes
 		info.nextUpdateTime = data.nextUpdateTime
 		--兑换商店
-		info.shopData = {
-			nextUpdateTime = data.shop.nextRefreshLeftTime,
-			refreshCount = data.shop.todayRefreshCount,
-			point = data.shop.point,
+		info.shop = {
+			nextRefreshLeftTime = data.shop.nextRefreshLeftTime,
+			todayRefreshCount = data.shop.todayRefreshCount,
+			itemList = {}
 		}
-		info.shopData.shoplist = {}
 		for i=1,#data.shop.itemList do
 			local one = {}
 			one.index = data.shop.itemList[i].index
 			one.goodId = data.shop.itemList[i].goodId
 			one.buyCount = data.shop.itemList[i].buyCount
-			info.shopData.shoplist[i] = one
+			info.shop.itemList[i] = one
 		end
 
 		--后续事件列表
 		info.shopEventList = {}
-		for i=1,#data.gangeventlist do
-			local v = data.gangeventlist[i]
-			local tplayerlist = {}
-			local one = {}
-			one.eventId = v.eventId
-			one.eventIndex = v.eventsIndex
-			one.triggerTime = v.triggerTime
-			one.type = v.type --1 进行中的 2是领奖的
-			one.playerInfo = {
-				icon = v.playerInfo.icon,
-				level = v.playerInfo.level,
-				power = v.playerInfo.power,
-				devote = v.playerInfo.devote,
-				staffName = v.playerInfo.staffName,
-				job = v.playerInfo.job,
-				name = v.playerInfo.name,
-			}
-			for k, v in pairs(v.playerlist) do
-				local playerInfo = {
-					icon = v.icon,
-					level = v.level,
-					power = v.power,
-					devote = v.devote,
-					staffName = v.staffName,
-					job = v.job,
-					name = v.name,
-				}
-				table.insert(tplayerlist, playerInfo)
+		if data.gangeventlist ~= nil then
+			for i=1,#data.gangeventlist do
+				local v = data.gangeventlist[i]
+				local one = MActivity.GetNewGangEvent(v)
+				info.shopEventList[one.eventsIndex] = one
 			end
-			--需求
-			one.eventInfo = {
-				--params -1为任意员工，其他为指定员工
-				type = v.eventInfo.attrInfo.type,
-				val = v.eventInfo.attrInfo.value,
-				params = v.eventInfo.attrInfo.params,
-			}
-			one.playerlist = tplayerlist
-			info.shopEventList[one.eventIndex] = one
 		end
 		info.shopEventtimes = data.gangEventTimes
 		--已加班列表
 		info.staffoverlist = {}
-		for i=1,#data.staffoverTime do
-			info.staffoverlist[i] = data.staffoverTime[i]
+		if data.staffoverTime ~= nil then
+			for i=1,#data.staffoverTime do
+				info.staffoverlist[i] = data.staffoverTime[i]
+			end
 		end
+		-- print("加班信息")
+		-- LuaUtil.DumpTable(info.staffoverlist)
 		--已参加的个人事件员工列表
 		info.staffjoinlist = {}
-		for i=1,#data.staffjoinList do
-			info.staffjoinlist[i] = data.staffjoinList[i]
+		if data.staffjoinList ~= nil then
+			for i=1,#data.staffjoinList do
+				info.staffjoinlist[i] = data.staffjoinList[i]
+			end
 		end
+		-- print("参加信息")
+		-- LuaUtil.DumpTable(info.staffjoinlist)
 		--参与过商会事件的员工列表
 		info.staffshoplist = {}
-		for i=1,#data.staffShopList do
-			info.staffshoplist[i] = data.staffShopList[i]
+		if data.staffShopList ~= nil then
+			for i=1,#data.staffShopList do
+				info.staffshoplist[i] = data.staffShopList[i]
+			end
 		end
 		--刷新红点用
-		info.isNew = data.isNew
+		info.isNew = false
 		--更新数据层
 		MActivity.UpdateAct(info.actId, actType, info)
 		_P.CheckAdventureRedPoint(data.actId, actType)
@@ -1148,6 +1114,10 @@ function _P.DoUpdate(data, isInit)
 		--奇遇活动
 		_P.DoUpdateAdventure(Define.ActivityType.Adventure, data.adventure)
 	end
+	if data.financing ~= nil then
+		--银行理财
+		_P.DoUpdateInvestment(Define.ActivityType.Investment, data.financing)
+	end
 	-- if data.limitbuy ~= nil then
 	-- 	_P.DoUpdateLimitBuy(Define.ActivityType.Shop_Limit,data.limitbuy)
 	-- else
@@ -1187,7 +1157,8 @@ function _P.OnGetSuccess(data)
 				_P.CheckJianChenRepoint(actId, info.actType)
 				-- 界面表现(招募员工返回)
 				WindowMgr.Call("UFourTraitorsActivity", "OnRecuitCallBack", data)
-				WindowMgr.Call("USuperStaffPanel", "OnRecuitCallBack", data)
+				--WindowMgr.Call("USuperStaffPanel", "OnRecuitCallBack", data)
+				WindowMgr.Call("USuperStaffDetail", "OnRecuitCallBack", data)
 			end
 		elseif info.actType == Define.ActivityType.RechargeReward_Day then
 			local one = info.list[data.index]
@@ -1261,7 +1232,7 @@ function _P.OnGetSuccess(data)
 				_P.CheckAdventureRedPoint(actId, info.actType)
 
 				--界面表现
-
+				WindowMgr.Call("UXinGuanRank", "OnGetRewardBack", data)
 			end
 		elseif info.actType == Define.ActivityType.Shop_Package then
 			if data.isGeted then
@@ -1391,6 +1362,7 @@ function _P.OnUpdateState(data)
 				}
 			end
 			_P.CheckCharityRedPoint(actId, info.actType)
+			--奇遇活动关闭
 		elseif info.actType == Define.ActivityType.Adventure then
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
@@ -1566,6 +1538,26 @@ function _P.OnUpdateState(data)
 			_P.CheckLotteryRepoint(data.actId)
 			--刷新界面
 			WindowMgr.Call("ULottery", "OnUpdateInfo", data.actId)
+		elseif info.actType == Define.ActivityType.Investment then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(data.actId)
+				MActivity.ClearForType(Define.ActivityType.Investment)
+				isNeedUpdateMainBtn = true
+			else
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+
+				--检查小红点
+				_P.CheckInvestmentRedPoint(data.actId, data)
+			end
+
+			WindowMgr.Call("UInvestmentPanel", "OnUpdateViewState", data)
 		end
 	end
 
@@ -1885,47 +1877,147 @@ end
 
 --奇遇活动完成个人事件返回
 function _P.OnAdvPerson(data)
+	--移除事件
+	-- print("完成个人事件")
+	-- LuaUtil.DumpTable(data)
+	local activityData = MActivity.GetFromId(data.actId)
+	if activityData ~= nil then
+		activityData.personalEventlist[data.eventIndex] = nil
+		activityData.hotval = data.hotval
+		activityData.personalEventTimes = data.eventtimes
+		activityData.staffjoinlist = {}
+		for k,v in pairs(data.staffjoinList) do
+			table.insert(activityData.staffjoinlist, v)
+		end
+	end
+	--更新数据层
+	MActivity.UpdateAct(data.actId, Define.ActivityType.Adventure, activityData)
 	if WindowMgr.IsCreated("UAdventureStaff") then
-		WindowMgr.Call("UAdventureStaff","OnSelfRankData",data)
+		WindowMgr.Call("UAdventureStaff","OnCompleteEvent",data)
+	end
+
+	if WindowMgr.IsCreated("UAdventureMain") then
+		WindowMgr.Call("UAdventureMain","UpdateOwnData")
 	end
 end
 
 --奇遇活动完成商会事件返回
 function _P.OnAdvGang(data)
-
+	-- print("完成商会事件返回")
+	-- LuaUtil.DumpTable(data)
+	local activityData = MActivity.GetFromId(data.actId)
+	if activityData ~= nil then
+		activityData.shopEventtimes = data.eventtimes
+		activityData.staffshoplist = {}
+		for k,v in pairs(data.staffShopList) do
+			table.insert(activityData.staffshoplist, v)
+		end
+	end
+	--更新数据层
+	MActivity.UpdateAct(data.actId, Define.ActivityType.Adventure, activityData)
+	if WindowMgr.IsCreated("UAdventureFollow") then
+		WindowMgr.Call("UAdventureFollow","OnJoinCallBack",data)
+	end
 end
 
 --奇遇领取后续事件奖励
 function _P.OnAdvGetGangReward(data)
-
+	-- print("领取后续事件奖励")
+	-- LuaUtil.DumpTable(data)
+	--刷新信息
+	MActivity.RemoveGangEvent(data.actId,data)
+	if WindowMgr.IsCreated("UAdventureFollow") then
+		WindowMgr.Call("UAdventureFollow","OnRewardCallBack",data)
+	end
 end
 
 --奇遇个人事件推送
 function _P.OnNewEvent(data)
-	local activityData = MActivity.GetFromId(data.actId)
+	-- print("个人事件推送")
+	-- LuaUtil.DumpTable(data)
+	--更新一下当前事件
+	MActivity.UpdatePersonEvent(data.actId,data)
+	--红点
+	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
+	if WindowMgr.IsCreated("UAdventureMain") then
+		WindowMgr.Call("UAdventureMain","UpdateEvent",data)
+	end
+end
 
+--奇遇热度推送
+function _P.OnHotVal(data)
+	-- print("热度值")
+	-- LuaUtil.DumpTable(data)
+	local activityData = MActivity.GetFromId(data.actId)
+	if activityData == nil then return end
+	activityData.hotval = data.lucky
+	--热度值满了红点提示
+	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
+	if WindowMgr.IsCreated("UAdventureMain") then
+		WindowMgr.Call("UAdventureMain","UpdateOwnData")
+	end
 end
 
 --奇遇商会事件推送
 function _P.OnNewGangEvent(data)
 	--剔除旧事件或者增加新事件
+	-- print("后续事件推送")
+	-- LuaUtil.DumpTable(data)
+	--更新一下当前事件
+	MActivity.UpdateGangEvent(data.actId,data)
+	--红点
+	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
+	if WindowMgr.IsCreated("UAdventureFollow") then
+		WindowMgr.Call("UAdventureFollow","UpdateEvent",data)
+	end
 end
 
 --奇遇兑换商店刷新返回
 function _P.OnAdvShopRefrash(data)
+	MActivity.SetShopAdvData(data)
+	if WindowMgr.IsCreated("UAdventureExchangePanel") then
+		WindowMgr.Call("UAdventureExchangePanel","OnRefreshShopData",data)
+	end
 end
 
 --奇遇打开排行榜返回
 function _P.OnAdvRank(data)
-
+	-- print("奇遇个人排行榜返回")
+	-- LuaUtil.DumpTable(data)
+	-- if WindowMgr.IsCreated("UAdventureExchangePanel") then
+	-- 	WindowMgr.Call("UAdventureExchangePanel","OnRefreshShopData",data)
+	-- end
 end
 
 --奇遇商城购买返回
 function _P.OnAdvShopBuy(data)
+	MActivity.UpdateAdvShop(data)
+	if WindowMgr.IsCreated("UAdventureExchangePanel") then
+		WindowMgr.Call("UAdventureExchangePanel","OnExchangeCallBack",data)
+	end
 end
 
 --奇遇员工加班返回
 function _P.OnAdvStaffOver(data)
+	local activityData = MActivity.GetFromId(data.actId)
+	if activityData ~= nil then
+		table.insert(activityData.staffoverlist, data.staffId)
+		local index = -1
+		for k,v in pairs(activityData.staffjoinlist) do
+			if v == data.staffId then
+				index = k
+			end
+		end
+		if index ~= -1 then
+			table.remove(activityData.staffjoinlist, index)
+		end
+	end
+	--更新数据层
+	MActivity.UpdateAct(data.actId, Define.ActivityType.Adventure, activityData)
+
+	if WindowMgr.IsCreated("UAdventureStaff") then
+		WindowMgr.Call("UAdventureStaff","OnJoinCallBack",data)
+	end
 end
 
 -- 每日12点重置
@@ -2037,21 +2129,91 @@ end
 --奇遇获取红点检测
 function _P.CheckAdventureRedPoint(actId, actType)
 	local isShowMainBtnRed = false
+	MActivity.AdventureShopRed = false
 	local activityData = MActivity.GetFromId(actId)
-
+	if activityData == nil then return end
 	if activityData.selfGetState == MActivity.RewardGetState.CanGet or 
 		activityData.gangGetState == MActivity.RewardGetState.CanGet or
-		activityData.isNew or activityData.hotval == 100  then--todo:maxval
+		activityData.isNew or activityData.hotval == Csv.Const(20101)[9]  then--todo:maxval
 		isShowMainBtnRed = true
 	end
 
+	for k,v in pairs(activityData.shopEventList) do
+		if v.type == 1 and v.triggerTime + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
+			MActivity.AdventureShopRed = true
+		end
+	end
+
 	MActivity.AdventureMainRed = isShowMainBtnRed
-	MActivity.AdventureShopRed = #activityData.shopEventList > 0
 	MActivity.AdventureRankRed = activityData.selfGetState == MActivity.RewardGetState.CanGet or activityData.gangGetState == MActivity.RewardGetState.CanGet
 	local sysId = Define.SysId.Adventure
 	CMain.UpdateRedpoint(MActivity.AdventureMainRed, sysId)
-
 	--界面刷新
+	if WindowMgr.IsCreated("UAdventureMain") then
+		WindowMgr.Call("UAdventureMain", "UpdateRed")
+	end
+end
+
+-- 银行投资-----------------------------------------
+function _P.CheckInvestmentRedPoint(actId, data)
+	local isShowRed = data.curIndex <= MActivity.MaxStageNum
+	local activityData = MActivity.GetFromId(actId)
+
+	if isShowRed ~= MActivity.InvestmentRed then
+		MActivity.InvestmentRed = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Investment)
+	end
+end
+
+
+-- 请求获取中奖信息
+function _M.InvestmentInfoReq()
+	_M.Send(CMD_ID.cFinancingInfo)
+end
+
+
+-- 请求投资
+function _M.InvestmentGetReq(index)
+	_M.Send(CMD_ID.cFinancingGet, {index = index})
+end
+
+
+-- 中奖信息返回
+function _P.OnGetFinancingInfo(data)
+	WindowMgr.Call("UInvestmentPanel", "InvestmentInfoBack", data)
+end
+
+
+-- 投资成功后返回
+function _P.OnSignBack(data)
+	local actId = MActivity.ActIdForType[Define.ActivityType.Investment]
+	if actId ~= nil then
+		local actInfo = MActivity.GetFromId(actId)
+		local curIndex = (data.curIndex > MActivity.MaxStageNum and MActivity.MaxStageNum) or data.curIndex
+		actInfo.curIndex = curIndex
+		actInfo.getlist = data.getlist
+	end
+
+	WindowMgr.Call("UInvestmentPanel", "OnSignBack", data)
+	_P.CheckInvestmentRedPoint(actId, data)
+end
+
+-- 新中奖信息推送
+function _P.OnNewInfoPush(data)
+	WindowMgr.Call("UInvestmentPanel", "OnNewInfoPush", data)
+end
+
+-- init回调后设置数据
+function _P.DoUpdateInvestment(actType, data)
+	MActivity.ClearForType(actType)
+
+	local info = _P.StateInfo(data, actType)
+	local curIndex = (data.curIndex > MActivity.MaxStageNum and MActivity.MaxStageNum) or data.curIndex
+	info.curIndex = curIndex
+	info.getlist = data.getlist
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckInvestmentRedPoint(info.actId, data)
 end
 
 return _M

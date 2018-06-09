@@ -26,8 +26,8 @@ local PowerCsv = "Girl_skill_type"
 --不存在最大等级飞机图片
 local NextNotExitAircraft = "Air_010"
 
-local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
-local COLOR_RED = Color(255 / 255, 76 / 255, 76 / 255, 1)
+local COLOR_GREEN = Color(93 / 255, 153 / 255, 255 / 255, 1)
+local COLOR_RED = Color(255 / 255, 93 / 255, 140 / 255, 1)
 local COLOR_BLACK = Color(0, 0, 0, 1)
 local COLOR_GRAY = Color(99 / 255, 99 / 255, 99 / 255, 1)
 
@@ -356,9 +356,8 @@ function _P.PlayStartFly(self)
 	self.propeller.Activity = false
 	self.btnUp.IsGray = true
 	self.btnUp.RaycastTarget = false
-	CCommon.CreateEffect(self.flyEffectNode, effectID, nil, function()
-		_P.PlayFly(self, true)
-	end)
+	_P.PlayFly(self, true)
+	CCommon.CreateEffect(self.flyEffectNode, effectID)
 	CCommon.CreateEffect(self.landWave, self.airCraftAnimCsv.wave_effect)
 end
 
@@ -396,16 +395,16 @@ function _P.PlayFly(self, isUp)
 	local csvEffect = Csv.Effect[effectID]
 	local time = (csvEffect and csvEffect.dura) or 1
 	local temp = self.airCraft:DOAnchorPosY(distance, time)
-	temp:OnComplete(function ()
-		local csvAircraft = Csv.Aircraft[MAircraft.AircraftID]
-		if nil ~= csvAircraft then
-			if isUp then
-				self.airCraft:DOAnchorPosY(self.flyHighestPosY, time):OnComplete(function ()
-					self.flyEffectNode:DestroyChildren()
-					_P.PlayFly(self, false)
-					_P.RefreshAircraftDisplay(self, csvAircraft)
-				end)
-			else
+	local csvAircraft = Csv.Aircraft[MAircraft.AircraftID]
+	if nil ~= csvAircraft then
+		if isUp then
+			self.airCraft:DOAnchorPosY(self.flyHighestPosY, time):OnComplete(function ()
+				self.flyEffectNode:DestroyChildren()
+				_P.PlayFly(self, false)
+				_P.RefreshAircraftDisplay(self, csvAircraft)
+			end)
+		else
+			temp:OnComplete(function ()
 				self:Unlock()
 				self.nameInfo.Activity = true
 				_P.RefreshAircraftInfo(self, csvAircraft)
@@ -413,9 +412,9 @@ function _P.PlayFly(self, isUp)
 					_P.RefreshAircraftList(self)
 				end)
 				_P.RefreshCostItem(self)
-			end
+			end)
 		end
-	end)
+	end
 end
 
 --进化飞机成功

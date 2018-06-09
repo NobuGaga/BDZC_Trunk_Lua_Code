@@ -432,12 +432,24 @@ function _M:OnCreate()
 	homeBtns[Define.SysId.Girl_Baby] = {btn = moudle:Get("Child"),btnClick = moudle:Get("Child_Click"),redpoint = moudle:Get("QP_2")}
 	local car = moudle:Get("Car")
 	homeBtns[Define.SysId.Car] = {btn = car,btnClick = moudle:Get("Car_Click"),canChange = true,actor = moudle:Get("ActorCar"),redpoint = moudle:Get("red1"),scale = moudle:Get("scale2"),tips = moudle:Get("tip2")}
-	local air = moudle:Get("Air")
-	homeBtns[Define.SysId.Aircraft] = {btn = air,btnClick = moudle:Get("Air_Click"),canChange = true,actor = moudle:Get("ActorAir"),redpoint = moudle:Get("red3"),scale = moudle:Get("scale1"),tips = moudle:Get("tip1")}
 	if GameSetting.IsiOSCommit then
 		moudle:Get("Girl_4").Activity = false
+		moudle:Get("AirNode").Activity = false
+		moudle:Get("red3").Activity = false
 	else
 		homeBtns[Define.SysId.DressUp] = {btn = moudle:Get("Girl_4"),btnClick = moudle:Get("Girl_4_Click")}
+
+		local air = moudle:Get("Air")
+		homeBtns[Define.SysId.Aircraft] = {btn = air,btnClick = moudle:Get("Air_Click"),canChange = true,actor = moudle:Get("ActorAir"),redpoint = moudle:Get("red3"),scale = moudle:Get("scale1"),tips = moudle:Get("tip1")}
+		--直升机的Material
+		CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Air", "Shaders/Air"), function(session, obj)
+			if obj == nil or session.Error ~= nil then
+				error("Load Shaders/Air error!!", session.Error)
+			else
+				air.Material = CS.UnityEngine.Object.Instantiate(obj)
+			end
+			CS.Loader.LoadSession.Push(session)
+		end)
 	end
 	local yacht = moudle:Get("Yacht")
 	homeBtns[Define.SysId.Yacht] = {btn = yacht,canChange = false,actor = moudle:Get("ActorYacht")}
@@ -450,16 +462,6 @@ function _M:OnCreate()
 			error("Load Shaders/Car error!!", session.Error)
 		else
 			car.Material = CS.UnityEngine.Object.Instantiate(obj)
-		end
-		CS.Loader.LoadSession.Push(session)
-	end)
-
-	--直升机的Material
-	CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Air", "Shaders/Air"), function(session, obj)
-		if obj == nil or session.Error ~= nil then
-			error("Load Shaders/Air error!!", session.Error)
-		else
-			air.Material = CS.UnityEngine.Object.Instantiate(obj)
 		end
 		CS.Loader.LoadSession.Push(session)
 	end)
@@ -776,7 +778,9 @@ end
 
 --刷新飞机红点
 function _R.RefreshAircraftRedPoint(self)
-	self.Moudle:Get("red3").Activity = MMain.FuncIsOpen(Define.SysId.Aircraft) and not MAircraft.IsStuding
+	if not GameSetting.IsiOSCommit then
+		self.Moudle:Get("red3").Activity = MMain.FuncIsOpen(Define.SysId.Aircraft) and (not MAircraft.IsStuding or MAircraft.IsAircraftHaveUnActivative())
+	end
 end
 
 function _R.RefreshVerdictRed(self)

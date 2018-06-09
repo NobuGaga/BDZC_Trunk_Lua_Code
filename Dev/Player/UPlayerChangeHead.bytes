@@ -13,7 +13,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MMain = JRequire "Dev.Main.MMain"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local MPlayer = JRequire "Dev.Player.MPlayer"
-local TabGroup = JRequire "Dev.Common.TabGroup"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -67,6 +67,7 @@ function _P.RefreshList(self,funcId)
 	_P.ChangeSelectHead(self,self.NowSelectId)
 
 	local textActivity = moudle:Get("ActivityDesc")
+	local imgActivity = moudle:Get("ActivityDescBg")
 	if funcId == Define.SysId.MakeUp_Activity then
 		if self.ActId ~= nil then
 			local actData = MActivity.GetFromId(self.ActId)
@@ -76,10 +77,12 @@ function _P.RefreshList(self,funcId)
 				else
 					textActivity.Text = Csv.Text("player_change14",{time1 = LuaUtil.TransToYearMonthDay(actData.state.startTime),time2 = LuaUtil.TransToYearMonthDay(actData.state.endTime)})
 				end
+				imgActivity.Activity = true
 			end
 		end
 	else
 		textActivity.Text = ""
+		imgActivity.Activity = false
 	end
 end
 

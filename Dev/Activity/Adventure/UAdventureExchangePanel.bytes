@@ -4,11 +4,14 @@ local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
 
 local NUM_TWEEN = "T_Club_NumSacle"
-local maxRefreshNum = tonumber(Csv.Const(Define.Const.RefreshShopMax))
-local costGoldNum = tonumber(Csv.Const(Define.Const.RefreshShopGoldCost))
+local maxRefreshNum = Csv.Const(20101)[7]
+local QIYUCOIN = 34102
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -21,7 +24,7 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate()
+function _M:OnCreate(data)
 	local module = self:CreateMoudle(self._RootNode, "M_Club_Exchange")
 	self.mModule = module
 
@@ -31,7 +34,18 @@ function _M:OnCreate()
 		self:Destroy()
 	end, nil, 1.2)
 
-	self.needCost = (self.exchangeData.todayRefreshCount + 1) * costGoldNum
+	self.mData = data
+	self.actId = self.mData.actId
+	self.exchangeData = data.shop
+	-- LuaUtil.DumpTable(self.exchangeData)
+	local costconf = Csv.Adventure[self.actId].refreshShopCost
+	local costGoldNum = 0
+	if #costconf <= self.exchangeData.todayRefreshCount then
+		costGoldNum = costconf[#costconf][2]
+	else
+		costGoldNum = costconf[self.exchangeData.todayRefreshCount + 1][2]
+	end
+	self.needCost = costGoldNum
 	local refreshBtn = module:Get("C_Btn_b_8")
 	refreshBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -46,10 +60,15 @@ function _M:OnCreate()
 	end)
 
 	module:Get("C_Text").Text = Csv.Text("adventure_exchange_title")
-	module:Get("integral").Text = Csv.Text("adventure_exchange_score")
+	module:Get("integral").Text = Csv.Text("adventure_exchange_score",{num = MBag.GetItemNum(QIYUCOIN)})
 	module:Get("zuanshiSX").Text = Csv.Text("adventure_exchange_money")
 	module:Get("timeSX").Text = Csv.Text("adventure_exchange_auto")
 	module:Get("C_text_8").Text = Csv.Text("adventure_exchange_refresh")
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+		if itemid == QIYUCOIN then
+			module:Get("integral").Text = Csv.Text("adventure_exchange_score",{num = MBag.GetItemNum(QIYUCOIN)})
+		end
+	end)
 
 	self.timeText = module:Get("CXNum")
 	_P.SetData(self, self.exchangeData)
@@ -64,7 +83,7 @@ function _P.OnClickRefresh(self, isSure, arg)
 		end
 
 		if self.exchangeData.todayRefreshCount < maxRefreshNum then
-			CClub.RefreshShopReq(true)
+			CActivity.ReqAdvRefrashShop(true)
 		else
 			CCommon.ShowError(Csv.Text("adventure_exchange_refreshError"))
 		end
@@ -72,7 +91,7 @@ function _P.OnClickRefresh(self, isSure, arg)
 end
 
 function _P.SetData(self, data)
-	self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
+	-- self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
 	self.mModule:Get("CSNum").Text = (maxRefreshNum - data.todayRefreshCount) .. '/' .. maxRefreshNum
 	
 	_P.OnUpdateTime(self)
@@ -120,8 +139,8 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 	local shopItem = {}
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Club_Exchange_Item", WindowType.UI, 0)
 	if itemModule ~= nil then
-		local goodConf = Csv.ClubShop[data.goodid]
-		local itemConf = Csv.Item[goodConf.itemid]		
+		local goodConf = Csv.AdventureShop[data.goodId]
+		local itemConf = Csv.Item[goodConf.itemid]	
 
 		-- 设置item数据
 		local ItemNameText = itemModule:Get("GoodName")
@@ -142,7 +161,7 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 		qualityImg.SpriteName = itemConf.colorIcon
 
 		local scoreText = itemModule:Get("Score")
-		scoreText.Text = goodConf.costPoint .. Csv.Text("adventure_exchange_fenshu")
+		scoreText.Text = goodConf.costAdventureGold .. Csv.Text("adventure_exchange_fenshu")
 
 		local discountImg = itemModule:Get("Corner")
 		local discountText = itemModule:Get("CornerText")
@@ -157,13 +176,14 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 				CCommon.ShowError(Csv.Text("adventure_exchange_numError"))
 				return
 			end
-
-			if self.exchangeData.point < goodConf.costPoint then  -- 积分不足
+			--兑换
+			local bagNum = MBag.GetItemNum(QIYUCOIN)
+			if goodConf.costAdventureGold > bagNum then
 				CCommon.ShowError(Csv.Text("adventure_exchange_pointError"))
 				return
 			end
-
-			CClub.ExchangeItemReq(data.index, 1)
+			--兑换
+			CActivity.ReqAdvShopBuy(data.index, 1)
 		end)
 		
 		_P.SetItemGray(itemModule, data, goodConf)
@@ -217,7 +237,14 @@ function _R.OnRefreshShopData(self, data)
 	CCommon.ShowError(Csv.Text("adventure_exchange_refreshSuccess"))
 
 	self.exchangeData = data
-	self.needCost = (self.exchangeData.todayRefreshCount + 1) * costGoldNum
+	local costconf = Csv.Adventure[self.actId].refreshShopCost
+	local costGoldNum = 0
+	if #costconf < self.exchangeData.todayRefreshCount then
+		costGoldNum = costconf[#costconf][2]
+	else
+		costGoldNum = costconf[self.exchangeData.todayRefreshCount][2]
+	end
+	self.needCost = costGoldNum
 	
 	_P.SetData(self, data)
 end
@@ -228,15 +255,15 @@ function _R.OnExchangeCallBack(self, data)
 	local itemModule = updateItem.module
 	if updateItem == nil or itemModule == nil then return end
 
-	local goodConf = Csv.ClubShop[data.goodid]
+	local goodConf = Csv.AdventureShop[data.goodId]
 	_P.SetItemGray(itemModule, data, goodConf)
 
 	-- 更新分数
-	local scoreText = self.mModule:Get("integralNum")
-	scoreText.Text = (data.point < 0 and 0) or data.point
+	-- local scoreText = self.mModule:Get("integralNum")
+	-- scoreText.Text = (data.point < 0 and 0) or data.point
 
 	-- 获得奖励动画
-	local ScoreTween = scoreText.CachedTran:GetJTweener(NUM_TWEEN)
+	local ScoreTween = self.mModule:Get("integral").CachedTran:GetJTweener(NUM_TWEEN)
 	ScoreTween:Play()
 
 	local effectRect = itemModule:Get("Score")

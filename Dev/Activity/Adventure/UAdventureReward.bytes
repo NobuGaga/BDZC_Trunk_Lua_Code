@@ -32,20 +32,60 @@ function _M:OnCreate(data,OnClose)
 	self.mModule = module
 
 	self.mData = data
-	LuaUtil.DumpTable(data)
+	-- LuaUtil.DumpTable(data)
 	-- 点击任意点关闭
 	self._EventNode:AddOnClick(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end)
 	self.chuli = module:Get("chuli")
-	self.chuli.Text = Csv.Text("adventure_result_time",{num = data.compatibility * 100})
+	local compatibilityInt = math.ceil(data.compatibility * 100)
+	self.chuli.Text = Csv.Text("adventure_result_time",{num = compatibilityInt})
 	module:Get("Title").Text = Csv.Text("adventure_result_title")
 	module:Get("Tips").Text = Csv.Text("adventure_result_tips")
 	module:Get("pingjia").Text = Csv.Text("adventure_result_judge")
 	module:Get("jlTitle").Text = Csv.Text("adventure_reward_tips")
+	self.pjImg = module:Get("pjImg")
+	self.adventureCsv = Csv.Adventure[self.mData.actId]
+
+	self.pjImg.SpriteName = _P.GetPjImg(self)
 	_P.OnCreateList(self, self.mData.reward)
 	self.OnCloseCall = OnClose
+end
+
+function _P.GetPjImg(self)
+	local judgePoint = self.mData.compatibility * 100
+	local targetPoint = 1
+	local pointStage = {}
+	for i=1, #self.adventureCsv.popTarget do
+		table.insert(pointStage, self.adventureCsv.popTarget[i][1])
+		if judgePoint < self.adventureCsv.popTarget[i][1] then
+			if i == 1 then
+				targetPoint = self.adventureCsv.popTarget[i][1]
+			else
+				targetPoint = self.adventureCsv.popTarget[i-1][1]
+			end
+		elseif judgePoint >= self.adventureCsv.popTarget[#self.adventureCsv.popTarget][1] then
+			targetPoint = self.adventureCsv.popTarget[#self.adventureCsv.popTarget][1]
+		end
+	end
+	
+	local switch = {
+		[pointStage[1]] = function()
+			return "qy_006_1"
+		end,
+		[pointStage[2]] = function()
+			return "qy_006"
+		end,
+		[pointStage[3]] = function()
+			return "qy_006_2"
+		end,
+	}
+
+	local func = switch[targetPoint]
+	if func then 
+		return func()
+	end
 end
 
 function _P.OnCreateList(self, listData)

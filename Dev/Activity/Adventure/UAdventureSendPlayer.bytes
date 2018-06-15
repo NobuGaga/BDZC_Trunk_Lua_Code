@@ -7,6 +7,7 @@ local TabGroup = JRequire "Dev.Common.TabGroup2"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local MStaff = JRequire "Dev.Staff.MStaff"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -28,9 +29,9 @@ function _M:OnCreate(data,staffshoplist,actvityData)
 	self.actId = actvityData.actId
 	self.mData.staffshoplist = {}
 	self.mData.staffshoplist = staffshoplist
-	-- LuaUtil.DumpTable(data)
 	self.mRawTableItems = {}
 	self.mCondition = data.eventInfo
+	module:Get("title").Text = Csv.Text("adventure_select")
 	local closeBtn = module:Get("BackBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -42,28 +43,41 @@ function _M:OnCreate(data,staffshoplist,actvityData)
 end
 
 function _P.GetSortStaffs(self,rawTable, suitData)
-	local sortTable = {}
-	local suitTable = {} --符合条件的
-	local unsuitTable = {} --不符合条件的
-	local totalTable = {}--一共的
-	--TODO：
-	-- for k,v in pairs(rawTable) do
-	-- 	--符合条件的
-	-- 	if _P.CheckIsSuit(self,suitData,v) then
-	-- 		table.insert(suitTable,v)
-	-- 	else
-	-- 		table.insert(unsuitTable,v)
-	-- 	end
-	-- end
+	local suitTable = {}
+	local unsuitTable = {}
+	--TODO:排序优化
 	for k,v in pairs(rawTable) do
-		table.insert(sortTable,v)
+		--符合条件的
+		if _P.CheckIsSuit(self,suitData,v) > 0 then
+			table.insert(suitTable,v)
+		else
+			table.insert(unsuitTable,v)
+		end
 	end
-
-	table.sort(sortTable,function(a,b)
+	
+	table.sort(suitTable,function(a,b)
 		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
 	end)
-	-- print("sortTable",#sortTable)
-	return sortTable
+	table.sort(unsuitTable,function(a,b)
+		if suitData.type <= 4 then
+			local aval = MStaff.GetAttrByType(a.id, suitData.type)
+			local bval = MStaff.GetAttrByType(b.id, suitData.type)
+			if aval == bval then
+				if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
+					return a.id > b.id
+				else
+					return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
+				end
+			else
+				return aval > bval
+			end
+		end
+	end)
+
+	for k,v in pairs(unsuitTable) do
+		table.insert(suitTable, v)
+	end
+	return suitTable
 end
 
 --检测这名员工是否符合需求
@@ -112,7 +126,10 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 	local sendBtn = itemMoudle:Get("C_Btn_b")
 	sendBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		if self.activityData.shopEventtimes <= 0 then
+		local vip = MPlayer.GetVip()
+		local extraTime = Csv.Vip[vip].adventureSubCount
+		local lefttime = Csv.Const(20101)[5] + extraTime - self.activityData.shopEventtimes
+		if lefttime <= 0 then
 			CCommon.ShowError(Csv.Text("adventure_main_limit"))
 		else
 			_P.OnClickSendItem(self,data)
@@ -179,7 +196,7 @@ end
 function _P.OnClickSendItem(self,data)
 	--请求派遣
 	CActivity.ReqAdvGangEventEnd(self.actId, self.mData.eventsIndex,data.id,self.mData.eventId)
-	-- print("派遣了id为"..data.id.."的员工")
+	-- print("派遣了id为"..data.id.."的员工".."事件index:"..self.mData.eventsIndex)
 	self:Destroy()
 end
 

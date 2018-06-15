@@ -1,6 +1,7 @@
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CTrigger = JRequire "Dev.Main.CTrigger"
 local CMain = JRequire "Dev.Main.CMain"
+local EventCenter = JRequire "Dev.EventCenter"
 
 local _M = {}
 local _P = {}
@@ -146,6 +147,8 @@ function _P.OnStaffNew(data)
 	if WindowMgr.IsCreated("UBag") then
 		WindowMgr.Call("UBag","AddNewStaff",data.id)
 	end
+
+	EventCenter.CallEventTrigger(Define.EventListenId.GetStaff, data.id)
 end
 
 function _P.OnStaffUpdateBookExp(data)

@@ -84,6 +84,8 @@ function _P.InitTopInfo(self)
 																			   endTime = LuaUtil.TransToMD(state.startTime + self.listData.settleTime)})
 
 	self.textRestTime = self.moudle:Get("textRestTime")
+	self.textRestTimeT = self.moudle:Get("textRestTimeT")
+	self.textRestTimeT.Text = Csv.Text("rankreward_count_time_another")
 	_P.RefreshTime(self)
 	if time > 0 then
 		self.timer = self.textRestTime:AddOnUpdate(function() 
@@ -99,12 +101,13 @@ end
 
 --倒计时刷新时间
 function _P.RefreshTime(self)
-	local time = self.time - HeartBeat.ServSecond() 
+	local time = self.time - HeartBeat.ServSecond()
 	local isFinish = time <= 0
 	if isFinish then
-		self.textRestTime.Text = Csv.Text("rankreward_finish")
+		self.textRestTimeT.Text = Csv.Text("rankreward_finish")
+		self.textRestTime.Text = ""
 	else
-		self.textRestTime.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("rankreward_count_time_another"))
+		self.textRestTime.Text = LuaUtil.GetTimeHMS(time)
 	end
 	return isFinish
 end

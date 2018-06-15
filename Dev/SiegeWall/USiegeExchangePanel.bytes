@@ -31,22 +31,37 @@ function _M:OnCreate(actId, stageId)
 		self:Destroy()
 	end, nil, 1.2)
 
-	-- local data = MSiege.AllStageData[stageId]
-	-- if data == nil then return end
-	-- self.mData = data
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	helpBtn:AddOnButton(function()
+		WindowMgr.Create("URuleTips",17405)
+	end)
+
+	local data = MSiege.AllStageData[stageId]
+	if data == nil then return end
+	self.mData = data
+	self.stageId = stageId
+
+	--[[
 	self.mData = {
 		point = 220,
 		itemList = {{index = 1, goodid = 34049, buyCount = 10},{index = 2, goodid = 34050, buyCount = 2},
 		{index = 3, goodid = 34051, buyCount = 3},{index = 4, goodid = 34052, buyCount = 4}}
 	}
+	--]]
 
 	module:Get("C_Text_0").Text = Csv.Text("siege_exchange_title")
 	module:Get("IntegralText").Text = Csv.Text("siege_exchange_point", {num = self.mData.point})
 
-	-- local typeList = MActivity.GetListFromType(27)
-	-- local activityData = typeList[actId]
-	-- local isShowTime = activityData.endTime > HeartBeat.ServSecond()
-	local isShowTime = 1527436799 <= HeartBeat.ServSecond()
+	local siegeExchangeConf = Csv.SiegeExchange[actId * 100 + stageId]
+	
+	self.siegeExchangeConf = siegeExchangeConf
+
+	--local typeList = MActivity.GetListFromType(27)
+	--local activityData = typeList[actId]
+		--[[
+	local isShowTime = MSiege.EndTime > HeartBeat.ServSecond()
+	--local isShowTime = 1527436799 <= HeartBeat.ServSecond()
+
 	local siegeExchangeConf = Csv.SiegeExchange[actId * 100 + stageId]
 	
 	self.siegeExchangeConf = siegeExchangeConf
@@ -54,7 +69,7 @@ function _M:OnCreate(actId, stageId)
 		local endTime = 1527436799 + siegeExchangeConf.getRewardTime
 		_P.OnStartTimer(self, endTime)
 	end
-
+	--]]
 	_P.OnCreateList(self)
 end
 
@@ -101,8 +116,25 @@ end
 
 
 function _P.OnCreateList(self)
-	local listData = self.mData.itemList
-	if listData == nil then return end
+	local listInfo = self.mData.itemList
+
+	local buyList = {}
+	if listInfo ~= nil then
+		for k,v in pairs(listInfo)do
+			buyList[v.goodid] = {index = v.index,goodid = v.goodid,buyCount = v.buyCount}
+		end
+	end
+
+	local exchangeData = self.siegeExchangeConf
+	local shopIDs = exchangeData.shopId
+	local listData = {}
+	for k,v in pairs(shopIDs)do
+		if buyList[v] ~= nil then
+			table.insert(listData,{index = k,goodid = v,buyCount = buyList[v].buyCount})
+		else
+			table.insert(listData,{index = k,goodid = v,buyCount = 0})
+		end
+	end
 
 	local itemGrid = self.mModule:Get("Content")
 	self.itemModules = {}
@@ -148,7 +180,7 @@ function _P.CreateExchangeItem(self, itemGrid, itemName, data)
 	exchangeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		--兑换
-		if data.buyCount > 0 then
+		if hasNum > 0 then
 			if costNum <= self.mData.point then
 				CSiege.BuyShopItemReq(self.stageId, data.index, 1)
 				-- _R.OnExchangeCallBack(self, {index = 2, goodid = 34050, buyCount = 3, costpoint = 110, point = 110})

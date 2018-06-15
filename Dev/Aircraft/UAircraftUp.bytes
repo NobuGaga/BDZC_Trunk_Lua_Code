@@ -26,10 +26,7 @@ local PowerCsv = "Girl_skill_type"
 --不存在最大等级飞机图片
 local NextNotExitAircraft = "Air_010"
 
-local COLOR_GREEN = Color(93 / 255, 153 / 255, 255 / 255, 1)
-local COLOR_RED = Color(255 / 255, 93 / 255, 140 / 255, 1)
 local COLOR_BLACK = Color(0, 0, 0, 1)
-local COLOR_GRAY = Color(99 / 255, 99 / 255, 99 / 255, 1)
 
 local ListMoveTime = 0.5
 
@@ -332,15 +329,13 @@ function _P.RefreshCostItem(self)
 	if MAircraft.IsMaxLevel() then
 		self.btnUp.Activity = false
 		self.textMaxLevel.Text = Csv.Text("aircraft_up_max")
-		self.textCostNum.Text = Csv.Text("aircraft_up_cost", {need = Csv.Text("aircraft_up_max_cost"), own = itemNum})
-		self.textCostNum.Color = COLOR_GRAY
+		self.textCostNum.Text = Csv.Text("aircraft_up_cost_max", {need = Csv.Text("aircraft_up_max_cost"), own = itemNum})
 	else
 		self.btnUp.Activity = true
 		self.textMaxLevel.Text = ""
 		local needNum = MAircraft.UpCost[CostItemID] or 0
-		self.textCostNum.Text = Csv.Text("aircraft_up_cost", {need = needNum, own = itemNum})
 		local isEnough = itemNum >= needNum
-		self.textCostNum.Color = (isEnough and COLOR_GREEN) or COLOR_RED
+		self.textCostNum.Text = Csv.Text(((isEnough and "aircraft_up_cost_enough") or "aircraft_up_cost_not_enough"), {need = needNum, own = itemNum})
 		self.btnUp.IsGray = not isEnough
 		self.btnUp.RaycastTarget = isEnough
 	end

@@ -104,8 +104,10 @@ function _M:OnCreate(activityId, selectData)
 	self.curSelectToggle = MActivity.XinGuanTypeEnum.Personal
 	self.ScreenWidth = CS.JGui.JGuiManager.GuiRoot.Width
 	self.ownRankInfo = module:Get("own")
-	self.curNameText = module:Get("Num")
+	self.curNameText = module:Get("Name")
+	self.curIndexText = module:Get("Num")
 	self.curPointText = module:Get("Fraction")
+	self.curPointNumText = module:Get("FractionNum")
 	self.personText = module:Get("PersonText")
 	self.personText.Text = Csv.Text("xinguan_rank_mine_title")
 	self.gangText = module:Get("GangText")
@@ -241,12 +243,16 @@ function _P.SetOwnRankData(self)
 	if not curRankData then return end
 
 	local index = (curRankData.index == 0 and "10000+") or curRankData.index
-	self.curNameText.Text = Csv.Text("xinguan_battle_num", {num = index, name = curRankData.name})
-	self.curPointText.Text = Csv.Text("xinguan_battle_point") .. curRankData.score
+	self.curIndexText.Text = Csv.Text("xinguan_battle_num", {num = index})
+	self.curNameText.Text = curRankData.name
+	self.curPointText.Text = Csv.Text("xinguan_battle_point")
+	self.curPointNumText.Text = curRankData.score
 
 	local isShow = curRankData.name and curRankData.name ~= ""
+	self.curIndexText.Activity = isShow
 	self.curNameText.Activity = isShow
 	self.curPointText.Activity = isShow
+	self.curPointNumText.Activity = isShow
 end
 
 

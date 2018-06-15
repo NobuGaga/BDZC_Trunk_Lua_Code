@@ -190,7 +190,8 @@ function _M:OnCreate(data)
 
 ----------------------------------------------------------------
 	local fortuneText = moudle:Get("fortuneText")
-	local energyText = moudle:Get("energy_text")
+	local energyText = moudle:Get("energy_num")
+	moudle:Get("energy_text").Text = Csv.Text("Wharf_energy")
 	local vipText = moudle:Get("VIP_text")
 	local fortuneBtn = moudle:Get("FortuneBtn")
 	local findBtn = moudle:Get("C_Btn1")
@@ -265,7 +266,7 @@ function _M:OnCreate(data)
 		if MWharf.energyTimes <= 0 then
 			--self.ChooseMoudle:UpdateEnergyTick()
 			local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
-			energyText.Text = Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+			energyText.Text = luaUtil.GetTimeHMS(leftTime)--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
 		end
 	end)
 
@@ -474,13 +475,13 @@ function _R.RefreshTili(self)
 	 local maxEnergyMax = Csv.Vip[MPlayer.GetVip()].wharfEnergt
 
 	if MWharf.energyTimes > 0 then
-		energyText.Text = Csv.Text("Wharf_energy",{value = MWharf.energyTimes.."/"..maxEnergyMax})--"体力："..MWharf.energyTimes.."/"..MWharf.EnergyMax
+		energyText.Text = MWharf.energyTimes.."/"..maxEnergyMax--"体力："..MWharf.energyTimes.."/"..MWharf.EnergyMax
 		findText.Text =  Csv.Text("Wharf_find")--寻访
 		oneKeyBtn.IsGray = false
 		oneKeyBtn.RaycastTarget = true
 	else
 		local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
-		energyText.Text =  Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+		energyText.Text =  luaUtil.GetTimeHMS(leftTime)--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
 		findText.Text = Csv.Text("Wharf_restore")--"恢复"
 
 		oneKeyBtn.IsGray = true

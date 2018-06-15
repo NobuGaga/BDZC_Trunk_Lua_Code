@@ -46,6 +46,7 @@ function _M:OnCreate(...)
 	moudle:Get("attack").Text = Csv.Text("relations_attackTN")
 	moudle:Get("Skill").Text = Csv.Text("relations_skillTN")
 	moudle:Get("NumText").Text = Csv.Text("relations_point")
+	moudle:Get("NumText_0").Text = Csv.Text("relations_point")
 
 	-- moudle:Get("C_Btn_e"):AddOnButton(function()
 	-- 	SoundMgr.Play(10001)
@@ -113,7 +114,7 @@ function _P.RefreshView(self)
 		moudle:Get("Num").Text = data.otherpoint
 		moudle:Get("Staff").Text = Csv.Text("relations_staffnum")
 		moudle:Get("StaffNum").Text = Csv.Text("company_exp",{num = data.staffnum - data.surnum,max = data.staffnum})
-		moudle:Get("NameText").Text = Csv.Text("relations_namePointA",{num = data.mypoint})
+		moudle:Get("NameText").Text = data.mypoint
 		local csvStaff = Csv.Personnel[data.mstaffinfo.staffid]
 		moudle:Get("StaffName").Text = MStaff.GetStaffName(csvStaff.id)
 		local staffData = MStaff.StaffTable[csvStaff.id]

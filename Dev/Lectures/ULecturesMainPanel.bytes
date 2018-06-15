@@ -70,6 +70,13 @@ function _M:OnCreate()
 	_P.SetPlayerData(self)
 	_P.SetOneKeyData(self)
 	_P.SetCityData(self)
+	_P.RefreshVip(self)
+	
+	self:RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
+		if self.mModule ~= nil then
+			_P.RefreshVip(self)
+		end
+	end)
 end
 
 
@@ -102,7 +109,7 @@ function _P.SetPlayerData(self)
 	local roleLevelUpRect = module:Get("RoleLevelUp")
 
 	module:Get("RloeLv").Text = Csv.Text("player_level", {name = nowCsv.name})
-	module:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetHeadIcon()
+	module:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetSHeadIcon()
 	module:Get("RoleName").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
 	module:Get("AssetIcon_4").SpriteName = 'ygzz_001'
 	module:Get("AssetIcon_1").SpriteName = 'yg_tb_001_1'
@@ -396,7 +403,7 @@ function _R.OnBattleResult(self, data)
 		end
 	end
 
-	self.mModule:Get("ExpNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+	self.mModule:Get("AssetNum_1").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
 	_P.SetAutoBtnState(self)
 end
 
@@ -406,7 +413,7 @@ function _R.OnAutoBttleResult(self, data)
 	if data.state == MLectures.ResultState.Win then
 		_P.SetCityData(self)
 	end
-	self.mModule:Get("ExpNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
+	self.mModule:Get("AssetNum_1").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
 end
 
 
@@ -426,6 +433,25 @@ function _P.CheckBtnIsClick(delayTime)
 
 	lastTime = UnityTime.time
 	return true
+end
+
+
+function _P.RefreshVip(self)
+	local vip = MPlayer.GetVip()
+	local vipConf = Csv.Vip[vip]
+	if vipConf ~= nil then
+		local boxImg = self.mModule:Get("VipBox")
+		boxImg.Activity = vipConf.imgBord
+		if vipConf.imgBord ~= nil then
+			boxImg.SpriteName = vipConf.imgBord
+		end
+
+		local numImg = self.mModule:Get("VipNum")
+		numImg.Activity = vipConf.icon
+		if vipConf.icon ~= nil then
+			numImg.SpriteName = vipConf.icon
+		end
+	end
 end
 
 

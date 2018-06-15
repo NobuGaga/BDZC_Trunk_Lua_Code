@@ -63,16 +63,37 @@ function _M:OnCreate(data,istreasure)
 	local DonateBtn = moudle:Get("Icon3")
 
 	GetBtn:AddOnButton(function()
-		
+		SoundMgr.Play(10001)
+		self:Destroy()
 	end,nil,0.9)
 
 	OpenBtn:AddOnButton(function()
 		
 		local udiskData = Csv.SiegeTreasury[data.uDiskID]
-		local keyCount = MBag.GetItemNum(udiskData.passwordId)
-		print("udiskID________",data.uDiskID,keyCount)
 
-		CSiege.OpenUdiskReq(data.uDiskID,MPlayer.GetId(),istreasure)
+		local udiskItem = Csv.Item[data.uDiskID]
+		local keyItem = Csv.Item[udiskData.passwordId]
+		local costItem = Csv.Item[udiskData.passwordBuyid]
+
+		local keyCount = MBag.GetItemNum(udiskData.passwordId)
+		local has = MBag.GetItemNum(costItem.id)
+
+		if keyCount >= 1 then
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					CSiege.OpenUdiskReq(data.uDiskID,MPlayer.GetId(),istreasure)
+				end
+			end, {content = Csv.Text("siege_openUdisk_bypass", {num =1 ,item = keyItem.name,name = udiskItem.name})})
+		elseif has >= udiskData.passwordBuyCount then
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					CSiege.OpenUdiskReq(data.uDiskID,MPlayer.GetId(),istreasure)
+				end
+			end, {content = Csv.Text("siege_openUdisk_bygold", {num =udiskData.passwordBuyCount ,item = costItem.name,name = udiskItem.name})})
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = costItem.name}))
+		end
+
 	end,nil,0.9)
 
 	DonateBtn:AddOnButton(function()

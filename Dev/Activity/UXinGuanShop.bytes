@@ -208,7 +208,8 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 	end
 
 	-- 添加环形特效
-	CCommon.CreateItemLight(iconBox, Define.SysId.XinGuan1, data.itemId)
+	local light = CCommon.CreateItemLight(iconBox, Define.SysId.XinGuan1, data.itemId)
+	light.SelfRect.SizeDelta = Vector2(160,160)
 
 	local priceRect = itemModule:Get("Need")
 	local getText = itemModule:Get("GetText")

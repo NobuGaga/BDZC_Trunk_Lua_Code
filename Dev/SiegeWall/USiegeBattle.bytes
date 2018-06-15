@@ -25,7 +25,7 @@ local FIGHT_ROUND = Csv.Const(15005)
 
 local STRENGTH_BUFF_ID = 1
 local KILL_BUFF_ID = 2
-local KILL_ITEM_ID = 34013
+local KILL_ITEM_ID = 34103
 --------------------------
 local DEFAULT_BODY_NAME = "staff_choose"
 
@@ -51,13 +51,17 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.CloseView(self)
+	self:Destroy()
+end
+
 function _R.InitFight(self,data)
 	_P.ReadyFight(self,data.boss)
 	_P.ShowRank(self,data.hurtList)	
 	_P.ShowOwnHurt(self,data.ownHurt)
 end
 
-function _R.RefreshBuff(self,data)
+function _R.RefreshBuff(self)
 	_P.RefreshBuffs(self)
 end
 
@@ -73,13 +77,17 @@ end
 function _R.UpdateFight(self,data)
 	_P.IsFighting(self)
 	self:Lock()
-
 	_P.ShowFight(self, data, function()
 		if self.mMoudle ~= nil then
 			self:Unlock()
-			WindowMgr.Create("USiegeBattleResult",data)
+			if data.isKill then
+				WindowMgr.Create("USiegeBattleReward",data,self.mBossData.id)
+			else
+				WindowMgr.Create("USiegeBattleResult",data)
+			end
 		end
 	end)
+	_P.ShowOwnHurt(self,data.hurt)
 	_P.ShowRank(self,data.hurtList)	
 end
 
@@ -146,7 +154,7 @@ function _M:OnCreate(data)
 	self.mSmallTitle2 = smallTitleBg2
 
 	heroPowerText.Text = Csv.Text("finance_heroPowerName")
-	diyuText.Text = Csv.Text("finance_diyuRank")
+	diyuText.Text = Csv.Text("siege_fight_rank_title")
 	leftTitle1.Text = Csv.Text("finance_di")
 	rightTitle1.Text = Csv.Text("finance_bo")
 	smallTitle2.Text = bossData.name
@@ -327,8 +335,10 @@ function _P.OnBuyKillBuff(self,index)
 	
 	local hasItem = MBag.GetItemNum(KILL_ITEM_ID)
 	if hasItem > 0 then
-		CSiege.ReqBuyBuffInBattle(STRENGTH_BUFF_ID)
+		CSiege.ReqUsekillBuff(STRENGTH_BUFF_ID)
 	else
+		WindowMgr.Create("USiegeTreasurePanel",MSiege.ActivityId,MSiege.Phase,true)
+		--[[
 		local _cost = _P.GetBuffCost(data,buffInfo)
 		local itemDate = Csv.Item[Define.AssetsType.Gold]
 		local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
@@ -346,6 +356,7 @@ function _P.OnBuyKillBuff(self,index)
 				end
 			end,{content = Csv.Text("siege_buybuff_Tips2",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
 		end
+		--]]
 	end
 end
 
@@ -432,11 +443,6 @@ function _P.ReadyFight(self,data)
 
 	MSiege.isFighting = false
 	_P.IsFighting(self,data)
-
-	--副本胜利
-	if data.bossBlood.ncur <= 0 then
-		WindowMgr.Create("USiegeBattleResult",data)
-	end
 end
 
 function _P.IsFighting(self)
@@ -489,6 +495,8 @@ function _P.ShowFight(self,data,callBack)
 		end)
 
 		t:SetTarget(info.BloodText.CachedTran)
+
+		MSiege.BossPower.ncur = startBlood
 	end
 
 
@@ -574,12 +582,12 @@ end
 
 
 -------------数据---------------------------------------------
-function _P.ShowOwnHurt(self,hurt)
+function _P.ShowOwnHurt(self,_hurt)
 	local moudle = self.mMoudle
 	local ownHurt = moudle:Get("OwnInfoText")
 	local ownName = moudle:Get("OwnNameText")
 	ownName.Text = MPlayer.GetName()
-	ownHurt.Text = Csv.Text("finance_battleget_fb2",{num = hurt})
+	ownHurt.Text = Csv.Text("siege_fight_rank_value",{name = self.mBossData.name,hurt = _hurt})
 end
 
 function _P.ShowRank(self,listData)
@@ -600,18 +608,18 @@ function _P.ShowRank(self,listData)
 	local itemTable = {}
 	if rankData ~= nil then
 		for k,v in pairs(rankData) do
-			_P.CreatRankItem(content,v)
+			_P.CreatRankItem(self,content,v)
 		end
 	end
 end
 
-function _P.CreatRankItem(content,data)
+function _P.CreatRankItem(self,content,data)
 	local itemMoudle = JGuiManager.GetMoudle(content,"M_FB_PKRankItem", WindowType.UI, 10)
 	
 	local name = itemMoudle:Get("nameText")
 	local infoText = itemMoudle:Get("InfoText")
 
-	infoText.Text = Csv.Text("finance_battleget_fb2",{num = data.hurt})---"对非法机构抵御了"..data.hurt
+	infoText.Text = Csv.Text("siege_fight_rank_value",{name = self.mBossData.name,hurt = data.hurt})---"对非法机构抵御了"..data.hurt
 	name.Text = data.index.."."..data.name
 
 	itemMoudle.SelfRect.CachedTran:SetSiblingIndex(0)

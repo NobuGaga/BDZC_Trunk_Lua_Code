@@ -227,7 +227,7 @@ function _R.OnLotteryNumGet(self, actId, getNum, getRewards)
 						local effect
 						SoundMgr.PlaySystem(10004)
 						SoundMgr.Play(11000)
-						effect = CCommon.CreateEffect(self.NumItemRoot, GTE_EFFECT_ID, widgetInfo.getedSp.LocalPosition, function( ... )	
+						effect = CCommon.CreateEffect(widgetInfo.itemBG, GTE_EFFECT_ID, widgetInfo.getedSp.LocalPosition, function( ... )	
 							if effect ~= nil then
 								effect:Destroy()
 							end
@@ -324,9 +324,9 @@ function _P.DoUpdateTodayNum(self)
 						
 					for index = 1,NUM_REWARD_COUNT do
 						local widgetInfo = self.NumGetList[index]
-						local num = lotteryCsv.num[index]
-						widgetInfo.proText.Text = Csv.Text("lottery_8", {cur = info.todayNum, max = num})
+						local num = lotteryCsv.num[index]						
 						if info.todayNum >= num then
+							widgetInfo.proText.Text = Csv.Text("lottery_8", {cur = info.todayNum, max = num})
 							if info.numGets[num] then 
 								widgetInfo.getedSp.Activity = true
 							else
@@ -334,6 +334,7 @@ function _P.DoUpdateTodayNum(self)
 								widgetInfo.getedSp.Activity = false
 							end
 						else
+							widgetInfo.proText.Text = Csv.Text("lottery_13", {cur = info.todayNum, max = num})
 							isHaveCanGet = true
 							widgetInfo.getedSp.Activity = false
 						end
@@ -374,7 +375,8 @@ function _P.DoUpdateTime(self)
 	end
 end
 
-local ITEM_LIGHT_SIZE = Vector2(126, 126)
+local ITEM_LIGHT_SIZE = Vector2(140, 140)
+local ITEM_LIGHT_SIZE2 = Vector2(170, 170)
 function _P.ChangeActID(self)
 	local lotteryCsv = Csv.Lottery[self.ActId]
 	if lotteryCsv ~= nil then
@@ -413,6 +415,7 @@ function _P.ChangeActID(self)
 			end)
 			local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
 			if itemLightSp ~= nil then
+				itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE2
 				table.insert(self.ItemLight, itemLightSp)
 			end
 		end
@@ -662,7 +665,6 @@ function _M:OnCreate()
 	end)
 	self.TimeTips = moudle:Get("TimeTips")
 	self.NumGetList = {}
-	self.NumItemRoot = moudle:Get("Num_Info")
 	for i=1,NUM_REWARD_COUNT do
 		table.insert(self.NumGetList, {
 			itemBG = moudle:Get("Num_Item"..i),

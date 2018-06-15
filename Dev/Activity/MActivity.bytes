@@ -44,6 +44,9 @@ _M.AdvReqTypeEnum = {
 	Age = 7,		--年龄
 	YuanGong = 8,	--员工
 	Job = 9,		--职位
+	cloth = 10,		--衣服颜色
+	tile = 11,		--领带颜色
+	glass = 12, 	--戴眼镜
 }
 
 _M.AdvSexEnum = {
@@ -57,6 +60,12 @@ _M.CommerceRank = {
 	[Csv.Const(85)] = true,
 	[Csv.Const(86)] = true,
 	[Csv.Const(92)] = true,
+}
+
+_M.FuturesState = {
+	DEF = 1, -- 未抽取
+	CHOU=2, -- 已抽取
+	RECHARGE=3 -- 已充值
 }
 
 _M.ActList = {}
@@ -73,6 +82,8 @@ _M.XinGuanRed = false
 _M.SevenDayTargetPageRedIndex = -1	-- 七日目标今日目标页签红点Index
 _M.MaxStageNum = tonumber(Csv.Const(20151))
 _M.InvestmentRed = false
+_M.FuturesSelectIndex = 0 -- 操纵期货 选择的文件
+_M.FuturesReward = {} -- 操纵期货中奖信息
 
 function _M.Clean()
 	_M.ActList = {}
@@ -87,6 +98,8 @@ function _M.Clean()
 	_M.LotteryMessage = {}
 	_M.XinGuanRed = false
 	_M.InvestmentRed = false
+	_M.FuturesSelectIndex = 0
+	_M.FuturesReward = {}
 end
 
 function _M.ClearForType(actType)
@@ -263,9 +276,11 @@ end
 
 function _M.UpdateGangEvent(actId,data)
 	if _M.ActList[actId] ~= nil then
-		local event = _M.GetNewGangEvent(data)
-		_M.ActList[actId].shopEventList[event.eventsIndex] = event
-		_M.ActList[actId].isNew = true
+		for k,v in pairs(data.gangeventlist) do
+			local event = _M.GetNewGangEvent(v)
+			_M.ActList[actId].shopEventList[event.eventsIndex] = event
+			_M.ActList[actId].isNew = true
+		end
 	end
 end
 
@@ -302,8 +317,6 @@ function _M.GetNewPersonEvent(data)
 end
 
 function _M.GetNewGangEvent(data)
-	-- print("商会事件")
-	-- LuaUtil.DumpTable(data)
 	local one = {}
 	local tplayerlist = {}
 	one.eventId = data.eventId
@@ -375,7 +388,6 @@ end
 
 --奇遇刷新后商店数据更新
 function _M.SetShopAdvData(data)
-	LuaUtil.DumpTable(data)
 	_M.ActList[data.actId].shop = data
 end
 
@@ -384,6 +396,19 @@ function _M.GetAdvOverList(actId)
 	if _M.ActList[actId] ~= nil then
 		return _M.ActList[actId].staffoverlist
 	end
+end
+
+function _M.GetFuturesData()
+	local typeId = Define.ActivityType.Futures
+	local data = _M.GetListFromType(typeId)
+	if data == nil then
+		return nil
+	end
+	local activityId = _M.ActIdForType[typeId]
+	if data[activityId] == nil then
+		return nil
+	end
+	return data[activityId]
 end
 
 return _M

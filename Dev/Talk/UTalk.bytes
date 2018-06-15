@@ -314,10 +314,20 @@ function _M:OnCreate(chooseFuncId)
 	
 		local index = 0
 		for k,v in pairs(funcs) do
-			index = index + 1
-			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("Text"..index), v.name)
-			if lastChoose == v.id then
-				isHave = true
+			if v.id == 10705 then
+				if MPlayer.IsCross() then
+					index = index + 1
+					tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("Text"..index), v.name)
+					if lastChoose == v.id then
+						isHave = true
+					end
+				end
+			else
+				index = index + 1
+				tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("Text"..index), v.name)
+				if lastChoose == v.id then
+					isHave = true
+				end
 			end
 		end
 		if not isHave then

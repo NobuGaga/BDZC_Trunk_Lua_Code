@@ -35,11 +35,12 @@ function _M:OnCreate(index)
 	for _, staff in ipairs(staffList) do
 		local staffMoudle = JGuiManager.GetMoudle(content, "M_Dispatch_Aca_Item")
 		local csvStaff = Csv.Personnel[staff.id]
-		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[staff.color]
-		staffMoudle:Get("Head").SpriteName = csvStaff.asset
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[staff.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset3
 		staffMoudle:Get("textName").Text = csvStaff.name
-		staffMoudle:Get("textLevel").Text = Csv.Text("school_level", {num = staff.level})
+		staffMoudle:Get("textLevel").Text = staff.level
 		staffMoudle:Get("textAllQuality").Text = Csv.Text("school_allQuality", {num = MStaff.GetAllApitude(staff.id)})
+		staffMoudle:Get("textLevelT").Text = Csv.Text("palyer_levelup")
 		staffMoudle:Get("textAllPower").Text = Csv.Text("school_allPower", {num = MStaff.GetAllAttr(staff.id)})
 		staffMoudle:Get("textSkillExp").Text = Csv.Text("school_skillExp", {num = MStaff.GetStaffDataByID(staff.id).skillexp})
 		staffMoudle:Get("textExp").Text = Csv.Text("school_exp", {num = staff.bookexp})

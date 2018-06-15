@@ -45,7 +45,9 @@ function _M:OnCreate(data)
 	moudle:Get("text1").Text = levelCsv.name
 	moudle:Get("text2").Text = Csv.Text("player_ID", {id = data.id})
 	local serverInfo = CLogin.GetServerInfoByID(data.serverId)
-	moudle:Get("text3").Text = Csv.Text("player_area", {name = serverInfo.name})
+	if serverInfo ~= nil and serverInfo.name ~= nil then
+		moudle:Get("text3").Text = Csv.Text("player_area", {name = serverInfo.name})
+	end
 	local chenghaoText = moudle:Get("scaleText")
 	local chenghaoBG = moudle:Get("scaleBG")
 	if data.titleId ~= nil then

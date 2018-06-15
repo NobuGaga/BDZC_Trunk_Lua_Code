@@ -12,6 +12,13 @@ local CSiege = JRequire"Dev.SiegeWall.CSiege"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local luaUtil = JRequire"Libs.LuaUtil"
 local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local FIND_EFFECT_ID = 10153
+
+local BUFF_TEAM_ID = 4
+local BUFF_ALLKILL_ID = 5
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -22,6 +29,13 @@ function _M:Dispatch(funcName, ...)
 	if fun ~= nil then 
 		fun(self, ...)
 	end
+end
+
+function _R.UpdateMain(self)
+	--请求初始化信息
+	CSiege.ReqSiegeInit()
+	--请求阶段信息
+	CSiege.ReqSiegeStage()
 end
 
 function _R.InitSiege(self,data)
@@ -39,28 +53,30 @@ function _R.UpdateActionPoint(self)
 	self.mActionPoint.Text = MSiege.ActionPoint
 end
 
-
-
 function _R.GetProtest(self,data)
 
+	local actorPanel = self.mMoudle:Get("ActorPanel")
 	--播放特效动画
-
-	if data.type == 1 then
-		--请求进入boss
-		if data.boss ~= nil then
-			CSiege.ReqInitFight(data.boss.indexID)
-			WindowMgr.Create("USiegeBattle",data.boss)
+	local effectMoudle = CCommon.CreateEffect(actorPanel,FIND_EFFECT_ID,nil,function()
+		print("!!!!!!!!!!!!!!!!!!!!!!!!")
+		self:Unlock()
+		if data.type == 1 then
+			--请求进入boss
+			if data.boss ~= nil then
+				CSiege.ReqInitFight(data.boss.indexID)
+				WindowMgr.Create("USiegeBattle",data.boss)
+			end
+		elseif data.type == 2 then
+			if data.uDiskID ~= nil then
+				WindowMgr.Create("UGetUDisk",data,false)
+			else
+				print("没有U盘id__________",data.uDiskID)
+			end
+			
+		elseif data.type == 3 then
+			WindowMgr.Create("UGetItems",data)
 		end
-	elseif data.type == 2 then
-		if data.uDiskID ~= nil then
-			WindowMgr.Create("UGetUDisk",data,false)
-		else
-			print("没有U盘id__________",data.uDiskID)
-		end
-		
-	elseif data.type == 3 then
-		WindowMgr.Create("UGetItems",data)
-	end
+	end)
 end
 
 function _M:OnCreate()
@@ -77,11 +93,11 @@ function _M:OnCreate()
 	local helpBtn = moudle:Get("helpBtn")
 	helpBtn:AddOnButton(function()
 		SoundMgr.Play(10002)
-		if phase == 1 then
+		if self.mSelectPhase == 1 then
 			WindowMgr.Create("URuleTips",17401)
-		elseif phase == 2 then
+		elseif self.mSelectPhase == 2 then
 			WindowMgr.Create("URuleTips",17402)
-		elseif phase == 3 then
+		elseif self.mSelectPhase == 3 then
 			WindowMgr.Create("URuleTips",17403)
 		end
 		
@@ -98,11 +114,18 @@ function _M:OnCreate()
 	waitTime.Activity = false
 	recoveTime.Activity = false
 
+	moudle:Get("TimeText_0").Text = Csv.Text("siege_activity_end",{time = luaUtil.TransToMD(MSiege.EndTime)})
+
 	-----------进行中---------------------------------------------------
 	local fightBtn = moudle:Get("diyu")
 
 	fightBtn:AddOnButton(function()
-		CSiege.ReqProtest()
+		if MSiege.ActionPoint > 0 then
+			self:Lock()
+			CSiege.ReqProtest()
+		else
+			_P.BuyAction(self)
+		end
 		--_R.GetProtest(self,{type = 2,jifen = 1,score = 1,items = nil})
 	end)
 
@@ -135,19 +158,16 @@ function _M:OnCreate()
 			endTime = 1527091200, state = 3, startTime = 1527091200}}, self.mSelectPhase)
 	end)
 
-	--请求初始化信息
-	CSiege.ReqSiegeInit()
-	--请求阶段信息
-	CSiege.ReqSiegeStage()
+	_R.UpdateMain(self)
 
 	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
 		if not self.isGetStateMsg then
 			return
 		end 
 
+		local phase = MSiege.Phase
 		local leftTime = MSiege.RecoveTime - HeartBeat.ServSecond()
 		local openLeftTime = MSiege.OpenTime - HeartBeat.ServSecond()
-
 		if MSiege.OpenTime > 0 then
 			if self.mSelectPhase == phase  then
 				if openLeftTime > 0 then
@@ -162,12 +182,13 @@ function _M:OnCreate()
 				waitTime.Activity = false
 			end
 		else
+			
 			waitTime.Activity = false
 			if MSiege.RecoveTime > 0 then
 				if leftTime > 0 then
 					if self.mSelectPhase == phase then
 						recoveTime.Activity = true
-						_P.UpdateActionPoint(self)
+						--_P.UpdateActionPoint(self)
 						recoveTime.Text = Csv.Text("siege_next_protest",{time = luaUtil.GetTimeHMS(leftTime)})
 					else
 						recoveTime.Activity = false
@@ -190,12 +211,48 @@ function _P.Init(self)
 	_P.ShowTopImg(self,moudle)
 	_P.SelectNowPhase(self,phase)
 
-	MSiege.RecoveTime = 3800 + HeartBeat.ServSecond()
 	_P.ReduceTime(self)
 
 	self.mActionPoint.Text = MSiege.ActionPoint
 
 	self.isGetStateMsg = true
+end
+
+function _P.BuyAction(self)
+	local hasCost = MBag.GetItemNum(Define.AssetsType.Gold)
+	local costItem = Csv.Item[Define.AssetsType.Gold]
+
+	local SiegeData = Csv.Siege[MSiege.ActivityId]
+	local costList = nil
+	if SiegeData ~= nil then
+		costList = SiegeData.cost
+	end
+
+	local costNum = 0
+	if costList ~= nil then
+		for k,v in pairs(costList)do
+			if v[1] == MSiege.ActionBuy+1 then
+				costNum = v[2]
+			end
+		end
+		if costNum <= 0 then
+			costNum = costList[#costList][2]
+		end
+	end
+
+	local tipsStr = ""
+	if hasCost >= costNum then
+		tipsStr = Csv.Text("siege_buy_action1", {cost = costNum,num = 1})
+	else
+		tipsStr = Csv.Text("siege_buy_action2", {cost = costNum,num = 1})
+	end
+
+	CCommon.CheckTips(function(isSure, arg)
+		if isSure then
+			-- 开启u盘
+			CSiege.ReqBuyAction()
+		end
+	end, {content = tipsStr})
 end
 
 function _P.ShowTopImg(self,moudle)
@@ -262,6 +319,7 @@ function _P.ShowWaitRect(self,moudle,index)
 	wait.Activity = true
 	IngRect.Activity = false
 	End.Activity = false
+	self.mActionPoint.Activity = false
 	self.mDownRect.Activity = false
 
 	local waitText = moudle:Get("WaitText")
@@ -320,6 +378,7 @@ function _P.ShowEndRect(self,moudle,index)
 	wait.Activity = false
 	IngRect.Activity = false
 	End.Activity = true
+	self.mActionPoint.Activity = false
 	self.mDownRect.Activity = true
 
 	local endText = moudle:Get("EndText")
@@ -367,8 +426,13 @@ function _P.ShowIngRect(self,moudle,index)
 			diyuBtn.Activity = false
 			actionTime.Activity = false
 			openTime.Activity = true
-		
+			MSiege.RecoveTime = 0
+			self.mActionPoint.Activity = false
+			self.mRecoveTime.Activity = false
+
 			openTime.Text = Csv.Text("siege_open_time",{time1 = SiegeData.beginTime,time2 = SiegeData.endTime})
+		else
+			self.mActionPoint.Activity = true
 		end
 	else
 		print("找不到对应的数据id_______",activityId)
@@ -389,7 +453,18 @@ function _P.ShowIngRect(self,moudle,index)
 		local slider = moudle:Get("StopLossSlider1")
 		local sliderText = moudle:Get("StopLossSliderText")
 		local lossText = moudle:Get("StopLossText")
+		local bosshead = moudle:Get("BossHead")
+
 		bg.SpriteName = SiegeData.phaseBg1
+
+		local bossIDs = SiegeData.phaseBossId1
+		local bossData = nil
+		if bossIDs ~= nil then
+			bossData = Csv.SiegeBoss[bossIDs]
+		end
+		if bossData ~= nil then
+			bosshead.SpriteName = bossData.iconRound
+		end
 
 		if MSiege.Progress[1] ~= nil then
 			local progress = MSiege.Progress[1].progressCur/MSiege.Progress[1].progressMax
@@ -401,11 +476,11 @@ function _P.ShowIngRect(self,moudle,index)
 					local bossProgress = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
 
 					slider.FillAmount = bossProgress
-					sliderText.Text = bossData.name.."："..math.ceil(bossProgress*100).."%"
+					sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100).."%"
 				end
 			else
 				slider.FillAmount = progress
-				sliderText.Text = Csv.Text("siege_progress_1",{num = progress*100})
+				sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100)})
 			end
 		else
 			print("该阶段没有进度！_____1")
@@ -414,34 +489,69 @@ function _P.ShowIngRect(self,moudle,index)
 		if MSiege.LastUdisk ~= nil then
 			local lossprop = (MSiege.LastUdisk.nmax - MSiege.LastUdisk.ncur)/MSiege.LastUdisk.nmax * 100
 			if lossprop ~= nil then
-				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = lossprop})
+				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = string.format("%.1f",lossprop)})
 			end
 		end
 	elseif phase == 2 then
 		phaseboss2.Activity = true
 		local lossText = moudle:Get("StopLossText_0")
 		bg.SpriteName = SiegeData.phaseBg2
+		local ownTeam = MSiege.GetTeamType(MCommerce.MyCommerceId)
 		local progressTab = {}
+		local isBigBossDie = false
 		for i = 1,3,1 do
-			local _slider = moudle:Get("OneByOneSlider"..i)
+			local _slider = moudle:Get("OneByOneSliderBg"..i)
 			local _sliderText = moudle:Get("OneByOneSliderText"..i)
 			local _head = moudle:Get("BossHead"..i)
+			local _buff = moudle:Get("BuffIcon"..i)
+			_buff.Activity = false
+			_head.Activity = true
+			local bossIDs = SiegeData.phaseBossId2
+			local bossData = nil
+			if bossIDs ~= nil then
+				bossData = Csv.SiegeBoss[bossIDs[i]]
+			end
+			if bossData ~= nil then
+				_head.SpriteName = bossData.iconRound
+			end
+
 			progressTab[i] = {slider = _slider,sliderText = _sliderText,head = _head}
 
 			if MSiege.Progress[i] ~= nil then
+				if ownTeam == i then
+					_buff.Activity = true
+					_buff.SpriteName = _P.GetBuffImg(BUFF_TEAM_ID)
+				end
+
 				local progress = MSiege.Progress[i].progressCur/MSiege.Progress[i].progressMax
+				local bossInfo = MSiege.BigBoss[i]
+				print("__progress____",progress,MSiege.Progress[i].progressCur,MSiege.Progress[i].progressMax)
+				if bossInfo ~= nil then
+					print("boss__________",bossInfo.bossBlood.ncur,bossInfo.bossBlood.nmax)
+				end
 				if progress >= 1 then
-					local bossInfo = MSiege.BigBoss[i]
 					if bossInfo ~= nil then
-						local bossData = Csv.SiegeBoss[bossInfo.id]
 						local bossProgress = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
-						_slider.FillAmount = bossProgress
-						_sliderText.Text = bossData.name.."："..math.ceil(bossProgress*100).."%"
+						_slider.Value = bossProgress
+
+						if bossData ~= nil then
+							_sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100).."%"
+						end
+					else
+						print("boss已死亡？")
+						_slider.Value = 0
+						_sliderText.Text = "0.0%"
+
+						_head.IsGray = true
+						
+						if ownTeam == i then
+							isBigBossDie = true
+							_buff.Activity = false
+						end
 					end
 				else
-					_head.Activity = false
-					_slider.FillAmount = progress
-					_sliderText.Text = Csv.Text("siege_progress_1",{num = progress*100})
+					_slider.Value = progress
+					_sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100)})
 				end
 			else
 				print("该阶段没有进度_____1")
@@ -449,9 +559,19 @@ function _P.ShowIngRect(self,moudle,index)
 		end
 
 		if MSiege.LastUdisk ~= nil then
-			local lossprop = MSiege.LastUdisk.ncur/MSiege.LastUdisk.nmax
+			local lossprop = (MSiege.LastUdisk.nmax - MSiege.LastUdisk.ncur)/MSiege.LastUdisk.nmax
 			if lossprop ~= nil then
-				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = lossprop * 100})
+				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = string.format("%.1f",lossprop * 100)})
+			end
+		end
+
+		if isBigBossDie then
+			for i = 1,3,1 do
+				local _buff = moudle:Get("BuffIcon"..i)
+				if ownTeam ~= i then
+					_buff.Activity = true
+					_buff.SpriteName = _P.GetBuffImg(BUFF_ALLKILL_ID)
+				end
 			end
 		end
 
@@ -470,7 +590,7 @@ function _P.ShowIngRect(self,moudle,index)
 				if bossInfo.discoverer ~= nil then
 					local bossBloodProp = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
 					if bossBloodProp ~= nil then
-						bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = bossBloodProp *100})
+						bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = string.format("%.1f",bossBloodProp *100)})
 					end
 				else
 					bossText.Text = Csv.Text("siege_bigboss_nil",{name = bossData.name})
@@ -485,7 +605,7 @@ function _P.ShowIngRect(self,moudle,index)
 		enemyText.Text = Csv.Text("siege_last_enemy",{num = MSiege.lastEnmey}) 
 
 		if MSiege.LastUdisk ~= nil then
-			local lastUdisk = MSiege.LastUdisk.ncur
+			local lastUdisk = MSiege.LastUdisk.nmax - MSiege.LastUdisk.ncur
 			if lastUdisk ~= nil then
 				udiskText.Text = Csv.Text("siege_last_udisk",{num = lastUdisk})
 			end
@@ -518,8 +638,6 @@ function _P.ReduceTime(self)
 			end
 		end
 	end
-	
-	
 end
 
 function _P.GetTargetTime(hour)
@@ -528,6 +646,15 @@ function _P.GetTargetTime(hour)
 	local targetTime =  os.time({year=temp_date.year, month=temp_date.month, day=temp_date.day, hour=hour})
 
 	return targetTime-cur_time
+end
+
+function _P.GetBuffImg(id)
+	local buffData = Csv.SiegeBuff[id]
+	local imgStr = ""
+	if buffData ~= nil then
+		imgStr = buffData.icon 
+	end
+	return imgStr
 end
 
 return _M

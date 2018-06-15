@@ -34,6 +34,11 @@ function _M:OnCreate(data)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
+	local BtnRule = moudle:Get("C_Full_Help_Btn")
+	BtnRule:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Adventure)
+	end, nil, 1.2)
 
 	self.mData = data
 	self.content = moudle:Get("Content")
@@ -66,7 +71,8 @@ function _P.OnChoose(self, funcId)
 	if funcId == 1 then
 		local vip = MPlayer.GetVip()
 		local extraTime = Csv.Vip[vip].adventureSubCount
-		self.mMoudle:Get("cishu").Text = Csv.Text("adventure_follow_count", {num=self.mData.shopEventtimes.."/"..ADVSHOPLIMIT + extraTime})
+		local leftTime = ADVSHOPLIMIT + extraTime - self.mData.shopEventtimes
+		self.mMoudle:Get("cishu").Text = Csv.Text("adventure_follow_count", {num=leftTime.."/"..ADVSHOPLIMIT + extraTime})
 		self.mMoudle:Get("Tips").Text = ""
 		_P.CreateEventList(self)
 	elseif funcId == 2 then
@@ -138,7 +144,14 @@ function _P.AddItemToContent(self,content,data, type)
 	self.goBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		if type == 1 then
-			_P.OnClickSendPlayer(self,data)
+			local vip = MPlayer.GetVip()
+			local extraTime = Csv.Vip[vip].adventureSubCount
+			local lefttime = Csv.Const(20101)[5] + extraTime - self.mData.shopEventtimes
+			if lefttime <= 0 then
+				CCommon.ShowError(Csv.Text("adventure_main_limit"))
+			else
+				_P.OnClickSendPlayer(self,data)
+			end
 		else
 			_P.OnGetReward(self,data)
 		end
@@ -160,7 +173,7 @@ function _P.AddItemToContent(self,content,data, type)
 	moudle:Get("ManNum1").Text = num.."/"..subEventCsv.joinCount
 	moudle:Get("Reward").Text = Csv.Text("adventure_follow_reward")
 	moudle:Get("Condition").Text = Csv.Text("adventure_follow_con")
-
+	moudle:Get("redPoint").Activity = type == 2
 	local isJoin = _P.IsJoin(self,data.playerlist)
 
 	if type == 1 then
@@ -237,9 +250,6 @@ function _P.OnClickSendPlayer(self,data)
 end
 
 function _P.OnGetReward(self,data)
-	-- local rewardData = {reward = {{id = 32008,count = 10},{id=32009,count = 5}},eventsIndex = data.eventsIndex}
-	-- _R.OnRewardCallBack(self,rewardData)
-	-- print("actId:",self.mData.actId,data.eventsIndex)
 	CActivity.ReqAdvGetReward(self.mData.actId,data.eventsIndex)
 end
 
@@ -265,11 +275,7 @@ end
 
 function _R.OnRewardCallBack(self,data)
 	if data ~= nil then
-		--TODO:飘奖
-		--移除对应事件
-		--刷新可完成商会事件次数
 		SoundMgr.Play(10004)
-		-- LuaUtil.DumpTable(data)
 		local animRect = self.itemTab[data.eventIndex]:Get("Btn1")
 		self.itemTab[data.eventIndex]:Get("new_text").Text = ""
 		local delayCount = 0

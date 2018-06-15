@@ -234,10 +234,19 @@ end
 function _P.OnChooseStaff(self, staffId,moudle)
 	self.ChoosedStaffId = staffId
 
+	if self.selfSpine ~= nil then
+		self.selfSpine:Destroy()
+		self.selfSpine = nil
+	end
 	if staffId > 0 then
 		local info = MStaff.GetStaffDataByID(staffId)
 		local staffCsv = Csv.Personnel[staffId]
-		moudle:Get("StaffBSX").SpriteName = staffCsv.asset
+		if staffCsv ~= nil and staffCsv.prefab ~= nil and staffCsv.prefab > 0 then
+			self.selfSpine = CCommon.CreateActor(moudle:Get("StaffBSX"), staffCsv.prefab, CCommon.ActorFieldMap.fb_self)
+			moudle:Get("StaffBSX").SpriteName = ""
+		else
+			moudle:Get("StaffBSX").SpriteName = staffCsv.asset
+		end
 		moudle:Get("valueNum").Text = tostring(info.power)
 
 		MVote.SelectHero = info
@@ -260,6 +269,10 @@ function _P.ReadyFight(self,data)
 	local bossIcon = self.mBossIcon
 	
 	---------
+	if self.bossSpine ~= nil then
+		self.bossSpine:Destroy()
+		self.bossSpine = nil
+	end
 	local smallTitle1 = self.mSmallTitle1
 	local smallTitle2 = self.mSmallTitle2
 
@@ -269,7 +282,14 @@ function _P.ReadyFight(self,data)
 	ownInfo.Activity = true
 	diyuText.Activity = true
 	
-	bossIcon.SpriteName = Csv.Const(15012)--
+	local spineIDOrAsset = Csv.Const(15012)
+	local csvEffect = Csv.Effect[spineIDOrAsset]
+	if csvEffect and csvEffect.prefab then
+		self.bossSpine = CCommon.CreateActor(bossIcon, spineIDOrAsset, CCommon.ActorFieldMap.fb_boss)
+		bossIcon.SpriteName = ""
+	else
+		bossIcon.SpriteName = spineIDOrAsset
+	end
 	bloodValue.Text = math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"--data.bossBlood.ncur.."/"..data.bossBlood.nmax
 	_P.CreateOwnRank(self,data.own)
 
@@ -277,9 +297,18 @@ function _P.ReadyFight(self,data)
 	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
 	
 	local heroData = MVote.SelectStaff()
+	if self.selfSpine ~= nil then
+		self.selfSpine:Destroy()
+		self.selfSpine = nil
+	end
 	if heroData ~= nil then
 		local PersonnelData = Csv.Personnel[heroData.id]
-		self.mHeroIcon.SpriteName = PersonnelData.asset
+		if PersonnelData ~= nil and PersonnelData.prefab ~= nil and PersonnelData.prefab > 0 then
+			self.selfSpine = CCommon.CreateActor(self.mHeroIcon, PersonnelData.prefab, CCommon.ActorFieldMap.fb_self)
+			self.mHeroIcon.SpriteName = ""
+		else
+			self.mHeroIcon.SpriteName = PersonnelData.asset
+		end
 		self.mHeroPower.Text = heroData.power
 		MVote.SelectHero = heroData
 	else

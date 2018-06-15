@@ -253,11 +253,20 @@ end
 		WindowMgr.Call("UFriend", "OnRelationUpdate", playerId, relation, state)
 		WindowMgr.Call("UFriendRecommend", "OnUpdate")
 	end
+	function _P.ShowMsgTips(data)
+		if not WindowMgr.IsCreated("UMessage") then
+			WindowMgr.Create("UMessage")
+		end
+		WindowMgr.Call("UMessage","ShowMsgTips", data)
+	end
 	function _P.OnAddFriendNum(msg)
 		local lastNum = MFriend.RecvAddFriendNum
 		MFriend.RecvAddFriendNum = msg.num
 		if lastNum < MFriend.RecvAddFriendNum then
 			MFriend.IsHaveNewReq = true
+			local tipsData= {}
+			tipsData.funcId = Define.SysId.Friend_Friend
+			_P.ShowMsgTips(tipsData)
 		end
 		--小红点
 		if MFriend.RecvAddFriendNum > 0 then

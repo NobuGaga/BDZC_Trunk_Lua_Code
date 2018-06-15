@@ -214,8 +214,8 @@ end
 function _P.SetGetBtnData(self)
 	local text
 	local isFinish = self.time - HeartBeat.ServSecond() <= 0
-	local isPerson = (self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal)
-	local getState = (isPerson and self.activityData.selfGetState) or self.activityData.gangGetState
+	local isPerson = self.curSelectToggle == MActivity.AdventureTypeEnum.Person
+	local getState = (isPerson and self.activityData.personalRewardState) or self.activityData.gangrewardState
 	local isCanNotGet = getState == MActivity.RewardGetState.CanNotGet
 	local isGeted = getState == MActivity.RewardGetState.Geted
 	local isCanGet = getState == MActivity.RewardGetState.CanGet
@@ -236,7 +236,6 @@ function _P.SetGetBtnData(self)
 	else
 		self.getBtnText.Text = ""
 	end
-	
 	local isLight = isFinish and isCanGet
 	self.getBtn.IsGray = not isLight
 	self.getBtn.RaycastTarget = isLight
@@ -258,7 +257,6 @@ end
 
 --设置个人排名（商会排名）数据
 function _P.SetRankData(self)
-	print("SetState")
 	local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
 	local rankText = self.mModule:Get("rankNum")
 	if isPerson then
@@ -292,7 +290,7 @@ end
 function _R.OnUpdateData(self, actId)
 	-- print("数据刷新")
 	local data = MActivity.GetFromId(actId)
-	self.mData = data
+	self.activityData = data
 	_P.SetGetBtnData(self)
 end
 
@@ -310,7 +308,7 @@ end
 
 function _R.UpdateRed(self)
 	local data = MActivity.GetFromId(self.actId)
-	self.mData = data
+	self.activityData = data
 	_P.SetGetBtnData(self)
 end
 
@@ -326,8 +324,8 @@ function _R.OnGetRewardBack(self, data)
 		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
 			_R.OnUpdateData(self, data.actId)
 
-			local rankType = data.index % 10000
-			local realIndex = math.floor(data.index / 10000)
+			local rankType = data.index % 1000
+			local realIndex = math.floor(data.index / 1000)
 			local rewardItems = {}
 			local rankConf = Csv.Adventure[data.actId]
 			if rankType == 1 then

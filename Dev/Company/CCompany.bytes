@@ -122,10 +122,6 @@ function _P.OnInitManage(data)
 	MCompany.OnInitManage(data)
 	_M.CheckManageRedpoint()
 
-	WindowMgr.Call("UCompanyManagePop","RefreshTimes")
-	WindowMgr.Call("UCompanyFactoryPop","RefreshTimes")
-	WindowMgr.Call("UCompanyTrainPop","RefreshTimes")
-
 	if data.managelist ~= nil then
 		for k,v in pairs(data.managelist) do
 			if v.isgod then
@@ -156,16 +152,6 @@ function _P.OnManage(data)
 			WindowMgr.Call("UCompanyManage","ShowGod")
 		end
 		WindowMgr.Call("UCompanyManage","RefreshTimes")
-	-- elseif WindowMgr.IsCreated("UCompanyFactoryPop") then
-	-- 	if data.result.isgod then
-	-- 		WindowMgr.Call("UCompanyFactoryPop","ShowGod")
-	-- 	end
-	-- 	WindowMgr.Call("UCompanyFactoryPop","RefreshTimes")
-	-- elseif WindowMgr.IsCreated("UCompanyTrainPop") then
-	-- 	if data.result.isgod then
-	-- 		WindowMgr.Call("UCompanyTrainPop","ShowGod")
-	-- 	end
-	-- 	WindowMgr.Call("UCompanyTrainPop","RefreshTimes")
 	end
 	_M.CheckManageRedpoint()
 end
@@ -218,23 +204,6 @@ function _M.CheckManageRedpoint()
 			WindowMgr.Call("UWorldMap", "SetCompanyIcon")
 		end
 	end
-	-- if isManageRedpoint ~= MCompany.ManageRedPoint then
-	-- 	MCompany.ManageRedPoint = isManageRedpoint
-	-- 	CMain.UpdateRedpoint(isManageRedpoint,Define.SysId.Manage)
-	-- 	if WindowMgr.IsCreated("UWorldMap") then
-	-- 		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
-	-- 	end
-	-- end
-
-	-- if isFactoryRedpoint ~= MCompany.FactoryRedPoint then
-	-- 	MCompany.FactoryRedPoint = isFactoryRedpoint
-	-- 	CMain.UpdateRedpoint(isFactoryRedpoint,Define.SysId.Factory)
-	-- end
-
-	-- if isTrainRedpoint ~= MCompany.TrainRedPoint then
-	-- 	MCompany.TrainRedPoint = isTrainRedpoint
-	-- 	CMain.UpdateRedpoint(isTrainRedpoint,Define.SysId.Train)
-	-- end
 end
 
 function _M.CheckVerdictRedpoint()

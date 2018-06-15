@@ -8,6 +8,7 @@ local MStaff = JRequire "Dev.Staff.MStaff"
 local MGirl = JRequire"Dev.Girl.MGirl"
 local MVote = JRequire "Dev.Vote.MVote"
 local MShop = JRequire "Dev.Shop.MShop"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
 
 local _M = {}
 
@@ -147,6 +148,8 @@ function _M.FuncIsOpen(funcId)
 			else
 				return false
 			end
+		elseif funcId == Define.SysId.SiegeWall then
+			return MSiege.ActivityState
 		end
 		-------------------------
 		return true

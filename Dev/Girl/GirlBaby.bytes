@@ -199,11 +199,13 @@ end
 function _P.RefreshInfo(self,data)
 	local moudle = self.mMoudle
 	local babyInfo = moudle:Get("babyValue")
+	local motherInfo = moudle:Get("dateBG")
 
 	local sceneBg = moudle:Get("scene")
 	
 	if data == nil then
 		babyInfo.Activity = false
+		motherInfo.Activity = false
 		sceneBg.SpriteName = Csv.Const(10214)
 
 		
@@ -215,6 +217,7 @@ function _P.RefreshInfo(self,data)
 		return
 	else
 		babyInfo.Activity = true
+		motherInfo.Activity = true
 		sceneBg.SpriteName = Csv.BabyLevel[data.level.ncur].room
 	end
 

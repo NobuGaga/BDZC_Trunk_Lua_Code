@@ -1,6 +1,7 @@
 -- 银行投资界面
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local JTweenerManager = CS.JTween.JTweenerManager
@@ -23,7 +24,7 @@ local RIGHT_SCALE_EFFECT_ID = "T_Parliament_RightArrow"
 local GO_EFFECT_ID = "T_Effect_Investment_Go"
 local BACK_EFFECT_ID = "T_Effect_Investment_Back"
 local Width = 750
-local MaxInvestmentInfoNum = tonumber(Csv.Const(107)[3])
+local MaxInvestmentInfoNum = tonumber(Csv.Const(107)[1])
 
 
 function _M:Dispatch(funcName, ...)
@@ -110,7 +111,7 @@ function _P.OnCreateInfoItem(data, itemGrid)
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Futures_Main_Item", WindowType.UI, 0)
 	if not itemModule then return end
 
-	itemModule:Get("Info").Text = Csv.Text("investment_winShow", {name = data.playername, num = string.format("%.1f", data.pro)})
+	itemModule:Get("Info").Text = Csv.Text("investment_winShow", {name = data.playername, index = (data.index or 0), num = string.format("%.1f", data.pro)})
 end
 
 
@@ -162,11 +163,14 @@ end
 function _P.OnClickToSign(self, needVip, needGold)
 	local curVipLevel = MPlayer.GetVip()
 	if curVipLevel < needVip then
+		local curExp = MRecharge.VipData.exp
+		local needExp = Csv.Vip[needVip - 1].upExp
+		local costExp = needExp - curExp
 		CCommon.CheckTips(function(isSure,rg)
 			if isSure then
 				WindowMgr.Create("URecharge")
 			end
-		end, {content = Csv.Text("investment_signErr")})
+		end, {content = Csv.Text("investment_signErr", {num = costExp})})
 	else
 		-- 金币不足
 		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needGold) then

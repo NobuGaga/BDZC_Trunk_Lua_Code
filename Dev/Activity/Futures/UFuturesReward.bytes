@@ -1,0 +1,182 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CActivity = JRequire "Dev.Activity.CActivity"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local GET_EFFECT_ID = "T_Effect_Get"
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Futures_Open")
+	self.Moudle = moudle
+	self.scrollView = moudle:Get("scrollView2")
+	self.content = moudle:Get("content2")
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	moudle:Get("C_Btn_a"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.OnCZClick(self)
+		end, nil, 1.2)
+
+	moudle:Get("tIPS").Text = Csv.Text("futures_odds")
+	moudle:Get("shuxin").Text = Csv.Text("futures_main_tips")
+	moudle:Get("C_Text").Text = Csv.Text("futures_title")
+	moudle:Get("tIPS0").Text = Csv.Text("futures_tips")
+	moudle:Get("InfoText").Text = Csv.Text("futures_zj")
+	moudle:Get("Time").Text = Csv.Text("futures_time_text3")
+	moudle:Get("TimeText").Text = Csv.Text("futures_time_text4")
+	moudle:Get("Date").Text = Csv.Text("futures_time_text2")
+	moudle:Get("C_Btn_b").Activity = false
+	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num=Csv.Const(108)[4]})
+
+	_R.OnFuturesReset(self)
+	
+	CActivity.CFuturesNews()
+end
+
+function _R.OnFuturesReset(self)
+	local moudle = self.Moudle
+	self.mData = MActivity.GetFuturesData()
+	local state = self.mData.futuresState
+	for i = 1, 6 do
+		moudle:Get("lINE"..i).Activity = false
+		moudle:Get("odds"..i).Activity = false
+	end
+	local futuresConf = Csv.Futures[self.mData.actId]
+	local oddsConf = futuresConf.odds
+	local index = 1
+	for k,v in pairs(oddsConf) do
+		moudle:Get("odds"..index).Activity = true
+		moudle:Get("odds"..index).Text = Csv.Text("futures_open_odds", {num=v})
+		for kk, vv in pairs(self.mData.odds) do
+			if vv == true and math.abs(v - kk) < 0.01 then
+				moudle:Get("lINE"..index).Activity = true
+			end
+		end
+		index = index+1
+	end
+
+	local needAmount = ((self.mData.resetNeedAmount == nil and Csv.Const(108)[4]) or self.mData.resetNeedAmount)
+	moudle:Get("ExpText").Text = self.mData.rechargeAmount.."/"..needAmount
+	moudle:Get("ProgressBar").FillAmount = self.mData.rechargeAmount/needAmount
+	moudle:Get("DateText").Text = Csv.Text("futures_time_text", {startTime = os.date("%Y/%m/%d", self.mData.state.startTime),endTime = os.date("%Y/%m/%d", self.mData.state.endTime)})
+
+	local getRect1 = self.Moudle:Get("GetRect1")
+	if state == MActivity.FuturesState.CHOU then
+		moudle:Get("Text4").Activity = false
+		moudle:Get("Text1").Text = Csv.Text("futures_xscz_odds")
+		moudle:Get("Text3").Text = Csv.Text("futures_cz_tips")
+		moudle:Get("C_text").Text = Csv.Text("futures_cz")
+		
+		getRect1.Activity = true
+		getRect1.Alpha = 0
+		getRect1.LocalScale = Vector3(3, 3, 1)
+		self.Moudle:Get("GaizhangText1").Text = Csv.Text("futures_zhang", {num=string.format("%0.1f", self.mData.curFactor)})
+		if self.GaizhangTweener then
+			self.GaizhangTweener:Restore()
+		end
+		local gaizhangTweener = getRect1.CachedTran:GetJTweener(GET_EFFECT_ID)
+		self.GaizhangTweener = gaizhangTweener
+		gaizhangTweener:SetOnComplete(function()
+		end)
+		gaizhangTweener:Play()
+	elseif state == MActivity.FuturesState.RECHARGE then
+		getRect1.Activity = false
+		moudle:Get("Text1").Activity = false
+		moudle:Get("Text4").Activity = true
+		moudle:Get("C_text").Text = Csv.Text("futures_cz_lq")
+		moudle:Get("Text4").Text = Csv.Text("futures_lj_tips")
+		moudle:Get("Text5").Text = self.mData.rechargeAddGold
+	end
+end
+
+function _R.OnRefreshActivity(self, data)
+	self.mData = data
+
+	local state = self.mData.futuresState
+	if state == MActivity.FuturesState.CHOU then
+		self.Moudle:Get("Text4").Activity = false
+		self.Moudle:Get("Text1").Text = Csv.Text("futures_xscz_odds")
+		self.Moudle:Get("Text3").Text = Csv.Text("futures_cz_tips")
+		self.Moudle:Get("C_text").Text = Csv.Text("futures_cz")
+		-- self.Moudle:Get("Text2").Text = Csv.Text("futures_open_odds", {num=string.format("%0.1f", self.mData.curFactor)})
+	elseif state == MActivity.FuturesState.RECHARGE then
+		self.Moudle:Get("GetRect1").Activity = false
+		self.Moudle:Get("Text1").Activity = false
+		self.Moudle:Get("Text4").Activity = true
+		self.Moudle:Get("C_text").Text = Csv.Text("futures_cz_lq")
+		self.Moudle:Get("Text4").Text = Csv.Text("futures_lj_tips")
+		self.Moudle:Get("Text5").Text = self.mData.rechargeAddGold
+	end
+end
+
+function _P.OnCZClick(self)
+	local state = self.mData.futuresState
+	if state == MActivity.FuturesState.CHOU then
+		WindowOpen.Open(Define.SysId.Recharge)
+	elseif state == MActivity.FuturesState.RECHARGE then
+		CActivity.GetRewardReq(self.mData.actId, 0)
+	end
+end
+
+function _R.OnFuturesNews(self, data)
+	self.content:DestroyChildren()
+	if data ~= nil then
+		for k, v in pairs(data) do
+			local itemMoudle = JGuiManager.GetMoudle(self.content,"M_Futures_Main_Item",WindowType.UI, 0)
+			itemMoudle:Get("Info").Text = Csv.Text("futures_reward", {name=v.name, num=string.format("%0.1f", v.odds)})
+		end
+	end
+end
+
+function _R.OnGetSuccess(self, data, info)
+	self:Lock()
+	if data.isGeted then
+		CCommon.ShowFlyItem(self.Moudle:Get("ItemEffect"), Define.AssetsType.Gold, info.rechargeAddGold, 0.5)
+		self.Moudle.SelfRect:AddOnTime(function()
+			self:Unlock()
+			WindowOpen.Open(Define.SysId.Futures)
+		end, nil, 1.2)
+	end
+end
+
+function _R.OnUpdateViewState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.mData.actId)
+	end
+end
+
+return _M

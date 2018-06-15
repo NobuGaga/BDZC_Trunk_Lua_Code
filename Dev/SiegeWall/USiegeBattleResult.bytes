@@ -48,7 +48,9 @@ function _M:OnCreate(data,isVote)
 		text5.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--副本积分："
 		text6.Text = ""
 	end
-
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
+	--[[
 	-- 播放战斗失败特效
 	local _isWin
 	if isVote then
@@ -63,5 +65,6 @@ function _M:OnCreate(data,isVote)
 		SoundMgr.Play(10014)
 		CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
 	end
+	--]]
 end
 return _M

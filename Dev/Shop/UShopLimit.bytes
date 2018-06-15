@@ -138,7 +138,15 @@ function _P.GetSortShop(rawTable)
 		for k,v in pairs(rawTable) do
 			table.insert(sortTable,v)
 		end
-		table.sort(sortTable,function(a,b) return a.index < b.index end)
+		table.sort(sortTable,function(a,b)
+			local csvA = Csv.ShopLimitBuy[a.index]
+			local csvB = Csv.ShopLimitBuy[b.index]
+			if csvA ~= nil and csvA.sort ~= nil and csvB ~= nil and csvB.sort ~= nil then
+				return csvA.sort < csvB.sort
+			else
+				return false
+			end
+		end)
 	end
 	return sortTable
 end

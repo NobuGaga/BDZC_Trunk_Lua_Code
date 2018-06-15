@@ -3,6 +3,7 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local CTalk = JRequire "Dev.Talk.CTalk"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MTalk = JRequire "Dev.Talk.MTalk"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -175,6 +176,30 @@ function _Func.ShowShenJi(self, csvGod)
 		self:Destroy()
 	end)
 	tween:Play()	
+end
+-- data: funcId, id(player id), name(player name)
+function _Func.ShowMsgTips(self, data)
+	if Csv.Const(114) ~= 1 then
+		return 
+	end
+
+	if self.moudle == nil then
+		self.moudle = self:CreateMoudle(self._RootNode, "M_Msg_Tips")
+		LuaUtil.TextAddThreePoint(self.moudle:Get("new_text"), "")
+		self.tipsData = data
+		self.moudle.SelfRect:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			if self.tipsData.funcId == Define.SysId.Talk_Private then
+				WindowOpen.Open(self.tipsData.funcId, self.tipsData.id, self.tipsData.name)
+			elseif self.tipsData.funcId == Define.SysId.Friend_Friend then
+				WindowOpen.Open(self.tipsData.funcId)
+				WindowMgr.Call("UFriend","OpenAddFriendWin")
+			end
+			self:Destroy()
+		end, nil, 0.9)
+	else
+		self.tipsData = data
+	end
 end
 
 function _M:Dispatch(funcName, ...)

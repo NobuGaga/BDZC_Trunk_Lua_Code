@@ -403,7 +403,7 @@ function _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, d
 	return moudle
 end
 
-function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
+function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale, scaleArg)
 	local csv = Csv.Effect[effectId]
 	if csv == nil then
 		error(string.format( "cont find id from Effect csv, id:%d", effectId ))
@@ -428,7 +428,11 @@ function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
 		parent.LocalPosition = Vector2(csv.pos[1], csv.pos[2])
 	end
 	if scale ~= nil then
-		parent.LocalScale = Vector3(scale, scale, scale)
+		if scaleArg ~= nil then
+			parent.LocalScale = Vector3(scale * scaleArg.x, scale * scaleArg.y, scale * scaleArg.z)
+		else
+			parent.LocalScale = Vector3(scale, scale, scale)
+		end
 	elseif csv.scale ~= nil then
 		parent.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
 	end
@@ -449,11 +453,18 @@ function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, 
 end
 
 --自动创建Actor节点
-function _M.CreateEffectEx(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+function _M.CreateEffectEx(parent, effectId, onLoadedCall, pos, doneCall, spMap, textMap, dura, delay, scale)
 	if effectId < 10000 then
-		return _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+		local ret = _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
+		if onLoadedCall ~= nil then
+			onLoadedCall()
+		end
+		return ret
 	else
 		local prefab = JGuiManager.CreateActor(parent, tostring(effectId))
+		if onLoadedCall ~= nil then
+			prefab:SetOnLoadedBeforeLoad(onLoadedCall)
+		end
 		_M.LoadPrefabEffect(prefab, effectId, pos, doneCall, dura, scale)
 		return prefab
 	end
@@ -528,6 +539,26 @@ _M.ActorFieldMap =
 
 	--出游
 	wharf = "wharf",
+	wharf_event = "wharf_event",
+	wharf_pk_enemy = "wharf_pk_enemy",
+	wharf_pk_self = "wharf_pk_self",
+	wharf_pk_success = "wharf_pk_success",
+	wharf_pk_fail = "wharf_pk_fail",
+	wharf_build = "wharf_build",
+
+	--美容
+	metology_body = "metology_body",
+	metology_head = "metology_head",
+
+	--选举大厅
+	election_head = "election_head",
+	election_body = "election_body",
+
+	--游艇会
+	club_join = "club_join",
+
+	--公司
+	lobby_end = "lobby_end",
 }
 
 --[[
@@ -535,8 +566,11 @@ _M.ActorFieldMap =
 	@effectId: 特效表ID
 	@posScaleField: 位置和缩放值参数表索引
 ]]
-function _M.CreateActor(parent, prefabId, posScalefield)
+function _M.CreateActor(parent, prefabId, posScalefield, onLoadedCall, scaleArg)
 	local prefab = JGuiManager.CreateActor(parent, tostring(prefabId))
+	if onLoadedCall ~= nil then
+		prefab:SetOnLoadedBeforeLoad(onLoadedCall)
+	end
 	local pos = nil
 	local scale = nil
 	if posScalefield ~= nil then
@@ -560,17 +594,34 @@ function _M.CreateActor(parent, prefabId, posScalefield)
 			end
 		end
 	end
-	_M.LoadPrefabEffect(prefab, prefabId, pos, nil, nil, scale)
+	_M.LoadPrefabEffect(prefab, prefabId, pos, nil, nil, scale, scaleArg)
 	return prefab
 end
 
-function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield)
-	local body = _M.CreateActor(parent, bodyPrefabId, posScalefield)
-	local head = _M.CreateActor(parent, headPrefabId, posScalefield)
-	local headGrap = head:SkeletonGetGraphic()
-	if headGrap ~= nil then
-		body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
+function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield, onLoadedCall, scaleArg)
+	local isThatLoaded = false
+	local body, head
+	local func = function()
+		if isThatLoaded then
+			local headGrap = head:SkeletonGetGraphic()
+			if headGrap ~= nil then
+				body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
+			end
+			if onLoadedCall ~= nil then
+				onLoadedCall()
+			end
+		else
+			isThatLoaded = true
+		end
 	end
+	body = _M.CreateActor(parent, bodyPrefabId, posScalefield, function(actor)
+		body = actor
+		func()
+	end, scaleArg)
+	head = _M.CreateActor(parent, headPrefabId, posScalefield, function(actor)
+		head = actor
+		func()
+	end, scaleArg)	
 	return body, head
 end
 

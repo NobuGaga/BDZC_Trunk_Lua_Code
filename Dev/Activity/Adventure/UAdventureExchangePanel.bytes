@@ -8,10 +8,11 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local NUM_TWEEN = "T_Club_NumSacle"
 local maxRefreshNum = Csv.Const(20101)[7]
-local QIYUCOIN = 34102
+local QIYUCOIN = 34116
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -40,16 +41,15 @@ function _M:OnCreate(data)
 	-- LuaUtil.DumpTable(self.exchangeData)
 	local costconf = Csv.Adventure[self.actId].refreshShopCost
 	local costGoldNum = 0
-	if #costconf <= self.exchangeData.todayRefreshCount then
-		costGoldNum = costconf[#costconf][2]
-	else
-		costGoldNum = costconf[self.exchangeData.todayRefreshCount + 1][2]
-	end
+	costGoldNum = _P.GetCostNum(self)
+	local vip = MPlayer.GetVip()
+	self.extraTime = Csv.Vip[vip].adventureShopRefresh
 	self.needCost = costGoldNum
 	local refreshBtn = module:Get("C_Btn_b_8")
 	refreshBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		if self.exchangeData.todayRefreshCount < maxRefreshNum then
+
+		if self.exchangeData.todayRefreshCount < maxRefreshNum + self.extraTime then
 			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
 			CCommon.CheckTips(function(isSure, arg)
 				_P.OnClickRefresh(self, isSure, arg)
@@ -82,7 +82,7 @@ function _P.OnClickRefresh(self, isSure, arg)
 			return
 		end
 
-		if self.exchangeData.todayRefreshCount < maxRefreshNum then
+		if self.exchangeData.todayRefreshCount < maxRefreshNum  + self.extraTime then
 			CActivity.ReqAdvRefrashShop(true)
 		else
 			CCommon.ShowError(Csv.Text("adventure_exchange_refreshError"))
@@ -92,7 +92,7 @@ end
 
 function _P.SetData(self, data)
 	-- self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
-	self.mModule:Get("CSNum").Text = (maxRefreshNum - data.todayRefreshCount) .. '/' .. maxRefreshNum
+	self.mModule:Get("CSNum").Text = (maxRefreshNum + self.extraTime - data.todayRefreshCount) .. '/' .. maxRefreshNum + self.extraTime
 	
 	_P.OnUpdateTime(self)
 	if data.nextRefreshLeftTime > 0 then
@@ -239,14 +239,25 @@ function _R.OnRefreshShopData(self, data)
 	self.exchangeData = data
 	local costconf = Csv.Adventure[self.actId].refreshShopCost
 	local costGoldNum = 0
-	if #costconf < self.exchangeData.todayRefreshCount then
-		costGoldNum = costconf[#costconf][2]
-	else
-		costGoldNum = costconf[self.exchangeData.todayRefreshCount][2]
-	end
+	costGoldNum = _P.GetCostNum(self)
+
 	self.needCost = costGoldNum
 	
 	_P.SetData(self, data)
+end
+
+function _P.GetCostNum(self)
+	local costconf = Csv.Adventure[self.actId].refreshShopCost
+	local RefreshCount = self.exchangeData.todayRefreshCount + 1
+	for k,v in pairs(costconf) do
+		if v[1] <= RefreshCount and v[2] >= RefreshCount then
+			return v[3]
+		end
+
+		if k == #costconf and v[2] < RefreshCount then
+			return v[3]
+		end
+	end
 end
 
 -- 兑换道具回调
@@ -274,7 +285,7 @@ end
 
 function _R.OnUpdateRefreshCount(self)
 	self.exchangeData.todayRefreshCount = 0
-	self.mModule:Get("CSNum").Text = (maxRefreshNum - self.exchangeData.todayRefreshCount) .. '/' .. maxRefreshNum
+	self.mModule:Get("CSNum").Text = (maxRefreshNum + self.extraTime - self.exchangeData.todayRefreshCount) .. '/' .. maxRefreshNum + self.extraTime
 end
 
 return _M

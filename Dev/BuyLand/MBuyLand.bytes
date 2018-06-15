@@ -93,15 +93,16 @@ function _M.UpdateResult(data)
 	_M.isOpen = data.isOpen
 	_M.boosBlood = data.boosBlood
 	_M.UpdateRewardInfo(data.itemList)
-	if data.nextChapter ~= nil then 
-		_M.UpdateLandInfo(data.nextChapter.landInfo)
-	end
 
 	if _M.type == 1 then
 		WindowMgr.Create("UBuyLandBattle")
 		WindowMgr.Call("UBuyLandBattle","OnResult", data)
 	elseif _M.type == 10 then
 		WindowMgr.Call("UBuyLandMain","OnResult", data)
+	end
+	
+	if data.nextChapter ~= nil then 
+		_M.UpdateLandInfo(data.nextChapter.landInfo)
 	end
 end
 

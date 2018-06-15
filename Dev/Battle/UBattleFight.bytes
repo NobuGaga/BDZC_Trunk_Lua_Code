@@ -301,7 +301,7 @@ function _P.OnPlayOneReport(self, isFast)
 			if self.isSkipBattle then self.isSkipBattle = nil end
 		else
 			local delayTime = (reportData.playType == BattleShowEnum.Task and 1.2) or 1.9
-			self.BG:AddOnTime(function()
+			self.Moudle:Get("BG_Img"):AddOnTime(function()
 				if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
 					_P.SetBloodData(self, reportData.campType, isFast)
 				end

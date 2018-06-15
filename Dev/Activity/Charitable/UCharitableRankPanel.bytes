@@ -216,9 +216,8 @@ function _R.OnGetRewardBack(self, data)
 		local animRect = self.mModule:Get("GetAnim")
 		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
 			_R.OnUpdateData(self, data.actId)
-			local rewardIndex = data.index
+			local rewardIndex = _P.GetRewardIndex(self,data)
 			local rewardItems = Csv.Charity[data.actId].rankReward[rewardIndex]
-			
 			local rewardList = rewardItems or {}
 			local delayCount = 0
 			for k,v in pairs(rewardList) do
@@ -226,6 +225,14 @@ function _R.OnGetRewardBack(self, data)
 				delayCount = delayCount + 0.3
 			end
 		end)
+	end
+end
+
+function _P.GetRewardIndex(self,data)
+	for k,v in pairs(Csv.Charity[data.actId].rankInterval) do
+		if data.index >=v[1] and data.index <= v[2] then
+			return k
+		end
 	end
 end
 

@@ -91,12 +91,25 @@ function _P.OnDbgMessage(data)
 	print(context)
 end
 
+function _P.ShowMsgTips(tipsData)
+	if not WindowMgr.IsCreated("UMessage") then
+		WindowMgr.Create("UMessage")
+	end
+	WindowMgr.Call("UMessage","ShowMsgTips", tipsData)
+end
+
 --接收新的聊天消息
 function _P.OnGetNewTalk(data)
 	if data.channel == MTalk.Channel.PrivateMsg then
 		if data.from == 2 and MFriend.CheckRelation(data.sender, MFriend.RelationType.BlackList) then
 			return
 		end
+		
+		local tipsData = {}
+		tipsData.funcId = Define.SysId.Talk_Private
+		tipsData.id = data.sender
+		tipsData.name = data.sendername
+		_P.ShowMsgTips(tipsData)
 		CFriend.OnPrivateTalk(data)
 	else
 		if MFriend.CheckRelation(data.sender, MFriend.RelationType.BlackList) then
@@ -314,12 +327,6 @@ _P.CGMCommond =
 		func = function()
 			WindowMgr.Create("UMessage")
 			WindowMgr.Call("UMessage","ShowDebug")
-		end
-	},
-	speaker = {
-		desc = "@debug - 语音聊天测试",
-		func = function()
-			WindowMgr.Create("UTestVoiceChat")
 		end
 	},
 }

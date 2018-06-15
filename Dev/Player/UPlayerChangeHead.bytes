@@ -100,8 +100,36 @@ function _M:OnCreate()
 		_P.ClickItem(self)
 	end,nil,1.2)
 
-	moudle:Get("Bsx").SpriteName = MPlayer.GetBodySp()
-	moudle:Get("head").SpriteName = MPlayer.GetHeadSp()
+	if self.headSpine then
+		self.headSpine:Destroy()
+		self.headSpine = nil
+	end
+	local body = moudle:Get("Bsx")
+	local head = moudle:Get("head")
+	local bodyPrefab = MPlayer.GetBodyPrefabID()
+	local headPrefab = MPlayer.GetHeadPrefabID()
+	if bodyPrefab ~= nil and bodyPrefab > 0 then
+        self.bodySpine = CCommon.CreateActor(moudle:Get("body"), bodyPrefab, CCommon.ActorFieldMap.metology_body)
+		if headPrefab ~= nil and headPrefab > 0 then
+			self.headSpine = CCommon.CreateActor(body, headPrefab, CCommon.ActorFieldMap.metology_head, function(actor)
+				self.headSpine = actor
+				local headGrap = self.headSpine:SkeletonGetGraphic()
+				if headGrap ~= nil and self.bodySpine ~= nil then
+					self.bodySpine:SkeletonFollowerGraphic(headGrap.gameObject, "head")
+				end
+			end)			
+			body.SpriteName = ""
+			head.SpriteName = ""
+		else
+			self.bodySpine.Activity = false
+			body.SpriteName = MPlayer.GetBodySp()
+			head.SpriteName = MPlayer.GetHeadSp()
+		end
+	else
+		body.SpriteName = MPlayer.GetBodySp()
+		head.SpriteName = MPlayer.GetHeadSp()
+    end
+
 	moudle:Get("C_Text").Text = Csv.Text("player_change1")
 	moudle:Get("text1").Text = Csv.Text("player_change4")
 	moudle:Get("OverviewBtnText").Text = Csv.Text("player_change2")
@@ -365,7 +393,33 @@ function _P.ChangeSelectHead(self,headid)
 			self.ImgSelect.LocalPosition = Vector2(-2,2)
 			_P.SetAddAttr(self)
 			_P.SetCost(self)
-			moudle:Get("head").SpriteName = MPlayer.GetOtherHeadAsset(self.NowSelectId,MPlayer.GetSex())
+			if self.headSpine then
+				self.headSpine:Destroy()
+				self.headSpine = nil
+			end
+			local body = moudle:Get("Bsx")
+			local head = moudle:Get("head")
+			local headPrefab = MPlayer.GetPrefabID(self.NowSelectId, MPlayer.GetSex())
+			if headPrefab ~= nil and headPrefab > 0 and self.bodySpine ~= nil then
+				self.headSpine = CCommon.CreateActor(body, headPrefab, CCommon.ActorFieldMap.metology_head, function(actor)
+					self.headSpine = actor
+					local headGrap = self.headSpine:SkeletonGetGraphic()
+					if headGrap ~= nil and self.bodySpine ~= nil then
+						self.bodySpine.Activity = true
+						body.SpriteName = ""
+						self.bodySpine:SkeletonFollowerGraphic(headGrap.gameObject, "head")
+					else
+						body.SpriteName = MPlayer.GetBodySp()
+					end					
+				end)		
+				head.SpriteName = ""
+			else
+				if self.bodySpine ~= nil then
+					self.bodySpine.Activity = false
+					body.SpriteName = MPlayer.GetBodySp()
+				end
+				head.SpriteName = MPlayer.GetOtherHeadAsset(self.NowSelectId, MPlayer.GetSex())
+			end
 		end
 	end
 end

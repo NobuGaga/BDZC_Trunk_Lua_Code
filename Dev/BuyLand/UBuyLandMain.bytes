@@ -156,6 +156,26 @@ function _M:OnCreate()
 	if maxLvl >= curBattleId then
 		CBuyLand.CInit()
 	end
+
+	local vip = MPlayer.GetVip()
+	local csvVip = Csv.Vip[vip]
+	if csvVip ~= nil then
+		local imgBord = moudle:Get("VipBox")
+		if csvVip.imgBord ~= nil then
+			imgBord.Activity = true
+			imgBord.SpriteName = csvVip.imgBord
+		else
+			imgBord.Activity = false
+		end
+
+		local imgNum = moudle:Get("VipNum")
+		if csvVip.icon ~= nil then
+			imgNum.Activity = true
+			imgNum.SpriteName = csvVip.icon
+		else
+			imgNum.Activity = false
+		end
+	end
 end
 
 -- 关闭一键竞标胜利界面后调用
@@ -454,7 +474,7 @@ function _R.OnWinRefreshLandInfo(self)
 end
 
 function _P.RefreshAvatar(self)
-	self.RoleIcon.SpriteName = MPlayer.GetHeadIcon()
+	self.RoleIcon.SpriteName = MPlayer.GetSHeadIcon()
 end
 
 function _P.RefreshAttr(self)

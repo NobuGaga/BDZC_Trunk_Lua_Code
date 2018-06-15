@@ -3,6 +3,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local CActivity = JRequire "Dev.Activity.CActivity"
+local MStaff = JRequire "Dev.Staff.MStaff"
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -39,6 +40,7 @@ function _M:OnCreate(...)
 				_P.OnClickBtn(self,v.actId)
 			end,nil,0.9)
 			table.insert(sortTable,v.actId)
+			self:RegistRedpoint(moudle:Get("Red"..activityConf.typeId), Define.SysId.SuperStaff, v.actId)
 		end
 	end
 	
@@ -49,6 +51,12 @@ function _M:OnCreate(...)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
+
+	self:RegistCallEvent(Define.EventListenId.GetStaff, function (eventHandle , staffid )
+		if self.StaffGetImgTab[staffid] ~= nil then
+			self.StaffGetImgTab[staffid].Activity = true
+		end
+	end)
 end
 
 function _P.OnClickBtn(self,index)
@@ -72,6 +80,7 @@ end
 
 function _P.CreateStaff(self,index)
 	local moudle = self.mMoudle
+	self.StaffGetImgTab = {}
 	local activityConf = Csv.ActivityJaonChen[index]
 	if activityConf ~= nil then
 		local staffList = activityConf.attrid
@@ -101,6 +110,14 @@ function _P.CreateStaff(self,index)
 					moudle:Get("StaffBg"..i):AddOnButton(function()
 						_P.OnClickStaff(self,staffData)
 					end,nil,0.9)
+
+					local getImg = moudle:Get("Get"..i)
+					self.StaffGetImgTab[staffData.attrid] = getImg
+					if MStaff.StaffTable[staffData.attrid] ~= nil then
+						getImg.Activity = true
+					else
+						getImg.Activity = false
+					end
 				end
 			end
 		end

@@ -67,12 +67,27 @@ function _M:OnCreate(id)
 	tips1.Text = Csv.Text("Wharf_battle_tips",{name = enemyData.name,type = enemyData.npcTypeName})
 	tips2.Text = Csv.Text("Wharf_battle_level",{level = _P.GetBattleLevel(self,enemyPower,ownPower)})
 
-	enemySp.SpriteName = enemyData.bigIcon
-	enemySp.LocalPosition = Vector2(enemyData.bigIconPox[1],enemyData.bigIconPox[2])
-	enemySp.SizeDelta = Vector2(enemyData.bigIconSize[1],enemyData.bigIconSize[2])
-	--enemySp:SetNativeSize()
-	ownSp.SpriteName = MPlayer.GetBodySp()
-	ownHead.SpriteName = MPlayer.GetHeadSp()
+	local spineID = enemyData.spineID
+	if spineID and Csv.Effect[spineID] and Csv.Effect[spineID].prefab then
+		local spineAnim = CCommon.CreateActor(enemySp, spineID, CCommon.ActorFieldMap.wharf_pk_enemy)
+		enemySp.SpriteName = ""
+	else
+		enemySp.SpriteName = enemyData.bigIcon
+		enemySp.LocalPosition = Vector2(enemyData.bigIconPox[1],enemyData.bigIconPox[2])
+		enemySp.SizeDelta = Vector2(enemyData.bigIconSize[1],enemyData.bigIconSize[2])
+		--enemySp:SetNativeSize()
+	end
+	local headPrefab = MPlayer.GetHeadPrefabID()
+    local bodyPrefab = MPlayer.GetBodyPrefabID()
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        ownSp.SpriteName = ""
+        ownHead.SpriteName = ""
+
+        CCommon.CreateRole(bg2, bodyPrefab, headPrefab, CCommon.ActorFieldMap.wharf_pk_self, nil, Vector3(-1, 1, 1))
+    else
+        ownSp.SpriteName = MPlayer.GetBodySp()
+		ownHead.SpriteName = MPlayer.GetHeadSp()
+    end
 
 	local fightBtn = moudle:Get("C_Btn_b")
 	fightBtn:AddOnButton(function()

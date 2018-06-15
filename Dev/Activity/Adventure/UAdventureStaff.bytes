@@ -8,17 +8,20 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local TOP_BEGIN = 387
 local TOP_END = 850
-local BUTTOM_BEGIN = -809
+local BUTTOM_BEGIN = -849
 local BUTTOM_END = 0
 local DEFAULT_ICON = "HeroList_Add"
 local POSY_ANIM = "T_Adventure_PosY"
-local QUALITY1 = Color(47/255,32/255,231/255,1)
-local QUALITY2 = Color(228/255,7/255,231/255,1)
-local QUALITY3 = Color(236/255,111/255,14/255,1)
-local QUALITY4 = Color(240/255,0/255,0/255,1)
+local QUALITY1 = Color(255/255,255/255,255/255,1)
+local QUALITY2 = Color(12/255,184/255,56/255,1)
+local QUALITY3 = Color(47/255,32/255,231/255,1)
+local QUALITY4 = Color(228/255,7/255,231/255,1)
+local QUALITY5 = Color(236/255,111/255,14/255,1)
+local QUALITY6 = Color(240/255,0/255,0/255,1)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -33,48 +36,51 @@ function _M:Dispatch(funcName, ...)
 end
 
 function _R.OnCompleteEvent(self,data)
-	-- local data = 
-	-- {
-	-- 	actId = 40000,
-	-- 	eventIndex = 2,
-	-- 	compatibility = 0.63265562057495,
-	-- 	reward = {{id = 1, count = 100},{id = 34102, count = 100}},
-	-- 	hotval = 5,
-	-- 	eventtimes = 2,
-	-- 	eventId = 1003,
-	-- }
-	-- print("奖励数据：")
-	-- LuaUtil.DumpTable(data)
 	WindowMgr.Create("UAdventureResult", data, function()
 	self:Destroy()
 	end)
 end
 
 function _P.GetSortStaffs(self,rawTable, suitData)
-	local sortTable = {}
-	local suitTable = {} --符合条件的
-	local unsuitTable = {} --不符合条件的
-	local totalTable = {}--一共的
-	local overTable = {} --已加班不可使用的
-	local overUseTable = {} --已加班可以使用的
-	local freeTable = {} --没加班过的
+	local suitTable = {}
+	local unsuitTable = {}
 	--TODO:排序优化
 	for k,v in pairs(rawTable) do
 		--符合条件的
-		if _P.CheckIsSuit(self,suitData,v) then
+		if _P.CheckIsSuit(self,suitData,v) > 0 then
 			table.insert(suitTable,v)
 		else
 			table.insert(unsuitTable,v)
 		end
 	end
-	for k,v in pairs(rawTable) do
-		table.insert(sortTable,v)
-	end
-
-	table.sort(sortTable,function(a,b)
+	
+	table.sort(suitTable,function(a,b)
 		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
 	end)
-	return sortTable
+	table.sort(unsuitTable,function(a,b)
+		for i=1,#suitData do
+			if suitData[i].extra == 1 then
+				if suitData[i].type <= 4 then
+					local aval = MStaff.GetAttrByType(a.id, suitData[i].type)
+					local bval = MStaff.GetAttrByType(b.id, suitData[i].type)
+					if aval == bval then
+						if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
+							return a.id > b.id
+						else
+							return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
+						end
+					else
+						return aval > bval
+					end
+				end
+			end
+		end
+	end)
+
+	for k,v in pairs(unsuitTable) do
+		table.insert(suitTable, v)
+	end
+	return suitTable
 end
 
 --检测这名员工是否符合需求
@@ -89,6 +95,9 @@ function _P.CheckIsSuit(self,suitData, data)
 		if suitData[i].extra == 1 then
 			if suitData[i].type <= 4 then
 				local dataVal = MStaff.GetAttrByType(data.id, suitData[i].type)
+				if dataVal < suitData[i].val then
+					return dataVal - suitData[i].val
+				end
 				checkSum = checkSum + (dataVal - suitData[i].val) * checkSeed
 				--性别 国籍 年龄 员工ID
 			elseif suitData[i].type == MActivity.AdvReqTypeEnum.Sex then
@@ -122,13 +131,39 @@ function _P.CheckIsSuit(self,suitData, data)
 						checkSum = checkSum + 1*checkSeed
 					else
 						return -9999
+				end
+			elseif suitData[i].type == MActivity.AdvReqTypeEnum.cloth then
+				local result = false
+				for k,v in pairs(csvPerson.clothesColour) do
+					if v == suitData[i].val then
+						result = true
 					end
+				end
+				if result then
+					checkSum = checkSum + 1*checkSeed
+				else
+					return -9999
+				end
+			elseif suitData[i].type == MActivity.AdvReqTypeEnum.tile then
+				if csvPerson.tieColour == suitData[i].val then
+					checkSum = checkSum + 1*checkSeed
+				else
+					return -9999
+				end
+			elseif suitData[i].type == MActivity.AdvReqTypeEnum.glass then
+				if csvPerson.glasses == suitData[i].val then
+					checkSum = checkSum + 1*checkSeed
+				else
+					return -9999
+				end
 			end
 		end
 	end
 	--已选中直接置顶
-	if _P.IsContains(self, data.id) and checkSum > 0 then
-		checkSum = 99999
+	if _P.IsCurContains(self, data.id,self.index) and checkSum > 0 then
+		checkSum = 99999999
+	elseif _P.IsContains(self,data.id) and checkSum > 0 then
+		return 3
 	--使用过没加班
 	elseif _P.IsUse(self,data.id) and not _P.IsOverTime(self,data.id) then
 		return 2
@@ -151,6 +186,16 @@ function _P.SetAskStaffList(self)
 	end
 end
 
+function _P.SetSelect(self,index)
+	for i=1,#self.mReqTableItems do
+		if i == index then
+			self.mReqTableItems[i].module:Get("Ing").Activity = true
+		else
+			self.mReqTableItems[i].module:Get("Ing").Activity = false
+		end
+	end
+end
+
 function _P.OnCreateAskItem(self,data,contentTransform,index)
 	local reqStaff = {}
 	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Staff_AdvItem", WindowType.UI, 0)
@@ -160,13 +205,25 @@ function _P.OnCreateAskItem(self,data,contentTransform,index)
 		itemMoudle:Get("Z"..i..i).Activity = false
 		itemMoudle:Get("Gou"..i).Activity = false
 	end
+
+	itemMoudle:Get("DHKtext").Text = Csv.Text("adventure_select_send")
+
+	if index == 1 then
+		self.selectTips = itemMoudle:Get("Dhk")
+		self.selectTips.Activity = true
+	else
+		itemMoudle:Get("Dhk").Activity = false
+		
+	end
+	itemMoudle:Get("Ing").Activity = false
 	_P.SetReqDetail(data.attrInfo,itemMoudle,nil)
 	icon:AddOnButton(function(...)
+		self.Top:DOAnchorPosY(TOP_END, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
+		self.Buttom:DOAnchorPosY(BUTTOM_END, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
+		_P.SetSelect(self,index)
 		-- print("点击了格子ID",LuaUtil.DumpTable(self.mReqTableItems[index]))
 		_P.SetOwnStaffList(self,data.attrInfo,index)
-		self.Top:DOAnchorPosY(TOP_END, 0.2)
-		self.Buttom:DOAnchorPosY(BUTTOM_END, 0.2)
-	end,nil,1.2)
+	end,nil,1.05)
 
 	reqStaff.module = itemMoudle
 	return reqStaff
@@ -188,12 +245,10 @@ function _P.SetReqDetail(data, module,staffData)
 		 module:Get("Z"..k..k).Activity = true
 		if v.type <= 4 then
 			--自己的员工属性
+			module:Get("Num"..k).Text = Csv.Text("adventure_staff_attr"..v.type)..v.val
 			if staffData ~= nil then
 				local val = MStaff.GetAttrByType(staffData.id,v.type)
-				module:Get("Num"..k).Text = Csv.Text("adventure_staff_attr"..v.type)..val
 				module:Get("Gou"..k).Activity = val >= v.val
-			else
-				module:Get("Num"..k).Text = Csv.Text("adventure_staff_attr"..v.type)..v.val
 			end
 		elseif v.type == MActivity.AdvReqTypeEnum.Sex then
 			if staffData ~= nil then
@@ -224,17 +279,43 @@ function _P.SetReqDetail(data, module,staffData)
 		elseif v.type == MActivity.AdvReqTypeEnum.YuanGong then
 			if staffData ~= nil then
 				module:Get("Gou"..k).Activity = staffData.id == v.val
-			else
-				local name = MStaff.GetStaffName(v.val)
-				module:Get("Num"..k).Text = Csv.Text("adventure_work",{name = name})
 			end
+			local name = MStaff.GetStaffName(v.val)
+			module:Get("Num"..k).Text = Csv.Text("adventure_work",{name = name})
 		elseif v.type == MActivity.AdvReqTypeEnum.Job then
 			if staffData ~= nil then
 				local csvPerson = Csv.Personnel[staffData.id]
 				module:Get("Gou"..k).Activity = csvPerson.stage * 10 + csvPerson.stageType == v.val
+			end
+			local level = v.val/10
+			local type = v.val%10
+			module:Get("Num"..k).Text = Csv.Text("adventure_staff_type"..type)..Csv.Text("adventure_staff_level"..level)
+		elseif v.type == MActivity.AdvReqTypeEnum.cloth then
+			if staffData ~= nil then
+				local csvPerson = Csv.Personnel[staffData.id]
+				local resutl = false
+				for k,v in pairs(csvPerson.clothesColour) do
+					if v == v.val then
+						resutl = true
+					end
+				end
+				module:Get("Gou"..k).Activity = resutl
 			else
-				local index = v.val/10 + v.val%10
-				module:Get("Num"..k).Text = Csv.Text("adventure_job"..index)
+				module:Get("Num"..k).Text = Csv.Text("adventure_cloth"..v.val)
+			end
+		elseif v.type == MActivity.AdvReqTypeEnum.tile then
+			if staffData ~= nil then
+				local csvPerson = Csv.Personnel[staffData.id]
+				module:Get("Gou"..k).Activity = csvPerson.tieColour == v.val
+			else
+				module:Get("Num"..k).Text = Csv.Text("adventure_tile"..v.val)
+			end
+		elseif v.type == MActivity.AdvReqTypeEnum.glass then
+			if staffData ~= nil then
+				local csvPerson = Csv.Personnel[staffData.id]
+				module:Get("Gou"..k).Activity = csvPerson.glasses == v.val
+			else
+				module:Get("Num"..k).Text = Csv.Text("adventure_glass"..v.val)
 			end
 		end
 	end
@@ -242,17 +323,29 @@ end
 
 function _P.GetOutColor(self, type)
 	local switch = {
+		--白
 		[1] = function()
 			return QUALITY1
 		end,
+		--绿
 		[2] = function()
 			return QUALITY2
 		end,
+		--蓝
 		[3] = function()
 			return QUALITY3
 		end,
+		--紫
 		[4] = function()
 			return QUALITY4
+		end,
+		--橙色
+		[5] = function()
+			return QUALITY5
+		end,
+		--红
+		[6] = function()
+			return QUALITY6
 		end,
 	}
 
@@ -270,11 +363,18 @@ end
 function _P.SetOwnStaffList(self,suitData,index)
 	local contentTransform = self.mModule:Get("Content")
 	contentTransform:DestroyChildren()
-
+	self.index = index
+	self.scroll.Inertia = false
+	contentTransform.LocalPosition = Vector2(0,0)
 	local staffTableDatas = _P.GetSortStaffs(self, MStaff.StaffTable, suitData)
 	for k,v in ipairs(staffTableDatas) do
 		self.mRawTableItems[v.id] = _P.OnCreateOwnItem(self,v,contentTransform,suitData,index)
 	end
+	
+	contentTransform:AddOnTime(function()
+		self.scroll.Inertia = true
+		self.scroll.DecelerationRate = 0.135
+	end,nil,0.001)
 end
 
 function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
@@ -296,6 +396,7 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 		elseif _P.IsContains(self,data.id) then
 			--召回
 			_P.OnCallBackStaff(self,data,suitData)
+			itemMoudle:Get("Tips").Activity = false
 			sendBtnText.Text = Csv.Text("adventure_staff_send")
 		else
 			--派遣
@@ -304,11 +405,26 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 			else
 				if _P.IsUse(self,data.id) and not _P.IsOverTime(self,data.id) then
 					--加班
-					_P.OnStaffOverTime(self,data)
-					sendBtnText.Text = Csv.Text("adventure_staff_send")
+					local itemId = Csv.Const(20101)[11]
+					local haveNum = MBag.GetItemNum(itemId)
+					local itemCsv = Csv.Item[itemId]
+					local content = Csv.Text("battle_chooseCost", {name = itemCsv.name, num = 1, staff = MStaff.GetStaffName(data.id)})
+					CCommon.CheckTips(function(isSure)
+						if isSure then
+							if haveNum < 1 then
+								CCommon.ShowError(Csv.Text("common_cont_enough", {name = itemCsv.name}))
+							else
+								_P.OnStaffOverTime(self,data)
+								sendBtnText.Text = Csv.Text("adventure_staff_send")
+							end	
+						end
+					end,{items = {[itemId] = haveNum}, content = content},nil,"UItemCheckBox")
 				else
 					_P.OnClickSendItem(self,data,suitData,index)
+					itemMoudle:Get("Tips").Activity = true
+					itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended") 
 					sendBtnText.Text = Csv.Text("adventure_staff_callback")
+					_P.SetConfiromState(self)
 				end
 			end
 		end
@@ -323,9 +439,11 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 
 	if _P.CheckIsSuit(self,suitData,data) > 0 then
 		unSuit.Activity = false
+		ImgIcon.IsGray = false
 		sendBtn.Activity = true
 	else
 		unSuit.Activity = true
+		ImgIcon.IsGray = true
 		sendBtn.Activity = false
 	end
 	
@@ -339,6 +457,8 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	--派遣
 	if _P.IsContains(self,data.id) then
 		--召回
+		itemMoudle:Get("Tips").Activity = true
+		itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended") 
 		sendBtnText.Text = Csv.Text("adventure_staff_callback")
 	elseif _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
 		--一加班过
@@ -386,7 +506,6 @@ end
 
 --员工加班
 function _P.OnStaffOverTime(self,data)
-	-- print("self.id",self.actId,data.id)
 	CActivity.ReqAdvStaffOver(self.actId, data.id)
 end
 
@@ -402,7 +521,6 @@ function _P.UpdateItem(self,suitData,data,index)
 		end
 		_P.SetReqDetail(self.mData.eventInfo[index].attrInfo,itemMoudle,nil)
 	else
-		-- print("index",LuaUtil.DumpTable(self.mReqTableItems))
 		local itemMoudle = self.mReqTableItems[index].module
 		local csvPerson = Csv.Personnel[data.id]
 		_P.SetReqDetail(suitData,itemMoudle,data)
@@ -438,6 +556,27 @@ function _P.IsItemFull(self,index)
 		end
 	end
 	return false
+end
+
+function _P.SetConfiromState(self)
+	local light = #self.selectDataList == #self.mData.eventInfo
+	if light then
+		self.Top:DOAnchorPosY(TOP_BEGIN, 0.6):SetEase(CS.DG.Tweening.Ease.Linear)
+		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
+	end
+	self.confirm.IsGray = not light
+	self.confirm.RaycastTarget = light
+end
+
+function _P.IsCurContains(self,id,index)
+	local isHasSend = false
+	for i=1, #self.selectDataList do
+		if self.selectDataList[i].id == id and self.selectDataList[i].selectId == index then
+			isHasSend = true
+			break
+		end
+	end
+	return isHasSend
 end
 
 -- 是否已经派遣
@@ -513,8 +652,8 @@ function _M:OnCreate(eventData,activityData)
 	module:Get("Info").Text = eventconf.desc
 	module:Get("Icon").SpriteName = eventconf.icon
 	module:Get("C_text").Text = Csv.Text("adventure_staff_confirm")
-	module:Get("DHKtext").Text = Csv.Text("adventure_select")
-	self.selectTips = module:Get("Dhk")
+	module:Get("BtnText22").Text = Csv.Text("adventure_back")
+	self.scroll = module:Get("scrollView")
 	self.DownRect = module:Get("BtnRect")
 	self.DownRect.CachedTran:GetJTweener(POSY_ANIM):Play()
 	self.DownBtn = module:Get("Btn")
@@ -523,9 +662,12 @@ function _M:OnCreate(eventData,activityData)
 	self.confirm = module:Get("C_Btn_a")
 	self.confirm:AddOnButton(function(...)
 		--确认选择判断选择人数够了没
+	local vip = MPlayer.GetVip()
+	local extraTime = Csv.Vip[vip].adventureMainCount
+	local lefttime = Csv.Const(20101)[3] + extraTime - self.activityData.personalEventTimes
 		if #self.selectDataList < #self.mData.eventInfo then
 			CCommon.ShowError(Csv.Text("adventure_call_limit"))
-		elseif self.activityData.personalEventTimes <= 0 then
+		elseif lefttime <= 0 then
 			CCommon.ShowError(Csv.Text("adventure_main_limit"))
 		else
 			--TODO：完成事件
@@ -546,8 +688,8 @@ function _M:OnCreate(eventData,activityData)
 	end,nil,1.2)
 	
 	self.DownBtn:AddOnButton(function(...)
-		self.Top:DOAnchorPosY(TOP_BEGIN, 0.2)
-		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.2)
+		self.Top:DOAnchorPosY(TOP_BEGIN, 0.6):SetEase(CS.DG.Tweening.Ease.Linear)
+		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
 	end,nil,1.2)
 
 	
@@ -558,6 +700,7 @@ function _M:OnCreate(eventData,activityData)
 	self.OutBox = module:Get("OutBox")
 	self.OutBox.Color = _P.GetOutColor(self, eventconf.quality)
 	_P.SetAskStaffList(self)
+	_P.SetConfiromState(self)
 end
 
 return _M

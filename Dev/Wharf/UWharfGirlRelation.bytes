@@ -72,6 +72,7 @@ end
 function _M:OnCreate(id,eventID)
 	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_Relationship")
 	self.mMoudle = moudle
+	moudle:Get("SliderBg").Activity = false
 	local closeBtn = moudle:Get("back_Btn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -157,7 +158,7 @@ function _P.OnScrollValueChange(self)
 	local content = moudle:Get("content_1")
 	local pos = content.LocalPosition
 	local slider = moudle:Get("SliderBg")
-	slider.LocalPosition = pos
+	slider.LocalPosition = Vector2(pos.x,pos.y + 10)
 end
 
 function _P.ShowTopGirlItems(self,selectid)
@@ -192,13 +193,13 @@ function _P.ShowTopGirlItems(self,selectid)
 
 	self.mTopGirlTab = topgirlTab
 
-	self.mMoudle.SelfRect:AddOnTime(function()
+	-- self.mMoudle.SelfRect:AddOnTime(function()
 		if selectid ~= nil then
 			_P.SelectGirl(self,selectid)
 		else
 			_P.SelectGirl(self,lastID)
 		end
-	end,nil,0.05)
+	-- end,nil,0.05)
 end
 
 function _P.CreateTopGirl(self,content,v)
@@ -290,11 +291,11 @@ function _P.RefreshContentPos(self,moudle)
 
 	local targartPos = scrollWidth - imgPosx - imgWidth/2 
 	
-	if targartPos <= 1 then
-		content:DOAnchorPosX(targartPos,0.2)
-	else
-		content:DOAnchorPosX(0,0.2)
-	end
+	-- if targartPos <= 1 then
+	-- 	content:DOAnchorPosX(targartPos,0.2)
+	-- else
+	-- 	content:DOAnchorPosX(0,0.2)
+	-- end
 end
 
 
@@ -331,8 +332,12 @@ function _P.UpDateEvents(self,events)
 	end
 
 	--
+	self.mMoudle:Get("SliderBg").Activity = true
 	local silderfill = curEvent/maxEvent
 	self.mSliderValue.FillAmount = silderfill
+	if curEvent >= 3 then
+		self.mMoudle:Get("content_1").LocalPosition = Vector2(0,-604)
+	end
 
 	if silderfill == 1 then
 		self.isDone = true

@@ -402,34 +402,27 @@ end
 
 --设置形象
 function _P.SetBody(self, dataIndex, posData)
-	local csvData = Csv.Title[dataIndex]
-	local body, bodyPrefab = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
 	if self.bodySpine ~= nil then
         self.bodySpine:Destroy()
         self.bodySpine = nil
-    end
-	if nil ~= bodyPrefab and 0 ~= bodyPrefab then
-		self.bodySpine = CCommon.CreateActor(self.bosySpine, bodyPrefab, CCommon.ActorFieldMap.parliament_body)
-		self.Body.SpriteName = ""
-		self.Body.RaycastTarget = true
-	elseif nil ~= body then
-		self.Body.SpriteName = body
-		self.Body.Color = ColorWhite
-		self.Body.RaycastTarget = true
 	end
-
-	local head, heaPrefab = MParliament.GetBodyByIDSex(posData.head, posData.sex)
 	if self.headSpine ~= nil then
         self.headSpine:Destroy()
         self.headSpine = nil
     end
-	if nil ~= heaPrefab and 0 ~= heaPrefab then
-		self.headSpine = CCommon.CreateActor(self.Head, heaPrefab, CCommon.ActorFieldMap.parliament_head)
+	local body, bodyPrefab = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
+	local head, heaPrefab = MParliament.GetBodyByIDSex(posData.head, posData.sex)
+	if nil ~= bodyPrefab and 0 ~= bodyPrefab and nil ~= heaPrefab and 0 ~= heaPrefab then
+		self.bodySpine, self.headSpine = CCommon.CreateRole(self.bosySpine, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.parliament_body)
+		self.Body.SpriteName = ""
 		self.Head.SpriteName = ""
-	elseif nil ~= head then
+	else
+		self.Body.SpriteName = body
+		self.Body.Color = ColorWhite
 		self.Head.SpriteName = head
 		self.Head.Color = ColorWhite
 	end
+	self.Body.RaycastTarget = true
 
 	local isSelf = MPlayer.GetId() == posData.playerID
 	if nil ~= posData.msg and "" ~= posData.msg then
@@ -442,6 +435,7 @@ function _P.SetBody(self, dataIndex, posData)
 	end
 
 	self.NoneText.Activity = false
+	local csvData = Csv.Title[dataIndex]
 	self.PosNameText.Text = csvData.name
 	self.PlayerNameBox.Activity = true
 	self.PlayerNameText.Text = posData.playerName

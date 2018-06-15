@@ -67,6 +67,7 @@ function _M:OnCreate(chooseFuncId)
 	local scrollView = moudle:Get("downScroll")
 	local content = moudle:Get("content")
 	self.mContent = content
+	self.SelectImgTab = {}
 	--local funcIDs = {}
 	local lastChoose = 0
 
@@ -85,20 +86,22 @@ function _M:OnCreate(chooseFuncId)
 	if count > 0 then
 		lastChoose = chooseFuncId
 		local isHave = false
-		local defaultColor = Color(247/255, 211/255, 169/255, 1)
+		local defaultColor = Color(1,1,1,1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "HXbian_001_14", "HXbian_001_14",nil,defaultColor,beforeBtn,nextBtn,scrollView,content)
+		end, "HXbian_001_22", "HXbian_001_22",defaultColor,defaultColor,beforeBtn,nextBtn,scrollView,content)
 	
 		for k,v in pairs(funcs) do
 			local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item", WindowType.UI, 10)
-			local sheetRect = sheetMoudle.SelfRect
+			local sheetRect = sheetMoudle:Get("BG")
 			sheetRect.Activity = true
 
 			local sheetNameText =  sheetMoudle:Get("nameText_1")
 			sheetNameText.Activity = true
 
 			tabHandle:Add(v.id, sheetRect, sheetNameText, v.name)
+			self.SelectImgTab[v.id] = sheetMoudle:Get("select")
+			self.SelectImgTab[v.id].Activity = false
 		
 			if lastChoose == v.id then
 				isHave = true
@@ -299,6 +302,12 @@ function _P.OnChoose(self, funcId)
 
 	MWelfare.selectToggle = funcId
 	self.mTitle.Text = Csv.Func[funcId].name
+
+	if self.NowSelectImg ~= nil then
+		self.NowSelectImg.Activity = false
+	end
+	self.NowSelectImg = self.SelectImgTab[funcId]
+	self.NowSelectImg.Activity = true
 end
 
 

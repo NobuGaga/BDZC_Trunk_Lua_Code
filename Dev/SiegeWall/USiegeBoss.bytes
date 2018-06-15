@@ -38,7 +38,7 @@ function _M:OnCreate(selectPhase)
 
 	local helpBtn = moudle:Get("C_Full_Help_Btn")
 	helpBtn:AddOnButton(function()
-		
+		WindowMgr.Create("URuleTips",17404)
 	end)
 
 	moudle:Get("C_Text_0").Text = Csv.Text("siege_boss_title")
@@ -119,6 +119,8 @@ function _P.GetBossByType(type)
 			table.insert(list,v)
 		else
 			if type == Define.SysId.Siege_Boss_Server then
+				table.insert(list,v)
+				--[[
 				if MCommerce.MyCommerceId > 0 then
 					if v.commerceId ~= MCommerce.MyCommerceId then
 						table.insert(list,v)
@@ -126,6 +128,7 @@ function _P.GetBossByType(type)
 				else
 					table.insert(list,v)
 				end
+				--]]
 				
 			elseif type == Define.SysId.Siege_Boss_Commerce then
 				if MCommerce.MyCommerceId ~= 0 then
@@ -175,8 +178,17 @@ function _P.CreateBossItem(self,data)
 	headIcon.SpriteName = bossData.icon
 	name.Text = bossData.name
 	JinDu.Text = ""..jindu.."%"
-	FinderText.Text = Csv.Text("siege_boss_finder")
-	FinderName.Text = data.discoverer
+
+	if data.discoverer ~= nil then
+		FinderText.Activity = true
+		FinderName.Activity = true
+		FinderText.Text = Csv.Text("siege_boss_finder")
+		FinderName.Text = data.discoverer
+	else
+		FinderText.Activity = false
+		FinderName.Activity = false
+	end
+
 	buffIcon.Activity = false
 	
 	local specialBuff = MSiege.GetBuffInfo(1)

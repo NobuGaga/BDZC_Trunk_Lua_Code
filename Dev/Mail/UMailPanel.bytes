@@ -70,9 +70,11 @@ function _P.OnCreateMailList(self)
 		self.mModule:Get("texttop").Text = Csv.Text("mail_current")
 		self.mModule:Get("NumText").Text = "0"
 		self.mModule:Get("C_Btn_b").Activity = false
+		self.mModule:Get("empty").Activity = true
 		return
 	else
 		self.mModule:Get("hide").Activity = true
+		self.mModule:Get("empty").Activity = false
 		self.mModule:Get("C_Btn_b").Activity = true
 	end
 
@@ -152,6 +154,9 @@ function _P.CreatMailItem(self,parent,data)
 end
 
 function _P.OnClickItem(self, data)
+	if self.finishEffect ~= nil then
+		self.finishEffect:Destroy()
+	end
 	self.mailData = data
 	local moudle = self.mModule
 	moudle:Get("texttop").Text = Csv.Text("mail_current")
@@ -230,10 +235,12 @@ function _P.OnClickItem(self, data)
 	end
 	if data then
 		for k,v in pairs(self.idToMoudle) do
-			if k == self.mailData.mailid then
-				v:Get("H").Activity = true
-			else
-				v:Get("H").Activity = false
+			if v ~= nil then
+				if k == self.mailData.mailid then
+					v:Get("H").Activity = true
+				else
+					v:Get("H").Activity = false
+				end
 			end
 		end
 	end
@@ -292,16 +299,22 @@ function _P.UpdateItemData(self, data)
 
 	if self.finishImg ~= nil then
 		_P.PlayItemEffect(self, data)
+		if self.idToMoudle[data.mailid] ~= nil and self.mailData ~= nil then
+			self.finishImg.Activity = data.gainAward
+			self.mailData = MMail.GetMailData(data.mailid)
+			_P.SetItemData(self.idToMoudle[data.mailid], self.mailData)
+			_P.OnClickItem(self, self.mailData)
+		end
 		self.mModule.SelfRect:AddOnTime(function()
 			SoundMgr.Play(10004)
-			local effect = CCommon.CreateEffect(self.hasRect, GTE_EFFECT_ID, self.finishImg.LocalPosition, function( ... )
-				if effect ~= nil then
-					effect:Destroy()
+			self.finishEffect = CCommon.CreateEffect(self.hasRect, GTE_EFFECT_ID, self.finishImg.LocalPosition, function( ... )
+				if self.finishEffect ~= nil then
+					self.finishEffect:Destroy()
 				end
-				self.finishImg.Activity = data.gainAward
-				self.mailData = MMail.GetMailData(data.mailid)
-				_P.SetItemData(self.idToMoudle[data.mailid], self.mailData)
-				_P.OnClickItem(self, self.mailData)
+				-- if data.mailid ~= self.mailData.mailid then
+				-- 	_P.SetItemData(self.idToMoudle[self.mailData.mailid], self.mailData)
+				-- 	_P.OnClickItem(self, self.mailData)
+				-- end
 			end)
 		end, nil, 0.2)
 	end
@@ -382,6 +395,15 @@ function _P.RefreshMail(self)
 	self.mRawTableItems = {}
 	_P.OnCreateMailList(self)
 	self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
+
+	if self.idToMoudle[self.mailData.mailid] ~= nil and self.mailData ~= nil then
+		_P.OnClickItem(self, self.mailData)
+	else
+		if self.mSortMailDatas ~= nil and #self.mSortMailDatas > 0 then
+			self.mailData = self.mSortMailDatas[1]
+			_P.OnClickItem(self, self.mailData)
+		end
+	end
 end
 
 function _M:BeforeDestroy()

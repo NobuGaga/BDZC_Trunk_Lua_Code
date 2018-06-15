@@ -239,11 +239,28 @@ function _P.RefreshBody(self,index)
 			local head = moudle:Get("PosHead")
 			local body = moudle:Get("PosBody")
 			moudle:Get("BG").SpriteName = csvTitle.background
+			if self.bodySpine ~= nil then
+				self.bodySpine:Destroy()
+				self.bodySpine = nil
+			end
+			if self.headSpine ~= nil then
+				self.headSpine:Destroy()
+				self.headSpine = nil
+			end
 			if data.playerID ~= nil then
-				head.SpriteName = MPlayer.GetOtherHeadAsset(data.head,data.sex)
-				head.Color = ColorWhite
-				body.SpriteName = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
-				body.Color = ColorWhite
+				local bodySprite, bodyPrefab = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
+				local headSprite, heaPrefab = MParliament.GetBodyByIDSex(data.head, data.sex)
+				
+				if bodyPrefab and bodyPrefab ~= 0 and heaPrefab and heaPrefab ~= 0 then
+					self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("bosySpine"), bodyPrefab, heaPrefab, CCommon.ActorFieldMap.election_body)
+					body.SpriteName = ""
+					head.SpriteName = ""
+				else
+					body.SpriteName = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
+					body.Color = ColorWhite
+					head.SpriteName = MPlayer.GetOtherHeadAsset(data.head,data.sex)
+					head.Color = ColorWhite
+				end
 			else
 				head.SpriteName = DefaultHead
 				head.Color = ColorBlack

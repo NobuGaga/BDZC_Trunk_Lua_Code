@@ -130,6 +130,8 @@ _M.SysId =
 	Adventure = 137,
 	-- 银行理财
 	Investment = 175,
+	-- 操纵期货
+	Futures = 176,
 
 --自由城入口(世界) 150 ~ 199
 
@@ -742,6 +744,8 @@ _M.ActivityType =
 	Adventure = 27,
 	-- 银行投资
 	Investment = 28,
+	-- 操纵期货
+	Futures = 29,
 }
 
 --排行榜类型
@@ -782,6 +786,18 @@ _M.RankType =
 	AdventurePerson = 59,
 	-- 奇遇活动 商会
 	AdventureGang = 60,
+	--围攻华尔街第1阶段
+	SiegeOne = 61,
+	--围攻华尔街第1阶段商会
+	SiegeOneSH = 62,
+	--围攻华尔街第2阶段
+	SiegeTWO = 63,
+	--围攻华尔街第2阶段商会
+	SiegeTWOSH = 64,
+	--围攻华尔街第3阶段
+	SiegeTHREE = 65,
+	--围攻华尔街第3阶段商会
+	SiegeThreeSH = 66,
 }
 
 _M.CrossRankType = 
@@ -808,9 +824,18 @@ _M.RankTypeFunc =
 	[_M.RankType.Charitable] = {view = "UCharitableRankPanel", func = "OnGetSelfRankData"},
 	[_M.RankType.AdventurePerson] = {view = "UAdventureRank", func = "OnGetSelfRankData"},
 	[_M.RankType.AdventureGang] = {view = "UAdventureRank", func = "OnGetGangRankData"},
+	
 	-- 竞标
 	[_M.RankType.BuyLand1] = {view = "UBuyLandRank", func = "ResetList"}, -- 周榜
 	[_M.RankType.BuyLand2] = {view = "UBuyLandRank", func = "ResetList"}, -- 总榜
+
+	--围攻华尔街
+	[_M.RankType.SiegeOne] = {view = "USiegeRankPanel", func = "OnGetSelfRankData"},
+	[_M.RankType.SiegeOneSH] = {view = "USiegeRankPanel", func = "OnGetGangRankData"},
+	[_M.RankType.SiegeTWO] = {view = "USiegeRankPanel", func = "OnGetSelfRankData"},
+	[_M.RankType.SiegeTWOSH] = {view = "USiegeRankPanel", func = "OnGetGangRankData"},
+	[_M.RankType.SiegeTHREE] = {view = "USiegeRankPanel", func = "OnGetSelfRankData"},
+	[_M.RankType.SiegeThreeSH] = {view = "USiegeRankPanel", func = "OnGetGangRankData"},
 }
 
 _M.CrossRankTypeFunc =

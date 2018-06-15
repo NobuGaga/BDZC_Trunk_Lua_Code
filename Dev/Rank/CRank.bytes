@@ -2,6 +2,7 @@ local MRank = JRequire "Dev.Rank.MRank"
 local MRelations = JRequire "Dev.Relations.MRelations"
 local CMain = JRequire "Dev.Main.CMain"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = {}
 local _P = {}
@@ -113,10 +114,12 @@ function _P.OnRefreshWorship(data)
 	local isRedpoint = false
 	if data.list ~= nil then
 		for k,v in pairs(data.list) do
-			if v.cross == false then
+			if v.cross == nil or v.cross == false then
 				MRank.RankRedPointTable[v.rankid] = v.state
 			else
-				MRank.AllRankRedPointTable[v.rankid] = v.state
+				if MPlayer.IsCross() then
+					MRank.AllRankRedPointTable[v.rankid] = v.state
+				end
 			end
 		end
 		isRedpoint = MRank.GetRedState()

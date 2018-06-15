@@ -21,6 +21,7 @@ local ECmdId = {
 	cEnterTreasure = 13,	-- 进入宝库界面 -- PSiegeWall.CEnterTreasure
 	cShopBuy = 14,			-- 商城购买（兑换）PSiegeWall.CShopBuy
 	cGetRankReward = 15,	-- 领取排行版奖励 PSiegeWall.CGetRankReward
+	cSiegeBuyActions = 16,	-- 购买行动点 
 
 	sSiegeInit						=	1,  -- 初始化数据	--PSiegeWall.SSiegeMsg
 	sSiegeStage						=	2,	-- 接受阶段信息  --PSiegeWall.SSiegeStageMsg
@@ -39,6 +40,8 @@ local ECmdId = {
 	sGetRankReward					= 	15, -- 领取排行版奖励 PSiegeWall.SGetRankReward
 	sGetRankStatePush				=	16, -- 领取状态变化推送 PSiegeWall.SGetRankStatePush
 	sGetActionPoint					=	17,	-- 更新行动点 PSiegeWall.SActionPoint
+	sSiegeActivityStatus			=	18, -- 下发活动状态 PSiegeWall.SActivityStatus
+	sSiegeSwitchStage				=	19, -- 下发阶段切换后的开始时间  PSiegeWall.SSiegeSwitchStage
 }
 
 function _M.ModuleInit(isReload)
@@ -54,10 +57,11 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cUnlockStaff] = "PSiegeWall.CUnlockStaff",
 		[ECmdId.cOpenUdisk] = "PSiegeWall.COpenUdisk",
 		[ECmdId.cDonate] = "PSiegeWall.CDonate",
-		[ECmdId.cBuyOrder] = "",
+		[ECmdId.cBuyOrder] = "PSiegeWall.CDonate",
 		[ECmdId.cEnterTreasure] = "PSiegeWall.CEnterTreasure",
 		[ECmdId.cShopBuy] = "PSiegeWall.CShopBuy",
-		[ECmdId.cGetRankReward] = "PSiegeWall.CEnterTreasure",
+		[ECmdId.cGetRankReward] = "PSiegeWall.CGetRankReward",
+		[ECmdId.cSiegeBuyActions] = "",
 	}
 	local recv = {
 		
@@ -78,164 +82,119 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sGetRankReward]		= { proto = "PSiegeWall.SGetRankReward",		handle = _P.OnGetRankRewardBack},
 		[ECmdId.sGetRankStatePush]  = { proto = "PSiegeWall.SGetRankStatePush",	 	handle = _P.OnGetRankStatePush},
 		[ECmdId.sGetActionPoint]	= { proto = "PSiegeWall.SActionPoint",			handle = _P.OnUpdateActionPoint},
+		[ECmdId.sSiegeActivityStatus]	= { proto = "PSiegeWall.SActivityStatus",			handle = _P.OnActivityStatus},
+		[ECmdId.sSiegeSwitchStage]	= { proto = "PSiegeWall.SSiegeSwitchStage",			handle = _P.OnSiegeSwitchStage},
 	}
 	 _M.Send = SocketMgr.Regist(Define.SysId.SiegeWall, send, recv, isReload)
 end
 
 -- C2S
 function _M.ReqSiegeInit()
-	print("_____ReqSiegeInit_________________")
 	_M.Send(ECmdId.cSiegeInit)
 end
 
 function _M.ReqSiegeStage()
-	print("___ReqSiegeInit___________________")
+	print("!!!!!!!")
 	_M.Send(ECmdId.cSiegeStage)
 end
 
 function _M.ReqProtest()
-	print("__ReqSiegeInit____________________")
 	_M.Send(ECmdId.cProtest)
 end
 
 function _M.ReqBossList()
-	print("___ReqSiegeInit___________________")
 	_M.Send(ECmdId.cBossList)
 end
 
 function _M.ReqInitFight(id)
-	print("___ReqSiegeInit___________________")
 	_M.Send(ECmdId.cInitFight,{bossIndexID = id})
 end
 
 function _M.ReqBuyBuffInBattle(_id)
-	print("__ReqBuyBuffInBattle__",_id)
 	_M.Send(ECmdId.cBuyBuffInBattle,{id = _id})
 end
 
 function _M.ReqUsekillBuff(_id)
-	print("__ReqUsekillBuff__",_id)
 	_M.Send(ECmdId.cUsekillBuff,{id = _id})
 end
 
 function _M.ReqSiegeFight(_staffid,_bossId)
-	print("___ReqSiegeInit___________________",_staffid,_bossId)
 	_M.Send(ECmdId.cSiegeFight,{staffid = _staffid,bossIndexID = _bossId})
 end
 
 function _M.ReqUnlockStaff(_staffid,_bossID)
-	print("___ReqSiegeInit___________________",_staffid,_bossID)
 	_M.Send(ECmdId.cUnlockStaff,{staffid = _staffid,bossIndexID = _bossID})
 end
 
 
 function _M.OpenUdiskReq(_id, _playerid,_istreasure)
-	print("___ReqSiegeInit___________________",_id, _playerid,_istreasure)
 	_M.Send(ECmdId.cOpenUdisk, {id = _id, playerid = _playerid,istreasure = _istreasure})
 end
 
 
 function _M.DonateReq(id)
-	print("_ReqSiegeInit_____________________")
 	_M.Send(ECmdId.cDonate, {id = id})
 end
 
 
-function _M.BuyOrderReq()
-	print("___ReqSiegeInit___________________")
-	_M.Send(ECmdId.cBuyOrder)
+function _M.BuyOrderReq(_id)
+	print("______BuyOrderReq__________________",_id)
+	_M.Send(ECmdId.cBuyOrder,{id = _id})
 end
 
 
-function _M.EnterTreasureReq(actId, stage)
-	print("___ReqSiegeInit___________________")
-	_M.Send(ECmdId.cEnterTreasure, {actId = actId, stage = stage})
+function _M.EnterTreasureReq(_actId, _stage)
+	_M.Send(ECmdId.cEnterTreasure, {actId = _actId, stage = _stage})
 end
 
 
-function _M.BuyShopItemReq(stage, index, count)
-	print("___ReqSiegeInit___________________")
-	_M.Send(ECmdId.cShopBuy, {stage = stage, index = index, count = count})
+function _M.BuyShopItemReq(_stage, _index, _count)
+	_M.Send(ECmdId.cShopBuy, {stage = _stage, index = _index, count = _count})
 end
 
 
-function _M.GetRankResReq(actId, stage, ranktype)
-	print("__ReqSiegeInit____________________")
-	_M.Send(ECmdId.cGetRankReward, {actId = actId, stage = stage, ranktype = ranktype})
+function _M.GetRankResReq(_actId, _stage, _ranktype)
+	print("____GetRankResReq________",_actId, _stage, _ranktype)
+	_M.Send(ECmdId.cGetRankReward, {actId = _actId, stage = _stage, ranktype = _ranktype})
 end
 
+function _M.ReqBuyAction()
+	_M.Send(ECmdId.cSiegeBuyActions)
+end
 
 -- S2C
-function _P.OnInitData(data)
-	print("OnInitData______________")
-	print(data.activityID)
-	print(data.phase)
-	if data.stageData ~=nil then
-		for k,v in pairs(data.stageData)do
-			print("_stage__",v.stage)
-			print("_point__",v.point)
-			print("selfGetState___",v.selfGetState)
-			print("selfGetState___",v.selfGetState)
-			if v.itemList ~= nil then
-				for k1,v1 in pairs(v.itemList)do
-					print("_itemIndex____",v1.index)
-					print("_goodid____",v1.goodid)
-					print("_buyCount____",v1.buyCount)
-				end
-			end
-		end
-	end
+function _P.OnActivityStatus(data)
+	MSiege.SiegeActivityStatus(data)
+end
 
+function _P.OnSiegeSwitchStage(data)
+	MSiege.SetOpenTime(data)
+end
+
+function _P.OnInitData(data)
 	MSiege.SetAcitvityPhase(data.activityID,data.phase)
 	MSiege.SetAllStageData(data.stageData)
 	WindowMgr.Call("USiegeMain","SiegeInit")
 end
 
 function _P.OnGetStageMsg(data)
-	print("________OnGetStageMsg_____________________")
-	print("__phase__________",data.phase)
-	if data.progress ~= nil then
-		for k,v in pairs(data.progress)do
-			print("progress_type_______",v.type)
-			print("progress_progressCur_______",v.progressCur)
-			print("progress_progressMax_______",v.progressMax)
-		end
-	end
-	print("__lastUdisk__________",data.lastUdisk.ncur,data.lastUdisk.nmax)
-	if data.buffs ~= nil then
-		for k,v in pairs(data.buffs)do
-			print("__buffs___________",v.key,v.value)
-		end
-	else
-		print("没有buff！！！")
-	end
-
-	if data.enemy ~= nil then
-		print("__enemy__________",data.enemy)
-	end
-	print("____________",data.staffs)
-	print("____________",data.teams)
-	
-	------------------------------------------------------------------------------
 	MSiege.SetSiegeStageMsg(data)
 	WindowMgr.Call("USiegeMain","SiegeStageMsg")
 end
 
 function _P.OnUpdateActionPoint(data)
-	print("_________UpdateAciont_______________")
-	print(data.action)
-	print(data.lastTime)
-
 	MSiege.SetActionPoint(data)
+	WindowMgr.Call("USiegeMain", "UpdateActionPoint")
 end
 
 function _P.OnProtest(data)
-	print("_________OnProtest____")
 	WindowMgr.Call("USiegeMain", "GetProtest",data)
+
+	--请求进度信息
+	WindowMgr.Call("USiegeMain", "UpdateMain")
 end
 
 function _P.OnBossList(data)
-	print("_________OnBossList_______")
 	MSiege.SetBossList(data)
 	WindowMgr.Call("USiegeBoss","UpdateList")
 end
@@ -246,16 +205,19 @@ end
 
 function _P.OnBuyBuffInBattle(data)
 	MSiege.SetNewBuff(data)
-	WindowMgr.Call("USiegeBattle", "RefreshBuff", data)
+	WindowMgr.Call("USiegeBattle", "RefreshBuff")
 end
 
 function _P.OnUsekillBuff(data)
 	MSiege.SetNewBuff(data)
-	WindowMgr.Call("USiegeBattle", "RefreshBuff", data)
+	WindowMgr.Call("USiegeBattle", "RefreshBuff")
 end
 
 function _P.OnSiegeFight(data)
 	WindowMgr.Call("USiegeBattle", "UpdateFight", data)
+
+	--请求进度信息
+	WindowMgr.Call("USiegeMain", "UpdateMain")
 end
 
 function _P.OnUnlockStaff(data)
@@ -264,7 +226,6 @@ function _P.OnUnlockStaff(data)
 end
 
 function _P.OnOpenUdiskBack(data)
-	print("___OnOpenUdiskBack____",data.id)
 	if WindowMgr.IsCreated("UGetUDisk") then
 		WindowMgr.Call("UGetUDisk", "ShowOpenUDisk", data)
 	elseif WindowMgr.IsCreated("USiegeTreasurePanel") then
@@ -279,20 +240,23 @@ end
 
 
 function _P.OnBuyOrderBack(data)
+	print("_____OnBuyOrderBack__________",data.id,data.leavecount)
 	WindowMgr.Call("USiegeTreasurePanel", "OnBuyCallBack", data)
 end
 
 
 function _P.OnEnterTreasure(data)
+	print("OnEnterTreasure！！！！！！！！！！！！！！！！！")
 	WindowMgr.Call("USiegeTreasurePanel", "OnGetTreasureList", data)
 end
 
 
 function _P.OnShopBuyBack(data)
+	MSiege.ReduceAllStageData(data.stage,data.index,data.goodid,data.buyCount)
 	local curStageData = MSiege.AllStageData[data.stage]
+	
 	if curStageData then
 		MSiege.AllStageData[data.stage].point = data.point
-		_P.UpdateShopItemData(stage, data)
 	end
 
 	WindowMgr.Call("USiegeExchangePanel", "OnExchangeCallBack", data)
@@ -318,13 +282,8 @@ end
 
 
 function _P.OnGetRankStatePush(data)
-	local curStageData = MSiege.AllStageData[data.stage]
-	if curStageData then
-		MSiege.AllStageData[data.stage].selfGetState = data.selfGetState
-		MSiege.AllStageData[data.stage].gangGetState = data.gangGetState
-	end
-
-	WindowMgr.Call("USiegeRankPanel", "OnGetRankStatePush", data)
+	MSiege.SetRankStage(data)
+	WindowMgr.Call("USiegeRankPanel", "OnGetRankStatePush")
 end
 
 

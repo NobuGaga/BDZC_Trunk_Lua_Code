@@ -5,10 +5,12 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCar = JRequire "Dev.Car.CCar"
 local MCar = JRequire "Dev.Car.MCar"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
 local PointerRotateActs = {0, -53, -110, -178, -232}
 local BatchBreakData = Csv.Const(82)
+local DestroyBlueCarVipLvl = Csv.Const(112)
 local BatchSelectBgImgs = {"zj_033", "zj_027", "zj_028", "zj_029", "zj_030", "zj_031"}
 
 local _M = Class()
@@ -380,9 +382,16 @@ end
 -- 创建选择框
 function _P.OnCreateSelectItem(self, data, index)
 	local module = self.mModule
-	local qualityRect = module:Get("Quality" .. index)
-	module:Get("Car" .. index).Text = Csv.Text("car_batch_breakCar" .. data.index)
+	if data.index == 3 then
+		if MPlayer.GetVip() < DestroyBlueCarVipLvl then
+			module:Get("Quality" .. index).Activity = false
+			return
+		end
+	end
 
+	module:Get("Car" .. index).Text = Csv.Text("car_batch_breakCar" .. data.index)
+	
+	local qualityRect = module:Get("Quality" .. index)
 	qualityRect.Activity = true
 	qualityRect.SpriteName = BatchSelectBgImgs[data.index + 1]
 
@@ -391,8 +400,14 @@ function _P.OnCreateSelectItem(self, data, index)
 
 	qualityRect:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		lightImg.Activity = not lightImg.Activity
+		-- b级车
+		if data.index == 3 then
+			if MPlayer.GetVip() < DestroyBlueCarVipLvl then
+				return
+			end
+		end
 
+		lightImg.Activity = not lightImg.Activity
 		if lightImg.Activity then
 			MCar.BatchBreakList[data.index + 1] = data.index
 		else
@@ -406,6 +421,11 @@ end
 
 -- 更新座驾列表选中效果
 function _P.UpdateSelectData(self, qualityId, isSelect)
+	if qualityId == 3 then
+		if MPlayer.GetVip() < DestroyBlueCarVipLvl then
+			return
+		end
+	end
 	for i,v in ipairs(self.mAllCarItems) do
 		if v.qualityId == qualityId and (not v.isequip) and (not v.isUp) then
 			v.module:Get("Black").Activity = isSelect

@@ -115,18 +115,18 @@ function _P.SetJoinState(self)
 	end
 end
 
-function _P.SetBtnAnim(self)
-	if self.fruitTweener ~= nil then
-		self.fruitTweener:Restore()
-		self.fruitTweener:DOKill()
-		self.fruitTweener = nil
-	end
+-- function _P.SetBtnAnim(self)
+-- 	if self.fruitTweener ~= nil then
+-- 		self.fruitTweener:Restore()
+-- 		self.fruitTweener:DOKill()
+-- 		self.fruitTweener = nil
+-- 	end
 
-	self.fruitTweener = self.fruitBtn.CachedTran:GetJTweener(FRUIT_ANIM)
-	if MBag.GetItemNum(self.ItemId) >= self.minCostNum then
-		self.fruitTweener:Play()
-	end
-end
+-- 	self.fruitTweener = self.fruitBtn.CachedTran:GetJTweener(FRUIT_ANIM)
+-- 	-- if MBag.GetItemNum(self.ItemId) >= self.minCostNum then
+-- 		self.fruitTweener:Play()
+-- 	-- end
+-- end
 
 --界面构造
 function _M:OnCreate(...)
@@ -175,19 +175,20 @@ function _M:OnCreate(...)
 	module:Get("TimeText").Text = Csv.Text("charitable_open_time")
 	module:Get("FruitText").Text = Csv.Text("charitable_2")
 	module:Get("C_text_0").Text = Csv.Text("charitable_rank_reward")
-	
+	self.fruitNode = module:Get("FruitFxNode")
+	CCommon.CreateEffect(self.fruitNode, 10152)
 	_P.OnInitBtnState(self, charitableConf)
 
 	--监听播放爱心抽奖按钮动画
-	self.fruitBtn = module:Get("Fruit")
-	self.minCostNum = self.charitableConf.oneCost[2]
-	self.ItemId = self.charitableConf.oneCost[1]
-	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
-		if itemid == self.ItemId then
-			_P.SetBtnAnim(self)
-		end
-	end)
-	_P.SetBtnAnim(self)
+	-- self.fruitBtn = module:Get("Fruit")
+	-- self.minCostNum = self.charitableConf.oneCost[2]
+	-- self.ItemId = self.charitableConf.oneCost[1]
+	-- self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
+	-- 	if itemid == self.ItemId then
+	-- 		_P.SetBtnAnim(self)
+	-- 	end
+	-- end)
+	-- _P.SetBtnAnim(self)
 
 	--因为背景与排行分数有关，所以在这里要请求一把个人排行数据
 	CActivity.ReqCharitableGetRank()

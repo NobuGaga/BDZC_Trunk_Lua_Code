@@ -19,11 +19,12 @@ local _R = {}
 
 local winActorId = 10046
 
-function _M:OnCreate(data)
+function _M:OnCreate(data,id)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
 		self:Destroy()
 
+		WindowMgr.Call("USiegeBattle","CloseView")
 	end)
 
 	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PHReward")
@@ -35,23 +36,22 @@ function _M:OnCreate(data)
 	local text4 = moudle:Get("text4")
 	local text5 = moudle:Get("text5")
 
-	if isVote then
-		text1.Text = Csv.Text("finance_rewardTitle_fb3",{num = data.rank})--"恭喜总裁在【抵御巴菲特】活动中获得第"..data.rank.."名"
-	else
-		text1.Text = Csv.Text("finance_rewardTitle_fb2",{num = data.rank})--"恭喜总裁在【抵御索罗斯】活动中获得第"..data.rank.."名"
-	end
+	--text1.Text = Csv.Text("finance_rewardTitle_fb2",{num = data.rank})--"恭喜总裁在【抵御索罗斯】活动中获得第"..data.rank.."名"
 	text2.Text =  Csv.Text("finance_result_scoreFb2",{num = data.score})--"副本分数："--"副本分数："
 	text3.Text = ""
 	text4.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})----"副本积分："
 	text5.Text = ""
 
 	local itemContent = moudle:Get("Items")
-	if data.items ~= nil then
-		for k,v in pairs(data.items) do
-			CCommon.CreateItem(itemContent, v.id, nil, {num = v.count})
+	local rewardItes = Csv.SiegeBoss[id]
+	if rewardItes ~= nil then
+		if rewardItes.item ~= nil then
+			for k,v in pairs(rewardItes.item) do
+				CCommon.CreateItem(itemContent, v[1], nil, {num = v[2]})
+			end
 		end
 	end
-
+	
 	-- 播放战斗胜利特效
 	SoundMgr.Play(10014)
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), winActorId)

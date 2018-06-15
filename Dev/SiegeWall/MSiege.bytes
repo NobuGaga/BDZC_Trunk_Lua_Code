@@ -5,6 +5,7 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local MCommerce = JRequire "Dev.Commerce.MCommerce"
 local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local CCommon = JRequire "Dev.Common.CCommon"
 
 local _M = {}
 local _P = {}
@@ -23,10 +24,13 @@ _M.RankTypeEnum = {
 	Killed = 3,
 }
 
+_M.ActivityState = false --活动开关
+_M.StartTime = 0
+_M.EndTime = 0
 _M.ActivityId = 1 --活动id
 _M.Phase = 1 --阶段
 _M.OpenTime = 0 --开启CD(等待中开始)
-_M.PointCD = 0
+_M.PointCD = 1000
 _M.Progress = {} --进度，列表，第二阶段有3个进度
 _M.LastUdisk = nil --剩余U盘数量，总数
 _M.Buffs = {}
@@ -38,6 +42,7 @@ _M.DieStaffs = {} --已死亡的员工（每个boss都不一样）
 _M.BossList = {}
 
 _M.ActionPoint = 0--行动点
+_M.ActionBuy = 0--行动点购买次数
 _M.RecoveTime = 0 --恢复时间
 _M.isRecoveTick = false
 _M.RecoveHandle = nil 
@@ -62,6 +67,8 @@ _M.isFighting = false
 _M.selectBossId = 0
 _M.BossPower = {}
 _M.AllStageData = {}
+_M.RankSelfStageData = {}
+_M.RankGangStageData = {}
 
 function _M.Clean()
 	_M.OpenTime = 0
@@ -70,6 +77,7 @@ function _M.Clean()
 	_M.isRecoveTick = false
 	_M.RecoveHandle = nil 
 	_M.ActionPoint = 0
+	_M.ActionBuy = 0
 	_M.SelectHero = nil
 	_M.isFighting = false
 
@@ -79,17 +87,36 @@ function _M.Clean()
 	_M.LastUdisk = nil
 end
 
+function _M.SiegeActivityStatus(data)
+	_M.ActivityState = data.state
+	_M.ActivityId = data.actid
+	_M.StartTime = data.startTime
+	_M.EndTime = data.endTime
+
+	if Csv.Siege[_M.ActivityId] ~= nil then
+		_M.MaxPoint = Csv.Siege[_M.ActivityId].maxTimes
+		_M.PointCD = Csv.Siege[_M.ActivityId].CD
+	end
+
+	if _M.ActivityState == false then
+		--刷新活动图标
+		WindowMgr.Call("UMain","RefreshTopBtns")
+	end
+end
+
+function _M.SetOpenTime(data)
+	_M.OpenTime = data.starttime
+end
 
 function _M.SetAcitvityPhase(_acitvityId,_phase)
 	_M.ActivityId = _acitvityId --活动id
 	_M.Phase = _phase --阶段
 
-	_M.MaxPoint = Csv.Siege[_acitvityId].maxTimes
-	_M.PointCD = Csv.Siege[_acitvityId].CD
-	_M.OpenTime = 0
+	--[[
 	if _phase ~= nil then
 		CSiege.ReqSiegeStage() --请求阶段
 	end
+	--]]
 end
 
 function _M.SetSiegeStageMsg(data)
@@ -100,6 +127,7 @@ function _M.SetSiegeStageMsg(data)
 		for k,v in pairs(data.progress)do
 			local _progress = {type = v.type,progressCur = v.progressCur,progressMax = v.progressMax}
 			table.insert(_M.Progress,_progress)
+			--_M.Progress[v.type] = _progress
 		end
 	end
 
@@ -111,11 +139,10 @@ function _M.SetSiegeStageMsg(data)
 	_M.Buffs = {}
 	if data.buffs ~= nil then
 		for k,v in pairs(data.buffs)do
-			_M.Buffs[k] = v.value
+			_M.Buffs[v.key] = v.value
 			--table.insert(_M.Buffs,{key = v.key,value = v.value})
 		end
 	end
-	print("___M.Buffs____",#_M.Buffs)
 
 	_M.lastEnmey = 0
 	if data.enemy ~= nil then
@@ -126,7 +153,11 @@ function _M.SetSiegeStageMsg(data)
 	if data.boss ~= nil then
 		for k,v in pairs(data.boss)do
 			local boss = _P.BossMsg(v)
-			table.insert(_M.BigBoss,boss)
+			if v.type ~= nil then
+				_M.BigBoss[v.type] = boss
+			else
+				table.insert(_M.BigBoss,boss)
+			end
 		end
 	end
 
@@ -140,14 +171,15 @@ function _M.SetSiegeStageMsg(data)
 	_M.Teams = {}
 	if data.teams ~= nil then
 		for k,v in pairs(data.teams)do
-			local type = v.type
-			local bossId = v.bossId
-			local commerce = {}
+			local _type = v.type
+			local _bossId = v.bossId
+			local _commerce = {}
 			if v.commerce ~= nil then
 				for k2,v2 in pairs(v.commerce)do
-					table.insert(commerce,{id = v2.key,name = v2.value})
+					table.insert(_commerce,{id = v2.key,name = v2.value})
 				end
 			end
+			_M.Teams[_type] = {type = _type,bossId = _bossId,commerce = _commerce}
 		end
 	end
 end
@@ -156,8 +188,8 @@ function _M.SetActionPoint(data)
 	_M.ActionPoint = data.action
 
 	_M.RecoveTime = 0
-	if data.lastTime ~= nil then
-		_M.RecoveTime = data.lastTime
+	if _M.ActionPoint < _M.MaxPoint then
+		_M.RecoveTime = data.lastTime + HeartBeat.ServSecond()
 	end
 	_P.ReduceTime()
 end
@@ -173,6 +205,7 @@ function _M.SetBossList(data)
 end
 
 function _M.SetNewBuff(data)
+	CCommon.ShowError(Csv.Text("siege_buy_buff_success"))
 	if data.buff ~= nil then
 		if _M.Buffs[data.buff.key] ~= nil then
 			_M.Buffs[data.buff.key] = _M.Buffs[data.buff.key] + 1
@@ -190,13 +223,14 @@ function _P.ReduceTime()
 			local _tick = _M.RecoveTime
 			if _tick > 0 then
 				local leftTime = _tick - HeartBeat.ServSecond()
-				if leftTime < 0 then
+				if leftTime <= 0 then
 					_M.ActionPoint = _M.ActionPoint +1 
 					if _M.ActionPoint < _M.MaxPoint then
 						_M.RecoveTime = _M.PointCD + HeartBeat.ServSecond()
 					else
 						_M.RecoveTime = 0
 					end
+					WindowMgr.Call("USiegeMain", "UpdateActionPoint")
 				end
 			else
 				_M.isRecoveTick = false
@@ -223,7 +257,6 @@ function _P.BossMsg(msg)
 	local _staffId = {}
 	if msg.staffId ~= nil then
 		for k,v in pairs(msg.staffId)do
-			print("BossMsg__________________",v)
 			table.insert(_staffId,v)
 		end
 	end
@@ -248,7 +281,6 @@ function _M.UnlockStaff(data)
 	end
 
 	local dieStaff = _M.DieStaffs
-	print("___________",data.staffid)
 	if dieStaff ~= nil then
 		if dieStaff[data.staffid] ~= nil then
 			dieStaff[data.staffid] = nil
@@ -277,7 +309,6 @@ function _M.NewDieStaff(staffid)
 		dieStaff = {}
 		dieStaff[staffid] = true
 	end
-	print("_NewDieStaff____________",staffid,#dieStaff)
 	_M.DieStaffs = dieStaff
 end
 
@@ -293,7 +324,6 @@ function _M.SelectStaff()
 	local dieStaffs = _M.DieStaffs
 	
 	for k,v in pairs(staffList) do
-		print("selectStaff___________________",k,dieStaffs[k])
 		if dieStaffs[k] then
 			
 		else
@@ -350,16 +380,63 @@ function _M.SetAllStageData(stageList)
 			listData[v.stage] = v
 		end
 	end
+	
 	_M.AllStageData = listData
+end
+
+--购买商品扣除
+function _M.ReduceAllStageData(stage,_index,_goodid,_buycount)
+	if _M.AllStageData[stage] ~= nil then
+		local items = _M.AllStageData[stage].itemList
+		if items ~= nil then
+			for k,v in pairs(items)do
+				if v.goodid == _goodid then
+					v.buyCount = _buycount
+					return
+				end
+			end
+			table.insert(items,{index = _index,goodid = _goodid,buyCount = _buycount})
+		else
+			items = {}
+			table.insert(items,{index = _index,goodid = _goodid,buyCount = _buycount})
+		end
+		_M.AllStageData[stage].itemList = items
+	end
+end
+
+function _M.AddJifen(stage,jifen)
+	if _M.AllStageData[stage] ~= nil then
+		if _M.AllStageData[stage].point ~= nil then
+			_M.AllStageData[stage].point = _M.AllStageData[stage].point + jifen
+		else
+			_M.AllStageData[stage].point = jifen
+		end
+	end
+end
+
+function _M.SetRankStage(data)
+	local selfGetState = data.selfGetState
+	local gangGetState = data.gangGetState
+
+	if selfGetState ~= nil then
+		for k,v in pairs(selfGetState)do
+			_M.RankSelfStageData[v.key] = v.value
+		end
+	end
+	if gangGetState ~= nil then
+		for k,v in pairs(gangGetState)do
+			_M.RankGangStageData[v.key] = v.value
+		end
+	end
+	--状态通知
 end
 
 ---------------------------------------------------------
 function _M.GetBuffInfo(index)
 	local buffs = _M.Buffs
-	print("GetBuffInfo!!!",#buffs)
 	for k,v in pairs(buffs)do
+		print("__buffs____",k,v)
 		local buffData = Csv.SiegeBuff[k]
-		print("_____",buffData.index,index,k)
 		if buffData.index == index then
 			return {id = k,value = v}
 		end
@@ -373,7 +450,7 @@ function _M.GetTeamType(commerceID)
 			local type = v.type
 			if v.commerce ~= nil then
 				for k2,v2 in pairs(v.commerce)do
-					if v2.key == commerceID then
+					if v2.id == commerceID then
 						return type
 					end
 				end

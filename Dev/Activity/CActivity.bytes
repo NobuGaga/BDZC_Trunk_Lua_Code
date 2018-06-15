@@ -110,6 +110,9 @@ local CMD_ID =
 	cAdventureStaffOver = 35,		--(奇遇)奇遇员工加班 PActivity.CStaffOverTime
 	cFinancingInfo = 36,			--(银行投资)请求获取中奖信息
 	cFinancingGet = 37,				--(银行投资)请求投资 PActivity.CFinancingGet
+	cFuturesSelect = 38, -- 操纵期货 选择文件
+	cFuturesNews = 39, -- 操纵期货 中奖信息
+	cFuturesReset = 40, -- 操纵期货 重置抽取数据
 
 	sInit = 1,						--初始化 PActivity.SActivity
 	sUpdate = 2,					--更新 PActivity.SActivity
@@ -145,7 +148,7 @@ local CMD_ID =
 	sAdventureOpenRank = 32,		--(奇遇)打开奇遇排行榜返回 PActivity.SAdventureOpenRank
 	sAdventureGongGetReward = 33,	--(奇遇)领取后续事件奖励返回， PActivity.PGangEventRewardItemInfo
 	sAdventureNewEventSend	= 34,	--(奇遇)新事件推送 PActivity.PEventItemInfo
-	sAdventureGangEventSend = 35,	--(奇遇)后续事件推送 PActivity.PGangEventItemInfo
+	sAdventureGangEventSend = 35,	--(奇遇)后续事件推送 PActivity.SAdventureGangEvent
 	sAdventureShopRefresh =	36,		--(奇遇)刷新商城 PClub.SAdventureShopRefresh
 	sAdventureShopBuy =	37,			--(奇遇)商城购买 PClub.SAdventureShopBuy
 	sAdventureStaffOver = 38,		--(奇遇)员工加班返回 PActivity.SStaffOverTime
@@ -153,6 +156,10 @@ local CMD_ID =
 	sFinancingGet = 40,				--(银行投资)请求投资返回 PActivity.SFinancingGet
 	sNewFinancingInfo = 41,			--(银行理财)中奖信息推送 PActivity.POneGetInfo
 	sAdventureSendLucky = 42,		--(奇遇)幸运值推送	PActivity.SAdventureLucky
+	sFuturesSelect = 43, --操纵期货 选择文件返回
+	sFuturesNews = 44, --操纵期货 中奖信息
+	pNewsInfo = 45, --操纵期货 更新中奖信息一条
+	sFuturesReset = 46, -- 操纵期货 重置抽取数据
 }
 
 function _M.ModuleClean()
@@ -196,6 +203,8 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cAdventureStaffOver]	 = "PActivity.CStaffOverTime",
 		[CMD_ID.cFinancingInfo]	 	 	 = "",
 		[CMD_ID.cFinancingGet]			 = "PActivity.CFinancingGet",
+		[CMD_ID.cFuturesSelect] = "PActivity.CFuturesSelect",
+		[CMD_ID.cFuturesReset] = ""
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -234,14 +243,18 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sAdventureGangEventCompelete] = {proto = "PActivity.SAdventureGangEventCompelete", handle = _P.OnAdvGang}, --(奇遇)完成公会事件返回
 		[CMD_ID.sAdventureGongGetReward] = {proto = "PActivity.PGangEventRewardItemInfo", handle = _P.OnAdvGetGangReward}, --(奇遇)领取后续事件奖励返回
 		[CMD_ID.sAdventureNewEventSend]  = {proto = "PActivity.PEventItemInfo",			handle = _P.OnNewEvent},		--(奇遇)新个人事件推送
-		[CMD_ID.sAdventureGangEventSend] = {proto = "PActivity.PGangEventItemInfo",		handle = _P.OnNewGangEvent},	--(奇遇)新商会事件推送
+		[CMD_ID.sAdventureGangEventSend] = {proto = "PActivity.SAdventureGangEvent",	handle = _P.OnNewGangEvent},	--(奇遇)新商会事件推送
 		[CMD_ID.sAdventureShopRefresh]	 = {proto = "PActivity.PAdventureShop",			handle = _P.OnAdvShopRefrash},	--(奇遇)兑换商城刷新		
 		[CMD_ID.sAdventureShopBuy]		 = {proto = "PActivity.PAdventureShopItem",		handle = _P.OnAdvShopBuy},		--(奇遇)商城购买返回
 		[CMD_ID.sAdventureStaffOver]	 = {proto = "PActivity.SStaffOverTime",			handle = _P.OnAdvStaffOver},	--(奇遇)员工加班返回
 		[CMD_ID.sFinancingInfo]	 		 = {proto = "PActivity.SFinancingInfo",			handle = _P.OnGetFinancingInfo}, 	--(银行投资)请求获取中奖信息返回
 		[CMD_ID.sFinancingGet]	 		 = {proto = "PActivity.SFinancingGet",			handle = _P.OnSignBack},	--(银行投资)请求投资返回
 		[CMD_ID.sNewFinancingInfo]	 	 = {proto = "PActivity.POneGetInfo",			handle = _P.OnNewInfoPush},	--(银行投资)请求投资返回
-		[CMD_ID.sAdventureSendLucky]	 = {proto = "PActivity.SAdventureLucky",		handle = _P.OnHotVal},		--(奇遇)热度值推送
+		[CMD_ID.sAdventureSendLucky]	 = {proto = "PActivity.SAdventureLucky",		handle = _P.OnHotVal},
+		[CMD_ID.sFuturesSelect] = {proto = "PActivity.SFuturesSelect", handle = _P.OnFuturesSelect}, -- 操纵期货 选择文件返回
+		[CMD_ID.sFuturesNews] = {proto = "PActivity.SFuturesNews", handle = _P.OnFuturesNews}, -- 操纵期货 中奖信息
+		[CMD_ID.pNewsInfo] = {proto = "PActivity.SFuturesNews.PNewsInfo", handle = _P.OnNewsInfo}, -- 操纵期货 中奖信息更新一条		--(奇遇)热度值推送
+		[CMD_ID.sFuturesReset] = {handle = _P.OnFuturesReset}, -- 操纵期货 重置抽取信息
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Activity, func_send, func_recv, isReload)
@@ -398,6 +411,26 @@ end
 function _M.ReqAdvGetReward(actId, eventIndex)
 	_M.Send(CMD_ID.cAdventureGongGetReward,{actId = actId, eventIndex = eventIndex})
 end
+
+-- 操纵期货抽文件
+function _M.CFuturesSelect(index)
+	_M.Send(CMD_ID.cFuturesSelect, {index = index})
+
+	-- local data = {}
+	-- data.index = 3
+	-- data.odds = 1
+	-- _P.OnFuturesSelect(data)
+
+end
+
+function _M.CFuturesNews()
+	_M.Send(CMD_ID.cFuturesNews)
+end
+
+function _M.CFuturesReset()
+	_M.Send(CMD_ID.cFuturesReset)
+end
+
 -------------------服务器回包---------------------
 function _P.StateInfo(data, actType)
 	if data == nil then return nil end
@@ -587,8 +620,8 @@ end
 
 		--活动信息
 		info.hotval = data.hotval
-		info.selfGetState = data.rewardState
-		info.gangGetState = data.gangrewardState
+		info.personalRewardState = data.personalRewardState
+		info.gangrewardState = data.gangrewardState
 		info.personalEventTimes = data.personalEventTimes
 		info.nextUpdateTime = data.nextUpdateTime
 		--兑换商店
@@ -607,9 +640,9 @@ end
 
 		--后续事件列表
 		info.shopEventList = {}
-		if data.gangeventlist ~= nil then
-			for i=1,#data.gangeventlist do
-				local v = data.gangeventlist[i]
+		if data.gangeventlist ~= nil and data.gangeventlist.gangeventlist ~= nil then
+			for i=1,#data.gangeventlist.gangeventlist do
+				local v = data.gangeventlist.gangeventlist[i]
 				local one = MActivity.GetNewGangEvent(v)
 				info.shopEventList[one.eventsIndex] = one
 			end
@@ -645,6 +678,73 @@ end
 		--更新数据层
 		MActivity.UpdateAct(info.actId, actType, info)
 		_P.CheckAdventureRedPoint(data.actId, actType)
+		if WindowMgr.IsCreated("UAdventureMain") then
+			WindowMgr.Call("UAdventureMain", "UpdateEvent", info)
+		end
+		if WindowMgr.IsCreated("UAdventureRank") then
+			WindowMgr.Call("UAdventureRank", "OnUpdateData", info.actId)
+		end
+	end
+
+	--操纵期货
+	--操纵期货数据更新
+	function _P.DoUpdateFutures(actType, data)
+		if data == nil then return end
+		
+		local info = _P.StateInfo(data, actType)
+		-- TODO 为啥要这样重置？
+		-- if info.state.lefttime then
+		-- 	info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+		-- else
+		-- 	info.state.lefttime = HeartBeat.ServSecond()
+		-- end
+		
+		-- 赔率
+		local futuresConf = Csv.Futures[data.actId]
+		info.odds = {}
+		-- 兑换商店列表
+		local oddsConf = futuresConf.odds
+		if oddsConf then
+			for k,v in pairs(oddsConf) do
+				info.odds[string.format("%0.1f", v)] = false
+			end
+			if data.obtainedFactors ~= nil then
+				for kk, vv in pairs(data.obtainedFactors) do
+					for k,v in pairs(info.odds) do
+						if math.abs(vv - k) < 0.01 then
+							info.odds[k] = true
+						end
+					end
+				end
+			end
+		end
+
+		info.selectedFiles = {}
+		if data.selectedFiles ~= nil then
+			for k, v in pairs(data.selectedFiles) do
+				info.selectedFiles[k] = v
+			end
+		end
+
+		info.curFactor = data.curFactor
+		info.futuresState = data.futuresState
+		info.rechargeAddGold = data.rechargeAddGold
+		info.actId = data.actId
+		info.resetNeedAmount = data.resetNeedAmount
+		info.rechargeAmount = ((data.rechargeAmount == nil and 0) or data.rechargeAmount)
+		info.resetTimes = ((data.resetTimes == nil and 0) or data.resetTimes)
+
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		_P.CheckFuturesRedPoint(info.actId, info)
+		if WindowMgr.IsCreated("UFuturesReward") then
+			WindowMgr.Call("UFuturesReward", "OnFuturesReset")
+		end
+		if WindowMgr.IsCreated("UFuturesMain") then
+			if info.curFactor == nil or info.curFactor ==0 then
+				WindowMgr.Call("UFuturesMain", "OnFuturesReset")
+			end
+		end
 	end
 
 --每日充值
@@ -1114,6 +1214,9 @@ function _P.DoUpdate(data, isInit)
 		--奇遇活动
 		_P.DoUpdateAdventure(Define.ActivityType.Adventure, data.adventure)
 	end
+	if data.futures ~= nil then
+		_P.DoUpdateFutures(Define.ActivityType.Futures, data.futures)
+	end
 	if data.financing ~= nil then
 		--银行理财
 		_P.DoUpdateInvestment(Define.ActivityType.Investment, data.financing)
@@ -1141,9 +1244,13 @@ function _P.OnGetSuccess(data)
 	local actId = data.actId
 	local info = MActivity.GetFromId(actId)
 	if info ~= nil then
-		local typeModule = _P.GetActivityModuleForType(info.actType)
-		if typeModule then
-			typeModule.OnGetSuccess(data, info)
+		if info.actType == Define.ActivityType.Futures then
+			WindowMgr.Call("UFuturesReward", "OnGetSuccess", data, info)
+		else
+			local typeModule = _P.GetActivityModuleForType(info.actType)
+			if typeModule then
+				typeModule.OnGetSuccess(data, info)
+			end
 		end
 
 		if info.actType == Define.ActivityType.JianChen or
@@ -1222,17 +1329,16 @@ function _P.OnGetSuccess(data)
 			--奇遇活动奖励返回
 		elseif info.actType == Define.ActivityType.Adventure then
 			if data.isGeted then
-				local rankType = data.index % 10000
-				if rankType == 1 and info.selfGetState == MActivity.RewardGetState.CanGet then
-					info.selfGetState = MActivity.RewardGetState.Geted
-				elseif rankType >= 2 and info.gangGetState == MActivity.RewardGetState.CanGet then
-					info.gangGetState = MActivity.RewardGetState.Geted
+				local rankType = data.index % 1000
+				if rankType == 1 and info.personalRewardState == MActivity.RewardGetState.CanGet then
+					info.personalRewardState = MActivity.RewardGetState.Geted
+				elseif rankType >= 2 and info.gangrewardState == MActivity.RewardGetState.CanGet then
+					info.gangrewardState = MActivity.RewardGetState.Geted
 				end
 
 				_P.CheckAdventureRedPoint(actId, info.actType)
-
 				--界面表现
-				WindowMgr.Call("UXinGuanRank", "OnGetRewardBack", data)
+				WindowMgr.Call("UAdventureRank", "OnGetRewardBack", data)
 			end
 		elseif info.actType == Define.ActivityType.Shop_Package then
 			if data.isGeted then
@@ -1903,8 +2009,6 @@ end
 
 --奇遇活动完成商会事件返回
 function _P.OnAdvGang(data)
-	-- print("完成商会事件返回")
-	-- LuaUtil.DumpTable(data)
 	local activityData = MActivity.GetFromId(data.actId)
 	if activityData ~= nil then
 		activityData.shopEventtimes = data.eventtimes
@@ -1946,11 +2050,11 @@ end
 
 --奇遇热度推送
 function _P.OnHotVal(data)
-	-- print("热度值")
-	-- LuaUtil.DumpTable(data)
 	local activityData = MActivity.GetFromId(data.actId)
 	if activityData == nil then return end
 	activityData.hotval = data.lucky
+	--更新数据层
+	MActivity.UpdateAct(data.actId, Define.ActivityType.Adventure, activityData)
 	--热度值满了红点提示
 	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
 	if WindowMgr.IsCreated("UAdventureMain") then
@@ -1961,8 +2065,6 @@ end
 --奇遇商会事件推送
 function _P.OnNewGangEvent(data)
 	--剔除旧事件或者增加新事件
-	-- print("后续事件推送")
-	-- LuaUtil.DumpTable(data)
 	--更新一下当前事件
 	MActivity.UpdateGangEvent(data.actId,data)
 	--红点
@@ -2132,8 +2234,8 @@ function _P.CheckAdventureRedPoint(actId, actType)
 	MActivity.AdventureShopRed = false
 	local activityData = MActivity.GetFromId(actId)
 	if activityData == nil then return end
-	if activityData.selfGetState == MActivity.RewardGetState.CanGet or 
-		activityData.gangGetState == MActivity.RewardGetState.CanGet or
+	if activityData.personalRewardState == MActivity.RewardGetState.CanGet or 
+		activityData.gangrewardState == MActivity.RewardGetState.CanGet or
 		activityData.isNew or activityData.hotval == Csv.Const(20101)[9]  then--todo:maxval
 		isShowMainBtnRed = true
 	end
@@ -2145,13 +2247,33 @@ function _P.CheckAdventureRedPoint(actId, actType)
 	end
 
 	MActivity.AdventureMainRed = isShowMainBtnRed
-	MActivity.AdventureRankRed = activityData.selfGetState == MActivity.RewardGetState.CanGet or activityData.gangGetState == MActivity.RewardGetState.CanGet
+	MActivity.AdventureRankRed = activityData.personalRewardState == MActivity.RewardGetState.CanGet or activityData.gangrewardState == MActivity.RewardGetState.CanGet
 	local sysId = Define.SysId.Adventure
 	CMain.UpdateRedpoint(MActivity.AdventureMainRed, sysId)
 	--界面刷新
 	if WindowMgr.IsCreated("UAdventureMain") then
 		WindowMgr.Call("UAdventureMain", "UpdateRed")
 	end
+end
+
+function _P.CheckFuturesRedPoint(actId, data)
+	local info = MActivity.GetFuturesData()
+	local count = 0
+	if info.selectedFiles ~= nil then
+		count = #info.selectedFiles
+	end
+	local isShowRed = false
+	if count < Csv.Futures[actId].dailyTimes then
+		isShowRed = true
+	elseif count == Csv.Futures[actId].dailyTimes and info.futuresState ~= MActivity.FuturesState.DEF then
+		isShowRed = true
+	else
+		local needAmount = ((info.resetNeedAmount == nil and Csv.Const(108)[4]) or info.resetNeedAmount)
+		if info.rechargeAmount >= needAmount then
+			isShowRed = true
+		end
+	end
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.Futures)
 end
 
 -- 银行投资-----------------------------------------
@@ -2214,6 +2336,78 @@ function _P.DoUpdateInvestment(actType, data)
 
 	MActivity.UpdateAct(info.actId, actType, info)
 	_P.CheckInvestmentRedPoint(info.actId, data)
+end
+
+function _P.OnFuturesSelect(data)
+	local info = MActivity.GetFuturesData()
+	info.curFactor = data.factor
+	info.futuresState = MActivity.FuturesState.CHOU
+	WindowMgr.Call("UFuturesMain", "OnFuturesSelect", info)
+end
+
+function _P.OnFuturesNews(data)
+	MActivity.FuturesReward = {}
+	if data.newsList ~= nil then
+		for k,v in pairs(data.newsList) do
+			local reward = {}
+			reward.name = v.playerName
+			reward.odds = v.factor
+			MActivity.FuturesReward[k] = reward
+		end
+	end
+
+	if WindowMgr.IsCreated("UFuturesReward") then
+		WindowMgr.Call("UFuturesReward", "OnFuturesNews", MActivity.FuturesReward)
+	end
+	if WindowMgr.IsCreated("UFuturesMain") then
+		WindowMgr.Call("UFuturesMain", "OnFuturesNews", MActivity.FuturesReward)
+	end
+end
+
+function _P.OnNewsInfo(data)
+	local reward = {}
+	reward.name = data.playerName
+	reward.odds = data.factor
+	if MActivity.FuturesReward ~= nil then
+		local MaxInfoNum = tonumber(Csv.Const(108)[3])
+		if #MActivity.FuturesReward >= MaxInfoNum then
+			table.remove(MActivity.FuturesReward, #MActivity.FuturesReward)
+		end
+		table.insert(MActivity.FuturesReward, 1, reward)
+	end
+
+	if WindowMgr.IsCreated("UFuturesReward") then
+		WindowMgr.Call("UFuturesReward", "OnFuturesNews", MActivity.FuturesReward)
+	end
+	if WindowMgr.IsCreated("UFuturesMain") then
+		WindowMgr.Call("UFuturesMain", "OnFuturesNews", MActivity.FuturesReward)
+	end
+end
+
+function _P.OnFuturesReset(data)
+	-- local info = MActivity.GetFuturesData()
+	-- -- 赔率
+	-- local futuresConf = Csv.Futures[info.actId]
+	-- info.odds = {}
+	-- -- 兑换商店列表
+	-- local oddsConf = futuresConf.odds
+	-- if oddsConf then
+	-- 	for k,v in pairs(oddsConf) do
+	-- 		info.odds[string.format("%0.1f", v)] = false
+	-- 	end
+	-- end
+
+	-- info.selectedFiles = {}
+
+	-- info.curFactor = nil
+	-- info.futuresState = 0
+	-- info.rechargeAddGold = nil
+	-- info.rechargeAmount = info.rechargeAmount - info.resetNeedAmount
+	-- info.resetNeedAmount = nil
+	-- info.resetTimes = nil
+	--更新数据层
+	-- MActivity.UpdateAct(info.actId, Define.ActivityType.Futures, info)
+	-- _P.CheckFuturesRedPoint(info.actId, info)
 end
 
 return _M

@@ -7,6 +7,7 @@ local CBattle = JRequire "Dev.Battle.CBattle"
 local MMain = JRequire "Dev.Main.MMain"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+local MActivity = JRequire "Dev.Activity.MActivity"
 
 local _M = {}
 
@@ -295,7 +296,13 @@ function _M.Open(sysId, ...)
 		elseif sysId == _SysId.Investment then
 			WindowMgr.Create("UInvestmentPanel")
 		--公司(府宅) 200 ~ 255
-
+		elseif sysId == _SysId.Futures then
+			local futuresData = MActivity.GetFuturesData()
+			if futuresData == nil or futuresData.futuresState == MActivity.FuturesState.DEF then
+				WindowMgr.Create("UFuturesMain")
+			elseif futuresData.futuresState == MActivity.FuturesState.CHOU or futuresData.futuresState == MActivity.FuturesState.RECHARGE then
+				WindowMgr.Create("UFuturesReward")
+			end
 		end
 	end
 end

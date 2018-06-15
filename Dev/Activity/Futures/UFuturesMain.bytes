@@ -1,0 +1,229 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local Linear = CS.DG.Tweening.Ease.Linear
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Futures_Main")
+	self.Moudle = moudle
+	self.scrollView = moudle:Get("scrollView2")
+	self.content = moudle:Get("content2")
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+		end, nil, 1.2)
+
+	local typeId = Define.ActivityType.Futures
+	local data = MActivity.GetListFromType(typeId)
+	if not data then
+		CCommon.ShowError(Csv.Text(""))
+		return 
+	end
+
+	moudle:Get("C_Text").Text = Csv.Text("futures_title")
+	moudle:Get("InfoText").Text = Csv.Text("futures_zj")
+	moudle:Get("tIPS").Text = Csv.Text("futures_odds")
+	moudle:Get("shuxin").Text = Csv.Text("futures_main_tips")
+	moudle:Get("Time").Text = Csv.Text("futures_time_text3")
+	moudle:Get("TimeText").Text = Csv.Text("futures_time_text4")
+	moudle:Get("Date").Text = Csv.Text("futures_time_text2")
+	moudle:Get("C_text").Text = Csv.Text("futures_reset")
+	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num=Csv.Const(108)[4]})
+
+	self.initPos = {}
+	for i = 1, 6 do
+		table.insert(self.initPos, moudle:Get("WJJ"..i).LocalPosition)
+	end
+
+	_P.DoFuturesReset(self)
+
+	if self.mData.curFactor ~= nil and self.mData.curFactor >0 then
+		WindowMgr.Create("UFuturesReward")
+	else
+		CActivity.CFuturesNews()
+	end
+end
+
+function _R.OnFuturesReset(self)
+	for i = 1, 6 do
+		self.Moudle:Get("WJJ"..i).LocalPosition = self.initPos[i]
+	end
+	_P.DoFuturesReset(self)
+	CCommon.ShowError(Csv.Text("futures_reset_suc"))
+end
+
+function _P.DoFuturesReset(self)
+	local moudle = self.Moudle
+	self.mData = MActivity.GetFuturesData()
+
+	local state = self.mData.state
+	local activityId = self.mData.actId
+	local needAmount = ((self.mData.resetNeedAmount == nil and Csv.Const(108)[4]) or self.mData.resetNeedAmount)
+	moudle:Get("ExpText").Text = self.mData.rechargeAmount.."/"..needAmount
+	moudle:Get("ProgressBar").FillAmount = self.mData.rechargeAmount/needAmount
+	moudle:Get("DateText").Text = Csv.Text("futures_time_text", {startTime = os.date("%Y/%m/%d", state.startTime),
+	endTime = os.date("%Y/%m/%d", state.endTime)})
+	if self.mData.rechargeAmount >= needAmount then
+		moudle:Get("C_Btn_b").IsGray = false
+		moudle:Get("C_Btn_b").RaycastTarget = true
+		moudle:Get("C_Btn_b"):AddOnButton(function ( ... )
+			SoundMgr.Play(10002)
+			_P.OnResetClick(self)
+			end, nil, 1.2)
+	else
+		moudle:Get("C_Btn_b").IsGray = true
+		moudle:Get("C_Btn_b").RaycastTarget = false
+	end
+
+	local count = 0
+	if self.mData.selectedFiles ~= nil then
+		count = #self.mData.selectedFiles
+	end
+	local ismax = false
+	if count == Csv.Futures[activityId].dailyTimes then
+		ismax = true
+	end
+	if ismax == true then
+		moudle:Get("dialogue").Text = Csv.Text("futures_files2")
+	else
+		moudle:Get("dialogue").Text = Csv.Text("futures_files", {num=(Csv.Futures[activityId].dailyTimes-count)})
+	end
+
+	for i = 1, 6 do
+		moudle:Get("lINE"..i).Activity = false
+		moudle:Get("odds"..i).Activity = false
+	end
+	local futuresConf = Csv.Futures[activityId]
+	local oddsConf = futuresConf.odds
+	local index = 1
+	for k,v in pairs(oddsConf) do
+		moudle:Get("odds"..index).Activity = true
+		moudle:Get("odds"..index).Text = Csv.Text("futures_open_odds", {num=v})
+		for kk, vv in pairs(self.mData.odds) do
+			if vv == true and math.abs(v - kk) < 0.01 then
+				moudle:Get("lINE"..index).Activity = true
+			end
+		end
+		index = index+1
+	end
+
+	local poss = {}
+	for i = 1, 6 do
+		moudle:Get("WJJ"..i).Activity = true
+		moudle:Get("Num"..i).Text = i
+		moudle:Get("WJJ"..i):AddOnButton(function ( ... )
+			SoundMgr.Play(10002)
+			_P.OnFileClick(i)
+		end, nil, 1.2)
+		table.insert(poss, moudle:Get("WJJ"..i).LocalPosition)
+	end
+	for k, v in pairs(self.mData.selectedFiles) do
+		moudle:Get("WJJ"..v).Activity = false
+	end
+
+	local wjj = {}
+	for i = 6, 1, -1 do
+		if moudle:Get("WJJ"..i).Activity == true then
+			table.insert(wjj, moudle:Get("WJJ"..i))
+		end
+	end
+	if #wjj > 0 then
+		index = 1
+		for i = 6, 1, -1 do
+			if wjj[index] ~= nil then
+				wjj[index].LocalPosition = poss[i]
+				index = index +1
+			end
+		end
+	end
+
+	if self.mData.curFactor ~= nil and self.mData.curFactor >0 then
+		WindowMgr.Create("UFuturesReward")
+	else
+		CActivity.CFuturesNews()
+	end
+end
+
+function _P.OnResetClick(self)
+	CCommon.CheckTips(function(isSure,rg)
+		if isSure then
+			CActivity.CFuturesReset()
+		end
+	end, {content = Csv.Text("futures_isreset")})
+	
+end
+
+function _P.OnFileClick(index)
+	MActivity.FuturesSelectIndex = index
+	CActivity.CFuturesSelect(index)
+end
+
+function _R.OnFuturesNews(self, data)
+	self.content:DestroyChildren()
+	if data ~= nil then
+		for k, v in pairs(data) do
+			local itemMoudle = JGuiManager.GetMoudle(self.content,"M_Futures_Main_Item",WindowType.UI, 0)
+			itemMoudle:Get("Info").Text = Csv.Text("futures_reward", {name=v.name, num=string.format("%0.1f", v.odds)})
+		end
+	end
+end
+
+function _R.OnFuturesSelect(self, data)
+	if MActivity.FuturesSelectIndex > 0 then
+		self.Moudle:Get("dialogueBg").Activity = false
+		local open = self.Moudle:Get("Open")
+		local pos = open.LocalPosition
+		local file = self.Moudle:Get("WJJ"..MActivity.FuturesSelectIndex)
+		local tween = file:DOAnchorPosY(pos.y, 0.5)
+		tween:SetEase(Linear)
+		local t = file:DOAnchorPosX(pos.x, 0.5)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				file.Activity = false
+				open.Activity = true
+				open:AddOnTime(function ()
+					WindowMgr.Create("UFuturesReward")
+					end, nil, 0.3)
+			end)
+	end
+	
+end
+
+function _R.OnUpdateViewState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.mData.actId)
+	end
+end
+
+return _M

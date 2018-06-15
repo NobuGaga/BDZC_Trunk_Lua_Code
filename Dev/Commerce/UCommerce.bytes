@@ -179,6 +179,7 @@ end
 function _R.OnUpdatemeMyInfo(self)
 	local myInfo = MCommerce.MyCommerceInfo.myInfo
 	local moudle = self.Moudle
+
 	--职位
 	moudle:Get("OfferText").Text = MCommerce.GetJobStr(myInfo.job)
 	--贡献
@@ -208,6 +209,7 @@ function _R.OnUpdatemeMyInfo(self)
 			end
 			if isHave then
 				index = index + 1
+				moudle:Get(index).Activity = true
 				local btn = moudle:Get("Btn"..index)
 				btn.Activity = true
 				btn.SpriteName = funcCsv.icon
@@ -237,6 +239,7 @@ function _R.OnUpdatemeMyInfo(self)
 	end
 	for i=index + 1,7 do
 		moudle:Get("Btn"..i).Activity = false
+		moudle:Get(i).Activity = false
 	end
 end
 

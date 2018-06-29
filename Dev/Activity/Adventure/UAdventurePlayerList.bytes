@@ -63,6 +63,14 @@ end
 function _P.AddItemToContent(self,content,data)
 	local moudle = JGuiManager.GetMoudle(content,"M_Gang_member_Item", WindowType.UI, 10)
 
+	local csvVip = Csv.Vip[data.vip]
+	if csvVip ~= nil and csvVip.imgBord ~= nil then
+		moudle:Get("OutBox").SpriteName = csvVip.imgBord
+		moudle:Get("Num").SpriteNameAutoScale = "friend_num_"..data.vip
+	else
+		moudle:Get("OutBox").Activity = false
+	end
+	moudle:Get("C_Btn_b").Activity = false
 	moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(data.icon,data.sex)
 	moudle:Get("position").Text = Csv.Text("adventure_player_level"..data.job)
 	moudle:Get("SLNum").Text = data.power
@@ -72,7 +80,6 @@ function _P.AddItemToContent(self,content,data)
 	moudle:Get("Company").Text = Csv.Text("adventure_devote")
 	moudle:Get("contribution").Text = Csv.Text("adventure_level")
 	moudle:Get("contributionText").Text = data.level
-	LuaUtil.DumpTable(data)
 	moudle:Get("PeopleNum").Text = Csv.Personnel[data.staffId].name
 	moudle:Get("Time").Text = Csv.Text("adventure_send_staff")  
 	return moudle

@@ -19,6 +19,8 @@ local _R = {}
 
 local DefaultBody = "body_007"
 local DefaultHead = "head_004"
+local DefaultBodyID = 2
+local DefaultHeadID = 1001
 
 local ColorBlack = Color(0, 0, 0, 1)
 local ColorWhite = Color(1, 1, 1, 1)
@@ -262,10 +264,25 @@ function _P.RefreshBody(self,index)
 					head.Color = ColorWhite
 				end
 			else
-				head.SpriteName = DefaultHead
-				head.Color = ColorBlack
-				body.SpriteName = DefaultBody
-				body.Color = ColorBlack
+				body.SpriteName = ""
+				head.SpriteName = ""
+
+				local bodySprite, bodyPrefab = MParliament.GetBodyByIDSex(DefaultBodyID, data.sex)
+				local headSprite, heaPrefab = MParliament.GetBodyByIDSex(DefaultHeadID, data.sex)
+
+				if bodyPrefab and bodyPrefab ~= 0 and heaPrefab and heaPrefab ~= 0 then
+					self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("bosySpine"), bodyPrefab, heaPrefab, CCommon.ActorFieldMap.election_body,
+						function(body, head)
+							if body then
+								body.SkeletonColor = ColorBlack
+								body:SkeletonGetGraphic().freeze = true
+							end
+							if head then
+								head.SkeletonColor = ColorBlack
+								head:SkeletonGetGraphic().freeze = true
+							end
+						end)
+				end
 			end
 
 			local nameBG = moudle:Get("NameBox")

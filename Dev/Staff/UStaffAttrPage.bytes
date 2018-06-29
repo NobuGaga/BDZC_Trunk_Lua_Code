@@ -13,6 +13,7 @@ local STAFFMAXCOLOR = Csv.Const(Define.Const.StaffMax)[4]
 local LVLUP_ONEKEY = 10 -- 一键升多少级
 local PromoteItemId = 22
 local PromoteUseType = 6
+local levelUpAttrActorId = 10001
 
 --界面构建
 function _M:ctor(parent,id)
@@ -111,6 +112,13 @@ function _M:ctor(parent,id)
 		self.mLastVal = val
 	end
 	self:SetExpSlider(id,data.levelexp,data.level,false,false,false)
+
+	local canvasActor = moudle:Get("ActorCanvas")
+	canvasActor.SortingLayerName = "Tips1"
+	canvasActor.SortingOrder = 2
+	local canvasData = moudle:Get("DataCanvas")
+	canvasData.SortingLayerName = "Tips1"
+	canvasData.SortingOrder = 3
 end
 
 function _P.SetLvlUpInfo(self, data)
@@ -142,8 +150,8 @@ function _M:SetExpSlider(id,exp,level,isAnimate,isUp,isGod)
 				textSlider.Text = Csv.Text("staff_max")
 				self.TextExpTitle1.Activity = false
 				self.TextExpTitle2.Activity = false
-				_P.OnPlayLevelUpAnim(self)
 			end)
+			_P.OnPlayLevelUpAnim(self)
 		else
 			slider.FillAmount = 1
 			textSlider.Text = Csv.Text("staff_max")
@@ -172,8 +180,8 @@ function _M:SetExpSlider(id,exp,level,isAnimate,isUp,isGod)
 			slider.FillAmount = 0
 			moudle:Get("BtnUp").RaycastTarget = true
 			self:OnCreateData(id)
-			_P.OnPlayLevelUpAnim(self)
 		end)
+		_P.OnPlayLevelUpAnim(self)
 		self.mTween = tween
 		SoundMgr.Play(10004)
 		local nodeTrans = moudle:Get("EffectNodeGod")
@@ -188,8 +196,8 @@ function _M:SetExpSlider(id,exp,level,isAnimate,isUp,isGod)
 					slider.FillAmount = 0
 					moudle:Get("BtnUp").RaycastTarget = true
 					self:OnCreateData(id)
-					_P.OnPlayLevelUpAnim(self)
 				end)
+				_P.OnPlayLevelUpAnim(self)
 			else
 				tween = slider:DOFillAmount(val,(val - self.mLastVal)*0.3)
 				tween:OnComplete(function(...)
@@ -260,6 +268,16 @@ end
 
 function _P.OnPlayLevelUpAnim(self)
 	WindowMgr.Call("UStaffDetails", "OnPlayLevelUpAnim")
+end
+
+function _M:ShowAttrEffect()
+	local moudle = self.mMoudle
+	for i = 1,5 do
+		local actor = moudle:Get("DetailActor"..i)
+		if actor ~= nil then
+			CCommon.CreateEffect(actor, levelUpAttrActorId)
+		end
+	end
 end
 
 function _M:Destroy()

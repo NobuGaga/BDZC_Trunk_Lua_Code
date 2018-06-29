@@ -42,11 +42,15 @@ function _M:OnCreate(index)
 		staffMoudle:Get("Head").SpriteName = csvStaff.asset3
 		staffMoudle:Get("textName").Text = csvStaff.name
 		staffMoudle:Get("textLevel").Text = staff.level
-		staffMoudle:Get("textAllQuality").Text = Csv.Text("school_allQuality", {num = MStaff.GetAllApitude(staff.id)})
+		staffMoudle:Get("textAllQuality").Text = Csv.Text("school_allQuality")
+		staffMoudle:Get("textAllQualityNum").Text = MStaff.GetAllApitude(staff.id)
 		staffMoudle:Get("textLevelT").Text = Csv.Text("palyer_levelup")
-		staffMoudle:Get("textAllPower").Text = Csv.Text("school_allPower", {num = MStaff.GetAllAttr(staff.id)})
-		staffMoudle:Get("textSkillExp").Text = Csv.Text("school_skillExp", {num = MStaff.GetStaffDataByID(staff.id).skillexp})
-		staffMoudle:Get("textExp").Text = Csv.Text("school_exp", {num = staff.bookexp})
+		staffMoudle:Get("textAllPower").Text = Csv.Text("school_allPower")
+		staffMoudle:Get("textAllPowerNum").Text = MStaff.GetAllAttr(staff.id)
+		staffMoudle:Get("textSkillExp").Text = Csv.Text("school_skillExp")
+		staffMoudle:Get("textSkillExpNum").Text = MStaff.GetStaffDataByID(staff.id).skillexp
+		staffMoudle:Get("textExp").Text = Csv.Text("school_exp")
+		staffMoudle:Get("textExpNum").Text = staff.bookexp
 		staffMoudle:Get("C_text").Text = Csv.Text("school_select")
 		local btnUp = staffMoudle:Get("C_Btn_b")
 		local dispatched = staffMoudle:Get("Dispatched")

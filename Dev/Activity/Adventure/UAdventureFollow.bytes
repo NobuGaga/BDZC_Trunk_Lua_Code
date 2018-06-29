@@ -17,6 +17,7 @@ local _R = {}
 
 local ADVCOUNTTIME = Csv.Const(Define.Const.AdventureEvent)[10]
 local ADVSHOPLIMIT = Csv.Const(Define.Const.AdventureEvent)[5]
+local ADVREWARDLIMIT = Csv.Const(Define.Const.AdventureEvent)[13]
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -64,6 +65,9 @@ function _M:OnCreate(data)
 	MActivity.AdventureFollowLastChoose = 1
 	-- print("time:",HeartBeat.ServSecond())
 	moudle:Get("C_Text_0").Text = Csv.Text("adventure_follow_title")
+
+	MActivity.AdventureShopRed = false
+	CActivity.ReqUpdateRed(self.mData.actId, Define.SysId.Adventure)
 end
 
 function _P.OnChoose(self, funcId)
@@ -77,15 +81,16 @@ function _P.OnChoose(self, funcId)
 		_P.CreateEventList(self)
 	elseif funcId == 2 then
 		self.mMoudle:Get("cishu").Text = ""
-		self.mMoudle:Get("Tips").Text = Csv.Text("adventure_follow_count2", {num=ADVSHOPLIMIT})
+		self.mMoudle:Get("Tips").Text = Csv.Text("adventure_follow_count2", {num=ADVREWARDLIMIT})
 		_P.CreateRewardList(self)
 	end
+	_P.UpdateRed(self)
 end
 
 function _P.CreateRewardList(self)
 	self.content:DestroyChildren()
 	self.itemTab = {}
-	local eventListData = _P.GetActiveEventList(self)
+	local eventListData = _P.GetActiveEventList(self,2)
 	for k,v in pairs(eventListData) do
 		local item = _P.AddItemToContent(self,self.content,v, 2)
 		self.itemTab[v.eventsIndex] = item
@@ -98,20 +103,19 @@ function _P.CreateEventList(self)
 	self.itemTab = {}
 	_P.ClearTimer(self)
 	self.timerTab = {}
-	local eventListData = _P.GetActiveEventList(self)
+	local eventListData = _P.GetActiveEventList(self,1)
 	for k,v in pairs(eventListData) do
 		local item = _P.AddItemToContent(self,self.content,v, 1)
 		self.itemTab[v.eventsIndex] = item
 	end
 end
 
-function _P.GetActiveEventList(self)
+function _P.GetActiveEventList(self, funId)
 	local eventList = {}
 	if self.mData.shopEventList == nil then return end
-	local funId = MActivity.AdventureFollowLastChoose
 	for k,v in pairs(self.mData.shopEventList) do
 		if funId == 1  and v.type == funId then
-			if v.triggerTime + ADVCOUNTTIME > HeartBeat.ServSecond()  then
+			if v.triggerTime + ADVCOUNTTIME > HeartBeat.ServSecond()  and self.mData.state.lefttime > HeartBeat.ServSecond() then
 				table.insert(eventList, v)
 			end
 		elseif funId == 2 and v.type == funId then
@@ -139,7 +143,7 @@ function _P.AddItemToContent(self,content,data, type)
 	self.joinBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		_P.OnClickIcon(data.playerlist,data.eventId)
-	end, nil, 1)
+	end, nil, 0.9)
 	self.goBtn = moudle:Get("Btn1")
 	self.goBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -155,11 +159,16 @@ function _P.AddItemToContent(self,content,data, type)
 		else
 			_P.OnGetReward(self,data)
 		end
-	end, nil, 1)
-
-	-- LuaUtil.DumpTable(data)
+	end, nil, 0.9)
 
 	self.getText = moudle:Get("new_text")
+	local csvVip = Csv.Vip[data.playerInfo.vip]
+	if csvVip ~= nil and csvVip.imgBord ~= nil then
+		moudle:Get("OutBox").SpriteName = csvVip.imgBord
+		moudle:Get("Num").SpriteNameAutoScale = "friend_num_"..data.playerInfo.vip
+	else
+		moudle:Get("OutBox").Activity = false
+	end
 	moudle:Get("head").SpriteName = MPlayer.GetOtherHeadIcon(data.playerInfo.icon,data.playerInfo.sex) --客户端暂时先写死。。
 	moudle:Get("TitleText").Text = data.playerInfo.name.."("..Csv.Text("adventure_player_level"..data.playerInfo.job)..")"
 	moudle:Get("C_text").Text = Csv.Text("adventure_follow_p")
@@ -201,7 +210,6 @@ function _P.AddItemToContent(self,content,data, type)
 		moudle:Get("Btn1").Activity = false
 	end
 
-	-- LuaUtil.DumpTable(data)
 	self.condition1 = moudle:Get("Condition1")
 	self.condition2 = moudle:Get("Condition2")
 	local condition = data.eventInfo
@@ -213,7 +221,7 @@ function _P.AddItemToContent(self,content,data, type)
 	end
 
 	--类型
-	self.condition2.Text = Csv.Text("adventure_follow_con2",{attr = Csv.Text("adventure_staff_attr"..condition.type),num = condition.val})
+	self.condition2.Text = Csv.Text("adventure_follow_con2",{attr = Csv.Text("adventure_staff_type"..condition.type),num = condition.val})
 
 	return moudle
 end
@@ -277,8 +285,11 @@ function _R.OnRewardCallBack(self,data)
 	if data ~= nil then
 		SoundMgr.Play(10004)
 		local animRect = self.itemTab[data.eventIndex]:Get("Btn1")
+		self.itemTab[data.eventIndex]:Get("redPoint").Activity = false
 		self.itemTab[data.eventIndex]:Get("new_text").Text = ""
 		local delayCount = 0
+		animRect.SpriteName = ""
+		CActivity.ReqUpdateRed(data.actId, Define.SysId.Adventure)
 		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
 			for k,v in pairs(data.reward) do
 				CCommon.ShowFlyItem(animRect, v.id, v.count, delayCount)
@@ -300,6 +311,10 @@ function _P.RemoveEvent(self,eventsIndex)
 	end
 	--刷新显示
 	_P.OnChoose(self, MActivity.AdventureFollowLastChoose)
+end
+
+function _P.UpdateRed(self)
+	self.mMoudle:Get("redPoint").Activity = #_P.GetActiveEventList(self, 2) > 0
 end
 
 function _M:BeforeDestroy()

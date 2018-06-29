@@ -173,7 +173,9 @@ function _Func.ShowShenJi(self, csvGod)
 	CCommon.CreateEffect(moudle:Get("FxNode"), csvGod.effect)
 	local tween = moudle.SelfRect.CachedTran:GetJTweener("T_Effect_God")
 	tween:SetOnComplete(function()
-		self:Destroy()
+		if moudle ~= nil then 
+			moudle:Destroy()
+		end
 	end)
 	tween:Play()	
 end
@@ -183,22 +185,36 @@ function _Func.ShowMsgTips(self, data)
 		return 
 	end
 
-	if self.moudle == nil then
-		self.moudle = self:CreateMoudle(self._RootNode, "M_Msg_Tips")
-		LuaUtil.TextAddThreePoint(self.moudle:Get("new_text"), "")
-		self.tipsData = data
-		self.moudle.SelfRect:AddOnButton(function( ... )
+	if self.MsgTipsMoudle == nil then
+		self.MsgTipsMoudle = self:CreateMoudle(self._RootNode, "M_Msg_Tips")
+		LuaUtil.TextAddThreePoint(self.MsgTipsMoudle:Get("new_text"), "")
+		self.MsgTipsData = data
+		self.MsgTipsMoudle.SelfRect:AddOnButton(function( ... )
 			SoundMgr.Play(10001)
-			if self.tipsData.funcId == Define.SysId.Talk_Private then
-				WindowOpen.Open(self.tipsData.funcId, self.tipsData.id, self.tipsData.name)
-			elseif self.tipsData.funcId == Define.SysId.Friend_Friend then
-				WindowOpen.Open(self.tipsData.funcId)
+			if self.MsgTipsData.funcId == Define.SysId.Talk_Private then
+				WindowOpen.Open(self.MsgTipsData.funcId, self.MsgTipsData.id, self.MsgTipsData.name)
+			elseif self.MsgTipsData.funcId == Define.SysId.Friend_Friend then
+				WindowOpen.Open(self.MsgTipsData.funcId)
 				WindowMgr.Call("UFriend","OpenAddFriendWin")
 			end
-			self:Destroy()
+			_Func.HideMsgTips(self)
 		end, nil, 0.9)
 	else
-		self.tipsData = data
+		self.MsgTipsData = data
+	end
+end
+
+function _Func.HideMsgTips(self, type)
+	if self.MsgTipsMoudle == nil then
+		return
+	end
+	if self.MsgTipsData == nil then
+		return
+	end
+
+	if self.MsgTipsData.funcId == type then
+		self.MsgTipsMoudle:Destroy()
+		self.MsgTipsData = nil
 	end
 end
 

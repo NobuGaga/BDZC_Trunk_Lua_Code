@@ -195,17 +195,20 @@ function _P.OnEnterGameRet(data)
 		HeartBeat.InitServTime(data.servTime, data.debugMode)
 		return
 	end
+	
+	GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+
 	-- 输出错误信息
 	local switch = {
 		[-1001] = Csv.Text('login_inn_error_4'),
 		[-1002] = Csv.Text('login_inn_error_5'),
+		[-1003] = Csv.Text('login_account_forbid'),
 	}
 	if switch[data.errorCode] ~= nil then
 		CCommon.ShowError(switch[data.errorCode])
 	else
 		CCommon.ShowError(Csv.Text('login_known_error'))
 	end
-	GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
 end
 
 function _P.OnGetCharNameRet(data)

@@ -44,6 +44,7 @@ function _M:OnCreate(battleId, hurt, onClose, isShowText, ...)
 		self:Lock()
 		moudle.SelfRect:AddOnTime(function()
 			self:Unlock()
+			LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
 		end, nil, 0.5)
 	else
 		noneText.Text = Csv.Text("battle_noneErr")

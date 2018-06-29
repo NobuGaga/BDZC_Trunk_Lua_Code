@@ -32,6 +32,18 @@ function _M:OnCreate(data,isCloseUdisk)
 	local jifen = moudle:Get("Tips1")
 	local gongxian = moudle:Get("Tips2")
 
+--[[
+	local _jifen = 0
+	local _score = 0
+	local activityData = Csv.Siege[MSiege.ActivityId]
+
+	_jifen = data.jifen
+	_score = data.score
+	if activityData ~= nil then
+		_jifen = activityData.point[MSiege.Phase]
+		_score = activityData.point[MSiege.Phase]
+	end
+--]]
 	if data.jifen > 0 then
 		jifen.Text = Csv.Text("siege_get_jifen",{num = data.jifen})
 	end
@@ -42,7 +54,7 @@ function _M:OnCreate(data,isCloseUdisk)
 	local content = moudle:Get("content")
 	if data.items ~= nil then
 		for k,v in pairs(data.items) do
-			CCommon.CreateItem(content, v.id, nil, {num = v.count})
+			CCommon.CreateItem(content, v.id,CCommon.ShowItemTips, {num = v.count})
 		end
 	else
 		print("没有获得道具！！！")

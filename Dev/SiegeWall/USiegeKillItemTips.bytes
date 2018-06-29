@@ -1,0 +1,74 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(id)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Ranking_SkilItem")
+	local title = moudle:Get("Title")
+	local title2 = moudle:Get("Title2")
+	local title3 = moudle:Get("Title3")
+	local headIcon = moudle:Get("Head")
+	local content = moudle:Get("GoodsItem")
+
+	local jifen = moudle:Get("Jfjl1")
+	local gongxian = moudle:Get("Jfjl2")
+
+	title2.Text = Csv.Text("siege_rank_boss_kill1")
+	title3.Text = Csv.Text("siege_rank_boss_kill2")
+
+	local bossData = Csv.SiegeBoss[id]
+	
+	if bossData ~= nil then
+
+		headIcon.SpriteName = bossData.icon
+		title.Text = bossData.name
+		jifen.Text = Csv.Text("siege_get_jifen",{num = bossData.skillJifen}) 
+		gongxian.Text = Csv.Text("siege_get_gongxian",{num = bossData.skillJifen}) 
+
+		local rewardItes = bossData.randomgift1--Csv.SiegeBoss[id]
+		if rewardItes ~= nil then
+			for k,v in pairs(rewardItes) do
+				CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]})
+			end
+		end
+
+		local line = math.ceil(#rewardItes/4) 
+		moudle.SelfRect.SizeDelta = Vector2(692,190+line*160)
+	else
+		print("找不到boss数据__________id_",id)
+	end
+
+end
+
+return _M

@@ -166,10 +166,13 @@ function _P.OnClickItem(self,data)
 		local item = self.mRawTableItems[data.itemid]
 		if item ~= nil and item.moudle ~= nil then
 			local itemMoudle = item.moudle
+			self.mImgSelect.Activity = true
+			self.mImgSelect:SetParent(moudle.SelfRect.CachedTran)
+			self.mImgSelect.CachedTran:SetSiblingIndex(0)
+			self.mImgSelect.LocalPosition = Vector2(0,0)
 			self.mImgSelect:SetParent(itemMoudle.SelfRect.CachedTran)
 			self.mImgSelect.CachedTran:SetSiblingIndex(1)
 			self.mImgSelect.LocalPosition = Vector2(0,0)
-			self.mImgSelect.Activity = true
 		end
 	end
 end

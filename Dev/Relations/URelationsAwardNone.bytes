@@ -2,6 +2,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local MRelations = JRequire "Dev.Relations.MRelations"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
 local _M = Class(WindowBase)
 local _P = {}
 
@@ -16,7 +17,13 @@ function _M:OnCreate(...)
 	self.mMoudle = moudle
 
 	local data = MRelations.ReportData
-	moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
+	local staff = moudle:Get("BSX")
+	local csvPersonnel = Csv.Personnel[data.mstaffinfo.staffid]
+	if csvPersonnel.prefab then
+		CCommon.CreateActor(staff, csvPersonnel.prefab, CCommon.ActorFieldMap.lobby_one_fail)
+	else
+		staff.SpriteName = csvPersonnel.asset
+	end
 	moudle:Get("call").Text = Csv.Text("relations_dailytalkT")
 	moudle:Get("CallText").Text = Csv.Text("relations_overnone")
 	moudle:Get("Y").Text = Csv.Text("relations_cai")

@@ -294,9 +294,17 @@ function _R.OnUpdateData(self, actId)
 	_P.SetGetBtnData(self)
 end
 
+function _R.OnGetGangData(self,data)
+	self.gangRankNum = data.rank
+	if MRank.RankTable[self.gangRankType] ~= nil then
+		MRank.RankTable[self.gangRankType].selfrank = data.rank
+		MRank.RankTable[self.gangRankType].selfvalue = data.score
+	end
+	_P.SetRankData(self)
+end
+
 function _R.OnGetGangRankData(self,data)
-	-- print("商会排名返回")
-	self.gangRankNum = data.selfrank
+	CActivity.ReqRankOpen()
 end
 
 function _R.OnSelfRankData(self,data)
@@ -331,9 +339,9 @@ function _R.OnGetRewardBack(self, data)
 			if rankType == 1 then
 				rewardItems = rankConf.rankReward[realIndex]
 			elseif rankType == 2 then
-				rewardItems = rankConf.memberReward[realIndex]
-			elseif rankType == 3 then
 				rewardItems = rankConf.presidentReward[realIndex]
+			elseif rankType == 3 then
+				rewardItems = rankConf.memberReward[realIndex]
 			end
 			
 			local rewardList = rewardItems or {}
@@ -402,8 +410,8 @@ function _M:OnCreate(data)
 	self.gangRankType = self.adventureConf.rankCommerceType
 
 	_P.GetRankData(self, self.actId)
-	CRank.GetRankList(self.selfRankType, true)
 
+	CRank.GetRankList(self.selfRankType, true)
 	self.curSelectToggle = MActivity.AdventureTypeEnum.Person
 
 	module:Get("textSelfRank").Text = Csv.Text("xinguan_rank_selfRank")
@@ -438,8 +446,12 @@ function _M:OnCreate(data)
 	self.getBtn = module:Get("btnGet")
 	self.getBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
-		CActivity.GetRewardReq(self.activityData.actId, (isPerson and 1) or 2)
+		if HeartBeat.ServSecond() >= self.activityData.state.endTime then
+			CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		else
+			local isPerson =(self.curSelectToggle == MActivity.AdventureTypeEnum.Person)
+			CActivity.GetRewardReq(self.activityData.actId, (isPerson and 1) or 2)
+		end
 	end, nil, 0.95)
 
 	local state = self.activityData.state

@@ -121,9 +121,11 @@ function _M.Init()
 	_M.PlayVoiceUrl = _M.GameParam.cdnVersion.voiceSave
 
 	--区ID
-	_M.AreaId = "1,2,3,4,256"
+	_M.AreaId = "1,2,3,4,256,"
 	if sdkParam.areaid ~= nil and sdkParam.areaid ~= "" then
-		_M.AreaId = sdkParam.areaid
+		_M.SetAreaID(sdkParam.areaid)
+	else
+		_M.SetAreaID("1,2,3,4,256")
 	end
 
 	--是否审核阶段
@@ -149,6 +151,24 @@ function _M.Init()
 	end
 
 	_P.InitGM()
+end
+
+function _M.SetAreaID(areaIdStr)
+	_M.AreaId = areaIdStr or ""
+	-- error("last areaID:" .. _M.AreaId)
+	if not _M.IsEditor then
+		local areaArray = LuaUtil.StringSplit(_M.AreaId, ",")
+		if areaArray ~= nil then
+			local newTab = {}
+			for i=1,#areaArray do
+				if string.find(areaArray[i], '1') ~= 1 then
+					table.insert(newTab, areaArray[i])
+				end
+			end
+			_M.AreaId = table.concat(newTab, ",")
+		end
+	end
+	-- error("new areaID:" .. _M.AreaId)
 end
 
 function _M.ShowFog()

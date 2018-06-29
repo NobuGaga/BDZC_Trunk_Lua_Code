@@ -2,12 +2,22 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local ScrollGrid = JRequire "Dev.Common.ScrollGrid"
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
 local Default_Img = "yg_sx_002"
 local Select_Img = "yg_sx_003"
+
+local PageWidth = 735
+local PageHeight = 1127
+local ItemWidth = 180
+local ItemHeight = 468
+local SpaceX = 5
+local SpaceY = -11
+local PageNum = 12
+local ColNum = 4
 
 function _M:OnPopCreate( ... )
 	self:OnCreate(...)
@@ -23,7 +33,7 @@ end
 
 --界面构建
 function _M:OnCreate(...)
-	--MStaff.LoadStaffsSortType() --加载员工排序方式(20180508又说不存本地因为营销新手教程)
+	MStaff.LoadStaffsSortType() --加载员工排序方式(20180508又说不存本地因为营销新手教程)
 
 	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_UMain")
 	self.mMoudle = moudle
@@ -91,18 +101,18 @@ function _M:OnCreate(...)
 end
 
 function _R.ChangeStaffLv(self,staffid)
-	local staffitem = self.mRawTableItems[staffid]
+	local moudle = self.mStaffMoudleTable[staffid]
 	local data = MStaff.GetStaffDataByID(staffid)
-	if staffitem ~= nil and data ~= nil then
-		staffitem.moudle:Get("Level").Text = data.level
+	if moudle ~= nil and data ~= nil then
+		moudle:Get("Level").Text = data.level
 	end
 end
 
 function _R.ChangeStaffColor(self,staffid)
-	local staffitem = self.mRawTableItems[staffid]
+	local moudle = self.mStaffMoudleTable[staffid]
 	local data = MStaff.GetStaffDataByID(staffid)
-	if staffitem ~= nil and data ~= nil then
-		staffitem.moudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
+	if moudle ~= nil and data ~= nil then
+		moudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
 	end
 end
 
@@ -115,50 +125,173 @@ function _P.CreateStaffList(self,isForSort)
 	end
 
 	local contentTransform = self.mMoudle:Get("Content")
-	if not isForSort then
-		contentTransform:DestroyChildren()
+	-- if not isForSort then
+	-- 	contentTransform:DestroyChildren()
 
-		local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
-		for k,v in ipairs(staffTableDatas) do
-			self.mRawTableItems[v.id] = _P.OnCreateItem(v,contentTransform)
-		end
-		self.mSortStaffDatas = staffTableDatas
+	-- 	local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
+	-- 	for k,v in ipairs(staffTableDatas) do
+	-- 		self.mRawTableItems[v.id] = _P.OnCreateItem(v,contentTransform)
+	-- 	end
+	-- 	self.mSortStaffDatas = staffTableDatas
 
-		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-		for k,v in ipairs(staffTableDatas) do
-			self.mRawTableItems2[v.id] = _P.OnCreateItem(v,contentTransform)
-			self.mRawTableItems2[v.id].moudle.SelfRect.Activity = not MStaff.gou
-		end
+	-- 	staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+	-- 	for k,v in ipairs(staffTableDatas) do
+	-- 		self.mRawTableItems2[v.id] = _P.OnCreateItem(v,contentTransform)
+	-- 		self.mRawTableItems2[v.id].moudle.SelfRect.Activity = not MStaff.gou
+	-- 	end
+	-- else
+	-- 	local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
+	-- 	for k,v in ipairs(staffTableDatas) do
+	-- 		local item = self.mRawTableItems[v.id]
+	-- 		if item ~= nil then
+	-- 			item.moudle.SelfRect.CachedTran:SetSiblingIndex(k - 1)
+	-- 		end
+	-- 	end
+
+	-- 	local num = #staffTableDatas
+	-- 	if Csv.Personnel ~= nil and MStaff.gou == false then
+	-- 		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+	-- 		for k,v in ipairs(staffTableDatas) do
+	-- 			local item = self.mRawTableItems2[v.id]
+	-- 			if item ~= nil then
+	-- 				item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
+	-- 				item.moudle.SelfRect.Activity = true
+	-- 			end
+	-- 		end
+	-- 	else
+	-- 		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+	-- 		for k,v in ipairs(staffTableDatas) do
+	-- 			local item = self.mRawTableItems2[v.id]
+	-- 			if item ~= nil then
+	-- 				item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
+	-- 				item.moudle.SelfRect.Activity = false
+	-- 			end
+	-- 		end
+	-- 	end
+	-- end
+
+
+	contentTransform:DestroyChildren()
+	self.mStaffMoudleTable = {}
+	local scroll = self.mMoudle:Get("scrollView")
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	local scrollController = ScrollGrid.new(scroll,contentTransform,"M_Staff_Item",
+	function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end,
+	function(index,value)_P.ScrollCallBack2(self,index,value)end
+	)
+	local list = _P.GetAllStaffData(self)
+	self.mList = list
+	scrollController:CreateScroll(PageNum,PageHeight,PageWidth,ItemHeight,SpaceY,list,ColNum)
+	self.scrollController = scrollController
+end
+
+function _P.GetAllStaffData(self)
+	local staffTableDatas
+	if MStaff.gou then
+		staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
 	else
-		local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
-		for k,v in ipairs(staffTableDatas) do
-			local item = self.mRawTableItems[v.id]
-			if item ~= nil then
-				item.moudle.SelfRect.CachedTran:SetSiblingIndex(k - 1)
-			end
-		end
+		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
+	end
+	local staffTable = {}
+	for k,v in ipairs(staffTableDatas) do
+		table.insert(staffTable,v)
+	end
+	return staffTable
+end
 
-		local num = #staffTableDatas
-		if Csv.Personnel ~= nil and MStaff.gou == false then
-			staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-			for k,v in ipairs(staffTableDatas) do
-				local item = self.mRawTableItems2[v.id]
-				if item ~= nil then
-					item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
-					item.moudle.SelfRect.Activity = true
-				end
-			end
-		else
-			staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-			for k,v in ipairs(staffTableDatas) do
-				local item = self.mRawTableItems2[v.id]
-				if item ~= nil then
-					item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
-					item.moudle.SelfRect.Activity = false
-				end
-			end
+function _P.ScrollCallBack2(self,index,data)
+	if self.mStaffMoudleTable ~= nil then
+		self.mStaffMoudleTable[data.id] = nil
+	end
+end
+
+function _P.ScrollCallBack(self,index,data,itemMoudle)
+	if MStaff.NoStaff(data.id) then
+		itemMoudle:Get("BG_2").IsGray = true
+		itemMoudle:Get("Icon").IsGray = true
+	else
+		itemMoudle:Get("BG_2").IsGray = false
+		itemMoudle:Get("Icon").IsGray = false
+	end
+	local csvPerson = Csv.Personnel[data.id]
+
+	local ImgIcon = itemMoudle:Get("Icon")
+	ImgIcon.SpriteName = csvPerson.asset2
+	
+	itemMoudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
+
+	itemMoudle:Get("BG_2"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickItem(data.id)
+		end, nil, 1)
+
+	local TextLevel = itemMoudle:Get("Level")
+	TextLevel.Text = data.level
+
+	local TextName = itemMoudle:Get("Name")
+	TextName.Text = MStaff.GetStaffName(data.id)--csvPerson.name
+
+	local ImgRedPoint = itemMoudle:Get("RedPoint")
+	ImgRedPoint.Activity = MStaff.GetRedPointState(data.id)
+
+	for i = 1,7 do
+		local imgStar = itemMoudle:Get("Star"..i)
+		if imgStar ~= nil then
+			imgStar.Activity = false
 		end
 	end
+
+	for i = 1,csvPerson.star do
+		itemMoudle:Get("Star"..i).Activity = true
+	end
+
+	for i = 1,4 do
+		local imgZizhi = itemMoudle:Get("Zizhi"..i)
+		if imgZizhi ~= nil then
+			imgZizhi.Activity = false
+		end
+	end
+
+	for k,v in ipairs(csvPerson.specialtyIcon) do
+		local imgZizhi = itemMoudle:Get("Zizhi"..k)
+		if imgZizhi ~= nil then
+			imgZizhi.Activity = true
+			imgZizhi.SpriteName = v
+		end
+	end
+
+	self.mStaffMoudleTable[data.id] = itemMoudle
+
+	itemMoudle.SelfRect.LocalPosition = _P.GetPos(self,index)
+end
+
+function _P.GetPos(self,index)
+	local num1,num2 = math.modf(index/ColNum)
+	local col
+	local row
+	local x
+	local y
+	if num2 == 0 then
+		col = ColNum
+		row = num1
+	else
+		col = index%ColNum
+		row = num1 + 1
+	end
+	x = col * (ItemWidth + SpaceX) - SpaceX - ItemWidth/2 - PageWidth/2
+	local allNum = #self.mList
+	local num3,num4 = math.modf(allNum/ColNum)
+	local allColNum
+	if num4 == 0 then
+		allColNum = num3
+	else
+		allColNum = num3 + 1
+	end
+	y = ((ItemHeight + SpaceY) * allColNum - SpaceY)/2 - ((row - 1) * (ItemHeight + SpaceY) + ItemHeight/2)
+	return Vector2(x,y)
 end
 
 function _P.ClickSortItem(self,sortType)
@@ -170,8 +303,10 @@ end
 function _P.GetSortStaffsNotObtained(self,sortType)
 	local sortTable = {}
 	for index, v in pairs(Csv.Personnel) do
-		if self.mRawTableItems[v.id] == nil then
+		if MStaff.StaffTable[v.id] == nil then
 			table.insert(sortTable,v)
+		else
+			table.insert(sortTable,MStaff.StaffTable[v.id])
 		end
 	end
 
@@ -184,105 +319,37 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 	--按照属性(实力)》综合资质》品质》星数》id排序
 	if sortType == MStaff.StaffsSort.attr then
 		table.sort(sortTable,function(a,b)
-			local aAttr = MStaff.GetAllAttrNotObtained(a.id)
-			local bAttr = MStaff.GetAllAttrNotObtained(b.id)
-			if aAttr == bAttr then
-				local aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
-				local bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
-				if aZiZhi == bZiZhi then
-					if a.color == b.color then
-						local aStar = Csv.Personnel[a.id].star
-						local bStar = Csv.Personnel[b.id].star
-						if aStar == bStar then
-							return a.id < b.id
-						else
-							return aStar > bStar
-						end
-					else
-						return a.color > b.color
-					end
+			local isHaveA = MStaff.StaffTable[a.id] ~= nil
+			local isHaveB = MStaff.StaffTable[b.id] ~= nil
+			if isHaveA == isHaveB then
+				local aAttr
+				local bAttr
+				if not isHaveA then
+					aAttr = MStaff.GetAllAttrNotObtained(a.id)
+					bAttr = MStaff.GetAllAttrNotObtained(b.id)
 				else
-					return aZiZhi > bZiZhi
+					aAttr = MStaff.GetAllAttr(a.id)
+					bAttr = MStaff.GetAllAttr(b.id)
 				end
-			else
-				return aAttr > bAttr
-			end
-		end)
-		return sortTable
-	--品质排序
-	--按照品质》属性》综合资质》星数》id排序
-	elseif sortType == MStaff.StaffsSort.color then
-		table.sort(sortTable,function(a,b)
-			if a.color == b.color then
-				local aAttr = MStaff.GetAllAttrNotObtained(a.id)
-				local bAttr = MStaff.GetAllAttrNotObtained(b.id)
 				if aAttr == bAttr then
-					local aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
-					local bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
-					if aZiZhi == bZiZhi then
-						local aStar = Csv.Personnel[a.id].star
-						local bStar = Csv.Personnel[b.id].star
-						if aStar == bStar then
-							return a.id < b.id
-						else
-							return aStar > bStar
-						end
+					local aZiZhi
+					local bZiZhi
+					if not isHaveA then
+						aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
+						bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
 					else
-						return aZiZhi > bZiZhi
+						aZiZhi = MStaff.GetAllApitude(a.id)
+						bZiZhi = MStaff.GetAllApitude(b.id)
 					end
-				else
-					return aAttr > bAttr
-				end
-			else
-				return a.color > b.color
-			end
-		end)
-		return sortTable
-	--资质排序
-	--按照综合资质》属性》品质》星数》id排序
-	elseif sortType == MStaff.StaffsSort.apitude then
-		table.sort(sortTable,function(a,b)
-			local aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
-			local bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
-			if aZiZhi == bZiZhi then
-				local aAttr = MStaff.GetAllAttrNotObtained(a.id)
-				local bAttr = MStaff.GetAllAttrNotObtained(b.id)
-				if aAttr == bAttr then
-					if a.color == b.color then
-						local aStar = Csv.Personnel[a.id].star
-						local bStar = Csv.Personnel[b.id].star
-						if aStar == bStar then
-							return a.id < b.id
-						else
-							return aStar > bStar
-						end
-					else
-						return a.color > b.color
-					end
-				else
-					return aAttr > bAttr
-				end
-				
-			else
-				return aZiZhi > bZiZhi
-			end
-		end)
-		return sortTable
-	--星数排序
-	--按照星级》属性》综合资质》品质》id排序
-	elseif sortType == MStaff.StaffsSort.star then
-		table.sort(sortTable,function(a,b)
-			local aStar = Csv.Personnel[a.id].star
-			local bStar = Csv.Personnel[b.id].star
-			if aStar == bStar then
-				local aAttr = MStaff.GetAllAttrNotObtained(a.id)
-				local bAttr = MStaff.GetAllAttrNotObtained(b.id)
-				if aAttr == bAttr then
-					local aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
-					local bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
 					if aZiZhi == bZiZhi then
 						if a.color == b.color then
-							return a.id < b.id
+							local aStar = Csv.Personnel[a.id].star
+							local bStar = Csv.Personnel[b.id].star
+							if aStar == bStar then
+								return a.id < b.id
+							else
+								return aStar > bStar
+							end
 						else
 							return a.color > b.color
 						end
@@ -292,8 +359,172 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 				else
 					return aAttr > bAttr
 				end
-			else
-				return aStar > bStar
+			elseif isHaveA then
+				return true
+			elseif isHaveB then
+				return false
+			end
+		end)
+		return sortTable
+	--等级排序
+	--按照等级》属性》综合资质》星数》id排序
+	elseif sortType == MStaff.StaffsSort.level then
+		table.sort(sortTable,function(a,b)
+			local isHaveA = MStaff.StaffTable[a.id] ~= nil
+			local isHaveB = MStaff.StaffTable[b.id] ~= nil
+			if isHaveA == isHaveB then
+				if not isHaveA then
+					local aAttr = MStaff.GetAllAttrNotObtained(a.id)
+					local bAttr = MStaff.GetAllAttrNotObtained(b.id)
+					if aAttr == bAttr then
+						local aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
+						local bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
+						if aZiZhi == bZiZhi then
+							local aStar = Csv.Personnel[a.id].star
+							local bStar = Csv.Personnel[b.id].star
+							if aStar == bStar then
+								return a.id < b.id
+							else
+								return aStar > bStar
+							end
+						else
+							return aZiZhi > bZiZhi
+						end
+					else
+						return aAttr > bAttr
+					end
+				else
+					if a.level == b.level then
+						local aAttr = MStaff.GetAllAttr(a.id)
+						local bAttr = MStaff.GetAllAttr(b.id)
+						if aAttr == bAttr then
+							local aZiZhi = MStaff.GetAllApitude(a.id)
+							local bZiZhi = MStaff.GetAllApitude(b.id)
+							if aZiZhi == bZiZhi then
+								local aStar = Csv.Personnel[a.id].star
+								local bStar = Csv.Personnel[b.id].star
+								if aStar == bStar then
+									return a.id < b.id
+								else
+									return aStar > bStar
+								end
+							else
+								return aZiZhi > bZiZhi
+							end
+						else
+							return aAttr > bAttr
+						end
+					else
+						return a.level > b.level
+					end
+				end
+			elseif isHaveA then
+				return true
+			elseif isHaveB then
+				return false
+			end
+		end)
+		return sortTable
+	--资质排序
+	--按照综合资质》属性》品质》星数》id排序
+	elseif sortType == MStaff.StaffsSort.apitude then
+		table.sort(sortTable,function(a,b)
+			local isHaveA = MStaff.StaffTable[a.id] ~= nil
+			local isHaveB = MStaff.StaffTable[b.id] ~= nil
+			if isHaveA == isHaveB then
+				local aZiZhi
+				local bZiZhi
+				if not isHaveA then
+					aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
+					bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
+				else
+					aZiZhi = MStaff.GetAllApitude(a.id)
+					bZiZhi = MStaff.GetAllApitude(b.id)
+				end
+				if aZiZhi == bZiZhi then
+					local aAttr
+					local bAttr
+					if not isHaveA then
+						aAttr = MStaff.GetAllAttrNotObtained(a.id)
+						bAttr = MStaff.GetAllAttrNotObtained(b.id)
+					else
+						aAttr = MStaff.GetAllAttr(a.id)
+						bAttr = MStaff.GetAllAttr(b.id)
+					end
+					if aAttr == bAttr then
+						if a.color == b.color then
+							local aStar = Csv.Personnel[a.id].star
+							local bStar = Csv.Personnel[b.id].star
+							if aStar == bStar then
+								return a.id < b.id
+							else
+								return aStar > bStar
+							end
+						else
+							return a.color > b.color
+						end
+					else
+						return aAttr > bAttr
+					end
+					
+				else
+					return aZiZhi > bZiZhi
+				end
+			elseif isHaveA then
+				return true
+			elseif isHaveB then
+				return false
+			end
+		end)
+		return sortTable
+	--星数排序
+	--按照星级》属性》综合资质》品质》id排序
+	elseif sortType == MStaff.StaffsSort.star then
+		table.sort(sortTable,function(a,b)
+			local isHaveA = MStaff.StaffTable[a.id] ~= nil
+			local isHaveB = MStaff.StaffTable[b.id] ~= nil
+			if isHaveA == isHaveB then
+				local aStar = Csv.Personnel[a.id].star
+				local bStar = Csv.Personnel[b.id].star
+				if aStar == bStar then
+					local aAttr
+					local bAttr
+					if not isHaveA then
+						aAttr = MStaff.GetAllAttrNotObtained(a.id)
+						bAttr = MStaff.GetAllAttrNotObtained(b.id)
+					else
+						aAttr = MStaff.GetAllAttr(a.id)
+						bAttr = MStaff.GetAllAttr(b.id)
+					end
+					if aAttr == bAttr then
+						local aZiZhi
+						local bZiZhi
+						if not isHaveA then
+							aZiZhi = MStaff.GetAllApitudeNotObtained(a.id)
+							bZiZhi = MStaff.GetAllApitudeNotObtained(b.id)
+						else
+							aZiZhi = MStaff.GetAllApitude(a.id)
+							bZiZhi = MStaff.GetAllApitude(b.id)
+						end
+						if aZiZhi == bZiZhi then
+							if a.color == b.color then
+								return a.id < b.id
+							else
+								return a.color > b.color
+							end
+						else
+							return aZiZhi > bZiZhi
+						end
+					else
+						return aAttr > bAttr
+					end
+				else
+					return aStar > bStar
+				end
+			elseif isHaveA then
+				return true
+			elseif isHaveB then
+				return false
 			end
 		end)
 		return sortTable
@@ -515,18 +746,26 @@ function _R.ResetPoint(self)
 	local staffTable = MStaff.StaffTable
 	for k,v in pairs(staffTable) do
 		if v.id ~= nil then
-			local moudle = self.mRawTableItems[v.id].moudle
-			moudle:Get("RedPoint").Activity = MStaff.GetRedPointState(v.id)
+			local moudle = self.mStaffMoudleTable[v.id]
+			if moudle ~= nil then
+				moudle:Get("RedPoint").Activity = MStaff.GetRedPointState(v.id)
+			end
 		end
 	end
 end
 
 function _R.RefreshStaffName(self,id)
-	local staffItem = self.mRawTableItems[id]
-	if staffItem ~= nil then
-		local moudle = staffItem.moudle
+	local moudle = self.mStaffMoudleTable[id]
+	if moudle ~= nil then
 		local TextName = moudle:Get("Name")
 		TextName.Text = MStaff.GetStaffName(id)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
 	end
 end
 

@@ -33,21 +33,13 @@ function _M:OnCreate(data,isVote)
 	local text5 = moudle:Get("text5")
 	local text6 = moudle:Get("text6")
 
-	if isVote then
-		text1.Text = Csv.Text("finance_resultTitle_fb3",{num = data.hurt})--"对【巴菲特】抵御了"
-		text2.Text = ""
-		text3.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--"副本积分："
-		text4.Text = ""
-		text5.Text = ""
-		text6.Text = ""
-	else
-		text1.Text = Csv.Text("finance_resultTitle_fb2",{num = data.hurt})--"对【索罗斯】抵御了"
-		text2.Text = ""
-		text3.Text = Csv.Text("finance_result_scoreFb2",{num = data.score})--"副本分数："
-		text4.Text = ""
-		text5.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--副本积分："
-		text6.Text = ""
-	end
+	--text1.Text = Csv.Text("finance_resultTitle_fb2",{num = data.hurt})--"对【索罗斯】抵御了"
+	text2.Text = ""
+	text3.Text = Csv.Text("siege_battle_getgongxian",{num = data.jifen})--"副本分数："
+	text4.Text = ""
+	text5.Text = Csv.Text("siege_battle_getjifen",{num = data.jifen})--副本积分："
+	text6.Text = ""
+
 	SoundMgr.Play(10014)
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
 	--[[

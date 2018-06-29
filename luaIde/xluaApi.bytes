@@ -124,7 +124,7 @@ function CS.GameManager:RemoveFpsShow() end
 function CS.GameManager:SetResolution(per) end
 --[[
 	@jsonParam CS.LitJson.JsonData
-	@fileList CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089}}
+	@fileList CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{Plugin.CachedFileParam, IPlugin, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
 --]]
 function CS.GameManager:Init(jsonParam,fileList) end
 function CS.GameManager:GetJsonParam() end
@@ -2022,7 +2022,7 @@ CS.Loader.LoadAccessor = {}
 	@loadAttachBehaviour CS.UnityEngine.MonoBehaviour
 	@coroutineCount CS.System.Int32
 	@dataPath CS.System.String
-	@cachedFileList CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089}}
+	@cachedFileList CS.System.Collections.Generic.Dictionary`2{{System.String, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089},{Plugin.CachedFileParam, IPlugin, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null}}
 --]]
 function CS.Loader.LoadAccessor:Init(loadAttachBehaviour,coroutineCount,dataPath,cachedFileList) end
 --[[
@@ -2230,6 +2230,16 @@ CS.JGui.JGuiManager.HoleRectMaterial = nil
 	 Get 
 --]]
 CS.JGui.JGuiManager.BlurMaterial = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Material]
+	 Get 
+--]]
+CS.JGui.JGuiManager.SkeletonMaterial = nil
+--[[
+	@RefType [luaIde#CS.UnityEngine.Material]
+	 Get 
+--]]
+CS.JGui.JGuiManager.SkeletonGrayMaterial = nil
 --[[
 	CS.System.String
 	 Get 	 Set 
@@ -3035,6 +3045,16 @@ function CS.JGui.JGuiActor() end
 	 Get 	 Set 
 --]]
 CS.JGui.JGuiActor.SkeletonColor = nil
+--[[
+	CS.System.Single
+	 Get 	 Set 
+--]]
+CS.JGui.JGuiActor.SkeletonAlpha = nil
+--[[
+	CS.System.Boolean
+	 Get 	 Set 
+--]]
+CS.JGui.JGuiActor.SkeletonIsGray = nil
 --[[
 	@addSize CS.System.Int32
 --]]
@@ -4583,34 +4603,16 @@ CS.JGuiMovie.MoviePlayer = nil
 --]]
 CS.JGuiMovie.AudioSource = nil
 --[[
-	CS.UnityEngine.Video.VideoClip
-	 Get 	 Set 
---]]
-CS.JGuiMovie.VideoClip = nil
---[[
-	CS.System.Double
-	 Get 
---]]
-CS.JGuiMovie.Duration = nil
---[[
-	@movieName CS.System.String
---]]
-function CS.JGuiMovie:DeleteAsset(movieName) end
---[[
-	@movieName CS.System.String
---]]
-function CS.JGuiMovie:PrevLoad(movieName) end
---[[
 	@textureNode CS.JGui.JGuiTexture
+	@movieUrl CS.System.String
 	@width CS.System.Int32
 	@height CS.System.Int32
+	@frameCount CS.System.Int32
+	@time CS.System.Single
+	@onPlayDone CS.System.Action
 	@return [luaIde#CS.JGuiMovie]
 --]]
-function CS.JGuiMovie:AddMovie(textureNode,width,height) end
---[[
-	@movieName CS.System.String
---]]
-function CS.JGuiMovie:LoadMovie(movieName) end
+function CS.JGuiMovie:PlayMovie(textureNode,movieUrl,width,height,frameCount,time,onPlayDone) end
 function CS.JGuiMovie:Play() end
 function CS.JGuiMovie:Stop() end
 function CS.JGuiMovie:Pause() end

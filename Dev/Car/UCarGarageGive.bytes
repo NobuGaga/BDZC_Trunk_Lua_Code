@@ -254,10 +254,13 @@ function _P.UpdateCarInfo(self, data)
 		_P.SetCarAttrData(self, data)
 		_P.SetCarGraphData(self, carConf, data)
 		if self.RawItemTable[data.id] ~= nil then
+			self.imgSelect.Activity = true
+			self.imgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+			self.imgSelect.LocalPosition = Vector2(0,0)
+			self.imgSelect.CachedTran:SetSiblingIndex(0)
 			self.imgSelect:SetParent(self.RawItemTable[data.id].SelfRect.CachedTran)
 			self.imgSelect.LocalPosition = Vector2(0,0)
 			self.imgSelect.CachedTran:SetSiblingIndex(0)
-			self.imgSelect.Activity = true
 		end
 	end
 end

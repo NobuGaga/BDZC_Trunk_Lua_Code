@@ -35,6 +35,11 @@ function _R.CloseView(self)
 end
 
 function _M:OnCreate(data,istreasure)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
 	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Upan")
 	self.Moudle = moudle
 
@@ -42,6 +47,8 @@ function _M:OnCreate(data,istreasure)
 	local helpBtn = moudle:Get("C_Full_Help_Btn")
 	local backBtn = moudle:Get("C_Back_Btn")
 	local uDiskIcon = moudle:Get("UpanIcon")
+
+	moudle:Get("Tips").Text = Csv.Text("siege_getUdisk_tips")
 
 	title.Text = Csv.Func[Define.SysId.Siege_UDisk].name
 	helpBtn:AddOnClick(function()
@@ -54,9 +61,15 @@ function _M:OnCreate(data,istreasure)
 		self:Destroy()
 	end)
 
+	local udiskData = Csv.SiegeTreasury[data.uDiskID]
+
 	local bossIcon = moudle:Get("BossBSX")
 	local bossTalk = moudle:Get("text1")
 	bossTalk.Text = Csv.Text("siege_udisk_bossTalk")
+
+	local upanName = moudle:Get("UPanText")
+	uDiskIcon.SpriteName = udiskData.icon
+	upanName.Text = udiskData.name
 
 	local GetBtn = moudle:Get("Icon1")
 	local OpenBtn = moudle:Get("Icon2")
@@ -68,9 +81,6 @@ function _M:OnCreate(data,istreasure)
 	end,nil,0.9)
 
 	OpenBtn:AddOnButton(function()
-		
-		local udiskData = Csv.SiegeTreasury[data.uDiskID]
-
 		local udiskItem = Csv.Item[data.uDiskID]
 		local keyItem = Csv.Item[udiskData.passwordId]
 		local costItem = Csv.Item[udiskData.passwordBuyid]

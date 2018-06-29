@@ -41,6 +41,11 @@ local HomeBgImgSize = {
 	['iOSBg2'] = { width = 1024, height = 1024 }, 
 }
 
+local HomePeopleShadow = {
+	"Girl_1_Sha",
+	"ChildSha",
+}
+
 function _P.OnPressFunc(btn, funcId, data)
 	if data.isPress then
 		btn.Alpha = 1
@@ -419,6 +424,10 @@ function _M:OnCreate()
 																end
 															end)
 		end
+
+		for _, prefabName in ipairs(HomePeopleShadow) do
+			moudle:Get(prefabName).Activity = false
+		end
 	end
 
 	local homeBtns = {}
@@ -640,20 +649,34 @@ function _P.RefreshPoolGirl(self)
 	end
 end
 
+local vecTmp1 = Vector2(0, 430)
+local vecTmp2 = Vector2(0, 92)
+local vecTmp3 = Vector2(0, -108)
+local vecTmp4 = Vector2(0, 144)
+local vecTmp5 = Vector2.zero
+local vecTmp6 = Vector2(0, 195)
+
 function _P.OnScrollValueChange(self)
 	local moudle = self.Moudle
 	local skyPos = self.mContent.LocalPosition
 	local x = skyPos.x
-	self.mScrollImg0.LocalPosition = Vector2(0.26 * x,430)
-	self.mScrollImg1.LocalPosition = Vector2(0.43 * x + 135,92)
-	self.mScrollImgPoor.LocalPosition = Vector2(x + 288,-108)
-	self.mScrollImg2.LocalPosition = Vector2(0.36 * x + 135,144)
-	self.mScrollImg3.LocalPosition = Vector2(x,skyPos.y)
-	self.mSkyCanvas.LocalPosition = Vector2(0.26 * x,0)
-	self.mScrollImg4.LocalPosition = Vector2(x,195)
+	vecTmp1.x = 0.26 * x
+	self.mScrollImg0.LocalPosition = vecTmp1
+	vecTmp2.x = 0.43 * x
+	self.mScrollImg1.LocalPosition = vecTmp2
+	vecTmp3.x = x + 288
+	self.mScrollImgPoor.LocalPosition = vecTmp3
+	vecTmp4.x = 0.36 * x + 135
+	self.mScrollImg2.LocalPosition = vecTmp4
+	self.mScrollImg3.LocalPosition = skyPos
+	vecTmp5.x = 0.26 * x
+	self.mSkyCanvas.LocalPosition = vecTmp5
+	vecTmp6.x = x
+	self.mScrollImg4.LocalPosition = vecTmp6
 
 	local yachtPos = self.mYacht.LocalPosition
-	self.mYacht.LocalPosition = Vector2(0.43 * (x - 250),yachtPos.y)
+	yachtPos.x = 0.43 * (x - 250)
+	self.mYacht.LocalPosition = yachtPos
 	self.mYachtNode.LocalPosition = self.mYacht.LocalPosition
 
 	-- if x > 195 then

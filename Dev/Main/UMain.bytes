@@ -1,6 +1,7 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MTarget = JRequire "Dev.Target.MTarget"
@@ -507,10 +508,10 @@ function _P.RefreshTask(self)
 		if mainTask.pro >= mainTask.maxval then
 			--已经完成表现
 			moudle:Get("TaskTween").SpriteName = "zjm_0005"
-			text.Color = Color(11/255,245/255,132/255)
+			text.Color = Color(93/255,153/255,255/255)
 		else
 			moudle:Get("TaskTween").SpriteName = "zjm_0005_1"
-			text.Color = Color(1,35/255,35/255)
+			text.Color = Color(1,93/255,140/255)
 		end
 		text.Text = csv.title
 	end
@@ -578,6 +579,8 @@ function _M:OnCreate()
 		if self.Moudle ~= nil then
 			_P.RefreshVip(self, self.Moudle)
 		end
+
+		CActivity.UpdateInvestmentRed()
 	end)
 	
 	moudle:Get("TopBtns").LocalPosition = TOP_BTN_NOTICE_POS

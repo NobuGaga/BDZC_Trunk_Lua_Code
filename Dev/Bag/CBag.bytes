@@ -4,6 +4,7 @@ local EventCenter = JRequire "Dev.EventCenter"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
 local CStaff = JRequire "Dev.Staff.CStaff"
 local CMain = JRequire "Dev.Main.CMain"
 local CCar = JRequire "Dev.Car.CCar"
@@ -70,7 +71,6 @@ end
 function _P.OnGetItem(data)
 	MBag.Update(data.item,true)
 	
-	
 	local csvItem = Csv.Item[data.item.itemid]
 	if csvItem ~= nil then
 		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
@@ -79,6 +79,19 @@ function _P.OnGetItem(data)
 
 		if csvItem.type == 6 then
 			CCar.CheckCarRedPoint()
+		end
+
+		-- 银行理财检测红点
+		if data.item.itemid == Define.AssetsType.Gold then
+			CActivity.UpdateInvestmentRed()
+		end
+
+		-- 环球旅行红点
+		if data.item.itemid == MActivity.TravalDicsItemId then
+			local actId = MActivity.ActIdForType[Define.ActivityType.GlobalTraval]
+			if actId then
+				CActivity.UpdateTravalRed(actId)
+			end
 		end
 	end
 	
@@ -103,6 +116,11 @@ function _P.OnDelItem(data)
 
 		if csvItem.type == 6 then
 			CCar.CheckCarRedPoint()
+		end
+
+		-- 银行理财检测红点
+		if data.item.itemid == Define.AssetsType.Gold then
+			CActivity.UpdateInvestmentRed()
 		end
 	end
 	--_P.CheckMergeRedPoint(data.item.itemid)

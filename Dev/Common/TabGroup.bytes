@@ -57,14 +57,14 @@ function _M:ctor(onChooseCall, defaultIcon, lightIcon, defaultColor, lightColor,
 	end
 end
 
-function _M:Add(key, imageWidget, textWidget, title)
+function _M:Add(key, imageWidget, textWidget, title, selectIcon)
 	imageWidget.SpriteName = self.DefaultIcon
 	textWidget.Text = title
 	imageWidget:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		self:Choose(key)
 	end, nil, 0.9)
-	self.Tabs[key] = {image = imageWidget, text = textWidget}
+	self.Tabs[key] = {image = imageWidget, text = textWidget, selectIcon = selectIcon}
 
 	table.insert(self.TabsIndex,key)
 end
@@ -100,6 +100,9 @@ function _M:Choose(key)
 						v.image.SizeDelta = _LightImgSize
 						v.text.FontSize = _LightFontSize
 					end
+					if v.selectIcon then
+						v.selectIcon.Activity = true
+					end
 				else
 					v.image.SpriteName = self.DefaultIcon
 					v.text.Color = self.DefaultColor or _DefaultColor
@@ -110,6 +113,9 @@ function _M:Choose(key)
 					if self.IsBig then
 						v.image.SizeDelta = _DefaultImgSize
 						v.text.FontSize = _DefaultFontSize
+					end
+					if v.selectIcon then
+						v.selectIcon.Activity = false
 					end
 				end
 			end
@@ -133,12 +139,18 @@ function _M:JustChoose(key)
 					if self.BtnLightColor ~= nil then
 						v.image.Color = self.BtnLightColor
 					end
+					if v.selectIcon then
+						v.selectIcon.Activity = true
+					end
 				else
 					v.image.SpriteName = self.DefaultIcon
 					v.text.Color = self.DefaultColor or _DefaultColor
 					v.image.RaycastTarget = true
 					if self.BtnDefaultColor ~= nil then
 						v.image.Color = self.BtnDefaultColor
+					end
+					if v.selectIcon then
+						v.selectIcon.Activity = false
 					end
 				end
 			end

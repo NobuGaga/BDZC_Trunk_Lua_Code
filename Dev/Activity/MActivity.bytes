@@ -1,4 +1,6 @@
 local MMain = JRequire "Dev.Main.MMain"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local _M = {}
 
 _M.ActivityState = 
@@ -50,8 +52,8 @@ _M.AdvReqTypeEnum = {
 }
 
 _M.AdvSexEnum = {
-	Man = 1, 	--	男性
-	Female = 2,	-- 女性
+	Female = 1,	-- 女性
+	Man = 2, 	--	男性
 }
 
 --全局配置表冲榜活动商会冲榜榜单类型
@@ -78,12 +80,16 @@ _M.IsUpdateTime1 = false 			-- 新官上任，倒计时为0，向后端请求数
 _M.IsUpdateTime2 = false 			-- 新官上任，倒计时为0，向后端请求数据标记
 _M.ActIdForType = {}				-- 活动类型对应活动ID
 _M.LotteryMessage = {}				-- 抽奖消息
+_M.LotterySuperGetter = {playerId = 0, playerName = ""}
 _M.XinGuanRed = false
 _M.SevenDayTargetPageRedIndex = -1	-- 七日目标今日目标页签红点Index
 _M.MaxStageNum = tonumber(Csv.Const(20151))
 _M.InvestmentRed = false
 _M.FuturesSelectIndex = 0 -- 操纵期货 选择的文件
 _M.FuturesReward = {} -- 操纵期货中奖信息
+_M.AdventureShopRed = false
+_M.GloalTravalRed = false
+_M.TravalDicsItemId = tonumber(Csv.Const(20158))
 
 function _M.Clean()
 	_M.ActList = {}
@@ -96,10 +102,13 @@ function _M.Clean()
 	_M.IsUpdateTime2 = false	
 	_M.XinGuanStatus = {}
 	_M.LotteryMessage = {}
+	_M.LotterySuperGetter = {playerId = 0, playerName = ""}
 	_M.XinGuanRed = false
 	_M.InvestmentRed = false
 	_M.FuturesSelectIndex = 0
 	_M.FuturesReward = {}
+	_M.AdventureShopRed = false
+	_M.GloalTravalRed = false
 end
 
 function _M.ClearForType(actType)
@@ -216,7 +225,8 @@ function _M.GetRechargeOpenFunc()
 				if (v.id == Define.SysId.RechargeReward_Day and _M.GetListFromType(Define.ActivityType.RechargeReward_Day) ~= nil) or
 					(v.id == Define.SysId.RechargeReward_Total and _M.GetListFromType(Define.ActivityType.RechargeReward_Total) ~= nil) or
 					 (v.id == Define.SysId.RechargeReward_TotalDay and _M.GetListFromType(Define.ActivityType.RechargeReward_TotalDay) ~= nil) or
-					  (v.id == Define.SysId.RechargeReward_DailyGift and _M.GetListFromType(Define.ActivityType.RechargeReward_DailyGift) ~= nil) then
+					  (v.id == Define.SysId.RechargeReward_DailyGift and _M.GetListFromType(Define.ActivityType.RechargeReward_DailyGift) ~= nil) or
+					  	(v.id == Define.SysId.RechargeReward_Single and _M.GetListFromType(Define.ActivityType.RechargeReward_Single) ~= nil) then
 						table.insert(funcs, v)
 				end
 			end
@@ -275,33 +285,58 @@ function _M.UpdatePersonEvent(actId,data)
 end
 
 function _M.UpdateGangEvent(actId,data)
+	local isJoin = false
 	if _M.ActList[actId] ~= nil then
 		for k,v in pairs(data.gangeventlist) do
 			local event = _M.GetNewGangEvent(v)
 			_M.ActList[actId].shopEventList[event.eventsIndex] = event
-			_M.ActList[actId].isNew = true
+			if not _M.AdventureShopRed then
+				if event.playerlist ~= nil then
+					for i,j in pairs(event.playerlist) do
+						if j.playerId == MPlayer.GetId() then
+							isJoin = true
+						end
+					end
+				end
+				if event.playerInfo.playerId ~= MPlayer.GetId() 
+				and event.triggerTime + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
+					_M.AdventureShopRed = not isJoin
+				end
+			end
 		end
+	end
+end
+
+function _M.SetAdvNewFlag(actId,isShow)
+	if _M.ActList[actId] ~= nil then
+		_M.ActList[actId].isNew = isShow
 	end
 end
 
 function _M.GetNewPersonEvent(data)
 	local eventInfo = {}
 	local adventureItemCsv = Csv.AdventureMainEvent[data.eventId]
-	for i=1, #data.eventInfo do
-		local item = {
-			index = data.eventInfo[i].index,
-			attrInfo = {}
-		}
-		if data.eventInfo[i].attrInfo ~= nil then
-			for k,v in pairs(data.eventInfo[i].attrInfo) do
-				local one = {
-					type = v.type,
-					val = v.value,
-					extra = v.extra,
-				}
-				item.attrInfo[k] = one
+	if adventureItemCsv == nil then
+		error("事件id"..data.eventId.."错误")
+		return
+	end
+	if data.eventInfo ~= nil then
+		for i=1, #data.eventInfo do
+			local item = {
+				index = data.eventInfo[i].index,
+				attrInfo = {}
+			}
+			if data.eventInfo[i].attrInfo ~= nil then
+				for k,v in pairs(data.eventInfo[i].attrInfo) do
+					local one = {
+						type = v.type,
+						val = v.value,
+						extra = v.extra,
+					}
+					item.attrInfo[k] = one
+				end
+				eventInfo[i] = item
 			end
-			eventInfo[i] = item
 		end
 	end
 	local one = {
@@ -332,6 +367,7 @@ function _M.GetNewGangEvent(data)
 		name = data.playerInfo.name,
 		sex = data.playerInfo.sex,
 		playerId = data.playerInfo.playerId,
+		vip = data.playerInfo.vip,
 	}
 	if data.playerlist ~= nil then
 		for k, v in pairs(data.playerlist) do
@@ -345,17 +381,20 @@ function _M.GetNewGangEvent(data)
 				name = v.name,
 				sex = v.sex,
 				playerId = v.playerId,
+				vip = v.vip,
 			}
 			table.insert(tplayerlist, playerInfo)
 		end
 	end
 	--需求
-	one.eventInfo = {
-		--params -1为任意员工，其他为指定员工 不管只读第一个
-		type = data.eventInfo.attrInfo[1].type,
-		val = data.eventInfo.attrInfo[1].value,
-		params = data.eventInfo.attrInfo[1].params,
-	}
+	if data.eventInfo.attrInfo ~= nil then
+		one.eventInfo = {
+			--params -1为任意员工，其他为指定员工 不管只读第一个
+			type = data.eventInfo.attrInfo[1].type,
+			val = data.eventInfo.attrInfo[1].value,
+			params = data.eventInfo.attrInfo[1].params,
+		}
+	end
 	one.playerlist = tplayerlist
 	return one
 end
@@ -410,5 +449,44 @@ function _M.GetFuturesData()
 	end
 	return data[activityId]
 end
+
+-- 环球旅行
+function _M.CheckThisItemIsLight(exchangeConf, data, numId)
+	local needList = {}
+	for k,v in pairs(exchangeConf.diceItems) do
+		if needList[v[1]] == nil then
+			needList[v[1]] = v[2]
+		else
+			needList[v[1]] = needList[v[1]] + v[2]
+		end
+	end
+
+	local count = 0
+	local totalNum = 0
+	for k,v in pairs(needList) do
+		local hasData = data[k]
+		local hasCount = (hasData and hasData.count) or 0
+		if v <= hasCount then
+			count = count + 1
+		end
+
+		totalNum = totalNum + 1
+	end
+
+	return count ~= totalNum
+end
+
+function _M.CheckHasExchange(numberCount)
+	local isHas = false
+	for k,v in pairs(Csv.GlobalTravalExchange) do
+		if not _M.CheckThisItemIsLight(v, numberCount, v.id) then
+			isHas = true
+			break
+		end
+	end
+
+	return isHas
+end
+
 
 return _M

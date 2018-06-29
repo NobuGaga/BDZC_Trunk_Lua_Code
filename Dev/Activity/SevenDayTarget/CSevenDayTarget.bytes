@@ -93,6 +93,7 @@ function _P.SetCsvDataToActData(actData, csvValue)
 	actData.rankTitle = csvValue.rankTitle
 	actData.JumpSysId = csvValue.sysId
 	actData.poster = csvValue.poster
+	actData.posterFont = csvValue.posterFont
 	actData.targetTitle = csvValue.targetTitle
 	actData.targetItemTitle = csvValue.targetItemTitle
 	actData.jumpTitle = csvValue.jumpTitle
@@ -284,10 +285,25 @@ function _M.OnUpdatePro(actData, proData)
 	WindowMgr.Call("USevenDayTarget", "OnRefreshTargetViewAndProcess", proData.actId)
 end
 
-function _M.OnUpdateSevenRank(data, actData)
-	actData.rankPro = data.rankPro
-	actData.selfRank = data.rank
-	WindowMgr.Call("USevenDayTarget", "OnRefreshRankBottomInfo")
+function _P.OnUpdateSevenRank(data)
+	local actId = data.actId
+	local actData = MActivity.GetFromId(actId)
+	if actData then
+		actData.rankPro = data.rankPro
+		actData.selfRank = data.rank
+		WindowMgr.Call("USevenDayTarget", "OnRefreshRankBottomInfo")
+	end
 end
+
+------------------------------非通用接口注册(需要放到最下面进行)------------------------------
+_M.CMD_ID = 
+{
+	sSevenDayRank = 21,		--(七日目标)返回排名PActivity.SSevenDayRank
+}
+
+_M.func_recv = 
+{
+	[_M.CMD_ID.sSevenDayRank]	= {proto = "PActivity.SSevenDayRank",	handle = _P.OnUpdateSevenRank},
+}
 
 return _M

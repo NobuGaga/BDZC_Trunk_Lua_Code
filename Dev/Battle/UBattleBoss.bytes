@@ -279,13 +279,13 @@ end
 function _P.OnChooseStaff(self, staffId)
 	self.ChoosedStaffId = staffId
 
+	if self.Own.BobySpine ~= nil then
+		self.Own.BobySpine:Destroy()
+		self.Own.BobySpine = nil
+	end
 	if staffId > 0 then
 		local info = MStaff.GetStaffDataByID(staffId)
 		local staffCsv = Csv.Personnel[staffId]
-		if self.Own.BobySpine ~= nil then
-			self.Own.BobySpine:Destroy()
-			self.Own.BobySpine = nil
-		end
 		if staffCsv ~= nil and staffCsv.prefab ~= nil and staffCsv.prefab > 0 then
 			self.Own.BobySpine = CCommon.CreateActor(self.Own.Body, staffCsv.prefab, CCommon.ActorFieldMap.battle_boss_self)
 			self.Own.Body.SpriteName = ""

@@ -31,6 +31,9 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.CloseView(self)
+	self:Destroy()
+end
 
 function _M:OnCreate(activityData, stageId)
 	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Ranking")
@@ -60,7 +63,6 @@ function _M:OnCreate(activityData, stageId)
 		self.selfRankType = siegeConf.rankType[self.StageId]
 		self.gangRankType = self.selfRankType + 1
 	end
-	print("selfRankType________",self.StageId,self.selfRankType,self.gangRankType)
 
 	_P.GetRankData(self, activityData.actId, stageId)
 	CRank.GetRankList(self.selfRankType, true)
@@ -70,8 +72,6 @@ function _M:OnCreate(activityData, stageId)
 
 	local curStageData = MSiege.AllStageData[stageId]
 	self.curStageData = curStageData
-	print("curStageData__________",stageId,curStageData.selfGetState)
-	print("curStageData222222222222__________",MSiege.AllStageData[1].selfGetState)
 	
 	module:Get("textSelfRank").Text = Csv.Text("xinguan_rank_selfRank")
 	self.timeRect = module:Get("Time")
@@ -82,14 +82,34 @@ function _M:OnCreate(activityData, stageId)
 	module:Get("textBtnGet").Text = Csv.Text("xinguan_rank_get")
 	self.getBtnText = module:Get("noneText")
 	local personBtn = module:Get("btnRank")
+
+	local tipsBg = module:Get("TipsBg")
+	local tips = module:Get("Tips")
+	if stageId < 3 then
+		tipsBg.Activity = true
+		tips.Text = Csv.Text("siege_rank_tips")
+	else
+		tipsBg.Activity = false
+	end
+
+	local personalTitle = {}
+	personalTitle.rank = Csv.Text("siege_rank_Title_1")
+	personalTitle.name = Csv.Text("siege_rank_Title_2")
+	personalTitle.point = Csv.Text("siege_rank_Title_3")
+
+	local gangTitle = {}
+	gangTitle.rank = Csv.Text("siege_rank_Title_4")
+	gangTitle.name = Csv.Text("siege_rank_Title_5")
+	gangTitle.point = Csv.Text("siege_rank_Title_6")
+
 	personBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 
 		local isPerson =(self.curSelectToggle == MSiege.RankTypeEnum.Personal)
 		if isPerson then
-			WindowMgr.Create("UXinGuanRankDetail", self.selfRankType, true)
+			WindowMgr.Create("UXinGuanRankDetail", self.selfRankType, true,personalTitle)
 		else
-			WindowMgr.Create("UXinGuanRankDetail", self.gangRankType, false)
+			WindowMgr.Create("UXinGuanRankDetail", self.gangRankType, false,gangTitle)
 		end
 	end, nil, 0.95)
 
@@ -257,6 +277,8 @@ function _P.GetRankData(self, actId, stageId)
 			point = killerConf.point[i],
 			score = killerConf.score[i],
 			rewards = killerConf.rewards[i],
+			type = killerConf.type[i],
+			icon = killerConf.icon[i],
 		}
 
 		killList[i] = itemData
@@ -383,21 +405,46 @@ function _P.OnCreateKilledItem(data, itemGrid)
 	if not itemModule then return end
 
 	itemModule:Get("Title").Text = data.name
-	itemModule:Get("Title2").Text = Csv.Text("siege_rank_get")
+
+	local iconImg = itemModule:Get("Head")
+
+	local headBox = itemModule:Get("HeadBox")
+	local uPanImg = itemModule:Get("Upan")
+	headBox.Activity = false
+	uPanImg.Activity = false
+
+	local tips1 = ""
+	local tips2 = ""
+
+	if data.type == 1 then
+		headBox.Activity = true
+		iconImg.SpriteName = data.icon
+		tips1 = Csv.Text("siege_rank_boss_kill1")
+		tips2 = Csv.Text("siege_rank_boss_kill2")
+	elseif data.type == 2 then
+		uPanImg.Activity = true
+		uPanImg.SpriteName = data.icon
+		tips1 = Csv.Text("siege_rank_get")
+		tips2 = Csv.Text("siege_rank_show")
+	end
+	itemModule:Get("Title2").Text = tips1
 	itemModule:Get("Jfjl1").Text = Csv.Text("siege_rank_point") .. data.point
 	itemModule:Get("Jfjl2").Text = Csv.Text("siege_rank_score") .. data.score
-	itemModule:Get("Title3").Text = Csv.Text("siege_rank_show")
+	itemModule:Get("Title3").Text = tips2
 
 	local rewardGrid = itemModule:Get("GoodsItem")
 	for k, v in pairs(data.rewards) do
 		CCommon.CreateItem(rewardGrid, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.SiegeWall)
 	end
+
+	local line = math.ceil(#data.rewards/4) 
+	itemModule.SelfRect.SizeDelta = Vector2(692,190+line*160)
 end
 
 
 function _P.SetRankData(self)
 	local rankText = self.mModule:Get("rankNum")
-	local bottomRect = self.mModule:Get("bottomRect")
+	local bottomRect = self.mModule:Get("bottombg")
 	if self.curSelectToggle == MSiege.RankTypeEnum.Personal then
 		bottomRect.Activity = true
 		if self.selfRankNum and self.selfRankNum > 0 then
@@ -432,19 +479,20 @@ function _P.SetGetBtnData(self)
 	self.curStageData.selfGetState = MSiege.RankSelfStageData[stage] --data.selfGetState
 	self.curStageData.gangGetState = MSiege.RankGangStageData[stage] --data.gangGetState
 
-	print("__isFinish________",isFinish,stage)
-	print("_______________",isPerson,self.curStageData.selfGetState,self.curStageData.gangGetState)
-
+	local text
 	local isFinish = false
 	local isCanGet = false
 	local isGot = false
+	local isCanNotGet = false
 	if isPerson then
 		if self.curStageData.selfGetState ~= nil then
 			isFinish = true
 			if self.curStageData.selfGetState == 0 then
 				isCanGet = true
-			else
+			elseif self.curStageData.selfGetState == 1 then
 				isGot = true
+			elseif self.curStageData.selfGetState == 2 then
+				isCanNotGet = true
 			end
 		end
 	else
@@ -452,8 +500,10 @@ function _P.SetGetBtnData(self)
 			isFinish = true
 			if self.curStageData.gangGetState == 0 then
 				isCanGet = true
-			else
+			elseif self.curStageData.gangGetState == 1 then
 				isGot = true
+			elseif self.curStageData.gangGetState == 2 then
+				isCanNotGet = true
 			end
 		end
 	end
@@ -468,20 +518,6 @@ function _P.SetGetBtnData(self)
 	self.getBtn.Activity = not isGot
 	self.getImg.Activity = isGot--isGeted
 
-	--[[ 
-	local text
-	local isFinish = self.time - HeartBeat.ServSecond() <= 0
-	local isPerson = (self.curSelectToggle == MSiege.RankTypeEnum.Personal)
-	print("_______________",isPerson,self.curStageData.selfGetState,self.curStageData.gangGetState)
-	local getState = (isPerson and self.curStageData.selfGetState) or self.curStageData.gangGetState
-	print("state___________",getState)
-	--local getState = (isPerson and self.activityData.selfGetState) or self.activityData.gangGetState	
-	local isCanNotGet = getState == MActivity.RewardGetState.CanNotGet
-	local isGeted = getState == MActivity.RewardGetState.Geted
-	local isCanGet = getState == MActivity.RewardGetState.CanGet
-	self.timeRect.Activity = not isFinish
-	self.getBtnText.Activity = isFinish
-	self.mModule:Get("redpoint").Activity = isCanGet
 	if isFinish then
 		if isCanNotGet then
 			text ="rankreward_can_not_get"
@@ -496,13 +532,6 @@ function _P.SetGetBtnData(self)
 	else
 		self.getBtnText.Text = ""
 	end
-	
-	local isLight = isFinish and isCanGet
-	self.getBtn.IsGray = not isLight
-	self.getBtn.RaycastTarget = isLight
-	self.getBtn.Activity = not isGeted
-	self.getImg.Activity = isGeted
-	--]]
 end
 
 
@@ -524,13 +553,10 @@ function _R.OnGetRankStatePush(self, data)
 	local stage = self.StageId
 	self.curStageData.selfGetState = MSiege.RankSelfStageData[stage] --data.selfGetState
 	self.curStageData.gangGetState = MSiege.RankGangStageData[stage] --data.gangGetState
-	print("1______________",stage,MSiege.RankSelfStageData[stage])
-	print("2______________",stage,MSiege.RankGangStageData[stage])
 	_P.SetGetBtnData(self)
 end
 
 function _R.OnGetRewardBack(self, data)
-	print("_________",data.actId,data.stage,data.index,data.type)
 	-- 播放奖励动画
 	self.getBtn.Activity = false
 	self.mModule:Get("redpoint").Activity = false
@@ -555,12 +581,11 @@ function _R.OnGetRewardBack(self, data)
 			-- _R.OnGetRankStatePush(self, {selfGetState = self.curStageData.selfGetState, gangGetState = 1})
 		end
 		
-		print("rankList___________",#rankList)
 		if rankList == nil then return end
 		
 		local rewardList = rankList[realIndex] or {}
 		local delayCount = 0
-		print("rewardList___________",realIndex,#rewardList)
+		
 		for k,v in pairs(rewardList) do
 			CCommon.ShowFlyItem(animRect, v[1], v[2], delayCount)
 			delayCount = delayCount + 0.3

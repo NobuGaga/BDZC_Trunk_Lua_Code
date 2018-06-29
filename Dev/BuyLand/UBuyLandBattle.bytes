@@ -67,8 +67,10 @@ function _R.OnResult(self, data)
 	local actorNameId = (MBuyLand.isSuc and 'success') or 'fail'
 	SoundMgr.Play((MBuyLand.isSuc and 10050) or 10051)
 	local actorNode = self.Moudle:Get("ActorPanel")
-	CCommon.CreateEffect(actorNode, BattleActorId)
-	actorNode:SkeletonSetAnimation(actorNameId)
+	actorNode:SetOnLoadedBeforeLoad(function ( ... )
+		actorNode:SkeletonSetAnimation(actorNameId)
+	end)
+	CCommon.CreateEffect(actorNode, BattleActorId)	
 
 	self:Lock()
 	local cNum = MBuyLand.myCurMoney

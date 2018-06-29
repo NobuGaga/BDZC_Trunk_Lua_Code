@@ -28,8 +28,8 @@ local PosItemTextName = "PositionText"
 --官职ItemText2名
 local PosItemTextName2 = "PositionText2"
 
-local DefaultBody = "body_007"
-local DefaultHead = "head_004"
+local DefaultBodyID = 2
+local DefaultHeadID = 1001
 local GetFlagImage = "ph_010"
 
 --官职列表移动动画时间
@@ -367,13 +367,9 @@ function _P.SetDefaultBody(self, dataIndex)
 	if self.headSpine ~= nil then
         self.headSpine:Destroy()
         self.headSpine = nil
-    end
-	self.Body.SpriteName = DefaultBody
-	self.Body.Color = ColorBlack
+	end
+	_P.SetBodySpineOrSprite(self, nil, Define.Sex.Male, nil, nil, true)
 	self.Body.RaycastTarget = false
-	
-	self.Head.SpriteName = DefaultHead
-	self.Head.Color = ColorBlack
 
 	self.Words.Activity = false
 	self.MsgButton.Activity = false
@@ -400,8 +396,8 @@ function _P.GetBodyDataToSet(self, index)
 	end
 end
 
---设置形象
-function _P.SetBody(self, dataIndex, posData)
+--设置身体形象
+function _P.SetBodySpineOrSprite(self, titleID, sex, headID, bodyID, isDefault)
 	if self.bodySpine ~= nil then
         self.bodySpine:Destroy()
         self.bodySpine = nil
@@ -410,18 +406,52 @@ function _P.SetBody(self, dataIndex, posData)
         self.headSpine:Destroy()
         self.headSpine = nil
     end
-	local body, bodyPrefab = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
-	local head, heaPrefab = MParliament.GetBodyByIDSex(posData.head, posData.sex)
+	local body, bodyPrefab
+	if isDefault then
+		body, bodyPrefab = MParliament.GetBodyByIDSex(DefaultBodyID, sex)
+	elseif bodyID then
+		body, bodyPrefab = MParliament.GetBodyByIDSex(bodyID, sex)
+	else
+		body, bodyPrefab = MParliament.GetBodyByTitleID(titleID, sex)
+	end
+	local head, heaPrefab
+	if isDefault then
+		head, heaPrefab = MParliament.GetBodyByIDSex(DefaultHeadID, sex)
+	else
+		head, heaPrefab = MParliament.GetBodyByIDSex(headID, sex)
+	end
 	if nil ~= bodyPrefab and 0 ~= bodyPrefab and nil ~= heaPrefab and 0 ~= heaPrefab then
-		self.bodySpine, self.headSpine = CCommon.CreateRole(self.bosySpine, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.parliament_body)
+		self.bodySpine, self.headSpine = CCommon.CreateRole(self.bosySpine, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.parliament_body,
+			function(body, head)
+				if isDefault then
+					if body then
+						body.SkeletonColor = ColorBlack
+						body:SkeletonGetGraphic().freeze = true
+					end
+					if head then
+						head.SkeletonColor = ColorBlack
+						head:SkeletonGetGraphic().freeze = true
+					end
+				end
+			end)
 		self.Body.SpriteName = ""
 		self.Head.SpriteName = ""
 	else
 		self.Body.SpriteName = body
-		self.Body.Color = ColorWhite
 		self.Head.SpriteName = head
-		self.Head.Color = ColorWhite
+		if isDefault then
+			self.Body.Color = ColorBlack
+			self.Head.Color = ColorBlack
+		else
+			self.Body.Color = ColorWhite
+			self.Head.Color = ColorWhite
+		end
 	end
+end
+
+--设置形象
+function _P.SetBody(self, dataIndex, posData)
+	_P.SetBodySpineOrSprite(self, posData.titleID, posData.sex, posData.head)
 	self.Body.RaycastTarget = true
 
 	local isSelf = MPlayer.GetId() == posData.playerID

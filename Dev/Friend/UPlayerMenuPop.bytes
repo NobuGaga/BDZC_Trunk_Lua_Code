@@ -34,6 +34,8 @@ _P.TextTab =
 	[MFriend.PlayerMenu.AddBlacklist] = Csv.Text("PlayerMenu_6"),
 	--移除黑名单
 	[MFriend.PlayerMenu.DelBlacklist] = Csv.Text("PlayerMenu_7"),
+	--快捷提亲
+	[MFriend.PlayerMenu.Marry] = Csv.Text("PlayerMenu_8"),
 }
 
 _P.FuncTab = 
@@ -83,6 +85,11 @@ _P.FuncTab =
 				CFriend.ReqDelete(palyerId, MFriend.RelationType.BlackList)
 			end
 		end, {content = Csv.Text("Friend_45")})
+	end,
+	--快捷提亲
+	[MFriend.PlayerMenu.Marry] = function(palyerId)
+		print("快捷提亲!!!")
+		WindowMgr.Create("USelectBabyFast")
 	end,
 }
 

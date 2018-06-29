@@ -2,11 +2,12 @@ local _M = Class()
 local JGuiManager = CS.JGui.JGuiManager
 
 --界面构建
-function _M:ctor(scroll,content,prefabName,callBack)
+function _M:ctor(scroll,content,prefabName,callBack,callBack2)
     self.mScroll = scroll
 	self.mContent = content
 	self.mPrefabName = prefabName
     self.mCallBack = callBack
+    self.mCallBack2 = callBack2
 end
 
 function _M:CreateScroll(pageNum,pageWidth,itemWidth,itemHeight,space,tableData)
@@ -25,7 +26,7 @@ function _M:CreateScroll(pageNum,pageWidth,itemWidth,itemHeight,space,tableData)
 	self.mTableIndexMoudle = {}
 
 	if allNum > pageNum * 3 then
-		for i=1,pageNum + 3 do
+		for i=1,pageNum + 2 do
 			local moudle = JGuiManager.GetMoudle(content,self.mPrefabName)
 			table.insert(self.mTableFreeMoudle,moudle)
 		end
@@ -43,10 +44,14 @@ end
 
 function _M:OnScrollValueChange()
     local callBack = self.mCallBack
+    local callBack2 = self.mCallBack2
     if callBack == nil then
         return
     end
     local content = self.mContent
+    if content == nil then
+        return
+    end
     local tableIndexData = self.mTableIndexData
 	local tableShowData = self.mTableShowData
 	local tableFreeMoudle = self.mTableFreeMoudle
@@ -68,11 +73,12 @@ function _M:OnScrollValueChange()
 			tableShowData[i] = nil
 			if tableIndexMoudle[i] ~= nil then
 				table.insert(tableFreeMoudle,tableIndexMoudle[i])
-				tableIndexMoudle[i] = nil
+                tableIndexMoudle[i] = nil
+                callBack2(i,tableIndexData[i])
 			end
         end
     end
-    for j = nowIndex,nowIndex + self.mPageNum + 1 do
+    for j = nowIndex + self.mPageNum + 1,nowIndex,-1 do
         local isCreated = false
         if j > 0 and j <= #tableIndexData then
             for k,v in pairs(tableShowData) do

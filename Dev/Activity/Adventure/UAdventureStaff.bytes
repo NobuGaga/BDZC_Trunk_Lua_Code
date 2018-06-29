@@ -10,18 +10,21 @@ local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MBag = JRequire "Dev.Bag.MBag"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 
-local TOP_BEGIN = 387
-local TOP_END = 850
-local BUTTOM_BEGIN = -849
-local BUTTOM_END = 0
+local TOP_BEGIN = 0
+local TOP_END = 450
+local BUTTOM_BEGIN = 300
+local BUTTOM_END = 1200
 local DEFAULT_ICON = "HeroList_Add"
 local POSY_ANIM = "T_Adventure_PosY"
-local QUALITY1 = Color(255/255,255/255,255/255,1)
-local QUALITY2 = Color(12/255,184/255,56/255,1)
-local QUALITY3 = Color(47/255,32/255,231/255,1)
-local QUALITY4 = Color(228/255,7/255,231/255,1)
-local QUALITY5 = Color(236/255,111/255,14/255,1)
-local QUALITY6 = Color(240/255,0/255,0/255,1)
+local QUALITY1 = Color(203/255,203/255,203/255,1)
+local QUALITY2 = Color(97/255,253/255,150/255,1)
+local QUALITY3 = Color(96/255,193/255,249/255,1)
+local QUALITY4 = Color(219/255,93/255,243/255,1)
+local QUALITY5 = Color(255/255,162/255,21/255,1)
+local QUALITY6 = Color(255/255,93/255,140/255,1)
+
+local PINK = Color(255/255,93/255,140/255)
+local BLUE = Color(93/255,153/255,255/255)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -233,7 +236,14 @@ end
 function _P.SetReqDetail(data, module,staffData)
 	if staffData ~= nil then
 		module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
+		module:Get("BG_2").Activity = true
+		module:Get("BG_3").Activity = true
+		module:Get("Level").Text = staffData.level
+		module:Get("BG_2").SpriteName = MStaff.Color2Image[staffData.color]
 	else
+		module:Get("BG_2").Activity = false
+		module:Get("BG_3").Activity = false
+		module:Get("Level").Text = ""
 		module:Get("Name").Text = ""
 	end
 	for k, v in pairs(data) do
@@ -245,7 +255,7 @@ function _P.SetReqDetail(data, module,staffData)
 		 module:Get("Z"..k..k).Activity = true
 		if v.type <= 4 then
 			--自己的员工属性
-			module:Get("Num"..k).Text = Csv.Text("adventure_staff_attr"..v.type)..v.val
+			module:Get("Num"..k).Text = Csv.Text("adventure_staff_attr"..v.type,{num=v.val})
 			if staffData ~= nil then
 				local val = MStaff.GetAttrByType(staffData.id,v.type)
 				module:Get("Gou"..k).Activity = val >= v.val
@@ -294,8 +304,8 @@ function _P.SetReqDetail(data, module,staffData)
 			if staffData ~= nil then
 				local csvPerson = Csv.Personnel[staffData.id]
 				local resutl = false
-				for k,v in pairs(csvPerson.clothesColour) do
-					if v == v.val then
+				for k,j in pairs(csvPerson.clothesColour) do
+					if j == v.val then
 						resutl = true
 					end
 				end
@@ -389,6 +399,7 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	TextLevel.Text = data.level
 	local sendBtnText = itemMoudle:Get("C_Text")
 	local sendBtn = itemMoudle:Get("C_Btn_b")
+	sendBtn.SpriteName = "ty_024"
 	sendBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		if _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
@@ -398,6 +409,8 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 			_P.OnCallBackStaff(self,data,suitData)
 			itemMoudle:Get("Tips").Activity = false
 			sendBtnText.Text = Csv.Text("adventure_staff_send")
+			sendBtn.SpriteName = "ty_024"
+			_P.SetConfiromState(self)
 		else
 			--派遣
 			if _P.IsItemFull(self,index) then
@@ -421,14 +434,18 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 					end,{items = {[itemId] = haveNum}, content = content},nil,"UItemCheckBox")
 				else
 					_P.OnClickSendItem(self,data,suitData,index)
+					itemMoudle:Get("line1").Color = BLUE
+					itemMoudle:Get("line2").Color = BLUE
+					itemMoudle:Get("Tips").Color = BLUE
 					itemMoudle:Get("Tips").Activity = true
-					itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended") 
+					itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended")
 					sendBtnText.Text = Csv.Text("adventure_staff_callback")
 					_P.SetConfiromState(self)
+					sendBtn.SpriteName = "HX_ty_024_2"
 				end
 			end
 		end
-		end, nil, 1)
+		end, nil, 0.9)
 	local TextName = itemMoudle:Get("name")
 	TextName.Text = MStaff.GetStaffName(data.id)
 	
@@ -445,6 +462,8 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 		unSuit.Activity = true
 		ImgIcon.IsGray = true
 		sendBtn.Activity = false
+		itemMoudle:Get("line1").Color = PINK
+		itemMoudle:Get("line2").Color = PINK
 	end
 	
 	local allattrText = itemMoudle:Get("number2")
@@ -458,6 +477,10 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	if _P.IsContains(self,data.id) then
 		--召回
 		itemMoudle:Get("Tips").Activity = true
+		itemMoudle:Get("line1").Color = BLUE
+		itemMoudle:Get("line2").Color = BLUE
+		itemMoudle:Get("Tips").Color = BLUE
+		sendBtn.SpriteName = "HX_ty_024_2"
 		itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended") 
 		sendBtnText.Text = Csv.Text("adventure_staff_callback")
 	elseif _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
@@ -656,9 +679,9 @@ function _M:OnCreate(eventData,activityData)
 	self.scroll = module:Get("scrollView")
 	self.DownRect = module:Get("BtnRect")
 	self.DownRect.CachedTran:GetJTweener(POSY_ANIM):Play()
-	self.DownBtn = module:Get("Btn")
-	self.Top = module:Get("TopRect")
-	self.Buttom = module:Get("StaffListBg")
+	self.DownBtn = module:Get("BtnColider")
+	self.Top = module:Get("Anim")
+	self.Buttom = module:Get("Anim2")
 	self.confirm = module:Get("C_Btn_a")
 	self.confirm:AddOnButton(function(...)
 		--确认选择判断选择人数够了没
@@ -686,11 +709,11 @@ function _M:OnCreate(eventData,activityData)
 			-- _R.OnCompleteEvent(self,nil)
 		end
 	end,nil,1.2)
-	
+	self.DownBtn.SpriteName = ""
 	self.DownBtn:AddOnButton(function(...)
 		self.Top:DOAnchorPosY(TOP_BEGIN, 0.6):SetEase(CS.DG.Tweening.Ease.Linear)
 		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
-	end,nil,1.2)
+	end,nil,1)
 
 	
 	for i=1,eventconf.star do

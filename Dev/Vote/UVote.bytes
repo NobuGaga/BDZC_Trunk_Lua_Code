@@ -80,9 +80,11 @@ function _M:OnCreate()
 	self.TextMessage = moudle:Get("Info")
 	self.ImgArrow = moudle:Get("Arrow")
 
+	local messageRoot = moudle:Get("messageRoot")
+	messageRoot.Activity = false
 	moudle:Get("BottomClick"):AddOnButton(function()
 		self.IsOpenMessage = true
-		moudle:Get("messageRoot").Activity = true
+		messageRoot.Activity = true
 		_P.OnChangeMessagePage(self,self.NowMessagePage)
 		self.TextMessage.Activity = false
 		self.ImgArrow.LocalScale = Vector3(1,1,1)
@@ -90,7 +92,7 @@ function _M:OnCreate()
 
 	moudle:Get("messageRoot"):AddOnButton(function()
 		self.IsOpenMessage = false
-		moudle:Get("messageRoot").Activity = false
+		messageRoot.Activity = false
 		self.TextMessage.Activity = true
 		self.ImgArrow.LocalScale = Vector3(1,-1,1)
 	end,nil,1)
@@ -100,6 +102,7 @@ function _M:OnCreate()
 	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
 
 	moudle:Get("C_Text").Text = Csv.Text("vote_0")
+	moudle:Get("new_text").Text = Csv.Text("relations_tip3")
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
@@ -232,7 +235,11 @@ function _P.OnChangeMessagePage(self,type)
 	self.MessageMoudleTable = {}
 	for k,v in ipairs(messageTable) do
 		local messageMoudle = JGuiManager.GetMoudle(content,"M_Election_Info_Item")
-		messageMoudle:Get("Info").Text = _P.GetMessageStr(v)
+		if type == 1 then
+			messageMoudle:Get("Info").Text = _P.GetMessageStr(v)
+		else
+			messageMoudle:Get("Info").Text = LuaUtil.TransToHM(v.time).." ".._P.GetMessageStr(v)
+		end
 		table.insert(self.MessageMoudleTable,messageMoudle)
 	end
 	_P.SetBottomMessage(self,type)

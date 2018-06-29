@@ -16,6 +16,7 @@ local CMain = JRequire "Dev.Main.CMain"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 -- @RefType [Dev.EventCenter.bytes#_M]
 local EventCenter = JRequire "Dev.EventCenter"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -36,7 +37,7 @@ local DataNameToType = {
 	shop_Package = Define.ActivityType.Shop_Package,
 	lottery = Define.ActivityType.Lottery,
 	sevenDayTarget = Define.ActivityType.SevenDayTarget,
-	charitable = Define.ActivityType.Charitable
+	charitable = Define.ActivityType.Charitable,
 }
 
 local DataNameToSysID = {
@@ -53,7 +54,7 @@ local DataNameToSysID = {
 	shop_Package = Define.SysId.Shop_Package,
 	lottery = Define.SysId.Lottery,
 	sevenDayTarget = Define.SysId.SevenDayTarget,
-	charitable = Define.SysId.Charitable
+	charitable = Define.SysId.Charitable,
 }
 
 local ActTypeToModule = {
@@ -73,6 +74,34 @@ function _P.GetActivityModuleForType(actType)
 		end
 	end
 	return ActivityTypeModule[actType]
+end
+
+function _P.SetRegist(func_send, func_recv)
+	-- for actType, _ in pairs(ActTypeToModule) do
+		-- local typeModule = _P.GetActivityModuleForType(actType)
+		local typeModule = _P.GetActivityModuleForType(Define.ActivityType.SevenDayTarget)
+		if typeModule then
+			if typeModule.func_send then
+				if func_send == nil then
+					func_send = {}
+				end
+				for cmdID, protoName in pairs(typeModule.func_send) do
+					func_send[cmdID] = protoName
+				end	
+			end
+			if typeModule.func_recv then
+				if func_recv == nil then
+					func_recv = {}
+				end
+				for cmdID, protoData in pairs(typeModule.func_recv) do
+					if "table" == type(protoData) then
+						func_recv[cmdID] = protoData
+					end
+				end	
+			end
+		end
+	-- end
+	return func_send, func_recv
 end
 
 local CMD_ID = 
@@ -110,9 +139,12 @@ local CMD_ID =
 	cAdventureStaffOver = 35,		--(奇遇)奇遇员工加班 PActivity.CStaffOverTime
 	cFinancingInfo = 36,			--(银行投资)请求获取中奖信息
 	cFinancingGet = 37,				--(银行投资)请求投资 PActivity.CFinancingGet
-	cFuturesSelect = 38, -- 操纵期货 选择文件
-	cFuturesNews = 39, -- 操纵期货 中奖信息
-	cFuturesReset = 40, -- 操纵期货 重置抽取数据
+	cFuturesSelect = 38, 			-- 操纵期货 选择文件
+	cFuturesNews = 39, 				-- 操纵期货 中奖信息
+	cFuturesReset = 40, 			-- 操纵期货 重置抽取数据
+	cGlobalTravalAdventure = 41,	-- (全球环行)前进
+	cGlobalTravalBuy = 42,			-- (全球环行)购买骰子
+	cGlobalTravalExchange = 43,		-- (全球环行)兑换奖励 PActivity.cGlobalTravalExchange
 
 	sInit = 1,						--初始化 PActivity.SActivity
 	sUpdate = 2,					--更新 PActivity.SActivity
@@ -134,7 +166,6 @@ local CMD_ID =
 	sLotteryMsgList = 18,			--(抽奖)历史消息列表 PActivity.SLotteryMsgList
 	sVipDisCountGift = 19,			--VIP 折扣礼包领取后状态推送 PActivity.PVIPDiscountGift
 	sUpdateDailyGift = 20,			--更新每日礼包 PActivity.PDailyGiftInfo
-	sSevenDayRank = 21,				--(七日目标)返回排名PActivity.SSevenDayRank
 	sChairtyBuy	= 22,				--(慈善)购买捐赠物返回 PActivity.PChairtyAct
 	sChairtyDonation = 23,			--(慈善)捐赠返回 PActivity.PChairtyAct
 	sChairtyDrow = 24,				--(慈善)抽奖返回 PActivity.SCharityDrow
@@ -156,10 +187,14 @@ local CMD_ID =
 	sFinancingGet = 40,				--(银行投资)请求投资返回 PActivity.SFinancingGet
 	sNewFinancingInfo = 41,			--(银行理财)中奖信息推送 PActivity.POneGetInfo
 	sAdventureSendLucky = 42,		--(奇遇)幸运值推送	PActivity.SAdventureLucky
-	sFuturesSelect = 43, --操纵期货 选择文件返回
-	sFuturesNews = 44, --操纵期货 中奖信息
-	pNewsInfo = 45, --操纵期货 更新中奖信息一条
-	sFuturesReset = 46, -- 操纵期货 重置抽取数据
+	sFuturesSelect = 43, 			-- 操纵期货 选择文件返回
+	sFuturesNews = 44, 				-- 操纵期货 中奖信息
+	pNewsInfo = 45, 				-- 操纵期货 更新中奖信息一条
+	sFuturesReset = 46, 			-- 操纵期货 重置抽取数据
+	sGlobalTravalAdventure = 47,	-- (全球环行)前进返回 PActivity.sGlobalTravalAdventure
+	sGlobalTravalBuy = 48,			-- (全球环行)购买骰子 PActivity.sGlobalTravalBuy
+	sGlobalTravalExchange = 49,		-- (全球环行)兑换奖励 PActivity.sGlobalTravalExchange
+	sLotterySuperGetter = 50,		--(抽奖)超级大奖得主同步 PActivity.SLotterySuperGetter
 }
 
 function _M.ModuleClean()
@@ -204,7 +239,10 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cFinancingInfo]	 	 	 = "",
 		[CMD_ID.cFinancingGet]			 = "PActivity.CFinancingGet",
 		[CMD_ID.cFuturesSelect] = "PActivity.CFuturesSelect",
-		[CMD_ID.cFuturesReset] = ""
+		[CMD_ID.cFuturesReset] = "",
+		[CMD_ID.cGlobalTravalAdventure] = "",
+		[CMD_ID.cGlobalTravalBuy] = "",
+		[CMD_ID.cGlobalTravalExchange] = "PActivity.cGlobalTravalExchange",
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -229,7 +267,6 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sLotteryMsgList]   		 = {proto = "PActivity.SLotteryMsgList", 		handle = _P.OnLotteryMsgList},	--(抽奖)历史消息列表 PActivity.SLotteryMsgList	
 		[CMD_ID.sVipDisCountGift]  		 = {proto = "PActivity.PVIPDiscountGift", 		handle = _P.OnVipDiscountGift},
 		[CMD_ID.sUpdateDailyGift]  		 = {proto = "PActivity.PDailyGiftInfo", 		handle = _P.OnUpdateDailyGift},	--更新每日礼包 PActivity.PDailyGiftInfo	
-		[CMD_ID.sSevenDayRank]    		 = {proto = "PActivity.SSevenDayRank", 			handle = _P.OnUpdateSevenRank},		--(七日目标)返回排名PActivity.SSevenDayRank
 		[CMD_ID.sChairtyBuy]			 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyBuy},		--(慈善活动)购买返回PActivity.PChairtyAct
 		[CMD_ID.sChairtyDonation]		 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyDonate},	--(慈善活动)捐赠返回PActivity.PChairtyAct
 		[CMD_ID.sChairtyDrow]			 = {proto = "PActivity.SCharityDrow",			handle = _P.OnChairtyDrow}, 	--(慈善活动)抽奖返回PActivity.SCharityDrow
@@ -251,11 +288,17 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sFinancingGet]	 		 = {proto = "PActivity.SFinancingGet",			handle = _P.OnSignBack},	--(银行投资)请求投资返回
 		[CMD_ID.sNewFinancingInfo]	 	 = {proto = "PActivity.POneGetInfo",			handle = _P.OnNewInfoPush},	--(银行投资)请求投资返回
 		[CMD_ID.sAdventureSendLucky]	 = {proto = "PActivity.SAdventureLucky",		handle = _P.OnHotVal},
-		[CMD_ID.sFuturesSelect] = {proto = "PActivity.SFuturesSelect", handle = _P.OnFuturesSelect}, -- 操纵期货 选择文件返回
-		[CMD_ID.sFuturesNews] = {proto = "PActivity.SFuturesNews", handle = _P.OnFuturesNews}, -- 操纵期货 中奖信息
-		[CMD_ID.pNewsInfo] = {proto = "PActivity.SFuturesNews.PNewsInfo", handle = _P.OnNewsInfo}, -- 操纵期货 中奖信息更新一条		--(奇遇)热度值推送
-		[CMD_ID.sFuturesReset] = {handle = _P.OnFuturesReset}, -- 操纵期货 重置抽取信息
+		[CMD_ID.sFuturesSelect] 		 = {proto = "PActivity.SFuturesSelect", 		handle = _P.OnFuturesSelect}, -- 操纵期货 选择文件返回
+		[CMD_ID.sFuturesNews] 			 = {proto = "PActivity.SFuturesNews", 			handle = _P.OnFuturesNews}, -- 操纵期货 中奖信息
+		[CMD_ID.pNewsInfo] 				 = {proto = "PActivity.SFuturesNews.PNewsInfo", handle = _P.OnNewsInfo}, -- 操纵期货 中奖信息更新一条		--(奇遇)热度值推送
+		[CMD_ID.sFuturesReset] 			 = {											handle = _P.OnFuturesReset}, -- 操纵期货 重置抽取信息
+		[CMD_ID.sGlobalTravalAdventure]  = {proto = "PActivity.sGlobalTravalAdventure",	handle = _P.OnTravalEnterCallBack}, -- (全球环行)前进返回
+		[CMD_ID.sGlobalTravalBuy] 		 = {proto = "PActivity.sGlobalTravalBuy",		handle = _P.OnTravalBuyCallBack}, -- (全球环行)购买骰子
+		[CMD_ID.sGlobalTravalExchange] 	 = {proto = "PActivity.sGlobalTravalExchange",	handle = _P.OnTravalExchangeCallBack}, -- (全球环行)兑换奖励
+		[CMD_ID.sLotterySuperGetter]	 = {proto = "PActivity.SLotterySuperGetter",	handle = _P.OnUpdateSuperGetter}, --(抽奖)超级大奖得主同步
 	}
+
+	func_send, func_recv = _P.SetRegist(func_send, func_recv)
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Activity, func_send, func_recv, isReload)
 end
@@ -395,6 +438,11 @@ end
 --奇遇刷新兑换商城
 function _M.ReqAdvRefrashShop(pay)
 	_M.Send(CMD_ID.cAdventureShopRefresh,{pay = pay})
+end
+
+--奇遇外部刷新红点
+function _M.ReqUpdateRed(actId,actType)
+	_P.CheckAdventureRedPoint(actId,actType)
 end
 
 --奇遇商城购买
@@ -611,11 +659,12 @@ end
 
 		local AdventureCsv = Csv.Adventure[data.actId]
 		--更新个人事件列表
-		-- LuaUtil.DumpTable(data.personalEventlist)
 		info.personalEventlist = {}
-		for k,v in pairs(data.personalEventlist) do
-			local one = MActivity.GetNewPersonEvent(v)
-			info.personalEventlist[one.eventsIndex] = one
+		if data.personalEventlist ~= nil then
+			for k,v in pairs(data.personalEventlist) do
+				local one = MActivity.GetNewPersonEvent(v)
+				info.personalEventlist[one.eventsIndex] = one
+			end
 		end
 
 		--活动信息
@@ -680,6 +729,9 @@ end
 		_P.CheckAdventureRedPoint(data.actId, actType)
 		if WindowMgr.IsCreated("UAdventureMain") then
 			WindowMgr.Call("UAdventureMain", "UpdateEvent", info)
+		end
+		if WindowMgr.IsCreated("UAdventureFollow") then
+			WindowMgr.Call("UAdventureFollow","UpdateEvent",data)
 		end
 		if WindowMgr.IsCreated("UAdventureRank") then
 			WindowMgr.Call("UAdventureRank", "OnUpdateData", info.actId)
@@ -970,6 +1022,56 @@ end
 			end
 		end
 	end
+--单笔充值
+	--单笔充值红点检测
+	function _P.CheckSingleRechargeRepoint(actId)
+		local info = MActivity.GetFromId(actId)
+		if info and info.list then
+			for _, data in pairs(info.list) do
+				if MActivity.ActivityState.Doing == info.state.state then
+					local isUpdateRedpoint = data.canGetTimes > 0
+					if MActivity.ActRedpoint(actId, data.index, isUpdateRedpoint) then
+						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward_Single, actId, data.index)
+					end
+				end
+			end
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Single)
+		end
+	end
+	--单笔充值数据更新
+	function _P.DoUpdateSingleRecharge(actType, data)
+		if not data.list or not data.actId then
+			error("receive rechargeReward_Single actId " .. (data.actId or "nil") .. " list " .. (data.list or "nil"))
+			return
+		end
+		local csvRechargeSingle = Csv.RechargeSingle[data.actId]
+		if not csvRechargeSingle or not csvRechargeSingle.grade or not csvRechargeSingle.times or not csvRechargeSingle.award then
+			error("Csv RechargeSingle Data error actID " .. data.actId)
+			return
+		end
+		local info = _P.StateInfo(data, actType)
+		info.list = {}
+		for _, value in pairs(data.list) do
+			if value.id and csvRechargeSingle.grade[value.id] and csvRechargeSingle.times[value.id] and csvRechargeSingle.award[value.id] then
+				local item = { 
+					index = value.id, 
+					canGetTimes = value.canGetTimes,
+					getTimes = value.getTimes,
+					gold = csvRechargeSingle.grade[value.id],
+					maxTimes = csvRechargeSingle.times[value.id],
+					reward = csvRechargeSingle.award[value.id]
+				}
+				table.insert(info.list, item)	
+			end
+		end
+		table.sort(info.list, function(left, right) return left.index < right.index end)
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		--检查小红点
+		_P.CheckSingleRechargeRepoint(info.actId)
+		WindowMgr.Call("URechargeAward", "OnRefreshView", actType)
+	end
 --商城礼包
 	function _P.DoUpdateShopPackage(actType, data)
 		if data ~= nil then
@@ -1102,6 +1204,10 @@ end
 		end
 		WindowMgr.Call("ULottery", "OnLotteryMsg", data.actId)
 	end
+	function _P.OnUpdateSuperGetter(data)
+		MActivity.LotterySuperGetter = {playerId = data.playerId, playerName = data.playerName}
+		WindowMgr.Call("ULottery", "OnUpdateSuperGetter")
+	end
 	function _P.DoUpdateLottery(actType, data)
 		if data == nil then return end
 		-- print("----------DoUpdateLottery----------", data.actId)
@@ -1184,6 +1290,10 @@ function _P.DoUpdate(data, isInit)
 		--1, 3, 6元礼包
 		_P.DoUpdateDailyGift(Define.ActivityType.RechargeReward_DailyGift, data.rechargeReward_DailyGift)
 	end
+	if data.rechargeReward_Single then
+		--单笔充值
+		_P.DoUpdateSingleRecharge(Define.ActivityType.RechargeReward_Single, data.rechargeReward_Single)
+	end
 	if data.shop_Package ~= nil then
 		--商城礼包
 		_P.DoUpdateShopPackage(Define.ActivityType.Shop_Package, data.shop_Package)
@@ -1221,12 +1331,10 @@ function _P.DoUpdate(data, isInit)
 		--银行理财
 		_P.DoUpdateInvestment(Define.ActivityType.Investment, data.financing)
 	end
-	-- if data.limitbuy ~= nil then
-	-- 	_P.DoUpdateLimitBuy(Define.ActivityType.Shop_Limit,data.limitbuy)
-	-- else
-	-- 	MActivity.ClearForType(Define.ActivityType.Shop_Limit)
-	-- 	WindowMgr.Call("UShop", "OnRefreshLimit")
-	-- end
+	if data.globalTraval ~= nil then
+		-- 环球旅行
+		_P.DoUpdateTraval(Define.ActivityType.GlobalTraval, data.globalTraval)
+	end
 end
 
 function _P.OnInit(data)
@@ -1298,6 +1406,24 @@ function _P.OnGetSuccess(data)
 			local one = info.list[data.index]
 			if data.isGeted and MActivity.RewardGetState.CanGet == one.getState then
 				--界面表现
+				WindowMgr.Call("URechargeAward", "RefreshItemGetState", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.RechargeReward_Single then
+			if data.isGeted then
+				for _, listData in pairs(info.list) do
+					if listData.index == data.index then
+						listData.canGetTimes = listData.canGetTimes - 1
+						if listData.canGetTimes < 0 then
+							listData.canGetTimes = 0
+						end
+						listData.getTimes = listData.getTimes + 1
+						if listData.getTimes > listData.maxTimes then
+							listData.getTimes = listData.maxTimes
+						end
+						break
+					end
+				end
+				_P.CheckSingleRechargeRepoint(actId)
 				WindowMgr.Call("URechargeAward", "RefreshItemGetState", data, info.actType)
 			end
 		elseif info.actType == Define.ActivityType.XinGuan1 or
@@ -1555,6 +1681,26 @@ function _P.OnUpdateState(data)
 			_P.CheckDailyGiftRepoint(actId)
 			--界面刷新
 			WindowMgr.Call("URechargeAward", "OnRefreshView", info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_Single then
+			if data.state.state == MActivity.ActivityState.Close then
+				MActivity.ClearForId(data.actId)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Single)
+				if MActivity.GetListFromType(info.actType) == nil then
+					isNeedUpdateMainBtn = true
+				end
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = {
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			--检查小红点
+			_P.CheckSingleRechargeRepoint(actId)
+			--界面刷新
+			WindowMgr.Call("URechargeAward", "OnRefreshView", info.actType)
 		elseif info.actType == Define.ActivityType.XinGuan1 or
 			info.actType == Define.ActivityType.XinGuan2
 		then
@@ -1664,6 +1810,24 @@ function _P.OnUpdateState(data)
 			end
 
 			WindowMgr.Call("UInvestmentPanel", "OnUpdateViewState", data)
+		elseif info.actType == Define.ActivityType.GlobalTraval then
+			if data.state.state == MActivity.ActivityState.Close then
+				MActivity.ClearForId(data.actId)
+				MActivity.ClearForType(Define.ActivityType.GlobalTraval)
+				isNeedUpdateMainBtn = true
+			else
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+
+				_P.CheckTravalRedPoint(data.actId, data)
+			end
+
+			WindowMgr.Call("UGlobalTravalMainPanel", "OnUpdateViewState", data)
 		end
 	end
 
@@ -1708,6 +1872,15 @@ function _P.OnUpdatePro(data)
 			info.num = data.pro
 			_P.CheckRechargeTotalDayRepoint(actId,info.actType)
 			WindowMgr.Call("URechargeAward", "OnRefreshView",info.actType)
+		elseif info.actType == Define.ActivityType.RechargeReward_Single then
+			for _, listData in pairs(info.list) do
+				if listData.index == data.index then
+					listData.canGetTimes = data.pro
+					break
+				end
+			end
+			_P.CheckSingleRechargeRepoint(actId,info.actType)
+			WindowMgr.Call("URechargeAward", "OnRefreshView", info.actType)
 		elseif info.actType == Define.ActivityType.Charitable then
 			--判断结算时间
 			if HeartBeat.ServSecond()  > info.state.lefttime then
@@ -1890,15 +2063,6 @@ function _P.OnVipDiscountGift(data)
 	MVipWelfare.SetVipDiscountGiftGot(data)
 end
 
-function _P.OnUpdateSevenRank(data)
-	local actId = data.actId
-	local info = MActivity.GetFromId(actId)
-	if info then
-		local typeModule = _P.GetActivityModuleForType(Define.ActivityType.SevenDayTarget)
-		typeModule.OnUpdateSevenRank(data, info)
-	end
-end
-
 --慈善活动购买返回
 function _P.OnChairtyBuy(data)
 	if data == nil then return end
@@ -2040,6 +2204,7 @@ function _P.OnNewEvent(data)
 	-- print("个人事件推送")
 	-- LuaUtil.DumpTable(data)
 	--更新一下当前事件
+	if data == nil then return end
 	MActivity.UpdatePersonEvent(data.actId,data)
 	--红点
 	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
@@ -2050,6 +2215,7 @@ end
 
 --奇遇热度推送
 function _P.OnHotVal(data)
+	if data == nil then return end
 	local activityData = MActivity.GetFromId(data.actId)
 	if activityData == nil then return end
 	activityData.hotval = data.lucky
@@ -2066,6 +2232,7 @@ end
 function _P.OnNewGangEvent(data)
 	--剔除旧事件或者增加新事件
 	--更新一下当前事件
+	if data == nil then return end
 	MActivity.UpdateGangEvent(data.actId,data)
 	--红点
 	_P.CheckAdventureRedPoint(data.actId, Define.ActivityType.Adventure)
@@ -2084,11 +2251,9 @@ end
 
 --奇遇打开排行榜返回
 function _P.OnAdvRank(data)
-	-- print("奇遇个人排行榜返回")
-	-- LuaUtil.DumpTable(data)
-	-- if WindowMgr.IsCreated("UAdventureExchangePanel") then
-	-- 	WindowMgr.Call("UAdventureExchangePanel","OnRefreshShopData",data)
-	-- end
+	if WindowMgr.IsCreated("UAdventureRank") then
+		WindowMgr.Call("UAdventureRank","OnGetGangData",data)
+	end
 end
 
 --奇遇商城购买返回
@@ -2231,17 +2396,26 @@ end
 --奇遇获取红点检测
 function _P.CheckAdventureRedPoint(actId, actType)
 	local isShowMainBtnRed = false
-	MActivity.AdventureShopRed = false
 	local activityData = MActivity.GetFromId(actId)
 	if activityData == nil then return end
+	local vip = MPlayer.GetVip()
+	local extraTime = Csv.Vip[vip].adventureMainCount
+	local lefttime = Csv.Const(20101)[3] + extraTime - activityData.personalEventTimes
+
+	local index = 0
+	for k,v in pairs(activityData.personalEventlist) do
+		index = index + 1
+	end
+
 	if activityData.personalRewardState == MActivity.RewardGetState.CanGet or 
 		activityData.gangrewardState == MActivity.RewardGetState.CanGet or
-		activityData.isNew or activityData.hotval == Csv.Const(20101)[9]  then--todo:maxval
+		activityData.isNew or activityData.hotval == Csv.Const(20101)[9]
+		or (lefttime > 0 and index > 0) then--todo:maxval
 		isShowMainBtnRed = true
 	end
 
 	for k,v in pairs(activityData.shopEventList) do
-		if v.type == 1 and v.triggerTime + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
+		if v.type == 2 then
 			MActivity.AdventureShopRed = true
 		end
 	end
@@ -2278,12 +2452,29 @@ end
 
 -- 银行投资-----------------------------------------
 function _P.CheckInvestmentRedPoint(actId, data)
-	local isShowRed = data.curIndex <= MActivity.MaxStageNum
-	local activityData = MActivity.GetFromId(actId)
+	local isShowRed = false
+	local investureConf = Csv.Financing[actId * 100 + data.curIndex]
+	if investureConf then
+		local curGold = MBag.GetItemNum(Define.AssetsType.Gold)
+		local curVipLv = MPlayer.GetVip()
+		isShowRed = data.curIndex <= MActivity.MaxStageNum and curGold >= investureConf.gold and curVipLv >= investureConf.viplevel
+	end
 
 	if isShowRed ~= MActivity.InvestmentRed then
 		MActivity.InvestmentRed = isShowRed
 		CMain.UpdateRedpoint(isShowRed, Define.SysId.Investment)
+	end
+end
+
+
+-- 外部刷新红点
+function _M.UpdateInvestmentRed()
+	local actId = MActivity.ActIdForType[Define.ActivityType.Investment]
+	if actId ~= nil then
+		local actInfo = MActivity.GetFromId(actId)
+		if actInfo ~= nil then
+			_P.CheckInvestmentRedPoint(actId, actInfo)
+		end
 	end
 end
 
@@ -2385,29 +2576,129 @@ function _P.OnNewsInfo(data)
 end
 
 function _P.OnFuturesReset(data)
-	-- local info = MActivity.GetFuturesData()
-	-- -- 赔率
-	-- local futuresConf = Csv.Futures[info.actId]
-	-- info.odds = {}
-	-- -- 兑换商店列表
-	-- local oddsConf = futuresConf.odds
-	-- if oddsConf then
-	-- 	for k,v in pairs(oddsConf) do
-	-- 		info.odds[string.format("%0.1f", v)] = false
-	-- 	end
-	-- end
+	
+end
 
-	-- info.selectedFiles = {}
+------------------------------------------------------ 环球旅行-----------------------------------------
+function _M.OnEnterTravalReq()
+	_M.Send(CMD_ID.cGlobalTravalAdventure)
+end
 
-	-- info.curFactor = nil
-	-- info.futuresState = 0
-	-- info.rechargeAddGold = nil
-	-- info.rechargeAmount = info.rechargeAmount - info.resetNeedAmount
-	-- info.resetNeedAmount = nil
-	-- info.resetTimes = nil
-	--更新数据层
-	-- MActivity.UpdateAct(info.actId, Define.ActivityType.Futures, info)
-	-- _P.CheckFuturesRedPoint(info.actId, info)
+function _M.OnBuyTravalReq()
+	_M.Send(CMD_ID.cGlobalTravalBuy)
+end
+
+function _M.OnExchangeTravalReq(exchangeId)
+	_M.Send(CMD_ID.cGlobalTravalExchange, {exchangeId = exchangeId})
+end
+
+function _P.OnTravalEnterCallBack(data)
+	if WindowMgr.IsCreated("UGlobalTravalMainPanel") then
+		WindowMgr.Call("UGlobalTravalMainPanel", "OnTravalEnterCallBack", data, function( ... )
+			_P.SetEnterBackData(data)
+		end)
+	else
+		_P.SetEnterBackData(data)
+	end
+
+	_P.CheckTravalRedPoint(data.actId)
+end
+
+function _P.SetEnterBackData(data)
+	local actId = MActivity.ActIdForType[Define.ActivityType.GlobalTraval]
+	if actId ~= nil then
+		local actInfo = MActivity.GetFromId(actId)
+		actInfo.curPosId = data.curPosId
+		actInfo.travalLoopCount = data.travalLoopCount
+		actInfo.diceNumber = data.diceNumber
+		actInfo.numberCount = data.numberCount
+		if data.posReward ~= nil and next(data.posReward) ~= nil then
+			actInfo.posReward = data.posReward
+		end
+		if data.passPosList ~= nil and next(data.passPosList) ~= nil then
+			actInfo.passPosList = data.passPosList
+		end
+	end
+end
+
+function _P.OnTravalBuyCallBack(data)
+	local actId = MActivity.ActIdForType[Define.ActivityType.GlobalTraval]
+	if actId ~= nil then
+		local actInfo = MActivity.GetFromId(actId)
+		actInfo.buyCount = data.buyCount
+	end
+
+	if WindowMgr.IsCreated("UGlobalTravalMainPanel") then
+		WindowMgr.Call("UGlobalTravalMainPanel", "OnTravalBuyCallBack", data)
+	end
+end
+
+function _P.OnTravalExchangeCallBack(data)
+	local actId = MActivity.ActIdForType[Define.ActivityType.GlobalTraval]
+	if actId ~= nil then
+		local actInfo = MActivity.GetFromId(actId)
+		if actInfo.exchangeShop == nil then
+			actInfo.exchangeShop = {}
+			actInfo.exchangeShop[data.exchangeId] = {id = data.exchangeId, count = data.exchangeCount}
+		else
+			if actInfo.exchangeShop[data.exchangeId] ~= nil then
+				actInfo.exchangeShop[data.exchangeId].count = data.exchangeCount
+			else
+				actInfo.exchangeShop[data.exchangeId] = {id = data.exchangeId, count = data.exchangeCount}
+			end
+		end
+
+		actInfo.numberCount = data.numberCount
+	end
+
+	if WindowMgr.IsCreated("UGlobalTravalExchange") then
+		WindowMgr.Call("UGlobalTravalExchange", "UpdateExchangeData", data)
+	end
+
+	if WindowMgr.IsCreated("UGlobalTravalMainPanel") then
+		WindowMgr.Call("UGlobalTravalMainPanel", "UpdateExchangeData")
+	end
+
+	_P.CheckTravalRedPoint(actId)
+end
+
+-- init回调后设置数据
+function _P.DoUpdateTraval(actType, data)
+	MActivity.ClearForType(actType)
+
+	local info = _P.StateInfo(data, actType)
+	info.travalLoopCount = data.travalLoopCount
+	info.buyCount = data.buyCount
+	info.numberCount = data.numberCount
+	info.posReward = data.posReward
+	info.passPosList = data.passPosList
+	if data.exchangeShop ~= nil and next(data.exchangeShop) ~= nil then
+		info.exchangeShop = {}
+		for k,v in pairs(data.exchangeShop) do
+			info.exchangeShop[v.id] = v
+		end
+	end
+	info.curPosId = data.curPosId
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckTravalRedPoint(info.actId)
+end
+
+function _P.CheckTravalRedPoint(actId)
+	local isShowRed = false
+
+	local actInfo = MActivity.GetFromId(actId)
+	local hasNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
+	isShowRed = MActivity.CheckHasExchange(actInfo.numberCount) or hasNum > 0
+
+	if isShowRed ~= MActivity.GloalTravalRed then
+		MActivity.GloalTravalRed = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.GlobalTraval)
+	end
+end
+
+function _M.UpdateTravalRed(actId)
+	_P.CheckTravalRedPoint(actId)
 end
 
 return _M

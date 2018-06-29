@@ -83,6 +83,11 @@ function _M:OnCreate(sysId)
 		_P.OnClickOneKeyBtn(self)
 	end, nil, 0.9)
 
+	for i=1,2 do
+		local tabRect = module:Get("Tab".. i)
+		tabRect.Activity = false
+	end
+
 	local funcs = _P.GetFuncs(MMain.GetOpenedFuncs(sysId, true))
 	local count = #funcs
 	if count > 0 then
@@ -91,7 +96,9 @@ function _M:OnCreate(sysId)
 		end, "yth_023", "yth_023", Color.white, Color.black)
 
 		for k,v in pairs(funcs) do
-			self.tabHandle:Add(v.id, module:Get("Tab".. k), module:Get("TabText" .. k), v.name)
+			local tabRect = module:Get("Tab".. k)
+			tabRect.Activity = true
+			self.tabHandle:Add(v.id, tabRect, module:Get("TabText" .. k), v.name)
 		end
 
 		self.tabHandle:Choose(funcs[1].id)

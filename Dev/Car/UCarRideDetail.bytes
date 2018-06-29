@@ -40,9 +40,10 @@ function _M:OnCreate(data, id, seatIndex)
 		end
 	end
 
+	module:Get("new_text").Text = Csv.Text("palyer_levelup")
 	module:Get("Title").Text = Csv.Text("car_rideDetail_title")
-	module:Get("StaffLv").Text = Csv.Text("staff_level") .. data.level
-	module:Get("StaffTotal").Text = Csv.Text("car_main_shili") .. MCar.GetTotalAttrs(data.allAttr)
+	module:Get("StaffLv").Text = data.level
+	module:Get("StaffTotal").Text = Csv.Text("car_main_shili") .. "  " .. MCar.GetTotalAttrs(data.allAttr)
 	module:Get("ride").Text = Csv.Text("car_selectStaff_ride") .. "："
 
 	local staffConf = Csv.Personnel[data.id]
@@ -79,6 +80,21 @@ function _M:OnCreate(data, id, seatIndex)
 		WindowMgr.Create("UCarSelectStaff", id, seatIndex, true)
 		self:Destroy()
 	end, nil, 0.9)
+
+	for i = 1,4 do
+		local icon = module:Get("icon"..i)
+		if icon ~= nil then
+			icon.Activity = false
+		end
+	end
+
+	for k,v in ipairs(staffConf.specialtyIcon) do
+		local icon = module:Get("icon"..k)
+		if icon ~= nil then
+			icon.Activity = true
+			icon.SpriteName = v
+		end
+	end
 end
 
 

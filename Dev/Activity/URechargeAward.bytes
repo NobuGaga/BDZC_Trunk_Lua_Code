@@ -1,12 +1,13 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local MMain = JRequire "Dev.Main.MMain"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local URechargeAwardDay = JRequire "Dev.Activity.URechargeAwardDay"
 local URechargeAwardTotal = JRequire "Dev.Activity.URechargeAwardTotal"
 local URechargeAwardTotalDay = JRequire "Dev.Activity.URechargeAwardTotalDay"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local URechargeRewardDailyGift = JRequire "Dev.Activity.URechargeRewardDailyGift"
+local URechargeReward_Single = JRequire "Dev.Activity.URechargeReward_Single"
 local CCommon = JRequire "Dev.Common.CCommon"
 
 local _M = Class(WindowBase)
@@ -19,12 +20,14 @@ RechargeTypeForID[Define.SysId.RechargeReward_Day] = Define.ActivityType.Recharg
 RechargeTypeForID[Define.SysId.RechargeReward_Total] = Define.ActivityType.RechargeReward_Total
 RechargeTypeForID[Define.SysId.RechargeReward_TotalDay] = Define.ActivityType.RechargeReward_TotalDay
 RechargeTypeForID[Define.SysId.RechargeReward_DailyGift] = Define.ActivityType.RechargeReward_DailyGift
+RechargeTypeForID[Define.SysId.RechargeReward_Single] = Define.ActivityType.RechargeReward_Single
 
 local RechargeIDForType = {}
 RechargeIDForType[Define.ActivityType.RechargeReward_Day] = Define.SysId.RechargeReward_Day
 RechargeIDForType[Define.ActivityType.RechargeReward_Total] = Define.SysId.RechargeReward_Total
 RechargeIDForType[Define.ActivityType.RechargeReward_TotalDay] = Define.SysId.RechargeReward_TotalDay
 RechargeIDForType[Define.ActivityType.RechargeReward_DailyGift] = Define.SysId.RechargeReward_DailyGift
+RechargeIDForType[Define.ActivityType.RechargeReward_Single] = Define.SysId.RechargeReward_Single
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -55,6 +58,10 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle:delete()
 		self.ChooseMoudle = nil
 	end
+	local funcData = Csv.Func[funcId]
+	if funcData and funcData.name then
+		self.mMoudle:Get("title").Text = funcData.name
+	end
 	if funcId == Define.SysId.RechargeReward_Day then
 		self.ChooseMoudle = URechargeAwardDay.new(self.PageNode)
 	elseif funcId == Define.SysId.RechargeReward_Total then
@@ -63,6 +70,8 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = URechargeAwardTotalDay.new(self.PageNode)
 	elseif funcId == Define.SysId.RechargeReward_DailyGift then
 		self.ChooseMoudle = URechargeRewardDailyGift.new(self.PageNode)
+	elseif funcId == Define.SysId.RechargeReward_Single then
+		self.ChooseMoudle = URechargeReward_Single.new(self.PageNode)
 	end
 	self.mFuncId = funcId
 end
@@ -121,27 +130,25 @@ function _M:OnCreate()
 	local count = #funcs
 	if count > 0 then
 		--Table标签控制
-		local colorLight = Color(255/255,225/255,75/255,1)
-		local colorDefault = Color(0/255,195/255,255/255,1)
 		self.tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+		end, "HXbian_001_23", "HXbian_001_23", nil, Color(1, 1, 1, 1))
 	
 		local index = 0
 		self.pageIDCache = {}
 		for k,v in pairs(funcs) do
 			index = index + 1
 			self.pageIDCache[index] = v.id
-			self.tabHandle:Add(v.id, moudle:Get("Label"..index), moudle:Get("C_text_"..index), v.name)
+			self.tabHandle:Add(v.id, moudle:Get("Label"..index), moudle:Get("C_text_"..index), v.name, moudle:Get("select_" .. index))
 
 			--注册小红点
 			self:RegistRedpoint(moudle:Get("redpoint_" .. index), v.id)
 		end
 		self.tabHandle:Choose(funcs[1].id)
 	end
-	if count < 4 then
-		for i=count + 1,4 do
-			moudle:Get("Label"..i).Activity = false
+	if count < 5 then
+		for i=count + 1,5 do
+			moudle:Get("btn"..i).Activity = false
 		end
 	end
 end
@@ -159,7 +166,8 @@ function _R.RefreshItemGetState(self,data,actType)
 		if (self.mFuncId == Define.SysId.RechargeReward_Day and actType == Define.ActivityType.RechargeReward_Day)
 		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
 		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay)
-		or (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift) then
+		or (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift)
+		or (self.mFuncId == Define.SysId.RechargeReward_Single and actType == Define.ActivityType.RechargeReward_Single) then
 			self.ChooseMoudle:RefreshItemGetState(data)
 		end
 	end
@@ -171,7 +179,8 @@ function _R.OnRefreshView(self,actType)
 		if (self.mFuncId == Define.SysId.RechargeReward_Day and actType == Define.ActivityType.RechargeReward_Day)
 		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
 		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay)
-		or (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift) then
+		or (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift)
+		or (self.mFuncId == Define.SysId.RechargeReward_Single and actType == Define.ActivityType.RechargeReward_Single) then
 			self.ChooseMoudle:RefreshView()
 		end
 	end

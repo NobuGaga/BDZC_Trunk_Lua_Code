@@ -42,6 +42,7 @@ local ECmdId = {
 	sGetActionPoint					=	17,	-- 更新行动点 PSiegeWall.SActionPoint
 	sSiegeActivityStatus			=	18, -- 下发活动状态 PSiegeWall.SActivityStatus
 	sSiegeSwitchStage				=	19, -- 下发阶段切换后的开始时间  PSiegeWall.SSiegeSwitchStage
+	sSiegeBuff						= 	20, -- 下发阶buff信息  PSiegeWall.SSiegeBuff
 }
 
 function _M.ModuleInit(isReload)
@@ -84,9 +85,18 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sGetActionPoint]	= { proto = "PSiegeWall.SActionPoint",			handle = _P.OnUpdateActionPoint},
 		[ECmdId.sSiegeActivityStatus]	= { proto = "PSiegeWall.SActivityStatus",			handle = _P.OnActivityStatus},
 		[ECmdId.sSiegeSwitchStage]	= { proto = "PSiegeWall.SSiegeSwitchStage",			handle = _P.OnSiegeSwitchStage},
+		[ECmdId.sSiegeBuff]	= { proto = "PSiegeWall.SSiegeBuff",			handle = _P.OnSiegeBuff},
 	}
 	 _M.Send = SocketMgr.Regist(Define.SysId.SiegeWall, send, recv, isReload)
 end
+
+EventCenter.RegistCallEvent(Define.EventListenId.ServerError,function(handle, sysId, msgId)
+	if sysId == Define.SysId.SiegeWall then
+		if msgId == ECmdId.sProtest then
+			WindowMgr.Call("USiegeMain", "UnlockView")
+		end
+	end
+end, true)
 
 -- C2S
 function _M.ReqSiegeInit()
@@ -94,7 +104,6 @@ function _M.ReqSiegeInit()
 end
 
 function _M.ReqSiegeStage()
-	print("!!!!!!!")
 	_M.Send(ECmdId.cSiegeStage)
 end
 
@@ -138,7 +147,6 @@ end
 
 
 function _M.BuyOrderReq(_id)
-	print("______BuyOrderReq__________________",_id)
 	_M.Send(ECmdId.cBuyOrder,{id = _id})
 end
 
@@ -154,7 +162,6 @@ end
 
 
 function _M.GetRankResReq(_actId, _stage, _ranktype)
-	print("____GetRankResReq________",_actId, _stage, _ranktype)
 	_M.Send(ECmdId.cGetRankReward, {actId = _actId, stage = _stage, ranktype = _ranktype})
 end
 
@@ -165,10 +172,46 @@ end
 -- S2C
 function _P.OnActivityStatus(data)
 	MSiege.SiegeActivityStatus(data)
+
+	--断线重连--
+	if WindowMgr.IsCreated("USiegeBattle") then
+		WindowMgr.Call("USiegeBattle", "CloseView")
+	end
+	if WindowMgr.IsCreated("USiegeTreasurePanel") then
+		WindowMgr.Call("USiegeTreasurePanel", "CloseView")
+	end
+	if WindowMgr.IsCreated("USiegeTeamMessage") then
+		WindowMgr.Call("USiegeTeamMessage", "CloseView")
+	end
+	if WindowMgr.IsCreated("USiegeRankPanel") then
+		WindowMgr.Call("USiegeRankPanel", "CloseView")
+	end
+	if WindowMgr.IsCreated("USiegeExchangePanel") then
+		WindowMgr.Call("USiegeExchangePanel", "CloseView")
+	end
+	if WindowMgr.IsCreated("USiegeBoss") then
+		WindowMgr.Call("USiegeBoss", "CloseView")
+	end
+	if WindowMgr.IsCreated("UGetUDisk") then
+		WindowMgr.Call("UGetUDisk", "CloseView")
+	end
+	if WindowMgr.IsCreated("SiegeSelectStaff") then
+		WindowMgr.Call("SiegeSelectStaff", "CloseView")
+	end
+
+	WindowMgr.Call("USiegeMain", "UpdateMain")
 end
 
 function _P.OnSiegeSwitchStage(data)
 	MSiege.SetOpenTime(data)
+end
+
+function _P.OnSiegeBuff(data)
+	MSiege.SetBuff(data)
+
+	if WindowMgr.IsCreated("USiegeBattle") then
+		WindowMgr.Call("USiegeBattle", "RefreshBuff", data)
+	end
 end
 
 function _P.OnInitData(data)
@@ -197,9 +240,11 @@ end
 function _P.OnBossList(data)
 	MSiege.SetBossList(data)
 	WindowMgr.Call("USiegeBoss","UpdateList")
+	WindowMgr.Call("USiegeMain","ShowBossRedPoint")
 end
 
 function _P.OnInitFight(data)
+	WindowMgr.Create("USiegeBattle",data.boss)
 	WindowMgr.Call("USiegeBattle", "InitFight", data)
 end
 
@@ -240,13 +285,11 @@ end
 
 
 function _P.OnBuyOrderBack(data)
-	print("_____OnBuyOrderBack__________",data.id,data.leavecount)
 	WindowMgr.Call("USiegeTreasurePanel", "OnBuyCallBack", data)
 end
 
 
 function _P.OnEnterTreasure(data)
-	print("OnEnterTreasure！！！！！！！！！！！！！！！！！")
 	WindowMgr.Call("USiegeTreasurePanel", "OnGetTreasureList", data)
 end
 
@@ -283,17 +326,18 @@ end
 
 function _P.OnGetRankStatePush(data)
 	MSiege.SetRankStage(data)
-	WindowMgr.Call("USiegeRankPanel", "OnGetRankStatePush")
+	WindowMgr.Call("USiegeRankPanel", "OnGetRankStatePush",data)
 end
 
 
 --清空模块
 function _M.ModuleClean()
+	MSiege.Clean()
 end
 
 --注册12点重置监听
 EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
-	
+	--MSiege.Clean()
 end, true)
 
 return _M

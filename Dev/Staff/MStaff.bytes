@@ -1,3 +1,5 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
 local _M = {}
 local _P = {}
 local MBag = JRequire "Dev.Bag.MBag"
@@ -470,8 +472,9 @@ function _M.StaffChangeByItem(data)
 end
 
 function _M.LoadStaffsSortType()
-	if CS.UnityEngine.PlayerPrefs.HasKey("StaffsSort") then
-		_M.SortType = CS.UnityEngine.PlayerPrefs.GetInt("StaffsSort")
+	local playerId = MPlayer.GetId()
+	if CS.UnityEngine.PlayerPrefs.HasKey("StaffsSort_" .. playerId) then
+		_M.SortType = CS.UnityEngine.PlayerPrefs.GetInt("StaffsSort_" .. playerId)
 	else
 		_M.SetStaffsSortType(_M.StaffsSort.default)
 	end
@@ -479,9 +482,9 @@ end
 
 function _M.SetStaffsSortType(type)
 	_M.SortType = type
-
-	--local PlayerPrefs = CS.UnityEngine.PlayerPrefs
-	--PlayerPrefs.SetInt("StaffsSort", type)
+	local playerId = MPlayer.GetId()
+	local PlayerPrefs = CS.UnityEngine.PlayerPrefs
+	PlayerPrefs.SetInt("StaffsSort_" .. playerId, type)
 end
 
 --改名

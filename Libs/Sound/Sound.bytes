@@ -155,7 +155,7 @@ function _M:Play(id, volume, stopCall, audioClip)
 				end
 			end
 		end
-		if assetName == nil then
+		if id ~= 1 and assetName == nil then
 			error(string.format("Sound Csv error, assetName is Null!!! id: %d", id))
 			return false
 		end
@@ -190,6 +190,10 @@ function _M:Play(id, volume, stopCall, audioClip)
 		self.IsPassClip = true
 		source.clip = audioClip
 		doPlay(self, source.clip.length, soundCsv.playTime)
+	elseif assetName == nil then
+		self.IsPassClip = true
+		source.clip = nil
+		doPlay(self, 0, soundCsv.playTime)
 	else
 		self.IsPassClip = false
 		SoundClipPool.Pop(assetName, source, function ( ... )

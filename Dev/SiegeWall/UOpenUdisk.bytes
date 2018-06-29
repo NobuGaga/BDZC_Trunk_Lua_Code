@@ -8,6 +8,7 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MSiege = JRequire"Dev.SiegeWall.MSiege"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -22,6 +23,9 @@ function _M:OnCreate(data)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Upan_JM")
 	self.Moudle = moudle
 
+	local uDiskIcon = moudle:Get("UpanIcon")
+	local upanName = moudle:Get("UPanText")
+
 	local nums = {}
 	for i = 1,4,1 do
 		local num = moudle:Get("Num"..i)
@@ -31,6 +35,8 @@ function _M:OnCreate(data)
 	end
 
 	local udiskData = Csv.SiegeTreasury[data.id]
+	uDiskIcon.SpriteName = udiskData.icon
+	upanName.Text = udiskData.name
 
 	local rewardItems = {}
 	if data.items ~= nil then
@@ -41,9 +47,12 @@ function _M:OnCreate(data)
 	
 	local _jifen = 0
 	local _score = 0
-	_jifen = udiskData.openPoint
-	if MSiege.Phase == udiskData.stage then
-		_score = udiskData.openPoint
+
+	if MPlayer.GetId() == data.playerid then
+		_jifen = udiskData.openPoint
+		if MSiege.Phase == udiskData.stage then
+			_score = udiskData.openPoint
+		end
 	end
 
 	local rewardData = {items = rewardItems,jifen = _jifen,score = _score}
@@ -53,6 +62,7 @@ function _M:OnCreate(data)
 	moudle.SelfRect:AddOnUpdate(function()
 		if not isShowReward then
 			if index <= #nums then
+				SoundMgr.Play(10052)
 				nums[index].Text = math.random(0,9)..""
 				index = index+1
 			else

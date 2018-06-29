@@ -46,20 +46,22 @@ function _M:OnCreate(itemId)
 	module:Get("SecondTitle").Text = Csv.Text("bag_syntit2")
 
 	local mergeConf = Csv.CarItemMerge[itemId]
-	local itemConf = Csv.Item[mergeConf.mergeItemId]
-	local strColor = Csv.ItemColor[itemConf.color].str
-	module:Get("Name").Text = itemConf.name
-	module:Get("Desc").Text = Csv.Text("bag_detdescsp", {num = itemConf.tips})
-	module:Get("C_text").Text = Csv.Text("bag_syn")
+	if mergeConf ~= nil then
+		local itemConf = Csv.Item[mergeConf.mergeItemId]
+		local strColor = Csv.ItemColor[itemConf.color].str
+		module:Get("Name").Text = itemConf.name
+		module:Get("Desc").Text = Csv.Text("bag_detdescsp", {num = itemConf.tips})
+		module:Get("C_text").Text = Csv.Text("bag_syn")
 
-	local ImgIconColor = module:Get("IconColor")
-	ImgIconColor.SpriteName = itemConf.colorIcon
+		local ImgIconColor = module:Get("IconColor")
+		ImgIconColor.SpriteName = itemConf.colorIcon
 
-	local ImgIcon = module:Get("Icon")
-	ImgIcon.SpriteName = itemConf.icon
+		local ImgIcon = module:Get("Icon")
+		ImgIcon.SpriteName = itemConf.icon
 
-	self.mData = {id = itemId, count = mergeConf.needCount}
-	self.CostData = _P.CreateCostItemData(self, itemId, mergeConf.needCount)
+		self.mData = {id = itemId, count = mergeConf.needCount}
+		self.CostData = _P.CreateCostItemData(self, itemId, mergeConf.needCount)
+	end
 end
 
 
@@ -107,9 +109,15 @@ function _R.OnCarMatMerge(self, carData)
 		end
 	end
 
+	if carData == nil then return end
+
 	-- 弹窗
-	if not WindowMgr.IsCreated("UCarGetNewShowPanel") then
-		WindowMgr.Create("UCarGetNewShowPanel", carData)
+	if not WindowMgr.IsCreated("UCarGetNewShowPanel") and carData.carinfo ~= nil and next(carData.carinfo) ~= nil then
+		WindowMgr.Create("UCarGetNewShowPanel", carData.carinfo)
+	end
+
+	if carData.iteminfo ~= nil then
+		CCommon.ShowFlyItem(self.mModule:Get("animRect"), carData.iteminfo.id, carData.iteminfo.count)
 	end
 end
 

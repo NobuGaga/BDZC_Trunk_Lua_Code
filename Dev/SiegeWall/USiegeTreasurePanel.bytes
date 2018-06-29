@@ -7,6 +7,7 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local CSiege = JRequire "Dev.SiegeWall.CSiege"
 local MSiege = JRequire "Dev.SiegeWall.MSiege"
 local MBag = JRequire "Dev.Bag.MBag"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -30,6 +31,35 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.CloseView(self)
+	self:Destroy()
+end
+
+function _R.OnGetTreasureList(self, data)
+	self.mData = data
+
+	local diskList = {}
+	local orderCount = 0
+	if data.disklist ~= nil then
+		for k,v in pairs(data.disklist)do
+			if v.id ~= KILL_ITEM_ID then
+				--orderCount = orderCount + v.count
+				table.insert(diskList,v)
+			else
+				--table.insert(diskList,v)
+			end
+		end
+	end
+	self.mData.disklist = diskList
+	self.mData.orderdata = data.orderdata --{id = KILL_ITEM_ID,leavecount = orderCount}
+	
+	_P.SetPointData(self)
+
+	_P.SetPasswordData(self)
+	_P.InitPageData(self)
+	_P.OnSetListData(self)
+end
+
 function _M:OnCreate(actId,stageId,isOnBattle,toggleID)
 	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Treasury")
 	self.mModule = module
@@ -47,6 +77,8 @@ function _M:OnCreate(actId,stageId,isOnBattle,toggleID)
 	self.mData = {}
 	self.StageId = stageId
 	module:Get("C_Title").Text = Csv.Text("siege_treasure_title")
+	module:Get("Tips").Text = Csv.Text("siege_udisk_tips")
+	module:Get("Tips1").Text = Csv.Text("siege_udisk_tips2")
 
 	local noneText = module:Get("none")
 	noneText.Text = Csv.Text("club_info_none")
@@ -62,26 +94,17 @@ function _M:OnCreate(actId,stageId,isOnBattle,toggleID)
 	local pointText = self.mModule:Get("JifenText")
 	pointText.Text = Csv.Text("siege_treasure_point", {num = MSiege.AllStageData[stageId].point})
 
-	
 	_P.SetPasswordData(self)
 	_P.InitPageData(self)
 	_P.OnSetListData(self)
 
-	 CSiege.EnterTreasureReq(actId, stageId)
-
-	 --[[
-	_R.OnGetTreasureList(self, {
-		point = 355,
-		disklist = {{id = 34020, playerid = 100000, playername = "测试1", qualityid = 3}, {id = 34021, playerid = 100000, playername = "测试2", qualityid = 2}, {id = 34022, playerid = 100000, playername = "测试3", qualityid = 1}},
-		orderdata = {id = 34013, leavecount = 99}
-	})
-	--]]
+	CSiege.EnterTreasureReq(actId, stageId)
 end
 
 
 function _P.SetPointData(self)
 	local pointText = self.mModule:Get("JifenText")
-	pointText.Text = Csv.Text("siege_treasure_point", {num = self.mData.point})
+	pointText.Text = Csv.Text("siege_treasure_point", {num = MSiege.AllStageData[self.mData.stage].point})
 end
 
 -- isUpdateNum为true时，是表示只更新数量，不设置图片信息
@@ -111,7 +134,6 @@ function _P.SetPasswordData(self, isUpdateNum)
 		end
 		
 		local hasNum = MBag.GetItemNum(v)
-		print("________",v,hasNum)
 		local numText = self.mModule:Get("Num" .. k)
 		local csvTextName = (hasNum > 0 and "siege_treasure_numBlue") or "siege_treasure_numRed"
 		numText.Text = Csv.Text(csvTextName, {num = hasNum})
@@ -185,7 +207,6 @@ function _P.OnClickPage(self, pageType)
 	_P.OnSetListData(self)
 end
 
-
 function _P.OnSetListData(self)
 	local listData = nil
 	if self.curSelectPage == MSiege.TreasureEnum.Mine then
@@ -195,10 +216,15 @@ function _P.OnSetListData(self)
 	elseif self.curSelectPage == MSiege.TreasureEnum.Order then
 		listData = self.mData.orderdata
 	end
-
 	local itemGrid = self.mModule:Get("Content")
 	itemGrid:DestroyChildren()
 	self.NoneText.Activity = (listData == nil or next(listData) == nil)
+
+	if MCommerce.MyCommerceId ~= nil and MCommerce.MyCommerceId > 0 then
+		self.NoneText.Text = Csv.Text("siege_nocontribution")
+	else
+		self.NoneText.Text = Csv.Text("siege_nocommerce")
+	end
 
 	if listData ~= nil then
 		self.itemModules = {}
@@ -413,33 +439,11 @@ function _P.OnClickDonate(self, data)
 	end 
 end
 
-
-function _R.OnGetTreasureList(self, data)
-	self.mData = data
-
-	local diskList = {}
-	local orderCount = 0
-	if data.disklist ~= nil then
-		for k,v in pairs(data.disklist)do
-			if v.id ~= KILL_ITEM_ID then
-				--orderCount = orderCount + v.count
-				table.insert(diskList,v)
-			else
-				--table.insert(diskList,v)
-			end
-		end
-	end
-	self.mData.disklist = diskList
-	self.mData.orderdata = data.orderdata --{id = KILL_ITEM_ID,leavecount = orderCount}
-	_P.SetPointData(self)
-end
-
-
 function _R.OnDonateCallBack(self, data)
 	local treasureConf = Csv.SiegeTreasury[data.id]
 	if treasureConf.type == 1 then
 		CCommon.ShowError(Csv.Text("siege_treasure_donateOrder", {num = treasureConf.getPoint}))
-		MSiege.AddJifen(self.StageId,treasureConf.getPoint)
+		MSiege.AddJifen(MSiege.Phase,treasureConf.getPoint)
 		self.mModule:Get("JifenText").Text = Csv.Text("siege_treasure_point", {num = MSiege.AllStageData[self.StageId].point})
 
 		if data.id == self.mData.orderdata.id then
@@ -489,16 +493,23 @@ function _R.OnOpenCallBack(self, data)
 			curSelectMoudle:Get("DonateBtn").RaycastTarget = false
 		end
 	elseif self.curSelectPage == MSiege.TreasureEnum.Disk then
-		for k,v in pairs(self.mData.disklist) do
+		local diskList = self.mData.disklist
+		for k,v in pairs(diskList) do
 			if v.id == data.id then
-				table.remove(self.mData.disklist, k)
+				if v.count > 1 then
+					v.count = v.count - 1
+				else
+					table.remove(diskList, k)
+				end
 				break
 			end
 		end
+		self.mData.disklist = diskList
 		_P.OnSetListData(self)
 	end
 
 	_P.UpdateJifen(self,data)
+	_P.SetPasswordData(self,true)
 	WindowMgr.Create("UOpenUdisk",data)
 end
 

@@ -1,0 +1,45 @@
+local JGuiManager = CS.JGui.JGuiManager
+local MFriend = JRequire "Dev.Friend.MFriend"
+local CFriend = JRequire "Dev.Friend.CFriend"
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local UTiqinFriends = JRequire"Dev.Marry.UTiqinFriends"
+local UTiqinServer = JRequire"Dev.Marry.UTiqinServer"
+local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_Tiqin3", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

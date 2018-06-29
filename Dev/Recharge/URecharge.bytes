@@ -181,7 +181,13 @@ function _P.SetText(self, level, curExp, maxExp)
 		self.ExpText.Text = curExp .. '/' .. maxExp
 	end
 	if curExp < maxExp then
-		self.ExplainText.Text = Csv.Text("recharge_next", {num = maxExp - curExp, level = level + 1})
+		local csvText
+		if GameSetting.IsiOSCommit then
+			csvText = "recharge_next_ios"
+		else
+			csvText = "recharge_next"
+		end
+		self.ExplainText.Text = Csv.Text(csvText, {num = maxExp - curExp, level = level + 1})
 	else
 		self.ExplainText.Text = ""
 	end

@@ -40,7 +40,12 @@ function _M:OnCreate()
 	self.Bg1 = module:Get("bg1")
 	self.Bg2 = module:Get("bg2")
 	self.BgRect = module:Get("BgRect")
+	self.PosOffest = (CS.JGui.JGuiManager.GuiRoot.Height - 1334) / 2
 	module:Get("titleText").Text = Csv.Text("lecture_city_title")
+
+	local cityRect = module:Get("CityNode")
+	local cityPos = cityRect.LocalPosition
+	cityRect.LocalPosition = Vector2(cityPos.x, cityPos.y - self.PosOffest)
 
 	local closeBtn = module:Get("back_Btn")
 	closeBtn:AddOnButton(function ( ... )
@@ -226,13 +231,13 @@ function _P.SetCityListData(self, battleId, isMove)
 			self.ArrowAnimTween = arrowImg.CachedTran:GetJTweener("T_WorldIonName")
 			self.ArrowAnimTween:Play()
 			if lectureConf then
-				local shipPos = lectureConf.shipPos or {0, 0, 1}
+				local shipPos = lectureConf.shipPos or {0, 0 - self.PosOffest, 1}
 				local shipDirPos = Csv.LecturesShip[1]
 				shipImg.SpriteName = shipDirPos.icon
 				if lectureConf.id == 1 or (isMove and isMove == true) then -- 第一关
 					self:Lock()
-					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2] - 100)
-					local moveTween = shipImg:DOAnchorPosY(shipPos[2], 0.5)
+					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2] - 100 - self.PosOffest)
+					local moveTween = shipImg:DOAnchorPosY(shipPos[2] - self.PosOffest, 0.5)
 					moveTween:OnComplete(function()
 						self:Unlock()
 
@@ -240,7 +245,7 @@ function _P.SetCityListData(self, battleId, isMove)
 						shipImg.SpriteName = newShipDirPos.icon
 					end)
 				else
-					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2])
+					shipImg.LocalPosition = Vector2(shipPos[1], shipPos[2] - self.PosOffest)
 				end
 			end
 		else
@@ -323,9 +328,9 @@ function _P.OnPassBack(self)
 	if lastLectureConf == nil then return end
 
 	local shipImg = self.mModule:Get("ship")
-	local shipPosData = lastLectureConf.shipPos or {0, 0, 1}
+	local shipPosData = lastLectureConf.shipPos or {0, 0 - self.PosOffest, 1}
 	local shipDirPos = Csv.LecturesShip[shipPosData[3]]
-	shipImg.LocalPosition = Vector2(shipPosData[1], shipPosData[2])
+	shipImg.LocalPosition = Vector2(shipPosData[1], shipPosData[2] - self.PosOffest)
 	shipImg.SpriteName = shipDirPos.icon
 
 	local shipMoveList = {}
@@ -345,12 +350,12 @@ function _P.OnPassBack(self)
 			local cityNode = self.mModule:Get("CityNode")
 			local moveTween = cityNode:DOAnchorPosY(CityNodeMoveY, lastLectureConf.bgMoveTime / 1000)
 			moveTween:OnComplete(function()
-				cityNode.LocalPosition = Vector2.zero
+				cityNode.LocalPosition = Vector2(0, 0 - self.PosOffest)
 
 				local nowLectureConf = Csv.LecturesBattle[MLectures.CurBattleId]
-				local lastShipPosData = lastLectureConf.shipPos or {0, 0, 1}
+				local lastShipPosData = lastLectureConf.shipPos or {0, 0 - self.PosOffest, 1}
 				local nextShipDirPos = Csv.LecturesShip[lastShipPosData[3]]
-				shipImg.LocalPosition = Vector2(lastShipPosData[1], lastShipPosData[2])
+				shipImg.LocalPosition = Vector2(lastShipPosData[1], lastShipPosData[2] - self.PosOffest)
 				shipImg.SpriteName = nextShipDirPos.icon
 				_P.SetCityListData(self, MLectures.CurBattleId, true)
 			end)
@@ -365,7 +370,7 @@ function _P.OnMoveShip(self, callBack)
 		local shipImg = self.mModule:Get("ship")
 		local shipDirPos = Csv.LecturesShip[pos[3]]
 		shipImg.SpriteName = shipDirPos.icon
-		local shipMoveAnim = shipImg:DOAnchorPos(Vector2(pos[1], pos[2]), pos[4] / 1000)
+		local shipMoveAnim = shipImg:DOAnchorPos(Vector2(pos[1], pos[2] - self.PosOffest), pos[4] / 1000)
 		shipMoveAnim:OnComplete(function ()
 			table.remove(self.ShipMovePos, 1)
 			if next(self.ShipMovePos) ~= nil then

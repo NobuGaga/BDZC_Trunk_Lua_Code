@@ -313,9 +313,9 @@ function _P.DoRefreshLandInfo(self)
 							local csvGirl = Csv.Girl[v.id]
 							if csvGirl ~= nil then
 								local idesc = Csv.Text("buyland_main_girldesc",{name = csvGirl.name, num = v.value})
-								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {name = csvGirl.name, desc = idesc, icon = csvGirl.icon, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {girl = true, name = csvGirl.name, desc = idesc, icon = csvGirl.yuanicon, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
 								end
 								numAdd = numAdd+1
 							end
@@ -325,9 +325,9 @@ function _P.DoRefreshLandInfo(self)
 								local lnum = v.value
 								local textStr = (v.type == 2 and "buyland_main_staffdesc") or "buyland_main_staffdesc2"
 								local idesc = Csv.Text(textStr,{name = staffConf.name, num = lnum})
-								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset4, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
 								end
 								numAdd = numAdd + 1
 							end
@@ -342,7 +342,7 @@ function _P.DoRefreshLandInfo(self)
 							if v ~= nil then
 								local rewardItem, effectMoudle = CCommon.CreateItem(content, v.id, CCommon.ShowItemTips, {num = v.count, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
+									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
 								end
 							else
 								local rewardItem = CCommon.CreateItem(content, 1, nil, {moudleName = "M_Common_Item_70_55"})

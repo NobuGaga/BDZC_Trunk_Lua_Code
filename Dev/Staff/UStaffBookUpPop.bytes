@@ -33,6 +33,8 @@ function _M:OnCreate(staffid,bookid,bookstar)
 	self.TextMax1.Text = Csv.Text("staff_lvmax")
 	self.TextMax2 = moudle:Get("MaxText2")
 	self.TextMax2.Text = Csv.Text("staff_lvmax")
+	self.TextMax3 = moudle:Get("MaxText3")
+	self.TextMax3.Text = Csv.Text("staff_lvmax")
 
 	local BtnClose = moudle:Get("BtnClose")
 	BtnClose:AddOnButton(function ( ... )
@@ -73,6 +75,24 @@ function _M:OnCreate(staffid,bookid,bookstar)
 		end
 	end, nil, 0.9)
 
+	local BtnUp3 = moudle:Get("BtnUp3")
+	BtnUp3:AddOnButton(function ( ... )
+		if not _P.CheckBtnIsClick(0.3) then return end
+
+		SoundMgr.Play(10001)
+		if _P.IsLevelMax(self,staffid) then
+			CCommon.ShowError(Csv.Text("staff_booklvMax"))
+		else
+			local csvBookLv = Csv.BookLv[self.mBookStar * 1000 + self.mBookLv]
+			if csvBookLv ~= nil and csvBookLv.upLevelCost ~= nil then
+				if not MBag.CheckItemEnough(csvBookLv.upLevelCost[1], csvBookLv.upLevelCost[2]) then
+					return
+				end
+				CStaff.StaffBookUp(staffid,bookid,3)
+			end
+		end
+	end, nil, 0.9)
+
 	local TextTitle = moudle:Get("Title")
 	TextTitle.Text = Csv.Text("staff_bookup")
 
@@ -82,11 +102,17 @@ function _M:OnCreate(staffid,bookid,bookstar)
 	local TextPro2 = moudle:Get("Project2")
 	TextPro2.Text = Csv.Text("staff_pro2")
 
+	local TextPro3 = moudle:Get("Project3")
+	TextPro3.Text = Csv.Text("staff_pro3")
+
 	local TextUp1 = moudle:Get("C_text")
 	TextUp1.Text = Csv.Text("staff_up")
 
 	local TextUp2 = moudle:Get("C_text_0")
 	TextUp2.Text = Csv.Text("staff_up")
+
+	local TextUp3 = moudle:Get("C_text_1")
+	TextUp3.Text = Csv.Text("staff_up")
 
 	local TextName = moudle:Get("Name")
 	TextName.Text = book.name
@@ -113,6 +139,21 @@ function _M:OnCreate(staffid,bookid,bookstar)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UBagDetailPop",Define.AssetsType.Bookexp)
 	end,nil,0.9)
+
+	local ImgItemIcon3 = moudle:Get("ItemIcon3")
+	local part3 = moudle:Get("BG5")
+	local booklv = Csv.BookLv[bookstar * 1000 + self.mBookLv]
+	if booklv ~= nil and booklv.upLevelCost ~= nil then
+		part3.Activity = true
+		local itemid = booklv.upLevelCost[1]
+		ImgItemIcon3.SpriteName = Csv.Item[itemid].icon
+		local ImgColor3 = moudle:Get("ItemColor3")
+		ImgColor3.SpriteName = Csv.Item[itemid].colorIcon
+		ImgColor3:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UBagDetailPop",itemid)
+		end,nil,0.9)
+	end
 
 	for i=1,7 do
 		local star = moudle:Get("star"..i)
@@ -219,6 +260,25 @@ function _P.OnCreateData(self,moudle,staffid,bookid,bookstar,booklevel,isShowEff
 		TextCost2.Text = Csv.Text("staff_bookC2",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
 	end
 
+	local part3 = moudle:Get("BG5")
+	local bg = moudle:Get("BG1")
+	if booklv.upLevelCost ~= nil then
+		part3.Activity = true
+		bg.SizeDelta = Vector2(714,858)
+		local TextCost3 = moudle:Get("Cost3")
+		local costItemId = booklv.upLevelCost[1]
+		local costItemNum = booklv.upLevelCost[2]
+		if MBag.GetItemNum(costItemId) >= booklv.upLevelCost[2] then
+			TextCost3.Text = Csv.Text("staff_bookC",{name = Csv.Item[costItemId].name,num = MBag.GetItemNum(costItemId),max = costItemNum})
+		else
+			TextCost3.Text = Csv.Text("staff_bookC2",{name = Csv.Item[costItemId].name,num = MBag.GetItemNum(costItemId),max = costItemNum})
+		end
+		moudle:Get("UpChance3").Text = Csv.Text("staff_chance",{num = booklv.upLevelPer/100})
+	else
+		bg.SizeDelta = Vector2(714,678)
+		part3.Activity = false
+	end
+
 	local TextChance1 = moudle:Get("UpChance1")
 	TextChance1.Text = Csv.Text("staff_chance",{num = booklv.itemPer/100})
 
@@ -227,18 +287,24 @@ function _P.OnCreateData(self,moudle,staffid,bookid,bookstar,booklevel,isShowEff
 
 	local TextBtn1 = moudle:Get("C_text")
 	local TextBtn2 = moudle:Get("C_text_0")
+	local TextBtn3 = moudle:Get("C_text_1")
 	local Btn1 = moudle:Get("BtnUp1")
 	local Btn2 = moudle:Get("BtnUp2")
+	local Btn3 = moudle:Get("BtnUp3")
 	if _P.IsLevelMax(self,staffid) then
 		Btn1.Activity = false
 		Btn2.Activity = false
+		Btn3.Activity = false
 		self.TextMax1.Activity = true
 		self.TextMax2.Activity = true
+		self.TextMax3.Activity = true
 	else
 		TextBtn1.Text = Csv.Text("staff_up")
 		TextBtn2.Text = Csv.Text("staff_up")
+		TextBtn3.Text = Csv.Text("staff_up")
 		Btn1.RaycastTarget = true
 		Btn2.RaycastTarget = true
+		Btn3.RaycastTarget = true
 	end
 end
 

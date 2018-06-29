@@ -20,6 +20,9 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.CloseView(self)
+	self:Destroy()
+end
 
 function _M:OnCreate(actId, stageId)
 	local module = self:CreateMoudle(self._RootNode, "M_Wghej_Change")
@@ -183,7 +186,6 @@ function _P.CreateExchangeItem(self, itemGrid, itemName, data)
 		if hasNum > 0 then
 			if costNum <= self.mData.point then
 				CSiege.BuyShopItemReq(self.stageId, data.index, 1)
-				-- _R.OnExchangeCallBack(self, {index = 2, goodid = 34050, buyCount = 3, costpoint = 110, point = 110})
 			else
 				CCommon.ShowError(Csv.Text("finance_noJifen"))
 			end

@@ -22,6 +22,10 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.CloseView(self)
+	self:Destroy()
+end
+
 function _R.UpdateList(self)
 	_P.OnChoose(self, self.selectFun)
 end
@@ -110,9 +114,8 @@ end
 
 function _P.GetBossByType(type)
 	local bossList = MSiege.BossList
-
 	local list = {}
-	local myType = MSiege.GetTeamType(commerceID)
+	local myType = MSiege.GetTeamType(MCommerce.MyCommerceId)
 	for k,v in pairs(bossList)do
 		local bossData = Csv.SiegeBoss[v.id]
 		if bossData.start >= 7 then --7星boss除外
@@ -120,15 +123,6 @@ function _P.GetBossByType(type)
 		else
 			if type == Define.SysId.Siege_Boss_Server then
 				table.insert(list,v)
-				--[[
-				if MCommerce.MyCommerceId > 0 then
-					if v.commerceId ~= MCommerce.MyCommerceId then
-						table.insert(list,v)
-					end
-				else
-					table.insert(list,v)
-				end
-				--]]
 				
 			elseif type == Define.SysId.Siege_Boss_Commerce then
 				if MCommerce.MyCommerceId ~= 0 then
@@ -151,6 +145,14 @@ function _P.GetBossByType(type)
 			end
 		end
 	end
+
+	--排序
+	table.sort(list, function (a, b)
+		local a_Data = Csv.SiegeBoss[a.id]
+		local b_Data = Csv.SiegeBoss[b.id]
+		return a_Data.start > b_Data.start
+	end)
+
 	return list
 end
 
@@ -173,9 +175,10 @@ function _P.CreateBossItem(self,data)
 	end
 
 	local bossData = Csv.SiegeBoss[data.id]
-	local jindu = math.ceil((data.bossBlood.ncur*100) /data.bossBlood.nmax)
+	local jindu = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax)-- math.ceil((data.bossBlood.ncur*100) /data.bossBlood.nmax)
 
 	headIcon.SpriteName = bossData.icon
+	headIcon:SetNativeSize()
 	name.Text = bossData.name
 	JinDu.Text = ""..jindu.."%"
 
@@ -192,11 +195,10 @@ function _P.CreateBossItem(self,data)
 	buffIcon.Activity = false
 	
 	local specialBuff = MSiege.GetBuffInfo(1)
-	
 	if specialBuff ~= nil then
 		if specialBuff.value > 0 then
 			buffIcon.Activity = true
-			local buffData = Csv.SiegeBuff[specialBuff.key]
+			local buffData = Csv.SiegeBuff[specialBuff.id]
 
 			if buffData ~= nil then
 				buffIcon.SpriteName = buffData.icon
@@ -205,6 +207,38 @@ function _P.CreateBossItem(self,data)
 	else
 		buffIcon.Activity = false
 	end
+
+	--不是自己阵营不存在阵营buff
+	if data.type ~= nil and MSiege.Phase == 2 then
+		if data.type ~= MSiege.GetTeamType(MCommerce.MyCommerceId) then
+			if MSiege.CheckGetKillBuff() then
+				buffIcon.Activity = true
+			else
+				buffIcon.Activity = false
+			end
+		end
+	end
+	--阶段3
+	if MSiege.Phase == 3 then
+		if data.commerceId ~= nil then
+			if data.commerceId ~= MCommerce.MyCommerceId then
+				buffIcon.Activity = false
+			end
+		end
+	end
+
+	buffIcon:AddOnButton(function()
+		if specialBuff ~= nil then
+			local buffData = Csv.SiegeBuff[specialBuff.id]
+			if buffData ~= nil then
+				CCommon.CheckTips(function(isSure,rg) end, {content = buffData.tips, isNoCancel = true})
+			end
+		end
+	end,nil,1.2)
+
+	headIcon:AddOnButton(function()
+		WindowMgr.Create("USiegeKillItemTips",data.id)
+	end,nil,1.2)
 
 	line.Activity = false
 	
@@ -218,8 +252,14 @@ function _P.CreateBossItem(self,data)
 
 	fightText.Text = Csv.Text("siege_boss_fight")
 	fightBtn:AddOnButton(function()
-		CSiege.ReqInitFight(data.indexID)
-		WindowMgr.Create("USiegeBattle",data)
+
+		if MSiege.CheckOpenIng() then
+			CSiege.ReqInitFight(data.indexID)
+			--WindowMgr.Create("USiegeBattle",data)
+		else
+			CCommon.ShowError(Csv.Text("siege_boss_close"))
+		end
+		
 	end)
 
 	return moudle

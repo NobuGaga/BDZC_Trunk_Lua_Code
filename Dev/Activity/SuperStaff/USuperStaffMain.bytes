@@ -25,7 +25,7 @@ function _M:OnCreate(...)
 
 	local listData = _P.GetListData().listData
 	local sortTable = {}
-	for i = 1,3 do
+	for i = 1,4 do
 		local btn = moudle:Get("Btn"..i)
 		if btn ~= nil then
 			btn.Activity = false
@@ -62,7 +62,7 @@ end
 function _P.OnClickBtn(self,index)
 	if index ~= nil then
 		local moudle = self.mMoudle
-		for i = 1,3 do
+		for i = 1,4 do
 			moudle:Get("Light"..i).Activity = false
 		end
 		local activityConf = Csv.ActivityJaonChen[index]
@@ -70,7 +70,7 @@ function _P.OnClickBtn(self,index)
 			moudle:Get("Light"..activityConf.typeId).Activity = true
 			local btn = moudle:Get("Btn"..index)
 			if btn ~= nil then
-				btn.CachedTran:SetSiblingIndex(2)
+				btn.CachedTran:SetSiblingIndex(3)
 			end
 		end
 		self.ActId = index
@@ -102,7 +102,11 @@ function _P.CreateStaff(self,index)
 					end
 					if csvPerson.prefab ~= nil and csvPerson.prefab > 0 then
 						moudle:Get("StaffIcon"..i).SpriteName = ""
-						self.PrefabTable[i] = CCommon.CreateActor(moudle:Get("StaffIcon"..i), csvPerson.prefab, CCommon.ActorFieldMap.super_small)
+						self.PrefabTable[i] = CCommon.CreateActor(moudle:Get("StaffIcon"..i), csvPerson.prefab, CCommon.ActorFieldMap.super_small,function(body)
+							if body then
+								body:SkeletonGetGraphic().freeze = true
+							end
+						end)
 					else
 						moudle:Get("StaffIcon"..i).SpriteName = csvPerson.asset
 					end	

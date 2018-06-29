@@ -60,6 +60,13 @@ function _M:UpdateData()
 	if not self.SelectCarData then
 		_P.UpdateCarInfo(self)
 	end
+
+	self.mImgSelect.Activity = (not self.IsBatch) and (self.GetCurCarData ~= nil)
+	if self.IsBatch then
+		for i,v in ipairs(BatchBreakData) do
+			_P.UpdateCircleState(self, v)
+		end
+	end
 end
 
 
@@ -68,13 +75,19 @@ function _M:IsShowOneKeyData(isShow)
 	self.BatchRect.Activity = isShow
 	self.hasRect.Activity = (not isShow) and self.SelectCarData
 	self.noneRect.Activity = (not isShow) and (not self.SelectCarData)
-
+	self.mImgSelect.Activity = (not isShow) and (self.GetCurCarData ~= nil)
 	for i,v in ipairs(BatchBreakData) do
 		if isShow then
 			local isSelect = MCar.BatchBreakList[v + 1]
 			_P.UpdateSelectData(self, v, isSelect)
+			_P.UpdateCircleState(self, v)
 		else
-			_P.UpdateSelectData(self, v, false)
+			for i,v in ipairs(self.mAllCarItems) do
+				if self.batchBreakIdList[v.id] ~= nil then
+					v.module:Get("Black").Activity = false
+					self.batchBreakIdList[v.id] = nil
+				end
+			end
 		end
 	end
 end
@@ -195,9 +208,34 @@ end
 
 -- 选中车库数据
 function _P.OnSelectCarData(self, data, isUpdate, index)
-	if self.SelectCarData == data then return end
-	if self.IsBatch and (not isUpdate) and data then return end
+	if self.IsBatch and (not isUpdate) and data then
+		local isUp = MCar.CheckIsUp(data)
+		if data.isequip then
+			CCommon.ShowError(Csv.Text("err_car_decompose"))
+			return
+		end
 
+		if isUp then
+			CCommon.ShowError(Csv.Text("err_car_batchDecompose"))
+			return
+		end
+
+		local item = self.mRawCarItems[data.id]
+		local module = item.module
+		if module ~= nil then
+			local selectImg = module:Get("Black")
+			local isSelect = not selectImg.Activity
+			selectImg.Activity = not selectImg.Activity
+			_P.UpdateOneSelectData(self, data.id, isSelect)
+
+			local carConf = Csv.Car[data.carid]
+			local isExpCar = (carConf and carConf.isExpCar and carConf.isExpCar == 1)
+			_P.UpdateCircleState(self, (isExpCar and 0) or data.color)
+		end
+		return
+	end
+
+	if self.SelectCarData == data then return end
 	self.SelectCarData = data
 	self.CurSelectIndex = index
 	_P.UpdateCarInfo(self, data)
@@ -205,10 +243,13 @@ function _P.OnSelectCarData(self, data, isUpdate, index)
 	if item ~= nil then
 		local module = item.module
 		if module ~= nil then
+			self.mImgSelect.Activity = true
+			self.mImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+			self.mImgSelect.LocalPosition = Vector2(0,0)
+			self.mImgSelect.CachedTran:SetSiblingIndex(0)
 			self.mImgSelect:SetParent(module.SelfRect.CachedTran)
 			self.mImgSelect.LocalPosition = Vector2(0,0)
 			self.mImgSelect.CachedTran:SetSiblingIndex(0)
-			self.mImgSelect.Activity = true
 		end
 	end
 end
@@ -396,7 +437,9 @@ function _P.OnCreateSelectItem(self, data, index)
 	qualityRect.SpriteName = BatchSelectBgImgs[data.index + 1]
 
 	local lightImg = module:Get("Gou" .. index)
+	local pointImg = module:Get("YuanDian" .. index)
 	lightImg.Activity = data.isSelect
+	pointImg.Activity = false
 
 	qualityRect:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -407,6 +450,7 @@ function _P.OnCreateSelectItem(self, data, index)
 			end
 		end
 
+		pointImg.Activity = false
 		lightImg.Activity = not lightImg.Activity
 		if lightImg.Activity then
 			MCar.BatchBreakList[data.index + 1] = data.index
@@ -431,6 +475,101 @@ function _P.UpdateSelectData(self, qualityId, isSelect)
 			v.module:Get("Black").Activity = isSelect
 
 			self.batchBreakIdList[v.id] = ((isSelect and v.id) or nil)
+		end
+	end
+end
+
+
+-- 获取某一品质的未装备、未提升座驾的总数量
+function _P.GetTotalNumBuyQuality(self, qualityId)
+	local totalNum = 0
+	for k,v in pairs(self.mAllCarItems) do
+		if qualityId == 0 then
+			local carConf = Csv.Car[v.data.carid]
+			local isExpCar = (carConf and carConf.isExpCar and carConf.isExpCar == 1)
+			if isExpCar then
+				totalNum = totalNum + 1
+			end
+		else
+			if v.qualityId == qualityId and (not v.isequip) and (not v.isUp) then
+				totalNum = totalNum + 1
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 点击某一辆座驾，选中或去选中
+function _P.UpdateOneSelectData(self, id, isSelect)
+	for i,v in ipairs(self.mAllCarItems) do
+		if (not v.isequip) and (not v.isUp) and v.id == id then
+			self.batchBreakIdList[v.id] = ((isSelect and v.id) or nil)
+		end
+	end
+end
+
+
+-- 选中中的某一品质总数量
+function _P.GetTotalBySelectArr(self, qualityId)
+	local count = 0
+	for k,v in pairs(self.batchBreakIdList) do
+		local carData = MCar.GetCurCarData(v)
+		local carConf = Csv.Car[carData.carid]
+		local isExpCar = (carConf and carConf.isExpCar and carConf.isExpCar == 1)
+		if qualityId == 0 then
+			if isExpCar then
+				count = count + 1
+			end
+		else
+			if carData and carData.color == qualityId and (not isExpCar) then
+				count = count + 1
+			end
+		end
+	end
+
+	return count
+end
+
+
+-- 更新下方选中框的状态（不选中，选中但是不全选，全选）
+function _P.UpdateCircleState(self, qualityId)
+	local totalNum = _P.GetTotalNumBuyQuality(self, qualityId)
+	local curTotalNum = _P.GetTotalBySelectArr(self, qualityId)
+	local batchRectIndex = _P.GetIndexByQualityId(qualityId)
+	if batchRectIndex == nil or batchRectIndex == 0 then
+		return
+	end
+	local isSelect = MCar.BatchBreakList[batchRectIndex]
+	local lightImg = self.mModule:Get("Gou" .. batchRectIndex)
+	local pointImg = self.mModule:Get("YuanDian" .. batchRectIndex)
+	if isSelect then
+		if curTotalNum == 0 and totalNum ~= 0 then
+			MCar.BatchBreakList[batchRectIndex] = nil
+			lightImg.Activity = false
+			pointImg.Activity = false
+		else
+			lightImg.Activity = totalNum == curTotalNum
+			pointImg.Activity = totalNum ~= curTotalNum
+		end
+	else
+		if curTotalNum > 0 then
+			MCar.BatchBreakList[batchRectIndex] = qualityId
+			lightImg.Activity = totalNum == curTotalNum
+			pointImg.Activity = totalNum ~= curTotalNum
+		else
+			lightImg.Activity = false
+			pointImg.Activity = false
+		end
+	end
+end
+
+
+function _P.GetIndexByQualityId(qualityId)
+	for i,v in ipairs(BatchBreakData) do
+		if v == qualityId then
+			return i
 		end
 	end
 end

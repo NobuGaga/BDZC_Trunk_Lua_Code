@@ -1,0 +1,215 @@
+-- 环球旅行兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_GlobalTravel_Reward")
+	self.mModule = module
+	self.mData = data
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = Csv.Text("global_title")
+
+	local travalConf = Csv.GlobalTraval[data.actId]
+	local state = data.state
+	module:Get("date").Text = Csv.Text("global_date", {startTime = _P.TransToYMD(state.startTime),
+														endTime = _P.TransToYMD(state.startTime + travalConf.settleTime)})
+	module:Get("time").Text = Csv.Text("gloabl_duan")
+
+	self.IconSpriteName = travalConf.diceIcon
+	_P.OnSetListData(self)
+end
+
+
+function _P.TransToYMD(time)
+	return os.date("%Y.%m.%d", time)
+end
+
+
+function _P.OnSetListData(self)
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	local shopList = _P.GetSortList(self, Csv.GlobalTravalExchange)
+	if shopList == nil then return end
+
+	self.mRawTableItems = {}
+	for k,v in ipairs(shopList) do
+		self.mRawTableItems[v.data.id] = _P.OnCreateExchangeItem(self, v.data, itemGrid, v.isGray)
+	end
+end
+
+
+function _P.GetSortList(self, shopList)
+	local sortList = {}
+	for k,v in pairs(shopList) do
+		sortList[#sortList + 1] = {data = v, isGray = MActivity.CheckThisItemIsLight(v, self.mData.numberCount, v.id)}
+	end
+
+	table.sort(sortList, function (a, b)
+		if a.isGray then
+			if b.isGray then
+				return a.data.id < b.data.id
+			end
+			return false
+		else
+			if not b.isGray then
+				return a.data.id < b.data.id
+			end
+			return true
+		end
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateExchangeItem(self, data, itemGrid, isGray)
+	local exchangeItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_GlobalTravel_Reward_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	local curExchangeData = _P.GetCurExchageData(self, data.id) or {id = data.id ,count = 0}
+	itemModule:Get("ShowText").Text = Csv.Text("gloabl_exchange_shop")
+	itemModule:Get("ShowText").Text = Csv.Text("gloabl_exchange_reward", {curNum = data.limitCount - curExchangeData.count, maxNum = data.limitCount})
+	
+	local exchangeBtn = itemModule:Get("btnGet")
+	exchangeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickExchange(self, data)
+	end, nil, 0.95)
+	itemModule:Get("textBtnGet").Text = Csv.Text("gloabl_exchange")
+	exchangeBtn.IsGray = isGray
+	exchangeBtn.RaycastTarget = not isGray
+
+	local showContent = itemModule:Get("ShowContent")
+	showContent:DestroyChildren()
+
+	for k,v in pairs(data.rewardItems) do
+		local itemModule = CCommon.CreateItem(showContent, v[1], nil, {num = v[2]})
+		CCommon.CreateItemLight(itemModule:Get("Icon"), Define.SysId.GlobalTraval, v[1])
+	end
+
+	_P.SetNeedItemData(self, data, itemModule)
+	
+	exchangeItem.module = itemModule
+	return exchangeItem
+end
+
+
+function _P.GetCurExchageData(self, exchangeId)
+	if self.mData.exchangeShop == nil then
+		return {id = exchangeId, count = 0}
+	end
+
+	if self.mData.exchangeShop[exchangeId] == nil then
+		return {id = exchangeId, count = 0}
+	end
+	
+	return self.mData.exchangeShop[exchangeId]
+end
+
+
+function _P.SetNeedItemData(self, data, itemModule)
+	local needContent = itemModule:Get("NeedContent")
+	needContent:DestroyChildren()
+
+	self.TmpData = {}
+	for k,v in pairs(data.diceItems) do
+		local itemModule = JGuiManager.GetMoudle(needContent, "M_GlobalTravel_Reward_Item_Item", WindowType.UI, 0)
+		if not itemModule then return end
+
+		local iconImg = itemModule:Get("Icon")
+		iconImg.SpriteName = self.IconSpriteName[v[1]]
+
+		local isGray = _P.CheckIsItemLight(self, v[1])
+		iconImg.IsGray = not isGray
+		iconImg.RaycastTarget = isGray
+	end
+end
+
+
+function _P.CheckIsItemLight(self, numId)
+	local numList = self.mData.numberCount[numId]
+	local itemNum = (numList ~= nil and numList.count) or 0
+
+	local hasNum = self.TmpData[numId] or 0
+	if itemNum > 0 and hasNum < itemNum then
+		if self.TmpData[numId] == nil then
+			self.TmpData[numId] = 1
+		else
+			self.TmpData[numId] = self.TmpData[numId] + 1
+		end
+
+		return true
+	end
+
+	return false
+end
+
+
+function _P.OnClickExchange(self, data)
+	local exchangeNum = ((self.mData.exchangeShop and self.mData.exchangeShop[data.id]) and self.mData.exchangeShop[data.id].count) or 0
+	if exchangeNum < data.limitCount then
+		CActivity.OnExchangeTravalReq(data.id)
+	end
+end
+
+
+function _R.UpdateExchangeData(self, data)
+	local itemModule = self.mRawTableItems[data.exchangeId].module
+	local showAnimRect = itemModule:Get("AnimRect")
+	local exchangeConf = Csv.GlobalTravalExchange[data.exchangeId]
+
+	local count = 1
+	if exchangeConf then
+		for k,v in pairs(exchangeConf.rewardItems) do
+			local flyTime = (count - 1) * 0.5
+			CCommon.ShowFlyItem(showAnimRect, v[1], v[2], flyTime)
+			count = count + 1
+		end
+	end
+
+	if self.mData.exchangeShop == nil then
+		self.mData.exchangeShop = {}
+		self.mData.exchangeShop[data.exchangeId] = {id = data.exchangeId, count = data.exchangeCount}
+	else
+		if self.mData.exchangeShop[data.exchangeId] ~= nil then
+			self.mData.exchangeShop[data.exchangeId].count = data.exchangeCount
+		else
+			self.mData.exchangeShop[data.exchangeId] = {id = data.exchangeId, count = data.exchangeCount}
+		end
+	end
+
+	self.mModule.SelfRect:AddOnTime(function()
+		self.mData.numberCount = data.numberCount
+		_P.OnSetListData(self)
+	end, nil, count * 0.5)
+end
+
+
+return _M

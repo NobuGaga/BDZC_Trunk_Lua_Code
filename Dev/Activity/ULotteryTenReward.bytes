@@ -51,7 +51,10 @@ function _M:OnCreate(ids)
 					-- 	CCommon.ShowItemTips(lotteryItemCsv.item)
 					-- end)
 					if lotteryItemCsv.broadcast == 1 or lotteryItemCsv.broadcast == 2 then
-						CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, nil, itemCsv.color)
+						local effectMoudle =  CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, nil, itemCsv.color)
+						if effectMoudle ~= nil then
+							effectMoudle.SelfRect.CachedTran:SetSiblingIndex(1)
+						end
 					end
 					CCommon.CreateEffect(moudle:Get("FxNode"..index), 10121)
 				end

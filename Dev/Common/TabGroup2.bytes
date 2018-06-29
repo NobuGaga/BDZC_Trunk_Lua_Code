@@ -36,12 +36,18 @@ function _M:Choose(key)
 					v.image.SizeDelta = _LightImgSize
 					v.text.FontSize = _LightFontSize
 					v.text.Color = _LightFontColor
+					if v.selectIcon then
+						v.selectIcon.Activity = true
+					end
 				else
 					v.image.RaycastTarget = true
 					v.image.SpriteName = _DefaultImg
 					v.image.SizeDelta = _DefaultImgSize
 					v.text.FontSize = _DefaultFontSize
 					v.text.Color = _DefaultFontColor
+					if v.selectIcon then
+						v.selectIcon.Activity = false
+					end
 				end
 			end
 		end
@@ -52,16 +58,33 @@ function _M:Choose(key)
 	return true
 end
 
-function _M:Add(key, imageWidget, textWidget, title)
+function _M:Add(key, imageWidget, textWidget, title, selectIcon)
 	imageWidget.SpriteName = self.DefaultIcon
 	textWidget.Text = title
 	imageWidget:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		self:Choose(key)
 	end, nil, 0.9)
-	self.Tabs[key] = {image = imageWidget, text = textWidget}
+	self.Tabs[key] = {image = imageWidget, text = textWidget, selectIcon = selectIcon}
 
 	table.insert(self.TabsIndex,key)
+end
+
+function _M:Remove(key)
+	local tab = self.Tabs[key]
+	self.Tabs[key] = nil
+	_P.RemoveTabIndex(self, key)
+	return tab
+end
+
+function _P.RemoveTabIndex(self, key)
+	local tabs = self.TabsIndex
+	for k,v in ipairs(tabs)do
+		if v == key then
+			table.remove(tabs,k)
+		end
+	end
+	self.TabsIndex = tabs
 end
 
 return _M

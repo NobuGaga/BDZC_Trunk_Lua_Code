@@ -31,6 +31,8 @@ function _M.ShowItemTips( itemId, params )
 	WindowMgr.Create("UBagDetailPop", itemId, params)
 end
 
+local GIRL_ITEM_SIZE = Vector2(70, 70)
+local GIRL_ITEM_SIZE2 = Vector2(140, 140)
 --创建物品
 function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 	local csvLine = Csv.Item[itemId]
@@ -53,26 +55,17 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 			onBtnCall(itemId, params)
 		end, nil, 0.9)
 	end
-	if one:Get("StaffIcon") ~= nil then
-		one:Get("StaffIcon").Activity = false
-	end
-	one:Get("Icon").Activity = true
+	
 	if params ~= nil then
 		if params.num ~= nil then
 			one:Get("Num").Text = tostring(params.num)
 		end
 		if params.icon ~= nil then
-			if params.staff then
-				if one:Get("StaffIcon") ~= nil then
-					one:Get("StaffIcon").SpriteName = params.icon
-					one:Get("StaffIcon").Activity = true
-				end
-				one:Get("Icon").Activity = false
+			one:Get("Icon").SpriteName = params.icon
+			if moudleNmae == "M_Common_Item" then
+				one:Get("Icon").SizeDelta = GIRL_ITEM_SIZE2
 			else
-				one:Get("Icon").SpriteName = params.icon
-				if one:Get("StaffIcon") ~= nil then
-					one:Get("StaffIcon").Activity = false
-				end
+				one:Get("Icon").SizeDelta = GIRL_ITEM_SIZE
 			end
 		end
 		-- if params.scale ~= nil then
@@ -80,12 +73,12 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 		-- end
 	end
 	
-	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color)
+	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color, 2)
 	return one, effectMoudle
 end
 
 --创建物品发光外框
-function _M.CreateItemLight(parent, sysId, itemId, itemColor)
+function _M.CreateItemLight(parent, sysId, itemId, itemColor, siblingIndex)
 	local effectMoudle
 	if sysId ~= nil and Csv.ItemSysEffect[sysId] then
 		if itemId ~= nil then
@@ -100,9 +93,14 @@ function _M.CreateItemLight(parent, sysId, itemId, itemColor)
 				local csvEffect = Csv.Effect[csvColorEffect.effectID]
 				if csvEffect.prefab ~= nil then
 					effectMoudle = JGuiManager.GetMoudle(parent, csvEffect.prefab, "", 0)
+					local effect = effectMoudle.SelfRect.CachedTran:GetJTweener("T_Item_Role")
+					effect:Play()
 				end
 			end
 		end
+	end
+	if effectMoudle ~= nil then
+		effectMoudle.SelfRect.CachedTran:SetSiblingIndex(siblingIndex)
 	end
 	return effectMoudle
 end
@@ -151,6 +149,7 @@ local M_Fly_Item_Right = "M_Fly_Item_Right"
 local M_Fly_Text = "M_Fly_Text"
 local M_Fly_Icon = "M_Fly_Icon"
 local T_Fly_Text = "T_Fly_Text"
+local T_Fly_TextManage = "T_Fly_TextManage"
 local M_Fly_ArtFont = "M_Fly_ArtFont"
 --飘物品和数量
 --[[
@@ -247,6 +246,45 @@ function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos)
 		moudle.SelfRect.LocalPosition = pos
 	end
 	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_Text)
+	if delayTime ~= nil and delayTime > 0 then
+		tween:DelayAll(delayTime)
+	end
+	tween:SetDestoryAtComplete()
+	tween:Play()
+end
+
+--经营飘字
+--[[
+    @desc: 
+    author:{author}
+    time:2017-11-16 13:19:13
+    --@parent: 挂载点
+	--@text: 显示文本
+	--@delayTime: 延迟播放时间 (可选, 不填没有延迟)
+	--@spName: 图片名(可选, 不填没有图片)
+	--@spSize: 图片大小(可选, 不填为图片的原始大小)
+    return
+]]
+function _M.ShowFlyTextManage(parent, text, delayTime, spName, spSize, pos)
+	local moudld
+	if spName ~= nil then
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Icon)
+		local icon = moudle:Get('Icon')
+		if spSize ~= nil then
+			icon.SizeDelta = spSize
+			icon.SpriteName = spName
+		else
+			icon.SpriteNameAutoScale = spName
+		end
+		moudle:Get('Text').Text = text
+	else
+		moudle = JGuiManager.GetMoudle(parent, M_Fly_Text)
+		moudle.SelfRect.Text = text
+	end
+	if pos ~= nil then
+		moudle.SelfRect.LocalPosition = pos
+	end
+	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_TextManage)
 	if delayTime ~= nil and delayTime > 0 then
 		tween:DelayAll(delayTime)
 	end
@@ -512,6 +550,12 @@ _M.ActorFieldMap =
 	commerce_staff = "commerce_staff",
 	commerce_main = "commerce_main",
 	commerce_boss = "commerce_boss",
+	commerce_study = "commerce_study",
+	commerce_create = "commerce_create",
+
+	--围攻华尔街
+	siege_staff = "siege_staff",
+	siege_boss = "siege_boss",
 
 	--NPC
 	story_right = "story_right_",
@@ -536,6 +580,8 @@ _M.ActorFieldMap =
 	--超级员工
 	super_small = "super_small",
 	super_big = "super_big",
+	super_get = "super_get",
+	super_getF4 = "super_getF4",
 
 	--出游
 	wharf = "wharf",
@@ -545,6 +591,7 @@ _M.ActorFieldMap =
 	wharf_pk_success = "wharf_pk_success",
 	wharf_pk_fail = "wharf_pk_fail",
 	wharf_build = "wharf_build",
+	wharf_game_info = "wharf_game_info",
 
 	--美容
 	metology_body = "metology_body",
@@ -559,6 +606,15 @@ _M.ActorFieldMap =
 
 	--公司
 	lobby_end = "lobby_end",
+	lobby_one_fail = "lobby_one_fail",
+	lobby_search = "lobby_search",
+
+	--背包
+	bag_use_girl = "bag_use_girl",
+	bag_use_staff = "bag_use_staff",
+
+	--美女
+	girl_info = "girl_info",
 }
 
 --[[
@@ -574,23 +630,24 @@ function _M.CreateActor(parent, prefabId, posScalefield, onLoadedCall, scaleArg)
 	local pos = nil
 	local scale = nil
 	if posScalefield ~= nil then
-		local uiPosScaleCsv = Csv.EffectUIPosScale[posScalefield]
-		if uiPosScaleCsv ~= nil then
-			pos = Vector2(uiPosScaleCsv.pos[1], uiPosScaleCsv.pos[2])
-			scale = uiPosScaleCsv.scale
-		else
-			local posScaleCsv = Csv.EffectIDPosScale[prefabId]
-			if posScaleCsv ~= nil and posScaleCsv.field ~= nil then
-				for k,v in pairs(posScaleCsv.field) do
-					if v == posScalefield then
-						local posInfo = posScaleCsv.pos[k]
-						if posInfo ~= nil then
-							pos = Vector2(posInfo[1], posInfo[2])
-						end
-						scale = posScaleCsv.scale[k]
-						break
+		local posScaleCsv = Csv.EffectIDPosScale[prefabId]
+		if posScaleCsv ~= nil and posScaleCsv.field ~= nil then
+			for k,v in pairs(posScaleCsv.field) do
+				if v == posScalefield then
+					local posInfo = posScaleCsv.pos[k]
+					if posInfo ~= nil then
+						pos = Vector2(posInfo[1], posInfo[2])
 					end
+					scale = posScaleCsv.scale[k]
+					break
 				end
+			end
+		end
+		if scale == nil then
+			local uiPosScaleCsv = Csv.EffectUIPosScale[posScalefield]
+			if uiPosScaleCsv ~= nil then
+				pos = Vector2(uiPosScaleCsv.pos[1], uiPosScaleCsv.pos[2])
+				scale = uiPosScaleCsv.scale
 			end
 		end
 	end
@@ -601,26 +658,31 @@ end
 function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield, onLoadedCall, scaleArg)
 	local isThatLoaded = false
 	local body, head
-	local func = function()
+	local func = function(actor)
 		if isThatLoaded then
+			body.Activity = true
+			head.Activity = true
+			
 			local headGrap = head:SkeletonGetGraphic()
 			if headGrap ~= nil then
 				body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
 			end
 			if onLoadedCall ~= nil then
-				onLoadedCall()
+				onLoadedCall(body, head)
 			end
 		else
 			isThatLoaded = true
-		end
+
+			actor.Activity = false
+		end		
 	end
 	body = _M.CreateActor(parent, bodyPrefabId, posScalefield, function(actor)
 		body = actor
-		func()
+		func(actor)
 	end, scaleArg)
 	head = _M.CreateActor(parent, headPrefabId, posScalefield, function(actor)
 		head = actor
-		func()
+		func(actor)
 	end, scaleArg)	
 	return body, head
 end

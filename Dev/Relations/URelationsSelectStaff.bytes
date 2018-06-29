@@ -53,8 +53,8 @@ function _M:OnCreate(...)
 	for k,v in ipairs(sortStaffTable) do
 		local staffMoudle = JGuiManager.GetMoudle(content, "M_Dispatch_Item")
 		local csvStaff = Csv.Personnel[v.id]
-		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[v.color]
-		staffMoudle:Get("Head").SpriteName = csvStaff.asset
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[v.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset3
 		staffMoudle:Get("textName").Text = MStaff.GetStaffName(v.id)--csvStaff.name
 		staffMoudle:Get("textLevel").Text = Csv.Text("school_level",{num = v.level})
 		staffMoudle:Get("textExp").Text = Csv.Text("relations_powerZ",{num = MStaff.GetAllAttr(v.id)})

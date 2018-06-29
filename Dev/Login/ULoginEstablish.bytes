@@ -38,10 +38,9 @@ end
 --界面构建
 function _M:OnCreate()
     --播放剧情
-    local isIos = GameSetting.Platform == Define.PlatformType.iPhone
-    if not isIos then
-        WindowMgr.Create("UMoviePlay", "StartMovie")
-    end    
+    if not GameSetting.IsiOSCommit then
+        WindowMgr.Create("UMoviePlay", CS.UnityEngine.Application.streamingAssetsPath .. "/Movie/StartMovie.mp4", 714, 0, 29)
+    end
 
     local moudle = self:CreateMoudle(self._RootNode, "M_Login_Establish")
     self.mMoudle = moudle

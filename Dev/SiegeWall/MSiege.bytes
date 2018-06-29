@@ -6,6 +6,7 @@ local MStaff = JRequire "Dev.Staff.MStaff"
 local MCommerce = JRequire "Dev.Commerce.MCommerce"
 local CSiege = JRequire "Dev.SiegeWall.CSiege"
 local CCommon = JRequire "Dev.Common.CCommon"
+local CMain = JRequire "Dev.Main.CMain"
 
 local _M = {}
 local _P = {}
@@ -47,22 +48,6 @@ _M.RecoveTime = 0 --恢复时间
 _M.isRecoveTick = false
 _M.RecoveHandle = nil 
 _M.SelectHero = nil
-_M.BossList = {}
---[[
-_M.Teams = {{type = 1,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
-			{type = 2,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}},
-			{type = 3,bossId = 3,commerce = {{key = 1,name = "1"},{key = 2,name = "2"}}}} --阵营信息	
-_M.BossList = {{indexID = 1,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "1",commerceId = 1},
-				{indexID = 2,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "2",commerceId = MCommerce.MyCommerceId},
-				{indexID = 3,id = 3,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "3",commerceId = 1},
-				{indexID = 4,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "4",commerceId = 1},
-				{indexID = 5,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "5",commerceId = MCommerce.MyCommerceId},
-				{indexID = 6,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "6",commerceId = 1},
-				{indexID = 7,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "7",commerceId = MCommerce.MyCommerceId},
-				{indexID = 8,id = 2,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "8",commerceId = 1},
-				{indexID = 9,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "9",commerceId = 1},
-				{indexID = 10,id = 1,bossBlood = {ncur = 1000,nmax = 1000},discoverer = "10",commerceId = 1},}
---]]
 _M.isFighting = false
 _M.selectBossId = 0
 _M.BossPower = {}
@@ -70,24 +55,49 @@ _M.AllStageData = {}
 _M.RankSelfStageData = {}
 _M.RankGangStageData = {}
 
+_M.IsOpenView = false
+_M.IsGetNewUdisk = false
+_M.IsGetBoss = false
+
 function _M.Clean()
-	_M.OpenTime = 0
-	_M.selectBossId = 0
-	_M.RecoveTime = 0
+	--_M.ActivityState = false --活动开关
+	--_M.StartTime = 0
+	--_M.EndTime = 0
+	_M.ActivityId = 1 --活动id
+	_M.Phase = 1 --阶段
+	_M.OpenTime = 0 --开启CD(等待中开始)
+	_M.PointCD = 1000
+	_M.Progress = {} --进度，列表，第二阶段有3个进度
+	_M.LastUdisk = nil --剩余U盘数量，总数
+	_M.Buffs = {}
+	_M.lastEnmey = 0 --剩余敌人数量，第三阶段
+	_M.BigBoss = {} --第二阶段3只
+	_M.Teams = {}
+	_M.RecoveStaffs = {} --已使用过复活的员工（策划说同一阶段同个员工只能复活一次）
+	_M.DieStaffs = {} --已死亡的员工（每个boss都不一样）
+	_M.BossList = {}
+	
+	_M.ActionPoint = 0--行动点
+	_M.ActionBuy = 0--行动点购买次数
+	_M.RecoveTime = 0 --恢复时间
 	_M.isRecoveTick = false
 	_M.RecoveHandle = nil 
-	_M.ActionPoint = 0
-	_M.ActionBuy = 0
 	_M.SelectHero = nil
 	_M.isFighting = false
-
+	_M.selectBossId = 0
 	_M.BossPower = {}
 	_M.AllStageData = {}
-	_M.BossList = {}
-	_M.LastUdisk = nil
+	_M.RankSelfStageData = {}
+	_M.RankGangStageData = {}
+	
+	_M.IsOpenView = false
+	_M.IsGetNewUdisk = false
+	_M.IsGetBoss = false
 end
 
 function _M.SiegeActivityStatus(data)
+	_M.Clean()
+	
 	_M.ActivityState = data.state
 	_M.ActivityId = data.actid
 	_M.StartTime = data.startTime
@@ -98,10 +108,13 @@ function _M.SiegeActivityStatus(data)
 		_M.PointCD = Csv.Siege[_M.ActivityId].CD
 	end
 
+	WindowMgr.Call("UMain","RefreshTopBtns")
 	if _M.ActivityState == false then
 		--刷新活动图标
-		WindowMgr.Call("UMain","RefreshTopBtns")
+		WindowMgr.Call("USiegeMain","CloseView")
 	end
+	
+	_M.CheckActivityRed()
 end
 
 function _M.SetOpenTime(data)
@@ -111,12 +124,6 @@ end
 function _M.SetAcitvityPhase(_acitvityId,_phase)
 	_M.ActivityId = _acitvityId --活动id
 	_M.Phase = _phase --阶段
-
-	--[[
-	if _phase ~= nil then
-		CSiege.ReqSiegeStage() --请求阶段
-	end
-	--]]
 end
 
 function _M.SetSiegeStageMsg(data)
@@ -136,6 +143,7 @@ function _M.SetSiegeStageMsg(data)
 		_M.LastUdisk = {ncur = data.lastUdisk.ncur,nmax = data.lastUdisk.nmax}
 	end
 	
+	--[[
 	_M.Buffs = {}
 	if data.buffs ~= nil then
 		for k,v in pairs(data.buffs)do
@@ -143,6 +151,7 @@ function _M.SetSiegeStageMsg(data)
 			--table.insert(_M.Buffs,{key = v.key,value = v.value})
 		end
 	end
+	--]]
 
 	_M.lastEnmey = 0
 	if data.enemy ~= nil then
@@ -184,6 +193,15 @@ function _M.SetSiegeStageMsg(data)
 	end
 end
 
+function _M.SetBuff(data)
+	_M.Buffs = {}
+	if data.buffs ~= nil then
+		for k,v in pairs(data.buffs)do
+			_M.Buffs[v.key] = v.value
+		end
+	end
+end
+
 function _M.SetActionPoint(data)
 	_M.ActionPoint = data.action
 
@@ -191,21 +209,29 @@ function _M.SetActionPoint(data)
 	if _M.ActionPoint < _M.MaxPoint then
 		_M.RecoveTime = data.lastTime + HeartBeat.ServSecond()
 	end
+	if data.buytimes ~= nil then
+		_M.ActionBuy = data.buytimes
+	end
 	_P.ReduceTime()
 end
 
 function _M.SetBossList(data)
 	_M.BossList = {}
+	_M.IsGetBoss = false
 	if data.bossList ~= nil then
 		for k,v in pairs(data.bossList)do
 			local boss = _P.BossMsg(v)
 			table.insert(_M.BossList,boss)
 		end
+
+		if #data.bossList > 0 then
+			_M.IsGetBoss = true
+		end
 	end
 end
 
 function _M.SetNewBuff(data)
-	CCommon.ShowError(Csv.Text("siege_buy_buff_success"))
+	
 	if data.buff ~= nil then
 		if _M.Buffs[data.buff.key] ~= nil then
 			_M.Buffs[data.buff.key] = _M.Buffs[data.buff.key] + 1
@@ -293,6 +319,7 @@ end
 
 function _M.SetDieStaffs(staffs)
 	local dieStaff = {}
+
 	if staffs ~= nil then
 		for k,v in pairs(staffs)do
 			dieStaff[v] = true
@@ -375,6 +402,10 @@ end
 -- 设置各阶段兑换商店、排行版领取状态数据
 function _M.SetAllStageData(stageList)
 	local listData = {}
+
+	for i=1,3,1 do
+		listData[i] = {stage = i,point = 0,itemList = _P.GetExchangeItems(i)}
+	end
 	if stageList ~= nil then
 		for k,v in pairs(stageList) do
 			listData[v.stage] = v
@@ -382,6 +413,19 @@ function _M.SetAllStageData(stageList)
 	end
 	
 	_M.AllStageData = listData
+end
+
+function _P.GetExchangeItems(phase)
+	local items = {}
+
+	local id = _M.ActivityId * 100+phase
+	local data = Csv.SiegeExchange[id]
+	if data ~= nil then
+		for k,v in pairs(data.shopId)do
+			table.insert(items,{index = k,goodid = v,buyCount = 0})
+		end
+	end
+	return items
 end
 
 --购买商品扣除
@@ -429,13 +473,13 @@ function _M.SetRankStage(data)
 		end
 	end
 	--状态通知
+	WindowMgr.Call("USiegeMain", "UpdateRedPoint")
 end
 
 ---------------------------------------------------------
 function _M.GetBuffInfo(index)
 	local buffs = _M.Buffs
 	for k,v in pairs(buffs)do
-		print("__buffs____",k,v)
 		local buffData = Csv.SiegeBuff[k]
 		if buffData.index == index then
 			return {id = k,value = v}
@@ -445,6 +489,9 @@ function _M.GetBuffInfo(index)
 end
 
 function _M.GetTeamType(commerceID)
+	if commerceID == 0 then
+		return 0
+	end
 	if _M.Teams ~= nil then
 		for k,v in pairs(_M.Teams)do
 			local type = v.type
@@ -458,6 +505,108 @@ function _M.GetTeamType(commerceID)
 		end
 	end
 	return nil
+end
+
+function _M.CheckRankRed(_siege)
+	local isRed = false
+	if _M.RankSelfStageData[_siege] ~= nil then
+		if _M.RankSelfStageData[_siege] ==  0 then
+			isRed = true
+		end
+	end
+	if _M.RankGangStageData[_siege] ~= nil then
+		if _M.RankGangStageData[_siege] == 0 then
+			isRed = true
+		end
+	end
+
+	return isRed
+end
+
+function _M.CheckActivityRed()
+	local isRed = false
+	if _M.ActivityState == true then
+		if Csv.Siege[_M.ActivityId] ~= nil then
+			local SiegeData = Csv.Siege[_M.ActivityId]
+
+			if SiegeData ~= nil then
+				local checkBeginTime = _P.GetTargetTime(SiegeData.beginTime)
+				local checkCloseTime = _P.GetTargetTime(SiegeData.endTime)
+				if checkBeginTime > 0 or checkCloseTime < 0 then
+					isRed = false
+				else
+					if not _M.IsOpenView then
+						isRed = true
+					else
+						isRed = false
+					end
+				end
+			else
+				print("找不到对应的数据id_______",activityId)
+			end
+		end
+	end
+	CMain.UpdateRedpoint(isRed,Define.SysId.SiegeWall)
+end
+
+function _P.GetTargetTime(hour)
+	local cur_time = os.time()
+	local temp_date = os.date("*t", cur_time)
+	local targetTime =  os.time({year=temp_date.year, month=temp_date.month, day=temp_date.day, hour=hour})
+
+	return targetTime-cur_time
+end
+
+function _M.CheckOpenIng()
+	if _M.ActivityState == true then
+		if Csv.Siege[_M.ActivityId] ~= nil then
+			local SiegeData = Csv.Siege[_M.ActivityId]
+
+			if SiegeData ~= nil then
+				local checkBeginTime = _P.GetTargetTime(SiegeData.beginTime)
+				local checkCloseTime = _P.GetTargetTime(SiegeData.endTime)
+				if checkBeginTime > 0 or checkCloseTime < 0 then
+					return false
+				else
+					return true
+				end
+			else
+				print("找不到对应的数据id_______",_M.ActivityId)
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetMaxActionPoint()
+	local count = 0
+	local siegeData = Csv.Siege[_M.ActivityId]
+	if  siegeData ~= nil then
+		count = count + siegeData.buyMax
+	end
+
+	local viplevel = MPlayer.GetVip()
+	if viplevel > 0 then
+		local vipData = Csv.Vip[viplevel]
+		if vipData ~= nil then
+			count = count + vipData.ActionTimes
+		end
+	end
+	
+	return count
+end
+
+function _M.CheckGetKillBuff()
+	if _M.Buffs ~= nil then
+		for k,v in pairs(_M.Buffs)do
+			if k == 5 then
+				if v > 0 then
+					return true
+				end
+			end
+		end
+	end
+	return false
 end
 
 return _M

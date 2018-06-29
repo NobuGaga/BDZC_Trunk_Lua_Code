@@ -624,6 +624,9 @@ function _P.OnUpdate(data)
 		cachedInfo.isOpenStudy = data.isOpenStudy
 		WindowMgr.Call("UCommerce","OnUpdatemeMyInfo")
 	end
+	if WindowMgr.IsCreated("UCommerceMembers") then
+		WindowMgr.Call("UCommerceMembers", "RefreshMemberNum")
+	end
 end
 --查询信息
 function _P.OnQuery(data)

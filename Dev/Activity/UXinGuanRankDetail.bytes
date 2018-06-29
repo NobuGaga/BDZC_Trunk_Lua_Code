@@ -33,7 +33,7 @@ function _M:BeforeDestroy()
 end
 
 
-function _M:OnCreate(rankId, isPerson)
+function _M:OnCreate(rankId, isPerson,titleName)
 	local module = self:CreateMoudle(self._RootNode, "M_Xgsr_GrRanking")
 	self.mModule = module
 
@@ -68,6 +68,13 @@ function _M:OnCreate(rankId, isPerson)
 	else
 		titleText.Text = Csv.Text("xinguan_rank_gang_title")
 		nameText.Text = Csv.Text("xinguan_rank_gang_name")
+	end
+
+	--若有传标题名称
+	if titleName ~= nil then
+		rankText.Text = titleName.rank
+		nameText.Text = titleName.name
+		pointText.Text = titleName.point
 	end
 
 	self.noneText = module:Get("none")

@@ -5,10 +5,14 @@ local _M = {}
 local _P = {}
 
 _M.REDPACKET_CD = Csv.Const(93)
+_M.REDPACKET_SHOW = 1800
 
+_M.isShowTicks = false
+_M.ShowpacketHandle = nil
 _M.isRedTicks = false
 _M.RedpacketHandle = nil
 
+_M.GetRedPacketTime = 0
 _M.isRedPackets = false
 _M.redPacketList = {}
 _M.redPackInfo = {}
@@ -18,6 +22,8 @@ function _M.Clean()
 		EventCenter.UnRegistCallEvent(_M.RedpacketHandle)
 	end
 
+	_M.GetRedPacketTime = 0
+	_M.isShowTicks = false
 	_M.isRedTicks = false
 	_M.isRedPackets = false
 	_M.redPacketList = {}
@@ -32,9 +38,13 @@ function _M.InitRedPacket(data)
 			table.insert(_M.redPacketList,redpacket)
 		end
 	end
+	_M.GetRedPacketTime = _M.GetNearPacket()--HeartBeat.ServSecond()
+	_M.RefreshShowTick()
 	_M.RefreshRedPacketTick()
 
 	_P.CheckIsRedPacket()
+	
+
 end
 
 function _M.GetNewRedPacket(data)
@@ -42,9 +52,12 @@ function _M.GetNewRedPacket(data)
 		local redpacket =  _P.OnRedpacketInfo(data.redPacket)
 		table.insert(_M.redPacketList,redpacket)
 	end
+	_M.GetRedPacketTime = _M.GetNearPacket()--HeartBeat.ServSecond()
+	_M.RefreshShowTick()
 	_M.RefreshRedPacketTick()
 
 	_P.CheckIsRedPacket()
+	
 end
 
 --已领完，已领取 都移除
@@ -107,7 +120,7 @@ end
 --已领完，已过期
 function _P.CheckIsRedPacket()
 	_M.isRedPackets = false
-	if _M.redPacketList ~= nil and #_M.redPacketList > 0 then
+	if _M.redPacketList ~= nil and #_M.redPacketList > 0 and _M.isShowTicks then
 		_M.isRedPackets = true
 	end
 	--
@@ -123,7 +136,6 @@ function _M.RefreshRedPacketTick()
 			_M.isRedTicks = true
 			_M.RedpacketHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
 				local _tick = _P.GetRedpacketTick()
-				print("___",_tick-HeartBeat.ServSecond())
 				if _tick > 0 then
 					for k,v in pairs(_M.redPacketList)do
 						if v.expireTime < HeartBeat.ServSecond() then
@@ -157,6 +169,43 @@ function _P.GetRedpacketTick()
 		end
 	end
 	return tick
+end
+
+---------------------
+function _M.GetNearPacket()
+	local packList = _M.redPacketList
+	local lessTime = 0
+	if packList ~= nil then
+		for k,v in pairs(packList)do
+			if v.sendTime > lessTime then
+				lessTime = v.sendTime
+			end
+		end
+	end
+	return lessTime
+end
+
+--检测红包展示时间
+function _M.RefreshShowTick()
+	if _M.isShowTicks == false then
+		local tick = _M.GetRedPacketTime
+		if tick>0 then
+			_M.isShowTicks = true
+			_M.ShowpacketHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local _tick = _M.GetRedPacketTime
+				if _tick > 0 then
+					if HeartBeat.ServSecond() - _tick >= _M.REDPACKET_SHOW then
+						_M.GetRedPacketTime = 0
+
+						_M.isShowTicks = false
+						_M.ShowpacketHandle = nil
+						_P.CheckIsRedPacket()
+						EventCenter.UnRegistCallEvent(eventHandle)
+					end
+				end
+			end)
+		end
+	end
 end
 
 return _M

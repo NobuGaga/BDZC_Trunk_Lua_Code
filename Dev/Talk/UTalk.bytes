@@ -73,11 +73,19 @@ function _R.RefreshMsg(self,_data)
 		_P.ResetItemsPosByOne(self,itemSizeY,1,_isShowTime)
 		_P.CheckItemsShow(self)
 
-		--
+		local content = self.mToggelContent
 		if _data.sender == MPlayer.GetId() then
-			local content = self.mToggelContent
-			if content.SizeDelta.y >1000 then
+			local redPack = _data.redPacket
+			if redPack == nil or _data.redPacket.type == 1 then
+				if content.SizeDelta.y >1000 then
+					content:DOAnchorPosY(-1055,0.1)
+				end
+			end
+		else
+			if content.LocalPosition.y > -1500 then
 				content:DOAnchorPosY(-1055,0.1)
+			else
+				_P.ShowNewsTips(self,1)
 			end
 		end
 	end
@@ -149,6 +157,7 @@ function _M:OnCreate(chooseFuncId)
 	local cancel = moudle:Get("Cancel")
 	cancel.Activity = false 
 
+	self.mMoudle = moudle
 	self.CrossHorn = moudle:Get("horn")
 	self.hornNum = moudle:Get("hornNum")
 	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
@@ -337,6 +346,11 @@ function _M:OnCreate(chooseFuncId)
 		self.mTabHandle = tabHandle
 	end
 
+-----------新消息----------------------------------	
+	moudle:Get("BottomNoticeBg"):AddOnButton(function()
+		_P.ClickNewMsgTips(self)
+	end)
+	_P.CloseNewsTips(self)
 ----------------------------------------------
 	self.SystemBg = moudle:Get("System")
 	self.MsgText = moudle:Get("SystemText")
@@ -652,10 +666,11 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 		packGot.Activity = true
 
 		gotMsg.Text = Csv.Text("talk_redpacket_got",{name1 = _data.sendername,name2 = _data.redPacket.senderName})
+		packGot.SizeDelta = Vector2(gotMsg.PreferredWidth + 80,packGot.SizeDelta.y)
 
 		itemMoudle.SelfRect.SizeDelta = Vector2(730,200)
 	end
-	
+
 	itemMoudle.SelfRect:SetAnchor(CS.JGui.JGuiManager.AnchorType.Bottom)
 	return itemMoudle
 end
@@ -730,7 +745,8 @@ function _P.ResetItemsPosByOne(self,SizeY,index,isShowTime)
 		items[i].posY = itemPosY
 		content.SizeDelta = Vector2(640,itemPosY+15)
 	end
-
+	
+	content.LocalPosition = Vector2(content.LocalPosition.x,content.LocalPosition.y - SizeY + 105)
 	if content.SizeDelta.y >1100 then
 		content.Pivot = Vector2(0.5,0)
 	end
@@ -779,6 +795,10 @@ function _P.OnValueChanged(self,value)
 					_P.GetTalkData(self,1)
 					_P.IsShowLoading(self,false)
 				end
+			end
+			
+			if content.LocalPosition.y > -1150 then
+				_P.CloseNewsTips(self)
 			end
 		end
 	end
@@ -871,6 +891,7 @@ function _P.OnClickTlakSender(self,sender,objPos, name)
 			MFriend.PlayerMenu.Look,
 			MFriend.PlayerMenu.Talk,
 			MFriend.PlayerMenu.Copy,
+			MFriend.PlayerMenu.Marry,
 			MFriend.PlayerMenu.AddFriend,
 			MFriend.PlayerMenu.AddBlacklist}
 
@@ -1137,6 +1158,27 @@ function _P.SetRedpacketState(self,state)
 			end
 		end
 	end
+end
+
+-------------------新消息提醒-----------------------------------------------------
+function _P.ShowNewsTips(self,count)
+	local moudle = self.mMoudle
+
+	self.newMsgCount = self.newMsgCount + count
+	moudle:Get("BottomNoticeBg").Activity = true
+	moudle:Get("Notice").Text  = Csv.Text("talk_news",{num = self.newMsgCount})
+end
+
+function _P.CloseNewsTips(self)
+	local moudle = self.mMoudle
+	
+	self.newMsgCount = 0
+	moudle:Get("BottomNoticeBg").Activity = false
+end
+
+function _P.ClickNewMsgTips(self)
+	_P.CloseNewsTips(self)
+	self.mToggelContent:DOAnchorPosY(-1055,0.1)
 end
 
 ----------------------------------------------------------------------------

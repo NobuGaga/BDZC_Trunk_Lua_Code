@@ -1,0 +1,74 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MGirl = JRequire "Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Atmosphere")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Text").Text = Csv.Text("married_main_title")
+	moudle:Get("text1").Text = Csv.Text("married_main_server")
+	moudle:Get("text2").Text = Csv.Text("married_main_zhaoqin")
+	moudle:Get("text3").Text = Csv.Text("married_main_tiqin")
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	local tiqinImg = moudle:Get("bsx2")
+	local serverImg = moudle:Get("bsx1")
+	local tiqinQingqiuImg = moudle:Get("bsx3")
+	local tiqinQingqiuName = moudle:Get("Name")
+
+	tiqinImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedTiqin")
+	end)
+
+	serverImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedZhaoqin")
+	end)
+
+	tiqinQingqiuImg:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMarriedQingqiu")
+	end)
+	
+	tiqinQingqiuImg.Activity = false
+
+	local tiqinList = MGirl.MarriedQingqiu
+
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			tiqinQingqiuImg.Activity = true
+			tiqinQingqiuName.Text = _P.GetFirstTiqinName(self,tiqinList)
+		end
+	end
+end
+
+function _P.GetFirstTiqinName(self,list)
+	return list[1].ownerGender
+end
+
+return _M

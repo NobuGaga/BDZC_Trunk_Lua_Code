@@ -2,6 +2,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class(WindowBase)
 
+local GIRL_ITEM_SIZE2 = Vector2(140, 140)
 --界面构建
 function _M:OnCreate(itemId, params)
   self._EventNode:AddOnClick(function ( ... )
@@ -41,24 +42,9 @@ function _M:OnCreate(itemId, params)
     end
 
     local ImgIcon = moudle:Get("Icon")
-    ImgIcon.Activity = true
-    if moudle:Get("StaffIcon") ~= nil then
-      moudle:Get("StaffIcon").Activity = false
-    end
-    -- moudle:Get("StaffIcon").Activity = true
     if params ~= nil and params.icon ~= nil then
-        if params.staff then
-          if moudle:Get("StaffIcon") ~= nil then
-            moudle:Get("StaffIcon").SpriteName = params.icon
-            moudle:Get("StaffIcon").Activity = true
-          end
-          ImgIcon.Activity = false
-        else
-          ImgIcon.SpriteName = params.icon
-          if moudle:Get("StaffIcon") ~= nil then
-            moudle:Get("StaffIcon").Activity = false
-          end
-        end
+        ImgIcon.SpriteName = params.icon
+        ImgIcon.SizeDelta = GIRL_ITEM_SIZE2
     else
         ImgIcon.SpriteName = csvLine.icon
 		end

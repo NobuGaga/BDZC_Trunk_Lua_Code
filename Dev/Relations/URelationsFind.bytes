@@ -3,6 +3,7 @@ local CRelations = JRequire "Dev.Relations.CRelations"
 local JGuiManager = CS.JGui.JGuiManager
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MParliament = JRequire "Dev.Parliament.MParliament"
 local _M = Class()
 local _P = {}
 
@@ -101,8 +102,26 @@ function _M:FindSuccess(data)
 	local moudle = self.mMoudle
 	self.mFindPlayerID = data.playerid
 	moudle:Get("PlayerInfo").Activity = true
-	moudle:Get("head").SpriteName = Csv.Avatar[data.avatar.head]["asset_"..data.sex]
-	moudle:Get("Body").SpriteName = Csv.Avatar[data.avatar.body]["asset_"..data.sex]
+	if self.bodySpine ~= nil then
+        self.bodySpine:Destroy()
+        self.bodySpine = nil
+	end
+	if self.headSpine ~= nil then
+        self.headSpine:Destroy()
+        self.headSpine = nil
+    end
+	local bodyAsset, bodyPrefab = MParliament.GetBodyByIDSex(data.avatar.body, data.sex)
+	local headAsset, heaPrefab = MParliament.GetBodyByIDSex(data.avatar.head, data.sex)
+	local head = moudle:Get("head")
+	local body = moudle:Get("Body")
+	if bodyPrefab and heaPrefab then
+		self.bodySpine, self.headSpine = CCommon.CreateRole(body, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.lobby_search)
+		body.SpriteName = ""
+		head.SpriteName = ""
+	else
+		body.SpriteName = bodyAsset
+		head.SpriteName = headAsset
+	end
 	moudle:Get("NameText").Text = data.name
 	moudle:Get("jifenNum").Text = data.point
 	moudle:Get("shiliNum").Text = data.power

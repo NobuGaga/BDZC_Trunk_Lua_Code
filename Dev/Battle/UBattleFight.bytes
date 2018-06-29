@@ -17,8 +17,8 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MLogin = JRequire "Dev.Login.MLogin"
 
 local JTweenerManager = CS.JTween.JTweenerManager
-local staffVec1 = Vector2(-183, -1036)
-local staffVec2 = Vector2(653, -1036)
+local staffVec1 = Vector2(-183, -1100)
+local staffVec2 = Vector2(653, -1100)
 local enemyBossVec1 = Vector2(208, -530)
 local enemyBossVec2 = Vector2(-638, -530)
 
@@ -695,7 +695,9 @@ function _P.RefreshAttr(self)
 	local csv = Csv.Battle[self.LastBattleID]
 
 	self.ownPower = MPlayer.GetAttr(Define.AttrType.Wuli)
-	self.Own.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(self.ownPower)) .. _P.GetBattleLevel(csv.Courage, self.ownPower)
+	self.Own.Power.Text = MPlayer.Attr2Str(Define.AttrType.Wuli)
+	self.Own.PowerNum.Text = LuaUtil.NumberFormat(self.ownPower)
+	self.Own.PingJia.Text = _P.GetBattleLevel(csv.Courage, self.ownPower)
 end
 
 
@@ -863,7 +865,8 @@ function _P.RefreshEnemy(self, isSeckill)
 
 	info.Head.SpriteName = chapterCsv.icon
 	info.Name.Text =  Csv.BattleName[csv.name].str 
-	info.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(csv.Courage))
+	info.Power.Text = MPlayer.Attr2Str(Define.AttrType.Wuli)
+	info.PowerNum.Text = LuaUtil.NumberFormat(csv.Courage)
 	info.BloodBar.FillAmount = lastEnemyBlood / csv.gold
 	info.Blood.Text = LuaUtil.NumberFormat(lastEnemyBlood)
 	info.Level.Text = '(' .. chapterCsv.posName .. ')'
@@ -1011,6 +1014,8 @@ function _M:OnCreate()
 		Head = moudle:Get("OwnHead"),
 		Name = moudle:Get("OwnName"),
 		Power = moudle:Get("OwnPower"),
+		PowerNum = moudle:Get("OwnPowerNum"),
+		PingJia = moudle:Get("OwnPowerPingjia"),
 		BloodBar = moudle:Get("OwnBar"),
 		Blood = moudle:Get("OwnBlood"),
 		Level = moudle:Get("OwnLevel"),

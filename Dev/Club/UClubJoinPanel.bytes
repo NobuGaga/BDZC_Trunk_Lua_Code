@@ -128,6 +128,15 @@ function _P.CreatePartyItem(self, itemGrid, itemName, data)
 	IconImg.SpriteName = itemConf.icon
 	local qualityImg  = itemModule:Get("IconBox")
 	qualityImg.SpriteName = itemConf.colorIcon
+
+	local limitText = itemModule:Get("limitText")
+	limitText.Activity = data.vipLv
+	if data.vipLv then
+		limitText.Text = Csv.Text("club_join_vipLv", {num = data.vipLv})
+		
+		local isHas = data.vipLv <= MPlayer.GetVip()
+		limitText.Color = (isHas and COLOR_GREEN) or COLOR_RED
+	end
 end
 
 
@@ -143,6 +152,12 @@ function _P.OnClickJoinParty(self, data)
 		CCommon.ShowError(Csv.Text("club_join_numNone")) -- 次数不足
 	else
 		if not MBag.CheckItemEnoughForArray(data.costItem) then-- 物品不足
+			return
+		end
+
+		-- vip等级不足
+		if data.vipLv ~= nil and data.vipLv > MPlayer.GetVip() then
+			CCommon.ShowError(Csv.Text("club_join_err", {num = data.vipLv, name = data.name}))
 			return
 		end
 

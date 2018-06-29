@@ -1,0 +1,235 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowType.bytes#_M]
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Main.MMainy.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+local JGuiManager = CS.JGui.JGuiManager
+
+----------------------常量定义--------------------------
+local MoudleName = "M_DailyRecharge_Day"
+local ItemName = "M_DailyRecharge_Item1"
+
+local GTE_EFFECT_ID = 5
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyHeight = 69
+--默认无奖励底图
+local DefaultNoReward = "ty_023"
+--默认无奖励物品ID
+local DefaultItemId = 1
+--进度条动画时间
+local ProcessFillTime = 0.3
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	self.moudle = JGuiManager.GetMoudle(self._RootNode, MoudleName, WindowType.UI, 0)
+	self.moudle:Get("titletext").Text = Csv.Text("chargeaward_single1")
+	self.timetext = self.moudle:Get("timetext")
+	self.scrollView = self.moudle:Get("scrollView")
+	self.content = self.moudle:Get("content")
+	self:RefreshView()
+end
+
+--刷新Item列表
+function _P.RefreshItemList(self)
+	self.listCache = {}
+	_P.SortDataList(self)
+	for index, data in ipairs(self.actData.list) do
+		_P.CreateItem(self, data)
+		_P.RefreshItem(self, data)
+	end
+end
+
+--排序Item列表数据
+function _P.SortDataList(self)
+	table.sort(self.actData.list, function(left, right)
+		if left.canGetTimes > 0 and right.canGetTimes > 0 then
+			return left.index < right.index
+		elseif left.canGetTimes <= 0 and right.canGetTimes > 0 then
+			return false
+		elseif left.canGetTimes > 0 and right.canGetTimes <= 0 then
+			return true
+		else
+			return left.index < right.index
+		end
+	end)
+end
+
+--创建Item
+function _P.CreateItem(self, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName, WindowType.UI, 0)
+	itemMoudle:Get("title").Text = Csv.Text("chargeaward_single4", {num = data.gold})
+
+	local item = {}
+	item.item = itemMoudle.SelfRect
+	itemMoudle:Get("timetext").Text = Csv.Text("chargeaward_T10")
+	item.sliderRest = itemMoudle:Get("Fill")
+	item.textSlider = itemMoudle:Get("slidertext")
+	item.content = itemMoudle:Get("content")
+	_P.InitMoveListData(self, itemMoudle, item.content)
+	_P.RefreshItemReward(self, item, data)
+
+	item.effectNode = itemMoudle:Get("EffectNode")
+	item.getFlag = itemMoudle:Get("Geted")
+	item.btnGet = itemMoudle:Get("C_Btn_a")
+	item.textBtnGet = itemMoudle:Get("C_text")
+	item.data = data
+	item.btnGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		if data.canGetTimes > 0 then
+			CActivity.GetRewardReq(self.actId, data.index)
+		else
+			if MMain.FuncIsOpen(Define.SysId.Recharge) then
+				WindowOpen.Open(Define.SysId.Recharge)
+			else
+				local csvFunc = Csv.Func[Define.SysId.Recharge]
+				CCommon.ShowError(csvFunc.conditionDesc)
+			end
+		end
+	end)
+
+	self.listCache[data.index] = item
+end
+
+--初始化移动列表需要的数据
+function _P.InitMoveListData(self, itemMoudle, content)
+	if not self.ItemDefaultHeight then
+		self.ItemDefaultHeight = itemMoudle.SelfRect.SizeDelta.y
+		local layout = self.content:AddVerticalLayoutGroup()
+		self.ItemSpace = layout.spacing
+		self.DefaultTop = layout.padding.top
+	end
+	
+	if not self.MaxRewardCol and content then
+		local layout = content:AddGridLayoutGroup()
+		if layout then
+			self.rewardColumnCount = layout.constraintCount
+			self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
+		end
+	end
+end
+
+--刷新Item奖励
+function _P.RefreshItemReward(self, item, data)
+	if not data.reward then
+		return
+	end
+	local num = 0
+	item.rewards = {}		
+	for _, reward in pairs(data.reward) do
+		local rewardItem = CCommon.CreateItem(item.content, reward[1], CCommon.ShowItemTips, 
+												{num = reward[2]}, Define.SysId.RechargeReward_Single)
+		num = num + 1
+		item.rewards[num] = reward
+	end
+	local row, rest = math.modf(num / self.rewardColumnCount)
+	if rest > 0 then
+		row = row + 1
+	end
+	for i = 1, row * self.rewardColumnCount - num do
+		local rewardItem = CCommon.CreateItem(item.content, DefaultItemId)
+		rewardItem.SelfRect.SpriteName = DefaultNoReward
+		rewardItem:Get("Icon").Activity = false
+		num = num + 1
+	end
+	local width = item.item.SizeDelta.x
+	item.item.SizeDelta = Vector2(width, self.ItemDefaultHeight + (row - 1) * self.rewardRowHeight)
+	item.height = item.item.SizeDelta.y
+end
+
+--刷新Item
+function _P.RefreshItem(self, data, isPlay)
+	local item = self.listCache[data.index]
+	if not item then
+		return
+	end
+	local restTiems = data.maxTimes - data.getTimes
+	if not isPlay then
+		item.sliderRest.FillAmount = math.min(1, restTiems / data.maxTimes)
+	end
+	item.textSlider.Text = Csv.Text("chargeaward_slider", {num = restTiems, max = data.maxTimes})
+	local isCanGet = data.canGetTimes > 0
+	local isGeted = data.maxTimes == data.getTimes
+	item.btnGet.Activity = not isGeted
+	item.getFlag.Activity = isGeted
+	if isCanGet then
+		item.textBtnGet.Text = Csv.Text("quest_get")
+	elseif not isGeted then
+		item.textBtnGet.Text = Csv.Text("chargeaward_go")
+	end
+	item.data = data
+end
+
+--刷新界面
+function _M:RefreshView()
+	self.content:DestroyChildren()
+	local typeData = MActivity.GetListFromType(Define.ActivityType.RechargeReward_Single) 
+	self.actId = MActivity.ActIdForType[Define.ActivityType.RechargeReward_Single]
+	if typeData and self.actId then
+		self.actData = typeData[self.actId]
+		if self.actData then
+			if self.actData.state and self.actData.state.startTime and self.actData.state.endTime then
+				self.timetext.Text = Csv.Text("chargeaward_T6", {day1 = LuaUtil.TransToMD(self.actData.state.startTime),
+																 day2 = LuaUtil.TransToMD(self.actData.state.endTime)})
+			end
+			if self.actData.list then
+				_P.RefreshItemList(self)
+			end
+		end
+	end
+end
+
+--刷新Item获取状态
+function _M:RefreshItemGetState(data)
+	if self.actId == data.actId then
+		local item = self.listCache[data.index]
+		if item and data.isGeted then
+			local isGetFull = item.data.maxTimes == item.data.getTimes
+			item.btnGet.Activity = not isGetFull
+			item.getFlag.Activity = isGetFull
+			if isGetFull then
+				item.getFlag.Alpha = 0
+				SoundMgr.Play(10004)
+				CCommon.CreateEffect(item.getFlag, GTE_EFFECT_ID, nil, function( ... ) 
+					item.getFlag.Alpha = 1
+				end)
+			end
+
+			if item.rewards then
+				for index, reward in ipairs(item.rewards) do 
+					CCommon.ShowFlyItem(item.effectNode, reward[1], reward[2], index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
+				end
+			end
+			item.sliderRest:DOFillAmount((item.data.maxTimes - item.data.getTimes) / item.data.maxTimes, ProcessFillTime)
+			_P.RefreshItem(self, item.data, true)
+		end
+	end
+end
+
+--销毁界面
+function _M:Destroy()
+	if self.moudle then
+		self.moudle:Destroy()
+	end
+end
+
+return _M

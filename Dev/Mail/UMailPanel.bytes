@@ -23,14 +23,20 @@ local _R = {}
 function _M:OnCreate(...)
 	local module = self:CreateMoudle(self._RootNode, "M_Mail_Content")
 	self.mModule = module
-	_P.OnCreateMailList(self)
 	
 	local closeBtn = module:Get("C_BackBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
-	
+
+	_P.OnCreateMailList(self)
+	if self.mailData ~= nil then
+		_P.OnClickItem(self, self.mailData)
+	else
+		module:Get("NumText").Text = '0/0'
+	end
+
 	module:Get("C_Text_title").Text = Csv.Text("mail_title")
 	module:Get("C_text_0_0").Text = Csv.Text("mail_onekey_get")
 	module:Get("C_text_0").Text = Csv.Text("mail_onekey_delete")
@@ -52,11 +58,6 @@ function _M:OnCreate(...)
 			CMail.DeleteAllMail()
 		end
 	end)
-	
-	if self.mSortMailDatas ~= nil and #self.mSortMailDatas > 0 then
-		self.mailData = self.mSortMailDatas[1]
-		_P.OnClickItem(self, self.mailData)
-	end
 end
 
 function _P.OnCreateMailList(self)
@@ -78,13 +79,19 @@ function _P.OnCreateMailList(self)
 		self.mModule:Get("C_Btn_b").Activity = true
 	end
 
+	if self.mailData == nil and self.mSortMailDatas ~= nil and #self.mSortMailDatas > 0 then
+		self.mailData = self.mSortMailDatas[1]
+	end
+
 	local scroll = self.mModule:Get("scrollView")
 	if self.scrollController ~= nil then
 		self.scrollController:delete()
 		self.scrollController = nil
 	end
 	self.scrollController = ScrollHorizontal.new(scroll, contentTransform, "M_Mail_Item2", 
-							function(index, value, module)_P.ScrollCallBack(self, index, value ,module)end)
+							function(index, value, module)_P.ScrollCallBack(self, index, value ,module)end,
+							function(index, value)_P.ScrollCallBack2(self, index, value)end
+						)
 	self.scrollController:CreateScroll(pageNum, pageWidth, itemWidth, itemHeight, space, mailTableDatas)
 end
 
@@ -114,7 +121,7 @@ function _P.ScrollCallBack(self, index, data, itemModule)
 			self.idToMoudle = {}
 		end
 		self.idToMoudle[data.mailid] = itemModule
-		_P.SetItemData(itemModule, data)
+		_P.SetItemData(self, itemModule, data)
 
 		itemModule:Get("M_Mail_Item2"):AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
@@ -125,16 +132,38 @@ function _P.ScrollCallBack(self, index, data, itemModule)
 	end
 end
 
-function _P.SetItemData(itemModule, data)
+function _P.ScrollCallBack2(self, index, data)
+	if self.idToMoudle ~= nil then
+		if self.idToMoudle[data.mailid] then
+			self.idToMoudle[data.mailid]:Get("H").Activity = false
+			self.idToMoudle[data.mailid] = nil
+		end
+	end
+end
+
+function _P.SetItemData(self, itemModule, data)
+	_P.SetMailRead(self, itemModule, data)
+
+	itemModule:Get("text1").Text = Csv.Text("mail_detail_system")
+	local mailTimeText = itemModule:Get("DateText")
+	mailTimeText.Text = luaUtil.TransToYearMonthDay(data.sendtime)
+
+	if data.mailid == self.mailData.mailid then
+		itemModule:Get("H").Activity = true
+	else
+		itemModule:Get("H").Activity = false
+	end
+end
+
+
+function _P.SetMailRead(self, itemModule, data)
 	if data.read == true then
 		itemModule:Get("BG").SpriteName = "yj_002"
 	else
 		itemModule:Get("BG").SpriteName = "yj_004"
 	end
-	itemModule:Get("text1").Text = Csv.Text("mail_detail_system")
-	local mailTimeText = itemModule:Get("DateText")
-	mailTimeText.Text = luaUtil.TransToYearMonthDay(data.sendtime)
 end
+
 
 function _P.GetPos(self, index)
 	local allNum = #self.mSortMailDatas
@@ -142,21 +171,16 @@ function _P.GetPos(self, index)
 	return Vector2(xPos, 0)
 end
 
-function _P.CreatMailItem(self,parent,data)
-	local moudle = JGuiManager.GetMoudle(parent,"M_Mail_Item2", WindowType.UI, 10)
-	_P.SetItemData(moudle, data)
-	moudle:Get("M_Mail_Item2"):AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		-- self:OnClickItem()
-	end, nil, 0.9)
-
-	return moudle
-end
 
 function _P.OnClickItem(self, data)
 	if self.finishEffect ~= nil then
 		self.finishEffect:Destroy()
 	end
+
+	if data == nil then
+		return
+	end
+
 	self.mailData = data
 	local moudle = self.mModule
 	moudle:Get("texttop").Text = Csv.Text("mail_current")
@@ -233,15 +257,16 @@ function _P.OnClickItem(self, data)
 			end
 		end
 	end
+
 	if data then
 		for k,v in pairs(self.idToMoudle) do
 			if v ~= nil then
-				if k == self.mailData.mailid then
-					v:Get("H").Activity = true
-				else
-					v:Get("H").Activity = false
-				end
+				v:Get("H").Activity = false
 			end
+		end
+
+		if self.idToMoudle[data.mailid] ~= nil then
+			self.idToMoudle[data.mailid]:Get("H").Activity = true
 		end
 	end
 
@@ -250,6 +275,7 @@ function _P.OnClickItem(self, data)
 		CMail.ReadMailReq(data.mailid)
 	end
 end
+
 
 -- 获取未读邮件数量
 function _P.GetUnReadNum(self)
@@ -290,6 +316,14 @@ end
 function _R.OnRefreshItem(self, data)
 	_P.OnDestroyAttachEffect(self)
 	_P.UpdateItemData(self, data)
+
+	if data.read then
+		local curModule = self.idToMoudle[data.mailid]
+		if curModule ~= nil then
+			_P.SetMailRead(self, curModule, data)
+			self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
+		end
+	end
 end
 
 function _P.UpdateItemData(self, data)
@@ -300,10 +334,9 @@ function _P.UpdateItemData(self, data)
 	if self.finishImg ~= nil then
 		_P.PlayItemEffect(self, data)
 		if self.idToMoudle[data.mailid] ~= nil and self.mailData ~= nil then
-			self.finishImg.Activity = data.gainAward
 			self.mailData = MMail.GetMailData(data.mailid)
-			_P.SetItemData(self.idToMoudle[data.mailid], self.mailData)
-			_P.OnClickItem(self, self.mailData)
+			_P.SetItemData(self, self.idToMoudle[data.mailid], self.mailData)
+			--_P.OnClickItem(self, self.mailData)
 		end
 		self.mModule.SelfRect:AddOnTime(function()
 			SoundMgr.Play(10004)
@@ -311,6 +344,7 @@ function _P.UpdateItemData(self, data)
 				if self.finishEffect ~= nil then
 					self.finishEffect:Destroy()
 				end
+				self.finishImg.Activity = data.gainAward
 				-- if data.mailid ~= self.mailData.mailid then
 				-- 	_P.SetItemData(self.idToMoudle[self.mailData.mailid], self.mailData)
 				-- 	_P.OnClickItem(self, self.mailData)

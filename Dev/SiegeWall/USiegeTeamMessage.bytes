@@ -15,6 +15,16 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.CloseView(self)
+	self:Destroy()
+end
 
 function _M:OnCreate(data)
 	self._EventNode:AddOnClick(function ()
@@ -29,12 +39,18 @@ function _M:OnCreate(data)
 	local test = moudle:Get("text111")
 	local content = moudle:Get("Content")
 
-	local bossData = Csv.SiegeBoss[data.bossId]
-	if bossData ~= nil then
-		headIcon.SpriteName = bossData.iconRound
-		test.Text = bossData.teamDesc
-	end
+	local activityId = MSiege.ActivityId
+	local SiegeData = Csv.Siege[activityId]
 
+	if SiegeData ~= nil then
+		local bossID = SiegeData.phaseBossId2[data.type]
+		local bossData = Csv.SiegeBoss[bossID]
+		if bossData ~= nil then
+			headIcon.SpriteName = bossData.iconRound
+			test.Text = bossData.teamDesc
+		end
+	end
+	
 	local content = moudle:Get("Content")
 	if data.commerce ~= nil then
 		for k,v in pairs(data.commerce)do

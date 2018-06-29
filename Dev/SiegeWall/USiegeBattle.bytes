@@ -14,6 +14,7 @@ local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MSiege = JRequire"Dev.SiegeWall.MSiege"
 local CSiege = JRequire"Dev.SiegeWall.CSiege"
 local MBag = JRequire "Dev.Bag.MBag"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
 -----------------------------
 
 local Linear = CS.DG.Tweening.Ease.Linear
@@ -56,13 +57,16 @@ function _R.CloseView(self)
 end
 
 function _R.InitFight(self,data)
+	MSiege.SetDieStaffs(data.boss.staffId)
 	_P.ReadyFight(self,data.boss)
 	_P.ShowRank(self,data.hurtList)	
 	_P.ShowOwnHurt(self,data.ownHurt)
 end
 
 function _R.RefreshBuff(self)
-	_P.RefreshBuffs(self)
+	if not MSiege.isFighting then
+		_P.RefreshBuffs(self)
+	end
 end
 
 --战斗结算后返回更新
@@ -87,7 +91,7 @@ function _R.UpdateFight(self,data)
 			end
 		end
 	end)
-	_P.ShowOwnHurt(self,data.hurt)
+	_P.ShowOwnHurt(self,data.ownHurt)
 	_P.ShowRank(self,data.hurtList)	
 end
 
@@ -136,11 +140,10 @@ function _M:OnCreate(data)
 	}
 
 	----------------------
+	self.mData = data
 	local bossData = Csv.SiegeBoss[data.id]
 	self.mBossData = bossData
 	MSiege.selectBossId = data.indexID
-
-	MSiege.SetDieStaffs(data.staffId)
 
 	local bgImg = moudle:Get("BG")
 	local diyuText = moudle:Get("diyupanghang")
@@ -183,9 +186,6 @@ function _M:OnCreate(data)
 		end)
 	end, nil, 0.9)
 
-	
-	_P.ReadyFight(self,data)--等待返回调用
-
 	--开始战斗
 	startBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -207,11 +207,14 @@ function _M:OnCreate(data)
 	for i = 1,3,1 do
 		local _icon = moudle:Get("Icon"..i)
 		local _num = moudle:Get("IconNum"..i)
-		buffIcons[i] = {icon = _icon,num = _num}
+		local _name = moudle:Get("BuffText"..i)
+		buffIcons[i] = {icon = _icon,num = _num,name = _name}
 
-		if i > 1 then
+		if i >= 1 then
 			_icon:AddOnButton(function()
-				if i == 2 then
+				if i == 1 then
+					_P.ShowBuffTips(self,i)
+				elseif i == 2 then
 					_P.OnBuyStrengthBuff(self,i)
 				elseif i == 3 then
 					_P.OnBuyKillBuff(self,i)
@@ -240,20 +243,45 @@ function _P.RefreshBuffs(self)
 					if buffData ~= nil then
 						v.icon.Activity = true
 						v.icon.SpriteName = buffData.icon
+						v.name.Text = buffData.name
 						v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
 					end
 				end
 			end
+			--不是自己阵营不存在阵营buff
+			local _data = self.mData
+			--阶段2
+			if MSiege.Phase == 2 then
+				if _data.type ~= nil then 
+					if _data.type ~= MSiege.GetTeamType(MCommerce.MyCommerceId) then
+						if MSiege.CheckGetKillBuff() then
+							v.icon.Activity = true
+						else
+							v.icon.Activity = false
+						end
+					end
+				end
+			end
+			--阶段3
+			if MSiege.Phase == 3 then
+				if _data.commerceId ~= nil then
+					if _data.commerceId ~= MCommerce.MyCommerceId then
+						v.icon.Activity = false
+					end
+				end
+			end
 		elseif k == 2 then
+			local buffData = Csv.SiegeBuff[STRENGTH_BUFF_ID]
+			v.icon.Activity = true
+			if buffData ~= nil then
+				v.icon.SpriteName = buffData.icon
+				v.name.Text = buffData.name
+			end
+
 			if buffInfo == nil then
 				--无buff无特效
-				
 			else
-				local buffData = Csv.SiegeBuff[buffInfo.id]
-
 				if buffData ~= nil then
-					v.icon.Activity = true
-					v.icon.SpriteName = buffData.icon
 					v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
 
 					--特效
@@ -265,17 +293,17 @@ function _P.RefreshBuffs(self)
 				end
 			end
 		elseif k == 3 then
+			local buffData = Csv.SiegeBuff[KILL_BUFF_ID]
+			v.icon.Activity = true
+			if buffData ~= nil then
+				v.icon.SpriteName = buffData.icon
+				v.name.Text = buffData.name
+			end
 			if buffInfo == nil then
 				--无buff无特效
-				
 			else
-				local buffData = Csv.SiegeBuff[buffInfo.id]
-
 				if buffData ~= nil then
-					v.icon.Activity = true
-					v.icon.SpriteName = buffData.icon
 					v.num.Text = math.ceil(buffData.powerAdd/100) * buffInfo.value.."%"
-
 					--特效
 					if buffInfo.value >= buffData.max then
 						
@@ -308,6 +336,8 @@ function _P.OnBuyStrengthBuff(self,index)
 			CCommon.CheckTips(function(isSure,rg)
 				if isSure then
 					CSiege.ReqBuyBuffInBattle(STRENGTH_BUFF_ID)
+					--
+					CCommon.ShowError(Csv.Text("siege_buy_buff_success"))
 				end
 			end,{content = Csv.Text("siege_buybuff_Tips1",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
 		else
@@ -336,27 +366,18 @@ function _P.OnBuyKillBuff(self,index)
 	local hasItem = MBag.GetItemNum(KILL_ITEM_ID)
 	if hasItem > 0 then
 		CSiege.ReqUsekillBuff(STRENGTH_BUFF_ID)
+		--
+		CCommon.ShowError(Csv.Text("siege_use_buff_success"))
 	else
 		WindowMgr.Create("USiegeTreasurePanel",MSiege.ActivityId,MSiege.Phase,true)
-		--[[
-		local _cost = _P.GetBuffCost(data,buffInfo)
-		local itemDate = Csv.Item[Define.AssetsType.Gold]
-		local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
-		
-		if hasGold >= _cost then
-			CCommon.CheckTips(function(isSure,rg)
-				if isSure then
-					CSiege.BuyOrderReq()
-				end
-			end,{content = Csv.Text("siege_buybuff_Tips1",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
-		else
-			CCommon.CheckTips(function(isSure,rg)
-				if isSure then
-					CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
-				end
-			end,{content = Csv.Text("siege_buybuff_Tips2",{cost = _cost,name = data.name,value = math.ceil(data.powerAdd/100)})})
-		end
-		--]]
+	end
+end
+
+function _P.ShowBuffTips(self,index)
+	local buffInfo = MSiege.GetBuffInfo(index)
+	local data = Csv.SiegeBuff[buffInfo.id]
+	if data ~= nil then
+		CCommon.CheckTips(function(isSure,rg) end, {content = data.tips, isNoCancel = true})
 	end
 end
 
@@ -384,10 +405,22 @@ end
 function _P.OnChooseStaff(self, staffId,moudle)
 	self.ChoosedStaffId = staffId
 
+	if self.StaffPrefab ~= nil then
+		self.StaffPrefab:Destroy()
+		self.StaffPrefab = nil
+	end
+
 	if staffId > 0 then
 		local info = MStaff.GetStaffDataByID(staffId)
 		local staffCsv = Csv.Personnel[staffId]
-		moudle:Get("StaffBSX").SpriteName = staffCsv.asset
+
+		if staffCsv.prefab ~= nil and staffCsv.prefab > 0 then
+			self.StaffPrefab = CCommon.CreateActor(moudle:Get("StaffBSX"), staffCsv.prefab, CCommon.ActorFieldMap.siege_staff)
+			moudle:Get("StaffBSX").SpriteName = ""
+		else
+			moudle:Get("StaffBSX").SpriteName = staffCsv.asset
+		end	
+		
 		moudle:Get("valueNum").Text = tostring(info.power)
 
 		MSiege.SelectHero = info
@@ -421,17 +454,36 @@ function _P.ReadyFight(self,data)
 	ownInfo.Activity = true
 	diyuText.Activity = true
 
-	bossIcon.SpriteName = self.mBossData.body--
-	bloodValue.Text = math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"
-	--_P.CreateOwnRank(self,data.own)
-	
+	if self.BossPrefab ~= nil then
+		self.BossPrefab:Destroy()
+		self.BossPrefab = nil
+	end
+
+	local bossData = self.mBossData
+	if bossData.prefab ~= nil and bossData.prefab > 0 then
+		self.BossPrefab = CCommon.CreateActor(bossIcon, bossData.prefab, CCommon.ActorFieldMap.siege_boss)
+		bossIcon.SpriteName = ""
+	else
+		bossIcon.SpriteName = self.mBossData.body
+	end
+	bloodValue.Text = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax) .. "%"----math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"
+
 	MSiege.BossPower = data.bossBlood
 	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
 	
 	local heroData = MSiege.SelectStaff() --每个boss的员工不通用
+	if self.StaffPrefab ~= nil then
+		self.StaffPrefab:Destroy()
+		self.StaffPrefab = nil
+	end
 	if heroData ~= nil then
 		local PersonnelData = Csv.Personnel[heroData.id]
-		self.mHeroIcon.SpriteName = PersonnelData.asset
+		if PersonnelData.prefab ~= nil and PersonnelData.prefab > 0 then
+			self.StaffPrefab = CCommon.CreateActor(self.mMoudle:Get("StaffBSX"), PersonnelData.prefab, CCommon.ActorFieldMap.siege_staff)
+			self.mHeroIcon.SpriteName = ""
+		else
+			self.mHeroIcon.SpriteName = PersonnelData.asset
+		end
 		self.mHeroPower.Text = heroData.power
 		MSiege.SelectHero = heroData
 	else
@@ -487,9 +539,9 @@ function _P.ShowFight(self,data,callBack)
 		end
 		
 		local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
-			if info.BloodText ~= nil then info.BloodText.Text = math.floor((value / self.FullBlood) * 100 + 0.5).."%" end
+			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",(value / self.FullBlood) * 100).."%" end
 		end, function()
-			if info.BloodText ~= nil then info.BloodText.Text = math.floor(fill * 100 + 0.5).."%" end
+			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",fill * 100).."%" end
 
 			CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
 		end)

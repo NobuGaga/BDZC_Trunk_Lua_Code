@@ -37,18 +37,17 @@ function _M:OnCreate(data,id)
 	local text5 = moudle:Get("text5")
 
 	--text1.Text = Csv.Text("finance_rewardTitle_fb2",{num = data.rank})--"恭喜总裁在【抵御索罗斯】活动中获得第"..data.rank.."名"
-	text2.Text =  Csv.Text("finance_result_scoreFb2",{num = data.score})--"副本分数："--"副本分数："
+	text2.Text =  Csv.Text("siege_battle_getgongxian",{num = data.jifen})--"副本分数："--"副本分数："
 	text3.Text = ""
-	text4.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})----"副本积分："
+	text4.Text = Csv.Text("siege_battle_getjifen",{num = data.jifen})----"副本积分："
 	text5.Text = ""
 
+
 	local itemContent = moudle:Get("Items")
-	local rewardItes = Csv.SiegeBoss[id]
+	local rewardItes = data.killitems--Csv.SiegeBoss[id]
 	if rewardItes ~= nil then
-		if rewardItes.item ~= nil then
-			for k,v in pairs(rewardItes.item) do
-				CCommon.CreateItem(itemContent, v[1], nil, {num = v[2]})
-			end
+		for k,v in pairs(rewardItes) do
+			CCommon.CreateItem(itemContent, v.id, CCommon.ShowItemTips, {num = v.count})
 		end
 	end
 	

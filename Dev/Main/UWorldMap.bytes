@@ -282,6 +282,9 @@ function _M:OnCreate()
 	local tRank = rankRed.CachedTran:GetJTweener("T_Effect_Guodong")
 	tRank:Play()
 
+	self.skyRect = moudle:Get("SkyRect")
+	self.medRect = moudle:Get("MediumRect")
+
 	_R.SetCompanyIcon(self)
 	_P.CheckWharfOpen(self)
 
@@ -385,16 +388,19 @@ function _P.SetMapBg(self)
 end
 
 -- 拖动列表设置值
+local vecTmp1 = Vector2.zero
+local vecTmp2
 function _P.OnScrollValueChange(self)
-	local module = self.Moudle
 	local contentPos = self.Map.LocalPosition
-	local skyRect = module:Get("SkyRect")
-	local medRect = module:Get("MediumRect")
-	
 	local x = contentPos.x
-	local y = (GameSetting.IsiOSCommit and 20) or 0
-	skyRect.LocalPosition = Vector2(x * 0.26, 0)
-	medRect.LocalPosition = Vector2(x * 0.36 + HillOffset, y)
+	vecTmp1.x = x * 0.26
+	if vecTmp2 == nil then
+		vecTmp2 = Vector2(x * 0.36 + HillOffset, (GameSetting.IsiOSCommit and 20) or 0)
+	else
+		vecTmp2.x = x * 0.36 + HillOffset
+	end
+	self.skyRect.LocalPosition = vecTmp1
+	self.medRect.LocalPosition = vecTmp2
 end
 
 

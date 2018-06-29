@@ -60,7 +60,10 @@ function _P.OnCreateList(self)
 
 			local ImgColor = shopMoudle:Get("product_box1")
 			ImgColor.SpriteName = csvItem.colorIcon
-			CCommon.CreateItemLight(ImgColor.transform, Define.SysId.Shop, nil, csvItem.color)
+			local effectMoudle = CCommon.CreateItemLight(ImgColor.transform, Define.SysId.Shop, nil, csvItem.color)
+			if effectMoudle ~= nil then
+				effectMoudle.SelfRect.CachedTran:SetSiblingIndex(1)
+			end
 
 
 			shopMoudle:Get("product_box1"):AddOnButton(function(...)

@@ -33,7 +33,12 @@ function _M:OnCreate(data)
 	local nameText = moudle:Get("name")
 	local DescValue = moudle:Get("Text1")
 
-	icon.SpriteName = girlData.bigIcon
+	local csvGirl = Csv.Girl[data.girlid]
+	if csvGirl and csvGirl.prefab then
+		CCommon.CreateActor(icon, csvGirl.prefab, CCommon.ActorFieldMap.wharf_game_info)
+	else
+		icon.SpriteName = girlData.bigIcon
+	end
 	nameText.Text = MGirl.GetGirlName(data.girlid)--girlData.name
 	DescValue.Text = girlData.tips
 

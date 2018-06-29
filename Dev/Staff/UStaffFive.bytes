@@ -3,15 +3,22 @@ local JGuiManager = CS.JGui.JGuiManager
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MStaff = JRequire "Dev.Staff.MStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
 local _M = Class(WindowBase)
 
 local StaffTable = Csv.Const(Define.Const.StaffFive)
 local RecreationManTable = Csv.Const(Define.Const.RecreationMan)
+local BigWigTable = Csv.Const(Define.Const.BigWigTable)
 
 --界面构建
 function _M:ctor(parent, specialId)
 	self._RootNode = parent
-	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Jgwh_Gh")
+	local moudle
+	if specialId == 6 then
+		moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Cjdh_Gh")
+	else
+		moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Jgwh_Gh")
+	end
 	self.mMoudle = moudle
 
 	moudle:Get("title").Text = Csv.Text("staff_speT")
@@ -22,13 +29,22 @@ function _M:ctor(parent, specialId)
 		staffList = StaffTable
 	elseif specialId == 5 then
 		staffList = RecreationManTable
+	elseif specialId == 6 then
+		staffList = BigWigTable
 	end
 
 	for k,v in ipairs(staffList) do
 		local csvStaff = Csv.Personnel[v]
 		local bsx = moudle:Get("bsx"..k)
 		if bsx ~= nil then
-			bsx.SpriteName = csvStaff.asset
+			if csvStaff.prefab then
+				CCommon.CreateActor(bsx, csvStaff.prefab, CCommon.ActorFieldMap.super_get, function(actor)
+					actor.SkeletonIsGray = MStaff.StaffTable[v] == nil
+				end)
+				bsx.SpriteName = ""
+			else
+				bsx.SpriteName = csvStaff.asset
+			end
 			if MStaff.StaffTable[v] ~= nil then
 				staffNum = staffNum + 1
 			else

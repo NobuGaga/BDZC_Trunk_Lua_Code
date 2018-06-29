@@ -5,6 +5,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local JGuiManager = CS.JGui.JGuiManager
 local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -29,7 +30,12 @@ function _M:OnCreate(data)
 		for k,v in pairs(data.list) do
 			local girlMoudle = JGuiManager.GetMoudle(content,"M_gir_BatchUse_Item")
 			local csvGirl = Csv.Girl[v.girlid]
-			girlMoudle:Get("BSX").SpriteName = csvGirl.homeicon
+			local girlNode = girlMoudle:Get("BSX")
+			if csvGirl.prefab then
+				CCommon.CreateActor(girlNode, csvGirl.prefab, CCommon.ActorFieldMap.bag_use_girl)
+			else
+				girlNode.SpriteName = csvGirl.homeicon
+			end
 			if v.type ~= nil then
 				girlMoudle:Get("Text").Text = Csv.Text("bag_girlT"..v.type)
 			end

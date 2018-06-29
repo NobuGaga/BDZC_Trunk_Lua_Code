@@ -544,6 +544,8 @@ function _M.OnGetNewGirl(girlId)
 	if csv.story ~= nil then
 		MMain.EnqueueWaitStory(1,girlId,csv.story)
 		WindowMgr.Call("UMain","ShowStory")
+	else
+		EventCenter.CallEventTrigger(Define.EventListenId.GetGirl, girlId)
 	end	
 end
 
@@ -580,6 +582,8 @@ function _M.OnGetNewStaff(staffId)
 			MMain.EnqueueWaitStory(2,staffId,csv.story)
 			WindowMgr.Call("UMain","ShowStory")
 		end
+	else
+		EventCenter.CallEventTrigger(Define.EventListenId.GetStaff, staffId)
 	end	
 end
 

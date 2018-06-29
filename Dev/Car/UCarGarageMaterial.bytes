@@ -191,10 +191,13 @@ function _P.OnSelectMatData(self, data, isUpdate, index)
 	local item = self.mAllMatData[index]
 	if item ~= nil then
 		local itemModule = item.module
+		self.ImgSelect.Activity = true
+		self.ImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+		self.ImgSelect.LocalPosition = Vector2(0,0)
+		self.ImgSelect.CachedTran:SetSiblingIndex(0)
 		self.ImgSelect:SetParent(itemModule.SelfRect.CachedTran)
 		self.ImgSelect.LocalPosition = Vector2(0,0)
 		self.ImgSelect.CachedTran:SetSiblingIndex(0)
-		self.ImgSelect.Activity = true
 	end
 end
 
@@ -241,7 +244,7 @@ function _P.SetBtnData(self, sellConf)
 	sellBtn.Activity = false
 	otherBtn.Activity = false
 
-	if sellConf.useType and sellConf.useType[1] ~= nil then
+	if sellConf ~= nil and sellConf.useType and sellConf.useType[1] ~= nil then
 		sellBtn.Activity = true
 		otherBtn.Activity = false
 
@@ -252,7 +255,7 @@ function _P.SetBtnData(self, sellConf)
 		end, nil, 0.9)
 	end
 	
-	if sellConf.useType and sellConf.useType[2] ~= nil then
+	if sellConf ~= nil and sellConf.useType and sellConf.useType[2] ~= nil then
 		sellBtn.Activity = true
 		otherBtn.Activity = true
 

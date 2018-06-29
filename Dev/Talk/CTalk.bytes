@@ -109,7 +109,9 @@ function _P.OnGetNewTalk(data)
 		tipsData.funcId = Define.SysId.Talk_Private
 		tipsData.id = data.sender
 		tipsData.name = data.sendername
-		_P.ShowMsgTips(tipsData)
+		if data.from ~= 1 then
+			_P.ShowMsgTips(tipsData)
+		end
 		CFriend.OnPrivateTalk(data)
 	else
 		if MFriend.CheckRelation(data.sender, MFriend.RelationType.BlackList) then

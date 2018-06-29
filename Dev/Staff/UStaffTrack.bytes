@@ -47,14 +47,16 @@ function _M:OnCreate(staffID)
 	if trackCsv and trackCsv.showType and trackCsv.showType == 1 then
 		iconRect.Activity = false
 		noneRect.Activity = true
+		moudle:Get("StaffIcon").Activity = false
 	else
 		iconRect.Activity = true
 		noneRect.Activity = false
 		local csvColorUp = Csv.ColorUp[staffCsv.color]
 		moudle:Get("ItemColor").SpriteName = "ty_018"
 		moudle:Get("ItemName").Text = Csv.Text("common_color",{num = csvColorUp.str,name = staffCsv.name})
-		moudle:Get("mask").Activity = true
-		moudle:Get("StaffIcon").SpriteName = staffCsv.asset
+		-- moudle:Get("mask").Activity = true
+		moudle:Get("StaffIcon").SpriteName = staffCsv.asset4
+		moudle:Get("StaffIcon").Activity = true
 		moudle:Get("ItemNum").Text = Csv.Text("bag_itemTrack5", {num = 0, max = 1})
 	end
 

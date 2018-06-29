@@ -230,13 +230,12 @@ end
 function _P.InitActivityInfo(self)
 	self.poster = self.moudle:Get("poster")
 	self.textTime = self.moudle:Get("textTime")
-	self.textTargetDesc = self.moudle:Get("textTargetDesc")
+	self.targetDesc = self.moudle:Get("targetDesc")
 	self.textTargetNum = self.moudle:Get("textTargetNum")
 	self.moudle:Get("btnJump"):AddOnButton(function()
 		SoundMgr.Play(10001)
 		WindowMgr.Create("USevenDayTargetJump", self.selectActData.jumpTitle, self.selectActData.jumpIDName)
 	end)
-	self.moudle:Get("testJump").Text = Csv.Text("sevendaytarget_jump")
 end
 
 --刷新活动信息
@@ -254,17 +253,22 @@ end
 
 --刷新活动进度信息
 function _P.RefreshActivityProcessInfo(self)
-	local desc
-	local num
 	if TargetRankDifPro[self.selectActData.type] and not self.isSelectTarget then
-		desc = self.selectActData.rankTitle .. ":"
-		num = self.selectActData.rankPro
+		self.textTargetNum.Text = self.selectActData.rankPro
 	else
-		desc = self.selectActData.targetTitle
-		num = self.selectActData.curPro
+		self.textTargetNum.Text = self.selectActData.curPro
 	end
-	self.textTargetDesc.Text = desc
-	self.textTargetNum.Text = num
+	if self.selectActData.posterFont then
+		if self.isSelectTarget and self.selectActData.posterFont[1] then
+			self.targetDesc.SpriteName = self.selectActData.posterFont[1]
+		elseif not self.isSelectTarget and self.selectActData.posterFont[2] then
+			self.targetDesc.SpriteName = self.selectActData.posterFont[2]
+		else
+			self.targetDesc.SpriteName = ""
+		end
+	else
+		self.targetDesc.SpriteName = ""
+	end
 end
 
 --刷新活动倒计时

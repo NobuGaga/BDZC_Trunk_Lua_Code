@@ -109,6 +109,16 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.RefreshMemberNum(self)
+	local moudle = self.Moudle
+	local info = MCommerce.MyCommerceInfo
+	if info ~= nil then
+		local myInfo = info.myInfo
+		local csv = Csv.Commerce[info.level]
+		moudle:Get("WealthNum").Text = info.memberNum .. "/" .. csv.count
+	end
+end
+
 --界面构建
 function _M:OnCreate()
 	CCommerce.MembersReq()

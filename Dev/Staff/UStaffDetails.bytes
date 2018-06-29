@@ -98,9 +98,22 @@ function _M:OnCreate(id,chooseFuncId)
 	self.mTextName.Text = MStaff.GetStaffName(id)--person.name
 
 	moudle:Get("ty_145").SpriteName = "ty_145"
-	moudle:Get("Speciality").Text = Csv.Text("staff_speciality")..person.specialty
-	local width = moudle:Get("Speciality").PreferredWidth
-	moudle:Get("ty_145").SizeDelta = Vector2(width+50,moudle:Get("ty_145").PreferredWidth)
+	moudle:Get("Speciality").Text = Csv.Text("staff_speciality")
+
+	local width = 90 + #person.specialtyIcon * 62
+	moudle:Get("ty_145").SizeDelta = Vector2(width,moudle:Get("ty_145").PreferredWidth)
+
+	for i = 1,4 do
+		local ygzz = moudle:Get("ygzz_"..i)
+		if ygzz ~= nil then
+			if person.specialtyIcon[i] ~= nil then
+				ygzz.Activity = true
+				ygzz.SpriteName = person.specialtyIcon[i]
+			else
+				ygzz.Activity = false
+			end
+		end
+	end
 
 	if person.prefab ~= nil and person.prefab > 0 then
 		CCommon.CreateActor(moudle:Get("StaffIcon"), person.prefab, CCommon.ActorFieldMap.staff_info)
@@ -204,7 +217,10 @@ end
 
 -- 播放升级特效
 function _R.OnPlayLevelUpAnim(self)
-	CCommon.CreateEffect(self.mMoudle:Get("AttiActorPanel"), levelUpAttrActorId)
+	--CCommon.CreateEffect(self.mMoudle:Get("AttiActorPanel"), levelUpAttrActorId)
+	if MStaff.LastChoose == Staff_Attr then
+		self.ChooseMoudle:ShowAttrEffect()
+	end
 	CCommon.CreateEffect(self.mMoudle:Get("BobyActorPanel"), bobyUpActorId)
 end
 

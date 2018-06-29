@@ -5,6 +5,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local JGuiManager = CS.JGui.JGuiManager
 local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -29,7 +30,12 @@ function _M:OnCreate(data)
 		for k,v in pairs(data.list) do
 			local staffMoudle = JGuiManager.GetMoudle(content,"M_bag_BatchUse_Item")
 			local csvStaff = Csv.Personnel[v.staffid]
-			staffMoudle:Get("BSX").SpriteName = csvStaff.asset
+			local staffNode = staffMoudle:Get("BSX")
+			if csvStaff.prefab then
+				CCommon.CreateActor(staffNode, csvStaff.prefab, CCommon.ActorFieldMap.bag_use_staff)
+			else
+				staffNode.SpriteName = csvStaff.asset
+			end
 			if v.addskillexp ~= nil then
 				staffMoudle:Get("Text").Text = Csv.Text("bag_skillexpT")
 				staffMoudle:Get("NumText").Text = Csv.Text("bag_addnum",{num = v.addskillexp})

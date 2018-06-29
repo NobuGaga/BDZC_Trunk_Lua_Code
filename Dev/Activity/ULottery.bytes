@@ -82,6 +82,15 @@ function _R.OnUpdateInfo(self, actId)
 	end
 end
 
+function _R.OnUpdateSuperGetter(self)
+	local playerInfo = MActivity.LotterySuperGetter
+	if playerInfo.playerName == nil or playerInfo.playerName == "" then
+		self.DezhuName.Text = Csv.Text("vote_26")
+	else
+		self.DezhuName.Text = playerInfo.playerName
+	end	
+end
+
 function _P.playGoodItemFx(self, itemList, callBack)
 	local isNeedShow = false
 	for k,v in pairs(itemList) do
@@ -416,6 +425,7 @@ function _P.ChangeActID(self)
 			local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
 			if itemLightSp ~= nil then
 				itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE2
+				itemLightSp.SelfRect.CachedTran:SetSiblingIndex(1)
 				table.insert(self.ItemLight, itemLightSp)
 			end
 		end
@@ -436,6 +446,7 @@ function _P.ChangeActID(self)
 				local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
 				if itemLightSp ~= nil then
 					itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE
+					itemLightSp.SelfRect.CachedTran:SetSiblingIndex(1)
 					table.insert(self.ItemLight, itemLightSp)
 				end
 			end
@@ -646,6 +657,10 @@ function _M:OnCreate()
 	self.MsgStop = false
 	moudle:Get("C_text_3").Text = Csv.Text("lottery_5")
 	moudle:Get("C_text_4").Text = Csv.Text("lottery_6")
+	moudle:Get("Dezhu").Text = Csv.Text("lottery_14")
+	self.DezhuName = moudle:Get("DezhuName")
+	_R.OnUpdateSuperGetter(self)
+	self.AssetText = moudle:Get("AssetNum_2")
 	self.LeftBtn = moudle:Get("C_Btn_a_0")
 	self.RightBtn = moudle:Get("C_Btn_b_0")
 	self.LeftBtn:AddOnButton(function ( ... )

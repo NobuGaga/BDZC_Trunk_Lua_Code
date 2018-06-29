@@ -9,6 +9,7 @@ local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MBag = JRequire "Dev.Bag.MBag"
 local JTweenerManager = CS.JTween.JTweenerManager
 local OutBack = CS.DG.Tweening.Ease.OutBack
+local BGMUSIC = 121
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -17,6 +18,7 @@ local _R = {}
 local ANIM_TIME = 0.2
 local BEGIN_POSX = -753
 local END_POSX = -71
+local ANIM_TIME = 1 --10%的速度
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -53,7 +55,7 @@ end
 
 --判断当前进度
 function _P.JudegeIsEnd(self)
-	if self.target < self.mData.compatibility * 100 then
+	if self.target < self.mData.compatibility then
 		self.startVal = self.target
 		self.target = _P.GetNextTarget(self)
 		return false
@@ -64,74 +66,113 @@ end
 
 --开始动画
 function _P.OnInitAnim(self,start,target)
-	self.qipao.Activity = true
+	self.qipao.Activity = false
+	local animTime = (target - start)/10 * ANIM_TIME
+	animTime = 1
 	local fill = math.min(1, target / 100)
-	self.slider:DOFillAmount(fill, 1.8)
+	self.slider:DOFillAmount(fill, animTime)
 	local targetInt = math.ceil(target)
-	local t = JTweenerManager.IntTween(start, targetInt, 1.8, function(value)
-		self.sliderText.Text = Csv.Text("adventure_handleing", {num = value}) 
+	local t = JTweenerManager.IntTween(start, targetInt, animTime, function(value)
+		self.sliderText.Text = Csv.Text("adventure_handleing", {num = value})
+		self.progressE.LocalPosition = Vector2((value/100)*614, 0)
 	end, function()
 		self.qipao.Activity = false
-		_P.OnCharterAnim(self,false)
+		local islast
+		if self.mData.compatibility > self.stage[#self.stage] then
+			islast = _P.GetNextTarget(self) == self.mData.compatibility and self.curStage > #self.stage
+		else
+			islast = _P.GetNextTarget(self) == self.mData.compatibility
+		end
+		if self.curStage <= #self.stage
+	 	then
+			_P.OnCharterAnim(self,false,islast)
+			self.curStage = self.curStage + 1
+		else
+			_P.OnCharterAnim(self,false,islast)			
+		end
 	end)
 end
 
 --人物入场动画
-function _P.OnCharterAnim(self,isReverse)
+function _P.OnCharterAnim(self,isReverse,isLast)
 	self.contenBg.Activity = false
 	self.continueBtn.Activity = false
-	-- print("talk:", _P.GetContent(self))
-	self.content.Text = _P.GetContent(self)
-	self.curStage = self.curStage + 1
+	self.content.Text = _P.GetContent(self,isLast)
 	if isReverse then
-		self.character:DOAnchorPosX(BEGIN_POSX, 0.4)
+		self.character:DOAnchorPosX(BEGIN_POSX, 0.6)
 	else
-		self.character:DOAnchorPosX(END_POSX, 0.4):OnComplete(function()
+		self.character:DOAnchorPosX(END_POSX, 0.6):OnComplete(function()
 			self.contenBg.Activity = true
 			self.contenBg.LocalScale = Vector3.zero
-			local t = self.contenBg:DOScale(1,0.5)
+			local t = self.contenBg:DOScale(1,0.7)
 			t:SetEase(OutBack)
 			self.continueBtn.Activity = true
 		end)
 	end
 end
 
-function _P.GetContent(self)
+function _P.GetContent(self,islast)
 	--第一次直接取评价值
 	if self.curStage == 1 then
-		return _P.GetContentByPoint(self,self.mData.compatibility)
-	else
-		local index = math.min(self.curStage, #self.randMatch)
+		return _P.GetContentByPoint(self,self.mData.compatibility/100)
+	elseif islast then
+		return _P.GetLastContent(self,self.mData.compatibility/100)
+	elseif self.curStage == 2 then
+		local index = math.min(self.curStage - 1, #self.randMatch)
 		local randV = self.randMatch[index]
-		return  _P.GetRandContent(self,randV)
+		return  _P.GetSecondContent(self,randV)
+	elseif self.curStage == 3 then
+		local index = math.min(self.curStage - 1, #self.randMatch)
+		local randV = self.randMatch[index]
+		return  _P.GetthirdContent(self,randV)
 	end
 	
 end
 
+function _P.GetLastContent(self, random)
+	if random <= self.talkRandGroup3[#self.talkRandGroup3].value then
+		return self.talkRandGroup3[#self.talkRandGroup3].key
+	end
+	for index=1,#self.talkRandGroup3 do
+		if random > self.talkRandGroup3[index].value then
+			local findIndex = math.max(1, index-1)
+			return self.talkRandGroup3[findIndex].key
+		end
+	end
+end
+
 function _P.GetContentByPoint(self,random)
-	-- print("randv",random)
-	-- LuaUtil.DumpTable(self.talkGroup)
-	if random <= self.talkGroup[1].value then
-		return self.talkGroup[1].key
+	if random <= self.talkGroup[#self.talkGroup].value then
+		return self.talkGroup[#self.talkGroup].key
 	end
 	for index=1,#self.talkGroup do
 		if random > self.talkGroup[index].value then
-			local findIndex = math.min(index+1,#self.talkGroup)
+			local findIndex = math.max(1, index-1)
 			return self.talkGroup[findIndex].key
 		end
 	end
 end
 
-function _P.GetRandContent(self,randv)
-	-- print("randv",randv)
-	-- LuaUtil.DumpTable(self.talkRandGroup)
-	if randv <= self.talkRandGroup[1].value then
-		return self.talkRandGroup[1].key
+function _P.GetSecondContent(self,randv)
+	if randv <= self.talkRandGroup1[#self.talkRandGroup1].value then
+		return self.talkRandGroup1[#self.talkRandGroup1].key
 	end
-	for index=1,#self.talkRandGroup do
-		if randv > self.talkRandGroup[index].value then
-			local findIndex = math.min(index+1,#self.talkRandGroup)
-			return self.talkRandGroup[findIndex].key
+	for index=1,#self.talkRandGroup1 do
+		if randv > self.talkRandGroup1[index].value then
+			local findIndex = math.max(1, index-1)
+			return self.talkRandGroup1[findIndex].key
+		end
+	end
+end
+
+function _P.GetthirdContent(self,randv)
+	if randv <= self.talkRandGroup2[#self.talkRandGroup2].value then
+		return self.talkRandGroup2[#self.talkRandGroup2].key
+	end
+	for index=1,#self.talkRandGroup2 do
+		if randv > self.talkRandGroup2[index].value then
+			local findIndex = math.max(1, index-1)
+			return self.talkRandGroup2[findIndex].key
 		end
 	end
 end
@@ -139,17 +180,18 @@ end
 function _P.GetNextTarget(self)
 	--已经第三阶段
 	if self.stage[#self.stage] == self.target then
-		return self.mData.compatibility * 100
+		return self.mData.compatibility
 	else
-		for i=1,#self.stage do
-			-- print("self", self.mData.compatibility * 100)
-			if self.stage[i] == self.target and 
-			self.stage[i+1] < self.mData.compatibility * 100 then
-				return self.stage[i+1]
+		if self.curStage <= #self.stage then
+			if self.stage[self.curStage] < self.mData.compatibility then
+				return self.stage[self.curStage]
 			else
-				return self.mData.compatibility * 100
+				return self.mData.compatibility
 			end
+		else
+			return self.mData.compatibility
 		end
+
 	end
 end
 
@@ -185,15 +227,23 @@ function _M:OnCreate(data,OnClose)
 	self.qipao = module:Get("qipao")
 	self.slider = module:Get("Fill")
 	self.sliderText = module:Get("SliderNum")
+	self.sgirl = module:Get("DB_SecretaryGirl")
 	self.character = module:Get("Bsx")
 	self.contenBg = module:Get("Dhk") 
 	self.content = module:Get("DhxText")
 	self.continueBtn = module:Get("Btn")
 	module:Get("BtnText").Text = Csv.Text("adventure_continue")
 
+	self.progressE = module:Get("progressActor")
+	CCommon.CreateEffect(self.progressE, 10154)
+
+	SoundMgr.PlayMusic(BGMUSIC)
 	self.stage = {}
 	for i=1,#self.adventureCsv.popTarget do
 		self.stage[i] = self.adventureCsv.popTarget[i][1]
+		if i <= 3 then
+			module:Get("Kedu"..i).LocalPosition = Vector2((self.stage[i]/100) * 614, 0)
+		end
 	end
 	for i=1,4 do
 		module:Get("QIPAO"..i).Alpha = 0
@@ -212,16 +262,33 @@ function _M:OnCreate(data,OnClose)
 		return a.value > b.value
 	end)
 
-	self.talkRandGroup = {}
-	for k,v in pairs(self.advEventCsv.talkrandomGroup) do
-		table.insert(self.talkRandGroup,{key = k, value = v})
+	self.talkRandGroup1 = {}
+	for k,v in pairs(self.advEventCsv.talkrandomGroup1) do
+		table.insert(self.talkRandGroup1,{key = k, value = v})
 	end
-	table.sort(self.talkRandGroup, function(a,b)
+	table.sort(self.talkRandGroup1, function(a,b)
 		return a.value > b.value
 	end)
 
-	--TODO:妹子图片走配置
-	self.character.SpriteName = self.advEventCsv.talkIcon
+	self.talkRandGroup2 = {}
+	for k,v in pairs(self.advEventCsv.talkrandomGroup2) do
+		table.insert(self.talkRandGroup2,{key = k, value = v})
+	end
+	table.sort(self.talkRandGroup2, function(a,b)
+		return a.value > b.value
+	end)
+
+	self.talkRandGroup3 = {}
+	for k,v in pairs(self.advEventCsv.talkrandomGroup3) do
+		table.insert(self.talkRandGroup3,{key = k, value = v})
+	end
+	table.sort(self.talkRandGroup3, function(a,b)
+		return a.value > b.value
+	end)
+
+	CCommon.CreateEffect(self.sgirl, 20003)
+	self.sgirl.LocalScale = Vector3(0.4,0.4,0.4)
+	self.sgirl.LocalPosition = Vector2(20,-900)
 	self.Bg.SpriteName = self.advEventCsv.talkBg
 
 	self.target = self.stage[1]

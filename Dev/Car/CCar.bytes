@@ -89,7 +89,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sCarTotalSell]     = { proto = "PCar.SCarTotalSell",	 handle = _P.OnTotalSellBack},
 		[ECmdId.sCarIntensify]     = { proto = "PCar.SCarUpdate",		 handle = _P.OnIntensifyBack},
 		[ECmdId.sCarItemBreakDown] = {									 handle = _P.OnCarItemBreakDownBack},
-		[ECmdId.sCarMerge]		   = { proto = "PCar.PCarInfo",		 	 handle = _P.OnCarItemMergeBack},
+		[ECmdId.sCarMerge]		   = { proto = "PCar.SCarMerge",		 handle = _P.OnCarItemMergeBack},
 	}
 	-- 调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Car, func_send, func_recv, isReload)
@@ -184,7 +184,7 @@ end
 
 -- 材料合成请求
 function _M.CarItemMergeReq(itemid)
-	_M.Send(ECmdId.sCarMerge, {itemid = itemid})
+	_M.Send(ECmdId.cCarMerge, {itemid = itemid})
 end
 
 

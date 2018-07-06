@@ -115,7 +115,7 @@ function _P.GetActiveEventList(self, funId)
 	if self.mData.shopEventList == nil then return end
 	for k,v in pairs(self.mData.shopEventList) do
 		if funId == 1  and v.type == funId then
-			if v.triggerTime + ADVCOUNTTIME > HeartBeat.ServSecond()  and self.mData.state.lefttime > HeartBeat.ServSecond() then
+			if (v.triggerTime or 0) + ADVCOUNTTIME > HeartBeat.ServSecond()  and self.mData.state.lefttime > HeartBeat.ServSecond() then
 				table.insert(eventList, v)
 			end
 		elseif funId == 2 and v.type == funId then
@@ -130,9 +130,9 @@ function _P.AddItemToContent(self,content,data, type)
 
 	local isSelf = data.playerInfo.playerId == MPlayer.GetId()
 	if type == 1 then
-		_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME, data)--ADVCOUNTTIME
+		_P.OnUpdateTime(self, moudle:Get("TimeText"), (data.triggerTime or 0) + ADVCOUNTTIME, data)--ADVCOUNTTIME
 		local t = moudle.SelfRect:AddOnUpdate(function()
-			_P.OnUpdateTime(self, moudle:Get("TimeText"), data.triggerTime + ADVCOUNTTIME, data)
+			_P.OnUpdateTime(self, moudle:Get("TimeText"), (data.triggerTime or 0) + ADVCOUNTTIME, data)
 		end, nil, 1)
 		table.insert(self.timerTab, t)
 	end
@@ -202,7 +202,7 @@ function _P.AddItemToContent(self,content,data, type)
 		for i=1, len do
 			local iid = subEventCsv.joinReward[i][1]
 			local num = subEventCsv.joinReward[i][2]
-			CCommon.CreateItem(content,iid,nil,{num = num},nil)
+			CCommon.CreateItem(content, iid, CCommon.ShowItemTips, {num = num})
 		end
 	end
 	if isSelf and type == 1 then

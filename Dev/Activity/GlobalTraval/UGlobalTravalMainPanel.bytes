@@ -24,6 +24,8 @@ local RewardEffectId = 10161
 local OffestX = 48
 local OffestY = 42
 local QualityScaleNumArr = Csv.Const(20159)
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
 
 
 function _M:Dispatch(funcName, ...)
@@ -41,6 +43,7 @@ function _M:OnCreate()
 	local actId = MActivity.ActIdForType[Define.ActivityType.GlobalTraval]
 	if actId ~= nil then
 		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
 	end
 
 	if module == nil or self.ActInfo == nil then
@@ -73,16 +76,22 @@ function _M:OnCreate()
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UGlobalTravalExchange", self.ActInfo)
 	end, nil, 0.9)
+	self.ExchangeBtn = exchangeBtn
 
 	CCommon.CreateEffect(module:Get("ExActorPanel"), RewardEffectId)
-	_P.UpdateExchangeEffect(self, self.ActInfo.numberCount)
+	_P.UpdateExchangeEffect(self, self.ActInfo.exchangeShop, self.ActInfo.numberCount)
 
 	local enterBtn = module:Get("EnterBtn")
 	enterBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
+
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
 		_P.OnEnterTraval(self)
 	end, nil, 0.9)
 	module:Get("EnterText").Text = Csv.Text("global_forward")
+	module:Get("Tips_0").Text = Csv.Text("global_show")
 
 	local addBtn = module:Get("AddBtn")
 	addBtn:AddOnButton(function ( ... )
@@ -121,7 +130,27 @@ end
 function _P.SetGridDetail(self, curPosId)
 	local gridConf = Csv.GlobalTravalItem[curPosId]
 	if gridConf then
-		self.mModule:Get("Tips").Text = gridConf.desc
+		local curItemId = 0
+		for k,v in pairs(self.ActInfo.posReward) do
+			if v.posId == curPosId then
+				curItemId = v.itemId
+				break
+			end
+		end
+
+		local itemName = ''
+		local tipText = self.mModule:Get("Tips")
+		if curItemId ~= 0 then
+			local itemConf = Csv.Item[curItemId]
+			if itemConf then
+				itemName = itemConf.name
+				tipText.Text = Csv.Text(gridConf.desc, {name = itemName})
+			else
+				tipText.Text = Csv.Text("global_tips")
+			end
+		else
+			tipText.Text = Csv.Text("global_tips")
+		end
 	end
 end
 
@@ -152,10 +181,9 @@ function _P.SetOneCityData(self, data, travalLoopCount, isSetHeadPos)
 			_P.OnClickIcon(itemConf.id)
 		end, nil, 1)
 
-		local offestX = (iconImg.SizeDelta.x * (1 - scaleNum) / 4)
 		local offestY = (iconImg.SizeDelta.y * (1 - scaleNum) / 4)
 		iconImg.LocalScale = Vector3(scaleNum, scaleNum, scaleNum)
-		iconImg.LocalPosition = Vector2(iconImg.LocalPosition.x - offestX, iconImg.LocalPosition.y - offestY)
+		iconImg.LocalPosition = Vector2(0, iconImg.LocalPosition.y - offestY)
 
 		local curTruePos = (((not isSetHeadPos) and travalLoopCount and travalLoopCount > 1 and 1) or 0) * self.MaxGridNum + data.posId
 		_P.SetItemGray(self, curTruePos <= self.ActInfo.curPosId, data.posId)
@@ -224,10 +252,11 @@ end
 
 
 function _P.OnBuyTravalCount(self)
+	local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
 	local needCost = _P.GetNeedCostNum(self)
+	local hasBuyCount = travalConf.buyLimit + self.extraBuyTime - self.ActInfo.buyCount
 	CCommon.CheckTips(function(isSure,rg)
 		if isSure == true then
-			local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
 			local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
 			if hasNum < needCost then
 				CCommon.ShowError(Csv.Text("err_shop_buytype"))
@@ -239,7 +268,7 @@ function _P.OnBuyTravalCount(self)
 				end
 			end
 		end
-	end, {content = Csv.Text("global_buyShow", {num = needCost})})
+	end, {content = Csv.Text("global_buyShow", {num = needCost, num1 = hasBuyCount})})
 end
 
 
@@ -247,7 +276,7 @@ function _P.OnMoveHead(self, data, callBack)
 	local pos = self.HeadMovePos[1].pos
 	local curIndex = self.HeadMovePos[1].index
 	if pos then
-		_P.SetMapSide(self, pos)
+		_P.SetMapSide(self, pos, data.curPosId)
 
 		local headMoveAnim = self.HeadBox:DOAnchorPos(Vector2(pos[1], pos[2]), 0.35)
 			headMoveAnim:OnComplete(function ()
@@ -299,8 +328,10 @@ function _P.UpdateMapData(self, cityList, passPosList, travalLoopCount, callBack
 	local fadeOutTween = cityMap.CachedTran:GetJTweener(MOUDLE_FADEOUT)
 	fadeOutTween:Play()
 
-	for k,v in pairs(cityList) do
-		_P.SetOneCityData(self, v, travalLoopCount, false)
+	if cityList ~= nil and next(cityList) ~= nil then
+		for k,v in pairs(cityList) do
+			_P.SetOneCityData(self, v, travalLoopCount, false)
+		end
 	end
 
 	cityMap:AddOnTime(function()
@@ -348,17 +379,21 @@ end
 
 
 -- 分左右两边，要么显示左边，要么显示右边
-function _P.SetMapSide(self, pos)
+function _P.SetMapSide(self, pos, lastIndex)
 	local width = CS.JGui.JGuiManager.GuiRoot.Width
 	local mapRect = self.mModule:Get("Map")
 	local mapPosX = mapRect.LocalPosition.x
 	local mapPosY = mapRect.LocalPosition.y
 	local moveX = nil
 
-	if pos[1] >= width and mapPosX >= -width then
-		moveX = - width
-	elseif pos[1] < width and (mapPosX < -width or mapPosX ~= 0) then
-		moveX = 0
+	if lastIndex == 20 or lastIndex == 38 then -- 最后位置定在中间位置，需要特殊处理
+		moveX = - width / 2
+	else
+		if pos[1] >= width and mapPosX >= -width then
+			moveX = - width
+		elseif pos[1] < width and (mapPosX < -width or mapPosX ~= 0) then
+			moveX = 0
+		end
 	end
 
 	if moveX then
@@ -404,10 +439,12 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 	local actorPanel = self.mModule:Get("ActorPanel")
 	local diceImg = self.mModule:Get("DiceImg")
 
-	if data.passPosList ~= nil or next(data.passPosList) ~= nil then
+	if data.passPosList ~= nil and next(data.passPosList) ~= nil then
 		self.ActInfo.passPosList = data.passPosList
 	end
 
+	self:Lock()
+	self.ExchangeBtn.RaycastTarget = false
 	diceImg.SpriteName = self.DiceNameArrs[data.diceNumber]
 	CCommon.CreateEffect(actorPanel, DiceEffectID, nil, function( ... )
 		diceImg.Activity = true
@@ -433,25 +470,20 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 
 			if next(posList) ~= nil then
 				self.HeadMovePos = posList
-				self:Lock()
 
 				local MoveFunc = function ( ... )
 					_P.OnMoveHead(self, data, function()
 						if data.diceNumber == 6 then-- 移动完成后
 							-- 播放骰子摇到6特效
 							CCommon.CreateEffect(actorPanel, DoubleActorId, nil, function( ... ) 
-								_P.OnPlayGetAnim(self, data)
-								callback()
-								self:Unlock()
+								_P.SetMapUnLock(self, data, callback)
 							end)
 						else
-							_P.OnPlayGetAnim(self, data)
-							callback()
-							self:Unlock()
+							_P.SetMapUnLock(self, data, callback)
 						end
 	
 						_P.SetGridDetail(self, data.curPosId)
-						_P.UpdateExchangeEffect(self, data.numberCount)
+						_P.UpdateExchangeEffect(self, self.ActInfo.exchangeShop, data.numberCount)
 					end)
 				end
 				
@@ -472,10 +504,22 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 end
 
 
+function _P.SetMapUnLock(self, data, callback)
+	_P.OnPlayGetAnim(self, data)
+	callback()
+	self.ActInfo = MActivity.GetFromId(self.ActId)
+
+	self.ExchangeBtn:AddOnTime(function()
+		self:Unlock()
+		self.ExchangeBtn.RaycastTarget = true
+	end, nil, 0.5)
+end
+
+
 -- 更新特效状态
-function _P.UpdateExchangeEffect(self, numberCount)
+function _P.UpdateExchangeEffect(self, exchangeShop, numberCount)
 	local exchangeActorPanel = self.mModule:Get("ExActorPanel")
-	local isShowBtnEffect = MActivity.CheckHasExchange(numberCount)
+	local isShowBtnEffect = MActivity.CheckHasExchange(exchangeShop, numberCount)
 	exchangeActorPanel.Activity = isShowBtnEffect
 end
 
@@ -490,7 +534,28 @@ end
 
 
 function _R.UpdateExchangeData(self)
-	_P.UpdateExchangeEffect(self, self.ActInfo.numberCount)
+	_P.UpdateExchangeEffect(self, self.ActInfo.exchangeShop, self.ActInfo.numberCount)
+end
+
+
+function _R.OnUpdateViewState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+	end
+end
+
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
 end
 
 

@@ -1131,6 +1131,18 @@ function _M.SetZhaoqinCD(tick)
 	end
 end
 
+function _M.GetQingqiuById(id)
+	local list = {}
+	if _M.MarriedQingqiu ~= nil then
+		for k,v in pairs(_M.MarriedQingqiu)do
+			if id == v.tiqinBabyid then
+				table.insert(list,v)
+			end
+		end
+	end
+	return list
+end
+
 function _P.ReduceZhaoqinCD(_tick)
 	if _M.ZhaoqinCD > 0 then
 		_M.ZhaoqinCD = _M.ZhaoqinCD -1

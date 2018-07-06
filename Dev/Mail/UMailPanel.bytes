@@ -157,10 +157,19 @@ end
 
 
 function _P.SetMailRead(self, itemModule, data)
+	local bgImg = itemModule:Get("BG")
 	if data.read == true then
-		itemModule:Get("BG").SpriteName = "yj_002"
+		if data.awardList == nil and data.gainAward ~= true then
+			bgImg.SpriteName = "yj_002_1"
+		else
+			bgImg.SpriteName = "yj_004_1"
+		end
 	else
-		itemModule:Get("BG").SpriteName = "yj_004"
+		if data.awardList == nil and data.gainAward ~= true then
+			bgImg.SpriteName = "yj_002"
+		else
+			bgImg.SpriteName = "yj_004"
+		end
 	end
 end
 

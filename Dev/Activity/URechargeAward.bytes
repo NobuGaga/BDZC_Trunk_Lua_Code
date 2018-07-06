@@ -74,17 +74,23 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = URechargeReward_Single.new(self.PageNode)
 	end
 	self.mFuncId = funcId
+	for index, sysID in ipairs(self.pageIDCache) do
+		if sysID == funcId then
+			self.selectIndex = index
+			break
+		end
+	end
+	_P.MovePageList(self)
 end
 
 --刷新页签
 function _P.RefreshPage(self, actType)
-	local isShow = false
-	isShowCloseTips = _P.JudgeToRemovePage(self, RechargeIDForType[actType], actType)
-	if isShowCloseTips and not self.isShow then
-		self.isShow = true
+	local isClosePage = _P.JudgeToRemovePage(self, RechargeIDForType[actType], actType)
+	if isClosePage and not self.isShowCloseTips then
+		self.isShowCloseTips = true
 		CCommon.ShowError(Csv.Text("err_lottery_activity_close"))
 		self.mMoudle.SelfRect:AddOnTime(function ()
-			self.isShow = false
+			self.isShowCloseTips = false
 		end, nil, 10)
 	end
 	if #self.pageIDCache == 0 then
@@ -98,10 +104,16 @@ function _P.JudgeToRemovePage(self, sysID, actType)
 	if nil == typeData then
 		self.tabHandle:Remove(sysID).image:Destroy()
 		local pageIDCache = {}
-		for _, value in ipairs(self.pageIDCache) do
-			if value ~= sysID then
+		local removeIndex
+		for index, value in ipairs(self.pageIDCache) do
+			if value == sysID then
+				removeIndex = index
+			else
 				table.insert(pageIDCache, value)
 			end
+		end
+		if removeIndex then
+			self.mMoudle:Get("btn" .. removeIndex).Activity = false
 		end
 		self.pageIDCache = pageIDCache
 		if self.mFuncId == sysID and #self.pageIDCache ~= 0 then
@@ -114,7 +126,7 @@ function _P.JudgeToRemovePage(self, sysID, actType)
 end
 
 --界面构建
-function _M:OnCreate()
+function _M:OnCreate(openFunc)
 	local moudle = self:CreateMoudle(self._RootNode, "M_DailyRecharge")
 	self.mMoudle = moudle
 	moudle:Get("back_btn"):AddOnButton(function ( ... )
@@ -128,6 +140,9 @@ function _M:OnCreate()
 	self.PageNode = node
 	local funcs = MActivity.GetRechargeOpenFunc()
 	local count = #funcs
+	self.scrollWidth = moudle:Get("downScroll").SizeDelta.x
+	self.btnWidth = moudle:Get("btn1").SizeDelta.x
+	self.btnSpace = moudle:Get("layout"):AddHorizontalLayoutGroup().spacing
 	if count > 0 then
 		--Table标签控制
 		self.tabHandle = TabGroup.new(function (funcId)
@@ -136,21 +151,72 @@ function _M:OnCreate()
 	
 		local index = 0
 		self.pageIDCache = {}
+		local openFuncIsHave = false
 		for k,v in pairs(funcs) do
 			index = index + 1
 			self.pageIDCache[index] = v.id
 			self.tabHandle:Add(v.id, moudle:Get("Label"..index), moudle:Get("C_text_"..index), v.name, moudle:Get("select_" .. index))
-
+			if not openFuncIsHave and openFunc == v.id then
+				openFuncIsHave = true
+			end
 			--注册小红点
-			self:RegistRedpoint(moudle:Get("redpoint_" .. index), v.id)
+			local redpoint = moudle:Get("redpoint_" .. index)
+			self:RegistRedpoint(redpoint, v.id)
+			local isRed = MMain.RedpointIsActive(v.id)
+			if isRed then
+				if self.selectIndex == nil then
+					self.selectIndex = index
+				elseif self.selectIndex > v.id then
+					self.selectIndex = index
+				end
+			end
 		end
-		self.tabHandle:Choose(funcs[1].id)
+		if self.selectIndex == nil then
+			self.selectIndex = 1
+		end
+		if openFuncIsHave then
+			self.tabHandle:Choose(openFunc)
+		else
+			self.tabHandle:Choose(funcs[self.selectIndex].id)
+		end		
 	end
 	if count < 5 then
 		for i=count + 1,5 do
 			moudle:Get("btn"..i).Activity = false
 		end
 	end
+	_P.MovePageList(self)
+	moudle:Get("BeforeBtn"):AddOnButton(function ()
+		_P.OnClickArrow(self, true)
+	end, nil, 1)
+	moudle:Get("NextBtn"):AddOnButton(function ()
+		_P.OnClickArrow(self)
+	end, nil, 1)
+end
+
+function _P.OnClickArrow(self, isLeft)
+	local changeIndex = 1
+	if isLeft then
+		changeIndex = -1
+	end
+	local originIndex = self.selectIndex
+	self.selectIndex = self.selectIndex + changeIndex
+	if self.selectIndex < 1 or self.selectIndex > #self.pageIDCache then
+		self.selectIndex = originIndex
+	else
+		local sysID = self.pageIDCache[self.selectIndex]
+		if sysID then
+			self.tabHandle:Choose(sysID)
+		end
+	end
+end
+
+function _P.MovePageList(self)
+	local moveDistance = self.scrollWidth - ((self.btnWidth + self.btnSpace) * self.selectIndex - self.btnSpace)
+	if moveDistance > 0 then
+		moveDistance = 0
+	end
+	self.mMoudle:Get("layout"):DOAnchorPosX(moveDistance, 0.3)
 end
 
 function _R.RefreshItemState(self,data,actType)

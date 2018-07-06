@@ -19,20 +19,114 @@ local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
 
 local _M = Class(WindowBase)
 local _P = {}
-local _R = {}
 
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then 
-		fun(self, ...)
-	end
-end
-
-function _M:ctor(parent)
-	self._RootNode = parent
+function _M:ctor(RootNode,id)
+	self._RootNode = RootNode
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_Tiqin3", WindowType.UI, 0)
 	self.mMoudle = moudle
 
+	local data = MGirl.GetUnMarriedData(id)
+	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
+
+	moudle:Get("TabText1").Text = Csv.Text("married_ownchild")
+	moudle:Get("C_Text_0").Text = Csv.Text("married_tiqin_type")
+	moudle:Get("name").Text = Csv.Text("married_name_title")
+	moudle:Get("parent").Text = Csv.Text("married_parent_title")
+	moudle:Get("attrTitleText").Text = Csv.Text("married_attr_all")
+	moudle:Get("gongguan").Text = Csv.Text("married_gongguan")
+	moudle:Get("xingzheng").Text = Csv.Text("married_xingzhen")
+	moudle:Get("jisu").Text = Csv.Text("married_jisu")
+	moudle:Get("yingxiao").Text = Csv.Text("married_yingxiao")
+
+	local bxsImg = moudle:Get("bxs")
+	local name = moudle:Get("nameText")
+	local parent = moudle:Get("parentText")
+	local gongguan = moudle:Get("gongguanText")
+	local xingzheng = moudle:Get("xingzhengText")
+	local jisu = moudle:Get("jisuText")
+	local yingxiao = moudle:Get("yingxiaoText")
+
+	bxsImg.SpriteName =  MGirl.GetBabyIcon(data.gender,data.degree)
+	bxsImg:SetNativeSize()
+
+	name.Text = data.name
+	parent.Text = Csv.Girl[data.girlid].name
+	gongguan.Text = data.attribute.Wuli
+	xingzheng.Text = data.attribute.Zhili
+	jisu.Text = data.attribute.Zhengzhi
+	yingxiao.Text = data.attribute.Meili
+
+	------------------------------
+	local goldData = Csv.Item[Define.AssetsType.Gold]
+	local goldBox = moudle:Get("goodsBox1")
+	local goldIcon = moudle:Get("goods1")
+	local goldcostText = moudle:Get("consumeText1")
+	local goldhaveText = moudle:Get("HaveText1")
+	local selectGoldText = moudle:Get("C_text")
+	local useGoldBtn = moudle:Get("Btn_b")
+
+	local costGold = MGirl.GetMarriedGoldCost(data.degree)
+	local haveGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	local goldItemData = Csv.Item[Define.AssetsType.Gold]
+
+	selectGoldText.Text = Csv.Text("Girl_married_select")--"选择"
+	goldBox.SpriteName = goldData.colorIcon
+	goldIcon.SpriteName = goldData.icon
+	goldcostText.Text = Csv.Text("Girl_married_costGold",{cost = costGold })--"消耗<color=#FF2323>"..costGold.."</color>钻石"
+	goldhaveText.Text = Csv.Text("Girl_married_haveGold",{have = haveGold})--"现拥有<color=#FF2323>"..haveGold.."</color>钻石"
+
+	useGoldBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)	
+		if costGold <= haveGold then
+ 			CGirl.ReqTiQin(MGirl.MarriedSelectID,Define.AssetsType.Gold,0)
+			
+			CCommon.CheckTips(function(isSure,rg)
+					if isSure then
+						WindowMgr.Call("UMarriedTiqin","CloseView")--关闭结婚选项
+						WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
+					end
+				end,{content = Csv.Text("married_tiqin_success"),isNoCancel = true})
+			--self:Destroy()
+			--self._RootNode:Destroy()
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))--goldItemData.name.."不足!"
+		end
+	end)
+
+	local itemData = Csv.Item[marriedCostItem[1]]
+	local itemBox = moudle:Get("goodsBox2")
+	local itemIcon = moudle:Get("goods2")
+	local itemcostText = moudle:Get("consumeText2")
+	local itemhaveText = moudle:Get("HaveText2")
+	local selectItemText = moudle:Get("C_text_0")
+	local useItemBtn = moudle:Get("Btn_d")
+
+	local costItem = marriedCostItem[2]
+	local haveItem = MBag.GetItemNum(marriedCostItem[1])
+	
+	selectItemText.Text = Csv.Text("Girl_married_select")--"选择"
+	itemBox.SpriteName = itemData.colorIcon
+	itemIcon.SpriteName = itemData.icon
+	itemcostText.Text = Csv.Text("Girl_married_costItem",{name = itemData.name,num = costItem})--"消耗"..itemData.name.."x"..costItem
+	itemhaveText.Text = Csv.Text("Girl_married_haveItem",{have = haveItem,name = itemData.name})--"现拥有<color=#FF2323>"..haveItem.."</color>"..itemData.name
+
+	useItemBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if costItem <= haveItem then
+			CGirl.ReqTiQin(MGirl.MarriedSelectID,marriedCostItem[1],0)
+
+			CCommon.CheckTips(function(isSure,rg)
+					if isSure then
+						WindowMgr.Call("UMarriedTiqin","CloseView")--关闭结婚选项
+						WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
+					end
+				end,{content = Csv.Text("married_tiqin_success"),isNoCancel = true})
+			--self:Destroy()
+			--self._RootNode:Destroy()
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))--itemData.name.."不足!"
+		end
+	end)
 end
 
 function _M:Destroy()

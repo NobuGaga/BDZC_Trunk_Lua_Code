@@ -1,0 +1,172 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Talk.MTalk.bytes#_M]
+local MTalk = JRequire "Dev.Talk.MTalk"
+--@RefType [Dev.RedPacket.MRedpacket.bytes#_M]
+local MRedpacket = JRequire "Dev.RedPacket.MRedpacket"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_RedEnvelopes"
+local textTitle = "textTitle"
+local csvTitleText = "talk_redpacket"
+local btnClose = "btnClose"
+local ItemName = "M_RedEnvelopes_Item"
+
+local OpenedSprite = "dj_red_2"
+local NotOpenSprite = "red_main"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitView(self)
+	_R.RefreshView(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+--初始化窗口
+function _P.InitView(self)
+	self.content = self.moudle:Get("content")
+	self.itemListCache = {}
+end
+
+--创建红包Item
+function _P.CreateItem(self, index)
+	local item = {}
+	self.itemListCache[index] = item
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	itemMoudle.SelfRect:AddOnButton(function ()
+		_P.OnClickRedEnvelopes(self, index)
+	end)
+	item.textName = itemMoudle:Get("textName")
+	item.redSprite = itemMoudle:Get("redSprite")
+	item.itemMoudle = itemMoudle.SelfRect
+end
+
+--点击红包
+function _P.OnClickRedEnvelopes(self, index)
+	SoundMgr.Play(10002)
+	local item = self.itemListCache[index]
+	if not item then
+		return
+	end
+	local data = self.dataList[item.dataIndex]
+	if not data then
+		return
+	end
+	if data.redPacket.expireTime and data.redPacket.expireTime - HeartBeat.ServSecond() < 0 then
+		WindowMgr.Create("URedpacketPass", data)
+		data.redPacket.state = MTalk.RedPacketType.isPass
+		MRedpacket.RemoveRedPacket(data.redPacket.packetId)
+	elseif MTalk.RedPacketType.isNotOpen == item.redPacketType or data.redPacket == nil then
+		WindowMgr.Create("URedpacketSplit", data, function ()
+			_P.OnCloseRedpacketSplit(self)
+		end)
+	elseif data.redPacket then
+		CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
+	end
+end
+
+--关闭红包领取弹窗回调
+function _P.OnCloseRedpacketSplit(self)
+	if self.dataList and #self.dataList == 0 or (self.dataList == nil) then
+		self:Destroy()
+	end
+end
+
+--刷新红包Item数据
+function _P.RefreshItem(self, index, dataIndex)
+	local item = self.itemListCache[index]
+	if not item then
+		return
+	end
+	item.dataIndex = dataIndex
+	local data = self.dataList[dataIndex]
+	if not data then
+		return
+	end
+	item.textName.Text = data.sendername
+	if data.redPacket then
+		item.redPacketType = data.redPacket.state
+	end
+	if MTalk.RedPacketType.isNotOpen == item.redPacketType or item.redPacketType == nil then
+		item.redSprite.SpriteName = NotOpenSprite
+	else
+		item.redSprite.SpriteName = OpenedSprite
+	end
+end
+
+--刷新窗口
+function _R.RefreshView(self)
+	self.dataList = MTalk.GetAllRedPacket()
+	if self.dataList then
+		for index, data in ipairs(self.dataList) do
+			local item = self.itemListCache[index]
+			if item then
+				_P.RefreshItem(self, index, index)
+			else
+				_P.CreateItem(self, index)
+				_P.RefreshItem(self, index, index)
+			end
+		end
+		for index = #self.dataList + 1, #self.itemListCache do
+			self.itemListCache[index].itemMoudle.Activity = false
+		end
+	end
+end
+
+function _R.ShowRedpacket(self, data)
+	for index, data in ipairs(self.dataList) do
+		if data.redPacket.packetId == data.redPacket.packetId then
+			MRedpacket.RemoveRedPacket(data.redPacket.packetId)
+			_R.RefreshView(self)
+			break
+		end
+	end
+	if WindowMgr.IsCreated("URedpacketSplit") then
+		return
+	end
+	if data.result == MTalk.RedPacketType.isGot then 
+		WindowMgr.Create("URedpacketLook", data)
+	elseif data.result == MTalk.RedPacketType.isPass then
+		WindowMgr.Create("URedpacketNo", data)
+	else
+		WindowMgr.Create("URedpacketNo", data)
+	end
+end
+
+return _M

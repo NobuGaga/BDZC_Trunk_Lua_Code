@@ -375,6 +375,28 @@ function _M.GetRelationIds( relationType )
 	return ret
 end
 
+function _M.GetTypeById(id)
+	local qinjiaTab = _M.RelationCached[_M.RelationType.QinJia]
+	if qinjiaTab ~= nil then
+		for playerId,_ in pairs(qinjiaTab) do
+			if playerId == id then
+				return _M.RelationType.QinJia
+			end
+		end
+	end
+
+	local friendTab = _M.RelationCached[_M.RelationType.Friend]
+	if friendTab ~= nil then
+		for playerId,_ in pairs(friendTab) do
+			if playerId == id then
+				return _M.RelationType.Friend
+			end
+		end
+	end
+
+	return _M.RelationType.None
+end
+
 function _M.GetRelationPlayers(relationType, isSort)
 	local ret = {}
 	local playerIds = _M.GetRelationIds( relationType )

@@ -17,7 +17,7 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(data)
+function _M:OnCreate(data, onCloseCallback)
 
 	self._EventNode:AddOnClick(function ()
 		--SoundMgr.Play(10001)
@@ -30,6 +30,9 @@ function _M:OnCreate(data)
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
+		if onCloseCallback then
+			onCloseCallback()
+		end
 	end, nil, 1.2)
 
 	local headIcon = moudle:Get("Head")

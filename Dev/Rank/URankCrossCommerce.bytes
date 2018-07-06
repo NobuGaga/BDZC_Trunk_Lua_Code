@@ -69,8 +69,11 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		if value.rank > 3 then
 			moudle:Get("Num").Text = value.rank
 		end
-
-		moudle:Get("ShName").Text = value.commername
+		if value.level ~= nil then
+			moudle:Get("ShName").Text = value.commername..Csv.Text("cross_rank_1",{num = value.level})
+		else
+			moudle:Get("ShName").Text = value.commername
+		end
 		moudle:Get("bossName").Text = Csv.Text("cross_rank_bossname")
 		moudle:Get("NameText").Text = value.playername
 		moudle:Get("SLText").Text = Csv.Text("cross_rank_zsl") -- 总势力
@@ -78,7 +81,12 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		moudle:Get("people").Text = Csv.Text("cross_rank_peoplenum")
 		moudle:Get("qu").Text = Csv.Text("cross_rank_qu")
 		local serverInfo = CLogin.GetServerInfoByID(value.serverid)
-		moudle:Get("quText").Text = serverInfo.name
+		if serverInfo ~= nil then
+			moudle:Get("quText").Text = serverInfo.name
+		else
+			
+		end
+
 		local totalNum = value.totalMum
 		if totalNum == nil then
 			totalNum = 0

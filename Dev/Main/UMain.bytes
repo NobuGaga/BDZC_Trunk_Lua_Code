@@ -35,7 +35,6 @@ local _P = {}
 local _R = {}
 --常量定义
 local LEVEL_UP_EFFECT_ID = 10006
-local ACTIVITY_ACTORID = 10039
 local TOP_BTN_COUNT = 15
 local BOTTOM_BTN_COUNT = 6
 local LEFT_BTN_COUNT = 3
@@ -282,9 +281,9 @@ function _P.RefreshTopBtns(self, moudle)
 		else
 			btn.SpriteName = v.icon
 		end
-
-		local actorPanel = moudle:Get("ActorPanel" .. i)
-		_P.SetBtnLight(self, btn.name, actorPanel)
+		local key = "ActorPanel" .. i
+		local actorPanel = moudle:Get(key)
+		_P.SetBtnLight(self, key, v, actorPanel)
 		--注册小红点
 		self:RegistRedpoint(moudle:Get("topRedpoint_" .. i), v.id)
 	end
@@ -348,6 +347,15 @@ function _P.RefreshLeftBtns(self, moudle)
 		btn.SpriteName = v.icon
 		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
 
+		---私聊气泡点点点---------
+		if v.id == Define.SysId.Friend then
+			local pointTab = {}
+			for i=1,3,1 do
+				pointTab[i] = moudle:Get("point" .. i)
+			end
+			LuaUtil.FriendThreePoint(btn,pointTab,spaceTime)
+		end
+
 		--注册小红点
 		self:RegistRedpoint(moudle:Get("leftRedpoint_" .. i), v.id)
 	end
@@ -363,7 +371,7 @@ function _P.RefreshRightBtns(self, moudle)
 	local index = 0
 	for i,v in pairs(buttons) do
 		btn = moudle:Get("rightBtn_" .. i)
-		actor = moudle:Get("rightActor"..i)
+		local actor = moudle:Get("rightActor"..i)
 		if btn == nil then
 			error(string.format("create main right btn error!!!string.format index:%d,funcId:%d ", i, v.id))
 			break
@@ -374,7 +382,6 @@ function _P.RefreshRightBtns(self, moudle)
 		self.Btns[v.id] = btn
 		self.RightActorList[v.id] = actor
 		btn.SpriteName = v.icon
-		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
 
 		--红包
 		if v.id == Define.SysId.Redpacket then
@@ -383,6 +390,11 @@ function _P.RefreshRightBtns(self, moudle)
 			else
 				_P.OnRedpacketMove(self)
 			end
+			btn:AddOnButton(function()
+				WindowMgr.Create("URedEnvelopes")
+			end, nil, 0.9)
+		else
+			btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
 		end
 		--手机
 		if v.id == Define.SysId.Phone then
@@ -659,25 +671,23 @@ end
 
 
 -- 活动外框动画
-function _P.SetBtnLight(self, k, actorPanel)
-	if self.LightList[k] ~= nil then return end
-	if actorPanel == nil then return end
-	
-	CCommon.CreateEffect(actorPanel, ACTIVITY_ACTORID)
-	self.LightList[k] = true
+function _P.SetBtnLight(self, effectKey, csvLine, actorPanel)
+	local effectID = csvLine.effectID
+	local lastEffectID = self.LightList[effectKey]
+	if lastEffectID ~= nil then
+		if lastEffectID ~= effectID then
+			if actorPanel ~= nil then
+				actorPanel:DestroyChildren()
+			end
+			self.LightList[effectKey] = nil
+		else
+			return
+		end	
+	end
+	if effectID == nil or effectID <= 0 or actorPanel == nil then return end	
+	CCommon.CreateEffect(actorPanel, effectID)
+	self.LightList[effectKey] = effectID
 end
-
-
--- 左边图标外框动画
-function _P.SetLeftBtnLight(self, btn, parentRect)
-	if self.LightList[btn.name] ~= nil then return end
-
-	if btn == nil then return end
-	local effectModule = JGuiManager.GetMoudle(parentRect, ICON_EFFECTNAME, "", 0)
-	parentRect.LocalPosition = btn.LocalPosition
-	self.LightList[btn.name] = true
-end
-
 
 -- 目标系统呼吸动画显示
 function _R.OnUpdateTargetAnim(self)

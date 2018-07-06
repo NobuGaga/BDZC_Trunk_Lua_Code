@@ -16,7 +16,7 @@ function _M:OnCreate(data)
 	self.mIsShowEnd = false
 
 	moudle:Get("name_text").Text = data.name
-	moudle:Get("Ranking").Text = Csv.Text("lectures_rank_curNum") .. (data.rank or "nil")
+	moudle:Get("Ranking").Text = Csv.Text("lectures_rank_curNum") .. (data.rank or "0")
 	local talk = _P.GetTalk()
 	self.mEventText = moudle:Get("dialogue_text"):AddOnTime(function(...)
 		self.mTweenText = moudle:Get("dialogue_text"):DOText(talk, 1.5)

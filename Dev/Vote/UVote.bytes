@@ -17,6 +17,9 @@ local _R = {}
 local MessageAll_Max = Csv.Const(Define.Const.VoteMessageMax)[2]
 local MessageMy_Max = Csv.Const(Define.Const.VoteMessageMax)[3]
 
+local BG1 = "office_fight_005"
+local BG2 = "office_fight_004"
+
 function _M:BeforeDestroy()
 	CVote.ReqVoteClose()
 	if self.ChooseMoudle ~= nil then
@@ -39,18 +42,21 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle:delete()
 		self.ChooseMoudle = nil
 	end
+	local moudle = self.mMoudle
 	if funcId == Define.SysId.Vote_Town then
 		self.ChooseMoudle = UVoteTown.new(self.PageNode, function(node, point)
 			if self.mMoudle ~= nil then
 				self:RegistRedpoint(node, point)
 			end
 		end)
+		moudle:Get("Bg_0").SpriteName = BG1
 	elseif funcId == Define.SysId.Vote_Member then
 		self.ChooseMoudle = UVoteMember.new(self.PageNode, function(node, point)
 			if self.mMoudle ~= nil then
 				self:RegistRedpoint(node, point)
 			end
 		end)
+		moudle:Get("Bg_0").SpriteName = BG2
 	end
 end
 

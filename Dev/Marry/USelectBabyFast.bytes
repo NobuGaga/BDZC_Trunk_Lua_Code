@@ -18,12 +18,19 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate()
+function _R.GetPlayerBaby(self,data)
+	self:Destroy()
+	WindowMgr.Create("UPlayerBaby",data.tarPlayerId,data.tarBabyList)
+end
+
+function _M:OnCreate(playerId)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
 		self:Destroy()
 	end)
 	
+	self.mPlayerId = playerId
+
 	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Xuanhaizi")
 	local backBtn = moudle:Get("backBtn")
 	backBtn:AddOnButton(function(...)
@@ -127,10 +134,7 @@ function _P.CreatBabyItem(self,data,parent)
 	local selectBtn = moudle:Get("C_Btn_b")
 	selectBtn:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		--MGirl.MarriedSelectID = data.babyid
-		print("SelectBbaby______________",data.babyid)
-		self:Destroy()
-		--WindowMgr.Create("UMarriedSelectCost",self.mMarriedID)
+		CGirl.ReqLookOthersBaby(data.babyid,self.mPlayerId)
 	end)
 
 	return moudle

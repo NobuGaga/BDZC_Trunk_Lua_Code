@@ -16,34 +16,38 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = Class(WindowBase)
 local _P = {}
-local _R = {}
 
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then 
-		fun(self, ...)
-	end
-end
-
-function _R.SetFriendQinjia(self,msg)
+function _M:SetFriendQinjia(msg)
 	local list = self.mFriendMsgList
 	if list == nil then
 		list = {}
 	end
 	if msg.list ~= nil then
 		for k,v in pairs(msg.list)do
-			if list[v.id] == nil then
-				print("relation____________",v.relation)
-				list[v.id] = v
+			if not _P.CheckSamePlayer(list,v.id) then
+				table.insert(list,v)
 			end
 		end
 	end
+	
 	self.mFriendMsgList = list
 
 	_P.SetFriendItems(self)
 end
 
-function _M:ctor(parent)
+function _M:GetFriendBabyInfo(data)
+	
+	self.mTarBabyList = data.tarBabyList
+	if data.tarBabyList ~= nil then
+		if #data.tarBabyList > 0 then
+			self.mMoudle:Get("SH").Text = Csv.Text("married_baby",{num = #data.tarBabyList})
+		end
+	end
+end
+
+function _M:ctor(parent,id)
+	self.mOwnBabyId = id
+
 	self._RootNode = parent
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_Tiqin1", WindowType.UI, 0)
 	self.mMoudle = moudle
@@ -51,12 +55,25 @@ function _M:ctor(parent)
 	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab1")
 	moudle:Get("TabText2").Text = Csv.Text("married_tiqin_tab2")
 	moudle:Get("C_text").Text = Csv.Text("married_tiqin_look")
+	moudle:Get("NoneText").Text = Csv.Text("married_tiqin_nofriend")
 
 	local content = moudle:Get("content")
+	local infoRect = moudle:Get("Info")
+	self.mNoTips = moudle:Get("TextBG")
+	self.mInfoRect = infoRect
 	
+	self.mNoTips.Activity = false
+	self.mInfoRect.Activity = false
+
 	--查看子女信息
 	moudle:Get("C_Btn_a"):AddOnButton(function()
-		print("look_____________",self.selectFriendId)
+		if self.mTarBabyList ~= nil then
+			if #self.mTarBabyList > 0 then
+				WindowMgr.Create("UPlayerBaby",self.selectFriendId,self.mTarBabyList)
+			end
+		else
+			CCommon.ShowError(Csv.Text("married_nobaby"))
+		end
 	end,nil,1.2)
 
 	--往右
@@ -85,12 +102,21 @@ function _P.SetFriendItems(self)
 	local friendItemTab = {}
 	local friendList = self.mFriendMsgList
 	if friendList ~= nil then
+		if #friendList > 0 then
+			self.mInfoRect.Activity = true
+		else
+			self.mNoTips.Activity = true
+		end
+
 		local index = 0
 		for k,v in pairs(friendList)do
 			index = index+1
+
 			local _item = _P.CreateFriendItem(self,content,v,index)
 			friendItemTab[index] = {id = v.id,data = v,item = _item}
 		end
+	else
+		self.mNoTips.Activity = true
 	end
 	self.mFrinedItems = friendItemTab
 
@@ -112,11 +138,15 @@ function _P.OnClickNext(self,num)
 		return
 	end
 
-	self.mSelectItemIndex = index
 	_P.ClickFriendItem(self,index)
 end
 
 function _P.ClickFriendItem(self,index)
+	if self.mSelectItemIndex ~= nil and self.mSelectItemIndex == index then
+		return
+	end
+
+	self.mSelectItemIndex = index
 	local friendItems = self.mFrinedItems
 	
 	local itemMoudle = self.mSelectItem
@@ -138,6 +168,8 @@ end
 function _P.RefreshInfo(self,index)
 	local itemData = self.mFrinedItems[index]
 	self.selectFriendId = itemData.id
+	CGirl.ReqLookOthersBaby(self.mOwnBabyId,self.selectFriendId)
+
 	local data = itemData.data
 	if data == nil then
 		print("找不到好友数据id__________",id)
@@ -146,7 +178,6 @@ function _P.RefreshInfo(self,index)
 	
 	local moudle = self.mMoudle
 
-	local bsxImg = moudle:Get("bxs")
 	local tab1 = moudle:Get("Tab1")
 	local tab2 = moudle:Get("Tab2")
 	local name = moudle:Get("Name")
@@ -160,11 +191,35 @@ function _P.RefreshInfo(self,index)
 		tab2.Activity = true
 	end
 
+	_P.ShowBoby(self,data.headId,data.bodyId,data.sex)
+
 	name.Text = data.name
 	num.Text = Csv.Text("married_tiqin_num",{id = data.id})
 	powerText.Text = Csv.Text("married_power",{num = data.power})
 	levelText.Text = Csv.Text("married_level",{num = data.level})
-	babyText.Text = Csv.Text("married_baby",{num = _P.GetBabyNums(self)})
+	babyText.Text = Csv.Text("married_baby",{num = 0})
+end
+
+function _P.ShowBoby(self,headId,bodyId,sex)
+	if self.mHeadPrefab ~= nil then
+		self.mHeadPrefab:Destroy()
+		self.mHeadPrefab = nil
+	end
+
+	if self.mBodyPrefab ~= nil then
+		self.mBodyPrefab:Destroy()
+		self.mBodyPrefab = nil
+	end
+
+	local moudle = self.mMoudle
+	local headPrefab = MPlayer.GetPrefabID(headId, sex)
+    local bodyPrefab = MPlayer.GetPrefabID(bodyId, sex)
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        self.mBodyPrefab, self.mHeadPrefab = CCommon.CreateRole(moudle:Get("body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.player_look)
+    else
+        moudle:Get("body").SpriteName = MPlayer.GetSpFromSex(bodyId, sex)
+		moudle:Get("head").SpriteName = MPlayer.GetSpFromSex(headId, sex)
+	end
 end
 
 function _P.CreateFriendItem(self,content,data,index)
@@ -180,8 +235,13 @@ function _P.CreateFriendItem(self,content,data,index)
 	return moudle
 end
 
-function _P.GetBabyNums(self)
-	return 5
+function _P.CheckSamePlayer(list,id)
+	for k,v in pairs(list)do
+		if v.id == id then
+			return true
+		end
+	end
+	return false
 end
 
 

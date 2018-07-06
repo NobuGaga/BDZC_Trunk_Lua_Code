@@ -14,11 +14,13 @@ local CMD_ID =
 	cBattle = 1,
 	cUnlock = 2,
 	cSeckillBattle = 3,
+	cAcquisition = 4,
 
 	sInit = 1,
 	sResult = 2,
 	sUnlock = 3,
 	sSeckillBattle = 4,
+	sAcquisition = 5,
 }
 
 function _M.ModuleClean()
@@ -31,6 +33,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cBattle] = "PBattle.CBattle",
 		[CMD_ID.cUnlock] = "PBattle.CUnlock",
 		[CMD_ID.cSeckillBattle] = "PBattle.CSeckillBattle",
+		[CMD_ID.cAcquisition] = "",
 	}
 	--接收消息协议注册
 	local recv = {
@@ -38,6 +41,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sResult] = {	proto = "PBattle.SResult", 				handle = _P.OnResult},
 		[CMD_ID.sUnlock] = {	proto = "PBattle.SUnlock", 				handle = _P.OnUnlock},
 		[CMD_ID.sSeckillBattle] = {	proto = "PBattle.SSeckillBattle", 	handle = _P.OnSeckillResult},
+		[CMD_ID.sAcquisition] = {	proto = "PBattle.SAcquisition", 	handle = _P.OnAcquisitionResult},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Airport, send, recv, isReload)	
@@ -65,6 +69,11 @@ end
 -- 一键秒杀请求
 function _M.SeckillBattleReq(battleId)
 	_M.Send(CMD_ID.cSeckillBattle, {id = battleId})
+end
+
+-- 超级一键秒杀请求
+function _M.AcquisitionReq()
+	_M.Send(CMD_ID.cAcquisition)
 end
 
 -----------------------Server -- Client-----------------
@@ -205,5 +214,76 @@ function _M.EnterBattle()
 		WindowMgr.Create("UBattle")
 	end
 end 
+
+function _P.OnAcquisitionResult(data)
+	-- print(data.curId)
+	-- print(data.lastId)
+	-- for k1,v1 in ipairs(data.battle) do
+	-- 	for k,v in ipairs(v1.list) do
+	-- 		print("-----------------")
+	-- 		print(v.id)
+	-- 		print(v.state)
+	-- 		print(v.hurt)
+	-- 		print(v.blood)
+	-- 		print(v.money)
+	-- 		print(v.selfcost)
+	-- 	end
+	-- end
+	local list = _P.GetAcquisitionList(data)
+	local isNextChapter,lastBlood = _P.GetIsNextChapter(list)
+	if isNextChapter then
+		local csvBattle = Csv.Battle[data.lastId]
+		if csvBattle ~= nil and csvBattle.next ~= nil then
+			MBattle.CurId = csvBattle.next
+			MBattle.CurBlood = Csv.Battle[csvBattle.next].gold
+		else
+			print("------------csvBattle为空 or csvBattle.next 为空--------------")
+		end
+	else
+		MBattle.CurId = data.lastId
+		MBattle.CurBlood = lastBlood
+	end
+	if data.lastId > data.curId then
+		WindowMgr.Call("UBattle","OnAcquisition",list)
+	else
+		CCommon.ShowError(Csv.Text("battle_acqu1"))
+	end
+end
+
+function _P.GetIsNextChapter(list)
+	local lastChapter = list[#list]
+	for k,v in pairs(lastChapter.list) do
+		if v.state == MBattle.ResultState.Fail then
+			return false,v.blood
+		end
+	end
+	return true,0
+end
+
+function _P.GetAcquisitionList(data)
+	local list = {}
+	if data.battle ~= nil then
+		for k,v in pairs(data.battle) do
+			table.insert(list,v)
+		end
+		table.sort(list,function(a,b) return _P.Sort(a,b) end)
+	end
+	return list
+end
+
+function _P.Sort(a,b)
+	if a ~= nil and b ~= nil and a.list ~= nil and b.list ~= nil then
+		local valueA = a.list[1]
+		local valueB = b.list[1]
+		if valueA ~= nil and valueB ~= nil then
+			local csvBattleA = Csv.Battle[valueA.id]
+			local csvBattleB = Csv.Battle[valueB.id]
+			if csvBattleA ~= nil and csvBattleB ~= nil then
+				return csvBattleA.chapter < csvBattleB.chapter
+			end
+		end
+	end
+	return false
+end
 
 return _M

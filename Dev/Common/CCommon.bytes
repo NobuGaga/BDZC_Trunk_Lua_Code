@@ -226,7 +226,7 @@ end
 	--@spSize: 图片大小(可选, 不填为图片的原始大小)
     return
 ]]
-function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos)
+function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos, callback)
 	local moudld
 	if spName ~= nil then
 		moudle = JGuiManager.GetMoudle(parent, M_Fly_Icon)
@@ -248,6 +248,11 @@ function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos)
 	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_Text)
 	if delayTime ~= nil and delayTime > 0 then
 		tween:DelayAll(delayTime)
+		moudle.SelfRect:AddOnTime(function()
+			if callback ~= nil then
+				callback()
+			end
+		end, nil, delayTime)
 	end
 	tween:SetDestoryAtComplete()
 	tween:Play()
@@ -474,11 +479,14 @@ function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale, scale
 	elseif csv.scale ~= nil then
 		parent.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
 	end
-	if dura ~= nil and dura > 0 then
-		parent:LoadEffect(csv.prefab,dura)
-	else
-		parent:LoadEffect(csv.prefab,0)
-	end
+
+	-- 飞哥说先删掉，出现问题再说
+	-- if dura ~= nil and dura > 0 then
+	-- 	parent:LoadEffect(csv.prefab,dura)
+	-- else
+	-- 	parent:LoadEffect(csv.prefab,0)
+	-- end
+	parent:LoadEffect(csv.prefab,0)
 end
 
 function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
@@ -522,6 +530,7 @@ _M.ActorFieldMap =
 	parliament = "parliament",
 	parliament_worship = "	parliament_worship"	,
 	story_left = "story_left",
+	player_tiqin = "player_tiqin",
 
 	--殿堂
 	parliament_head = "parliament_head",

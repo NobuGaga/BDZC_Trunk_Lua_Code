@@ -142,7 +142,11 @@ function _R.ResetList(self, data)
 				self.Moudle:Get("gangtext1").Text = Csv.Text("cross_rank_sh")
 				self.Moudle:Get("gangtext2").Text = Csv.Text("cross_rank_shpm")
 				self.Moudle:Get("gangtext11").Text = data.selfName
-				self.Moudle:Get("gangtext22").Text = data.selfrank
+				if data.selfrank ~= nil and data.selfrank > 0 then
+					self.Moudle:Get("gangtext22").Text = data.selfrank
+				else
+					self.Moudle:Get("gangtext22").Text = Csv.Text("commerce_rank4")
+				end
 			end
 			
 			-- self.Moudle:Get("after").Activity = data.isworshiped

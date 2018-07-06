@@ -139,6 +139,9 @@ function _P.OnGetNewTalk(data)
 			end
 		end	
 	end
+	if data.redPacket then
+		WindowMgr.Call("URedEnvelopes", "RefreshView")
+	end
 end
 
 -- 删除指定聊天记录
@@ -186,7 +189,6 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 		CCommon.ShowError(Csv.Text("talk_no_send_sys"))
 		return
 	end
-
 	if _value ~= nil and _value ~= "" then
 		if string.sub(_value, 1, 1) == '@' then
 			local strTable = LuaUtil.StringSplit(string.sub(_value, 2), ' ')
@@ -214,12 +216,14 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 					local state = retTable.status
 					if state == 0 then
 						--正常
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId})
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state})
 					elseif state == 1 then
 						--违法
 						if _channel == MTalk.Channel.PrivateMsg then
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state})
 						else
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state})
+							--[[
 							local ctx = {
 									index = 0,
 									channel = _channel,--聊天频道  1全服 2商会 3私聊
@@ -233,13 +237,14 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 									headid = MPlayer.GetHeadID(), --头像id
 									commerceJob = 0, --商会职务（商会频道）
 							}
-							_P.OnGetNewTalk(ctx)
+							--_P.OnGetNewTalk(ctx)
+							--]]
 						end
 						-- CCommon.ShowError(Csv.Text("err_talk_filter_words"))
 						-- error("send talk error, state == 1")
 					else
 						--敏感
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId})
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,oriValue = _value})
 					end
 				else
 					error("SendNewTalk --> HttpSession retTable is empty!! url:" .. GameSetting.CheckChatUrl .. ", info:" .. param2)
@@ -250,7 +255,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 		end)
 		HttpHelper.Request(session)	
 	elseif voiceIndex ~= nil and voiceTime ~= nil and voiceTime > 0 then
-		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime})
+		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime,valueFlag = 0})
 	end
 end
 

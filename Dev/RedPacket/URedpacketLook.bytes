@@ -19,15 +19,22 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(data)
+function _P.CloseView(self, onCloseCallback)
+	self:Destroy()
+	if onCloseCallback then
+		onCloseCallback()
+	end
+end
+
+function _M:OnCreate(data, onCloseCallback)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
-		self:Destroy()
+		_P.CloseView(self, onCloseCallback)
 	end)
 	
 	local data = MRedpacket.redPackInfo
 	if data == nil then
-		self:Destroy()
+		_P.CloseView(self, onCloseCallback)
 	end
 
 	local moudle = self:CreateMoudle(self._RootNode,"M_Election_Red4")
@@ -35,7 +42,7 @@ function _M:OnCreate(data)
 	local closeBtn = moudle:Get("closeBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		self:Destroy()
+		_P.CloseView(self, onCloseCallback)
 	end, nil, 1.2)
 
 	local content = moudle:Get("content")

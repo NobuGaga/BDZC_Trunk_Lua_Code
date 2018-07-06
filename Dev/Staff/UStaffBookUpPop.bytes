@@ -191,7 +191,7 @@ end
 
 function _R.CreateData(self,data)
 	if data.success then
-		SoundMgr.Play(10011)
+		--SoundMgr.Play(10011)
 
 		-- 播放书籍升级成功特效
 		local numEffectPanel = self.mMoudle:Get("NumEffectPanel")
@@ -202,7 +202,7 @@ function _R.CreateData(self,data)
 
 		local count = tonumber(self.TextUpNum.Text) - tonumber(self.TextNowNum.Text)
 		for i=1, count do
-			CCommon.ShowFlyText(numEffectPanel, self.NowShowText .. "+1", i * 0.2)
+			CCommon.ShowFlyText(numEffectPanel, self.NowShowText .. "+1", i * 0.2,nil,nil,nil,function() SoundMgr.Play(10011) end)
 		end
 	else
 		SoundMgr.Play(10012)

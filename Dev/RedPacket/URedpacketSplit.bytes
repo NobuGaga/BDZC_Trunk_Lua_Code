@@ -31,12 +31,13 @@ function _R.ShowRedpacket(self,data)
 	end
 end
 
-function _M:OnCreate(data)
+function _M:OnCreate(data, onCloseCallback)
 	self._EventNode:AddOnClick(function ()
 		--SoundMgr.Play(10001)
 		--self:Destroy()
 	end)
 	
+	self.onCloseCallback = onCloseCallback
 	self.mData = data
 	self.isShowPop = false
 	self.isEffectDone = false
@@ -48,6 +49,9 @@ function _M:OnCreate(data)
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
+		if self.onCloseCallback then
+			self.onCloseCallback()
+		end
 	end, nil, 1.2)
 
 	local headIcon = moudle:Get("Head")
@@ -85,11 +89,11 @@ function _P.ToRedPop(self,data)
 	if not self.isShowPop then
 		self.isShowPop = true
 		if data.result == 3 then 
-			WindowMgr.Create("URedpacketNo",data)
+			WindowMgr.Create("URedpacketNo",data,self.onCloseCallback)
 		elseif data.result == 4 then
-			WindowMgr.Create("URedpacketPass",self.mData)
+			WindowMgr.Create("URedpacketPass",self.mData,self.onCloseCallback)
 		else 
-			WindowMgr.Create("URedpacketLook",data)
+			WindowMgr.Create("URedpacketLook",data,self.onCloseCallback)
 		end
 	end
 end

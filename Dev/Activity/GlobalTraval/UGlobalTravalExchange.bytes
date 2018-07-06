@@ -6,6 +6,8 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 local luaUtil = JRequire"Libs.LuaUtil"
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
 
 
 local _M = Class(WindowBase)
@@ -39,8 +41,9 @@ function _M:OnCreate(data)
 	module:Get("date").Text = Csv.Text("global_date", {startTime = _P.TransToYMD(state.startTime),
 														endTime = _P.TransToYMD(state.startTime + travalConf.settleTime)})
 	module:Get("time").Text = Csv.Text("gloabl_duan")
+	module:Get("Tips").Text = Csv.Text("global_exchange_tips")
 
-	self.IconSpriteName = travalConf.diceIcon
+	self.IconSpriteName = travalConf.diceitem
 	_P.OnSetListData(self)
 end
 
@@ -67,7 +70,7 @@ end
 function _P.GetSortList(self, shopList)
 	local sortList = {}
 	for k,v in pairs(shopList) do
-		sortList[#sortList + 1] = {data = v, isGray = MActivity.CheckThisItemIsLight(v, self.mData.numberCount, v.id)}
+		sortList[#sortList + 1] = {data = v, isGray = MActivity.CheckThisItemIsLight(v, self.mData.exchangeShop, self.mData.numberCount, v.id)}
 	end
 
 	table.sort(sortList, function (a, b)
@@ -93,13 +96,18 @@ function _P.OnCreateExchangeItem(self, data, itemGrid, isGray)
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_GlobalTravel_Reward_Item", WindowType.UI, 0)
 	if not itemModule then return end
 
-	local curExchangeData = _P.GetCurExchageData(self, data.id) or {id = data.id ,count = 0}
+	local curExchangeData = MActivity.GetCurExchageData(self.mData.exchangeShop, data.id) or {id = data.id ,count = 0}
 	itemModule:Get("ShowText").Text = Csv.Text("gloabl_exchange_shop")
-	itemModule:Get("ShowText").Text = Csv.Text("gloabl_exchange_reward", {curNum = data.limitCount - curExchangeData.count, maxNum = data.limitCount})
+	itemModule:Get("LeaveText").Text = Csv.Text("gloabl_exchange_reward", {curNum = data.limitCount - curExchangeData.count, maxNum = data.limitCount})
 	
 	local exchangeBtn = itemModule:Get("btnGet")
 	exchangeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
+
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+
 		_P.OnClickExchange(self, data)
 	end, nil, 0.95)
 	itemModule:Get("textBtnGet").Text = Csv.Text("gloabl_exchange")
@@ -110,7 +118,7 @@ function _P.OnCreateExchangeItem(self, data, itemGrid, isGray)
 	showContent:DestroyChildren()
 
 	for k,v in pairs(data.rewardItems) do
-		local itemModule = CCommon.CreateItem(showContent, v[1], nil, {num = v[2]})
+		local itemModule = CCommon.CreateItem(showContent, v[1], CCommon.ShowItemTips, {num = v[2]})
 		CCommon.CreateItemLight(itemModule:Get("Icon"), Define.SysId.GlobalTraval, v[1])
 	end
 
@@ -121,34 +129,25 @@ function _P.OnCreateExchangeItem(self, data, itemGrid, isGray)
 end
 
 
-function _P.GetCurExchageData(self, exchangeId)
-	if self.mData.exchangeShop == nil then
-		return {id = exchangeId, count = 0}
-	end
-
-	if self.mData.exchangeShop[exchangeId] == nil then
-		return {id = exchangeId, count = 0}
-	end
-	
-	return self.mData.exchangeShop[exchangeId]
-end
-
-
 function _P.SetNeedItemData(self, data, itemModule)
 	local needContent = itemModule:Get("NeedContent")
 	needContent:DestroyChildren()
 
 	self.TmpData = {}
 	for k,v in pairs(data.diceItems) do
-		local itemModule = JGuiManager.GetMoudle(needContent, "M_GlobalTravel_Reward_Item_Item", WindowType.UI, 0)
+		local itemModule = CCommon.CreateItem(needContent, 1)
 		if not itemModule then return end
 
 		local iconImg = itemModule:Get("Icon")
+		local qualityImg = itemModule:Get("color")
 		iconImg.SpriteName = self.IconSpriteName[v[1]]
+		qualityImg.SpriteName = 'ty_022'
 
 		local isGray = _P.CheckIsItemLight(self, v[1])
 		iconImg.IsGray = not isGray
 		iconImg.RaycastTarget = isGray
+		qualityImg.IsGray = not isGray
+		qualityImg.RaycastTarget = isGray
 	end
 end
 
@@ -181,6 +180,7 @@ end
 
 
 function _R.UpdateExchangeData(self, data)
+	self:Lock()
 	local itemModule = self.mRawTableItems[data.exchangeId].module
 	local showAnimRect = itemModule:Get("AnimRect")
 	local exchangeConf = Csv.GlobalTravalExchange[data.exchangeId]
@@ -188,7 +188,7 @@ function _R.UpdateExchangeData(self, data)
 	local count = 1
 	if exchangeConf then
 		for k,v in pairs(exchangeConf.rewardItems) do
-			local flyTime = (count - 1) * 0.5
+			local flyTime = (count - 1) * 0.3
 			CCommon.ShowFlyItem(showAnimRect, v[1], v[2], flyTime)
 			count = count + 1
 		end
@@ -206,9 +206,21 @@ function _R.UpdateExchangeData(self, data)
 	end
 
 	self.mModule.SelfRect:AddOnTime(function()
+		self:Unlock()
 		self.mData.numberCount = data.numberCount
 		_P.OnSetListData(self)
-	end, nil, count * 0.5)
+	end, nil, count * 0.3)
+end
+
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
 end
 
 

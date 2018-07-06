@@ -132,7 +132,7 @@ function _P.SetPlayerData(self)
 	
 	local nextCsv = Csv.Company[nowLevel + 1]
 	local nowExp = MPlayer.GetExp()
-	module:Get("ProSp").FillAmount = nowExp / nowCsv.cost
+	module:Get("ProSp").FillAmount = nowExp / (nowCsv.cost or 0)
 	module:Get("ProText").Text = Csv.Text("player_levelUpExp",{num = nowExp, max = nowCsv.cost})
 end
 

@@ -11,6 +11,8 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local MMain = JRequire "Dev.Main.MMain"
 --@RefType [Dev.Activity.CActivity.bytes#_M]
 local CActivity = JRequire "Dev.Activity.CActivity"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 -- @RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
 
@@ -19,7 +21,7 @@ local JGuiManager = CS.JGui.JGuiManager
 
 ----------------------常量定义--------------------------
 local MoudleName = "M_DailyRecharge_Day"
-local ItemName = "M_DailyRecharge_Item1"
+local ItemName = "M_DailyRecharge_Item4"
 
 local GTE_EFFECT_ID = 5
 --领取奖励弹出物品时间间隔
@@ -30,8 +32,6 @@ local RewardFlyHeight = 69
 local DefaultNoReward = "ty_023"
 --默认无奖励物品ID
 local DefaultItemId = 1
---进度条动画时间
-local ProcessFillTime = 0.3
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class()
@@ -43,7 +43,9 @@ function _M:ctor(parent)
 	self._RootNode = parent
 	self.moudle = JGuiManager.GetMoudle(self._RootNode, MoudleName, WindowType.UI, 0)
 	self.moudle:Get("titletext").Text = Csv.Text("chargeaward_single1")
+	self.moudle:Get("timetext3").Text = Csv.Text("chargeaward_T7")
 	self.timetext = self.moudle:Get("timetext")
+	self.timenum = self.moudle:Get("timenum")
 	self.scrollView = self.moudle:Get("scrollView")
 	self.content = self.moudle:Get("content")
 	self:RefreshView()
@@ -69,7 +71,17 @@ function _P.SortDataList(self)
 		elseif left.canGetTimes > 0 and right.canGetTimes <= 0 then
 			return true
 		else
-			return left.index < right.index
+			local leftIsGeted = left.maxTimes == left.getTimes
+			local rightIsGeted = right.maxTimes == right.getTimes
+			if leftIsGeted and rightIsGeted then
+				return left.index < right.index
+			elseif leftIsGeted and not rightIsGeted then
+				return false
+			elseif not leftIsGeted and rightIsGeted then
+				return true
+			else
+				return left.index < right.index
+			end
 		end
 	end)
 end
@@ -81,9 +93,9 @@ function _P.CreateItem(self, data)
 
 	local item = {}
 	item.item = itemMoudle.SelfRect
-	itemMoudle:Get("timetext").Text = Csv.Text("chargeaward_T10")
-	item.sliderRest = itemMoudle:Get("Fill")
-	item.textSlider = itemMoudle:Get("slidertext")
+	item.textItemTime = itemMoudle:Get("timetext")
+	itemMoudle:Get("slider").Activity = false
+	itemMoudle:Get("slidertext").Activity = false
 	item.content = itemMoudle:Get("content")
 	_P.InitMoveListData(self, itemMoudle, item.content)
 	_P.RefreshItemReward(self, item, data)
@@ -157,23 +169,22 @@ function _P.RefreshItemReward(self, item, data)
 end
 
 --刷新Item
-function _P.RefreshItem(self, data, isPlay)
+function _P.RefreshItem(self, data)
 	local item = self.listCache[data.index]
 	if not item then
 		return
 	end
 	local restTiems = data.maxTimes - data.getTimes
-	if not isPlay then
-		item.sliderRest.FillAmount = math.min(1, restTiems / data.maxTimes)
-	end
-	item.textSlider.Text = Csv.Text("chargeaward_slider", {num = restTiems, max = data.maxTimes})
+	item.textItemTime.Text = Csv.Text("chargeaward_T10", {num = restTiems})
 	local isCanGet = data.canGetTimes > 0
 	local isGeted = data.maxTimes == data.getTimes
 	item.btnGet.Activity = not isGeted
 	item.getFlag.Activity = isGeted
 	if isCanGet then
+		item.btnGet.SpriteName = "HX_ty_024_1"
 		item.textBtnGet.Text = Csv.Text("quest_get")
 	elseif not isGeted then
+		item.btnGet.SpriteName = "ty_024"
 		item.textBtnGet.Text = Csv.Text("chargeaward_go")
 	end
 	item.data = data
@@ -190,12 +201,28 @@ function _M:RefreshView()
 			if self.actData.state and self.actData.state.startTime and self.actData.state.endTime then
 				self.timetext.Text = Csv.Text("chargeaward_T6", {day1 = LuaUtil.TransToMD(self.actData.state.startTime),
 																 day2 = LuaUtil.TransToMD(self.actData.state.endTime)})
+				if self.updateTime then
+					self.updateTime:Destroy()
+				end
+					self.updateTime = self.moudle.SelfRect:AddOnUpdate(function()
+						_P.RefreshTimeText(self)
+					end, nil, 1)
+				_P.RefreshTimeText(self)
 			end
 			if self.actData.list then
 				_P.RefreshItemList(self)
 			end
 		end
 	end
+end
+
+--刷新倒计时文本显示
+function _P.RefreshTimeText(self)
+	local time = self.actData.state.endTime - HeartBeat.ServSecond()
+	if time < 0 then
+		time = 0
+	end
+	self.timenum.Text = LuaUtil.GetTimeHMS(time)
 end
 
 --刷新Item获取状态
@@ -219,8 +246,7 @@ function _M:RefreshItemGetState(data)
 					CCommon.ShowFlyItem(item.effectNode, reward[1], reward[2], index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
 				end
 			end
-			item.sliderRest:DOFillAmount((item.data.maxTimes - item.data.getTimes) / item.data.maxTimes, ProcessFillTime)
-			_P.RefreshItem(self, item.data, true)
+			_P.RefreshItem(self, item.data)
 		end
 	end
 end

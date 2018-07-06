@@ -42,6 +42,8 @@ local ECmdId = {
 	cCommentMoments						=	25,--评论朋友圈
 	cDateGameStart						=	26,--开始约会游戏
 	cGirlRename							=	27,--美女改名 PGirl.CGirlRename
+
+	cLookOthersBaby                     =   28,--查看他人宝宝 PGirl.CLookOthersBaby
 ------------------------------------------------------------------------------
 	sGirlList								=	1,--已解锁美女列表 
 	sGirlUpDate								=	2,--美女信息更新 
@@ -90,6 +92,8 @@ local ECmdId = {
 	sChatNewMsg							=	40,--聊天新消息
 	sDateGameStart						=	41,--开始约会游戏
 	sGirlRename							=	42,--美女改名 PGirl.SGirlRename
+	sBabyTechOneKey                     =   43,--一键教育 PGirl.SBabyTechOneKey
+	sLookOthersBaby                     =   44,--查看他人宝宝 PGirl.SLookOthersBaby
 }
 
 --清空模块
@@ -128,7 +132,8 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cPostMoments] = "PGirl.CPostMoments",
 		[ECmdId.cCommentMoments] = "PGirl.CCommentMoments",
 		[ECmdId.cDateGameStart] = "PGirl.CDateGameStart",
-		[ECmdId.cGirlRename] = "PGirl.CGirlRename"
+		[ECmdId.cGirlRename] = "PGirl.CGirlRename",
+		[ECmdId.cLookOthersBaby] = "PGirl.CLookOthersBaby",
 	}
 	local recv = {
 		[ECmdId.sGirlList]		=	{proto = "PGirl.SInit",		handle = _M.Init},
@@ -176,6 +181,9 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sChatNewMsg] = {proto = "PGirl.SChatNewMsg",handle = _P.RepChatNewMsg},
 		[ECmdId.sDateGameStart]	= {proto = "PGirl.SDateGameStart",handle = _P.RepDateGameStart},
 		[ECmdId.sGirlRename]	= {proto = "PGirl.SGirlRename",handle = _P.RepGirlRename},
+
+		[ECmdId.sBabyTechOneKey]	= {proto = "PGirl.SBabyTechOneKey",handle = _P.RepBabyTechOneKey},
+		[ECmdId.sLookOthersBaby]	= {proto = "PGirl.SLookOthersBaby",handle = _P.RepLookOthersBaby},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Girl, send, recv, isReload)
 end
@@ -523,8 +531,8 @@ function _M.ReqZhaoQinRefresh(id)
 	_M.Send(ECmdId.cZhaoQinRefresh,{babyid = id})
 end
 
-function _M.ReqTiQin(id,itemID,_palyerNo)
-	_M.Send(ECmdId.cTiQin,{babyid = id,costItemId = itemID,playerNo = _palyerNo})
+function _M.ReqTiQin(id,itemID,_palyerNo,_otherBabyId)
+	_M.Send(ECmdId.cTiQin,{babyid = id,costItemId = itemID,playerNo = _palyerNo,otherBabyId = _otherBabyId})
 end
 
 function _M.ReqTerminateTiQin(id)
@@ -536,9 +544,13 @@ function _M.ReqRefuseTiQin(id)
 end
 
 function _M.ReqMarrySomeone(id,targetID,itemID)
+	print("__ReqMarrySomeone_____",id,targetID,itemID)
 	_M.Send(ECmdId.cMarrySomeone,{babyid = id,otherBabyId = targetID,costItemId = itemID})
 end
 
+function _M.ReqLookOthersBaby(_ownBabyid,_tarPlayerId)
+	_M.Send(ECmdId.cLookOthersBaby,{ownBabyid = _ownBabyid,tarPlayerId = _tarPlayerId})
+end
 --
 
 function _P.RepUnmarriedList(data)
@@ -570,6 +582,7 @@ end
 function _P.RepNewCouple(data)
 	MGirl.NewMarriedBaby(data.couple)
 
+	print("RepNewCouple!!!!!!")
 	WindowMgr.Call("UMarriedQingqiu","CloseWin")
 	WindowMgr.Call("UMarriedSelectCost","CloseWin")
 	WindowMgr.Call("UMarriedZhaoqin","CloseWin")
@@ -618,6 +631,19 @@ end
 function _P.RepGirlRename(data)
 	MGirl.RefreshGirlName(data)
 	WindowMgr.Call("UGirlChangeName","CloseView")
+end
+
+function _P.RepBabyTechOneKey(data)
+
+end
+
+function _P.RepLookOthersBaby(data)
+
+	if WindowMgr.IsCreated("UMarriedTiqin") then
+		WindowMgr.Call("UMarriedTiqin","SetFriendBaby",data)
+	elseif WindowMgr.IsCreated("USelectBabyFast") then
+		WindowMgr.Call("USelectBabyFast","GetPlayerBaby",data)
+	end
 end
 
 ------------------------------------------------------------------------------------

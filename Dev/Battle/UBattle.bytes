@@ -42,6 +42,10 @@ local POP_HEIGHT = 123
 local LeftRecuitPos = Vector2(-80, -5)
 local RightRecuitPos = Vector2(85, -5)
 
+local AcquBtn_1 = "gk_031"
+local AcquBtn_2 = "gk_031_1"
+local Acqu_Vip_Level = Csv.Const(Define.Const.AcquKillVip)
+
 --界面删除前回收
 function _M:BeforeDestroy( ... )
 	if self.StoryMoudle ~= nil then
@@ -128,6 +132,11 @@ function _R.OnResult(self, data)
 	end
 
 	local playNewPart = function(newPartId)
+		local BtnAcqu = self.Moudle:Get("AcquBtn")
+		BtnAcqu.RaycastTarget = false
+		BtnAcqu:AddOnTime(function()
+			BtnAcqu.RaycastTarget = true
+		end,nil,0.5)
 		WindowMgr.Create("UBattlePartStart", newPartId, function()
 			if self.Moudle ~= nil then
 				local newPartCsv = Csv.Part[newPartId]
@@ -138,6 +147,7 @@ function _R.OnResult(self, data)
 		end)
 		_P.RefreshBuild(self)
 		_P.RefreshTips(self,false,false)
+		self:Unlock()
 		--WindowMgr.Create("UBattleBigMap",true)
 	end
 
@@ -169,7 +179,7 @@ function _R.OnResult(self, data)
 							end
 						end				
 					end)
-					self:Unlock()
+					-- self:Unlock()
 				end,nil,1.8)
 				_P.RefreshTips(self,true,true)
 			else
@@ -467,6 +477,29 @@ function _M:OnCreate()
 			imgNum.Activity = false
 		end
 	end
+
+	local BtnAcqu = moudle:Get("AcquBtn")
+	BtnAcqu:AddOnButton(function()
+		local csvBattle = Csv.Battle[MBattle.CurId]
+		if csvBattle ~= nil and csvBattle.type == MBattle.BattleType.BOSS then
+			CCommon.ShowError(Csv.Text("battle_acqu2"))
+			WindowMgr.Create("UBattleBoss")
+			return 
+		end
+		if MBag.GetItemNum(Define.AssetsType.Soldier) <= 0 then
+			CCommon.ShowError(Csv.Text("battle_acqu1"))
+			return 
+		end
+		CBattle.AcquisitionReq()
+	end,nil,0.9)
+
+	if MPlayer.GetVip() >= Acqu_Vip_Level then
+		BtnAcqu.RaycastTarget = true
+		BtnAcqu.SpriteName = AcquBtn_1
+	else
+		BtnAcqu.RaycastTarget = false
+		BtnAcqu.SpriteName = AcquBtn_2
+	end
 end
 
 function _P.RefreshBuild(self)
@@ -648,7 +681,7 @@ function _P.RefreshMessage(self,isAnimate,isall)
 		end
 		local delayTime = 0.5
 		if not isall then
-			popWin:AddOnTime(function()
+			self.PopTimeEvent = popWin:AddOnTime(function()
 				popWin.LocalPosition = Vector2(posX,posY)
 				func1()
 			end,nil,delayTime)
@@ -705,5 +738,104 @@ function _R.AddSortLayerCount(self, count)
 	self._CanvasIndex = self._CanvasIndex + count + 1
 end
 
+
+local MoneyActorId = 10165
+local Acqu_Time1 = 1
+local Acqu_Time2 = 0.6
+function _R.OnAcquisition(self,list)
+	local acquList = {}
+	for k,v in ipairs(list) do
+		local data = {value = v,chapter = _P.GetChapterForAcqu(v)}
+		table.insert(acquList,data)
+	end
+
+	local moudle = self.Moudle
+	local leng = #acquList
+	local nowChapter = Csv.Battle[MBattle.CurId].chapter
+	self:Lock()
+	moudle:Get("box").Activity = false
+	moudle:Get("TIPSBOX").Activity = false
+	--人头控制不可点
+	moudle:Get("RoleIconBg").RaycastTarget = false
+	local moneyActor = moudle:Get("MoneyActor")
+	moneyActor:DestroyChildren()
+	CCommon.CreateEffect(moneyActor, MoneyActorId)
+	moudle:Get("lanse"):AddOnTime(function()
+		moneyActor:DestroyChildren()
+		_P.RefreshBattle(self)
+		_P.RefreshTips(self,false,false)
+		moudle:Get("box").Activity = true
+		moudle:Get("TIPSBOX").Activity = true
+		WindowMgr.Create("UBattleAcquWin",acquList,function()
+			_P.CheckStaff(self,acquList)
+		end)
+		self:Unlock()
+		--解除人头不可点状态
+		moudle:Get("RoleIconBg").RaycastTarget = true
+	end,nil,Acqu_Time1 + Acqu_Time2 * (leng))
+
+	for k,v in ipairs(acquList) do
+		local index = v.chapter%10
+		local chapterItem = self.Battles[index]
+		if chapterItem ~= nil then
+			moudle:Get("build"..index):AddOnTime(function()
+				chapterItem.icon.Activity = true
+				chapterItem.pass.Activity = false
+				if v.chapter < nowChapter then
+					local effectMoudle = CCommon.CreateEffect(self.Moudle:Get("Ordinary"), PASS_EFFECT_ID, chapterItem.icon.LocalPosition,function()
+						chapterItem.icon.RaycastTarget = false
+						chapterItem.pass.Activity = true
+					end)
+				else
+					chapterItem.icon.RaycastTarget = true
+				end
+			end,nil,Acqu_Time1 + Acqu_Time2 * (k - 1))
+		end
+	end
+end
+
+function _P.CheckStaff(self,list)
+	if list ~= nil then
+		for k,v in pairs(list) do
+			local csvChapter = Csv.Chapter[v.chapter]
+			if csvChapter ~= nil and csvChapter.endStory ~= nil and csvChapter.endStory > 0 and csvChapter.staffId ~= nil then
+				if _P.CheckIsChapterClear(v.value.list) then
+					if self.StoryMoudle ~= nil then
+						self.StoryMoudle:Destroy()
+						self.StoryMoudle:delete()
+						self.StoryMoudle = nil
+					end
+					local staffData = {storyType = 2, objId = csvChapter.staffId, storyId = csvChapter.endStory}
+					self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, csvChapter.endStory, nil, staffData, Define.SysId.Airport)
+				end
+			end
+		end
+	end
+	local moudle = self.Moudle
+	if self.PopTimeEvent ~= nil then
+		self.PopTimeEvent:Destroy()
+	end
+	_P.RefreshTips(self,false,false)
+end
+
+function _P.CheckIsChapterClear(list)
+	if list ~= nil then
+		for k,v in pairs(list) do
+			if v.state == MBattle.ResultState.Fail then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+function _P.GetChapterForAcqu(value)
+	for k,v in pairs(value.list) do
+		if Csv.Battle[v.id] ~= nil then
+			local chapter = Csv.Battle[v.id].chapter
+			return chapter
+		end
+	end
+end
 
 return _M

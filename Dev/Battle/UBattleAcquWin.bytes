@@ -1,0 +1,166 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local EventCenter = JRequire "Dev.EventCenter"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local JGuiManager = CS.JGui.JGuiManager
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local winTalkActorId = 10019 -- 谈判成功
+
+--界面构建
+function _M:OnCreate(list,call)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Wghej_Onekey")
+	self.Call = call
+	moudle:Get("Tips").Text = Csv.Text("battle_acqu3")
+
+	local content = moudle:Get("content")
+	for k,v in ipairs(list) do
+		if _P.CheckIsHaveWin(v.value.list) then
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_Wghej_Onekey_Item")
+			itemMoudle:Get("Pingjia").Text = Csv.Text("battle_relation")
+			local csvChapter = Csv.Chapter[v.chapter]
+			if csvChapter ~= nil then
+				itemMoudle:Get("NameText").Text = csvChapter.name
+			end
+			local totalPart = _P.GetPassNum(v.value.list)
+			local totalMoney = _P.GetAllNum(v.value.list)
+			itemMoudle:Get("text1").Text = Csv.Text("battle_seckillShow", {partNum = totalPart, totalNum = LuaUtil.NumberFormat(totalMoney)}) .. _P.GetSaveStr(_P.GetAllSeckillMoney(v.value.list))
+
+			local rewardData = _P.GetAllReward(v.value.list)
+			local itemRoot = itemMoudle:Get("Item")
+			if rewardData.money ~= nil and rewardData.money > 0 then
+				CCommon.CreateItem(itemRoot,Define.AssetsType.Coin,nil,{num = rewardData.money})
+			end
+			if rewardData.financial ~= nil and rewardData.financial > 0 then
+				CCommon.CreateItem(itemRoot,Define.AssetsType.Record,nil,{num = rewardData.financial })
+			end
+			if rewardData.item ~= nil then
+				for _,v in pairs(rewardData.item) do
+					CCommon.CreateItem(itemRoot, v[1], nil, {num = v[2]})
+				end
+			end
+		end
+	end
+
+	-- 播放战斗胜利特效
+	SoundMgr.PlayNonStopUI(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), winTalkActorId)
+end
+
+function _P.GetSaveStr(offsetNum)
+	local saveStr = ""
+	if offsetNum >= 0 then
+		saveStr = Csv.Text("battle_saveMoney", {num = LuaUtil.NumberFormat(offsetNum)})
+	else
+		saveStr = Csv.Text("battle_takeMoney", {num = LuaUtil.NumberFormat(math.abs(offsetNum))})
+	end
+
+	return saveStr
+end
+
+function _P.CheckIsHaveWin(list)
+	for k,v in pairs(list) do
+		if v.state == MBattle.ResultState.Win then
+			return true
+		end
+	end
+	return false
+end
+
+-- 获取通关关数
+function _P.GetPassNum(list)
+	local totalNum = 0
+	for k,v in pairs(list) do
+		if v.state == MBattle.ResultState.Win then
+			totalNum = totalNum + 1
+		end
+	end
+
+	return totalNum
+end
+
+-- 获取总的节省金钱数
+function _P.GetAllSeckillMoney(list)
+	local totalNum = 0
+	for k,v in pairs(list) do
+		if v.state == MBattle.ResultState.Win then
+			local battleConf = Csv.Battle[v.id]
+			if battleConf then
+				totalNum = totalNum + (battleConf.gold - v.selfcost)
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 获取总的股份值
+function _P.GetAllNum(list)
+	local totalNum = 0
+	for k,v in pairs(list) do
+		local battleConf = Csv.Battle[v.id]
+		if v.state == MBattle.ResultState.Win then
+			if battleConf then
+				totalNum = totalNum + battleConf.gold
+			end
+		else
+			if battleConf then
+				totalNum = totalNum + (battleConf.gold - v.blood)
+			end
+		end
+	end
+
+	return totalNum
+end
+
+
+-- 获取一键秒杀奖励
+function _P.GetAllReward(list)
+	local rewardData = {}
+	rewardData.item = {}
+	rewardData.money = 0
+	rewardData.financial = 0
+
+	for k,v in pairs(list) do
+		if v.state == MBattle.ResultState.Win then
+			rewardData.money = rewardData.money + v.money
+			local battleConf = Csv.Battle[v.id]
+			if battleConf then
+				rewardData.financial = rewardData.financial + battleConf.financial
+
+				if battleConf.item then
+					for i,itemValue in ipairs(battleConf.item) do
+						local itemId = itemValue[1]
+						if rewardData.item[itemId] then
+							rewardData.item[itemId][2] = rewardData.item[itemId][2] + itemValue[2]
+						else
+							rewardData.item[itemId] = {itemId, itemValue[2]}
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return rewardData
+end
+
+function _M:BeforeDestroy()
+	if self.Call ~= nil then
+		self.Call()
+	end
+end
+
+return _M

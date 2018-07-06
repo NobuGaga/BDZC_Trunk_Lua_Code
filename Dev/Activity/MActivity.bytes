@@ -90,6 +90,7 @@ _M.FuturesReward = {} -- 操纵期货中奖信息
 _M.AdventureShopRed = false
 _M.GloalTravalRed = false
 _M.TravalDicsItemId = tonumber(Csv.Const(20158))
+_M.MaxOverTime = tonumber(Csv.Const(20101)[14]) -- 奇遇系统员工加班最大次数，by:pyh
 
 function _M.Clean()
 	_M.ActList = {}
@@ -279,7 +280,7 @@ function _M.UpdatePersonEvent(actId,data)
 		end
 		local event = _M.GetNewPersonEvent(data)
 		_M.ActList[actId].personalEventlist[event.eventsIndex] = event
-		_M.ActList[actId].nextUpdateTime = data.triggerTime + Csv.Const(20101)[1]
+		_M.ActList[actId].nextUpdateTime = (data.triggerTime or 0) + Csv.Const(20101)[1]
 		_M.ActList[actId].isNew = true
 	end
 end
@@ -299,7 +300,7 @@ function _M.UpdateGangEvent(actId,data)
 					end
 				end
 				if event.playerInfo.playerId ~= MPlayer.GetId() 
-				and event.triggerTime + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
+				and (event.triggerTime or 0) + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
 					_M.AdventureShopRed = not isJoin
 				end
 			end
@@ -315,6 +316,7 @@ end
 
 function _M.GetNewPersonEvent(data)
 	local eventInfo = {}
+	local otherEventRule = {}
 	local adventureItemCsv = Csv.AdventureMainEvent[data.eventId]
 	if adventureItemCsv == nil then
 		error("事件id"..data.eventId.."错误")
@@ -322,20 +324,24 @@ function _M.GetNewPersonEvent(data)
 	end
 	if data.eventInfo ~= nil then
 		for i=1, #data.eventInfo do
-			local item = {
-				index = data.eventInfo[i].index,
-				attrInfo = {}
-			}
-			if data.eventInfo[i].attrInfo ~= nil then
-				for k,v in pairs(data.eventInfo[i].attrInfo) do
-					local one = {
-						type = v.type,
-						val = v.value,
-						extra = v.extra,
-					}
-					item.attrInfo[k] = one
+			if data.eventInfo[i].index < 100 then
+				local item = {
+					index = data.eventInfo[i].index,
+					attrInfo = {}
+				}
+				if data.eventInfo[i].attrInfo ~= nil then
+					for k,v in pairs(data.eventInfo[i].attrInfo) do
+						local one = {
+							type = v.type,
+							val = v.value,
+							extra = v.extra,
+						}
+						item.attrInfo[k] = one
+					end
+					eventInfo[i] = item
 				end
-				eventInfo[i] = item
+			elseif data.eventInfo[i].index == 100 then
+				otherEventRule = {[1] = data.eventInfo[i].attrInfo[1].type, [2] = data.eventInfo[i].attrInfo[1].value}
 			end
 		end
 	end
@@ -347,6 +353,7 @@ function _M.GetNewPersonEvent(data)
 		eventInfo = eventInfo,
 		eventId = data.eventId,
 		eventsIndex = data.eventsIndex,
+		otherEventRule = otherEventRule,
 	}
 	return one
 end
@@ -356,7 +363,7 @@ function _M.GetNewGangEvent(data)
 	local tplayerlist = {}
 	one.eventId = data.eventId
 	one.eventsIndex = data.eventsIndex
-	one.triggerTime = data.triggerTime
+	one.triggerTime = data.triggerTime or 0
 	one.type = data.type --1 进行中的 2是领奖的
 	one.playerInfo = {
 		icon = data.playerInfo.icon,
@@ -387,7 +394,7 @@ function _M.GetNewGangEvent(data)
 		end
 	end
 	--需求
-	if data.eventInfo.attrInfo ~= nil then
+	if data.eventInfo.index < 100 and data.eventInfo.attrInfo ~= nil then
 		one.eventInfo = {
 			--params -1为任意员工，其他为指定员工 不管只读第一个
 			type = data.eventInfo.attrInfo[1].type,
@@ -395,6 +402,7 @@ function _M.GetNewGangEvent(data)
 			params = data.eventInfo.attrInfo[1].params,
 		}
 	end
+
 	one.playerlist = tplayerlist
 	return one
 end
@@ -451,7 +459,19 @@ function _M.GetFuturesData()
 end
 
 -- 环球旅行
-function _M.CheckThisItemIsLight(exchangeConf, data, numId)
+function _M.GetCurExchageData(exchangeShop, exchangeId)
+	if exchangeShop == nil then
+		return {id = exchangeId, count = 0}
+	end
+
+	if exchangeShop[exchangeId] == nil then
+		return {id = exchangeId, count = 0}
+	end
+	
+	return exchangeShop[exchangeId]
+end
+
+function _M.CheckThisItemIsLight(exchangeConf, exchangeShop, data, numId)
 	local needList = {}
 	for k,v in pairs(exchangeConf.diceItems) do
 		if needList[v[1]] == nil then
@@ -464,7 +484,7 @@ function _M.CheckThisItemIsLight(exchangeConf, data, numId)
 	local count = 0
 	local totalNum = 0
 	for k,v in pairs(needList) do
-		local hasData = data[k]
+		local hasData = (data and data[k]) or nil
 		local hasCount = (hasData and hasData.count) or 0
 		if v <= hasCount then
 			count = count + 1
@@ -473,13 +493,15 @@ function _M.CheckThisItemIsLight(exchangeConf, data, numId)
 		totalNum = totalNum + 1
 	end
 
-	return count ~= totalNum
+	local curExchangeData = _M.GetCurExchageData(exchangeShop, exchangeConf.id)
+	local curNum = exchangeConf.limitCount - curExchangeData.count
+	return count ~= totalNum or curNum == 0
 end
 
-function _M.CheckHasExchange(numberCount)
+function _M.CheckHasExchange(exchangeShop, numberCount)
 	local isHas = false
 	for k,v in pairs(Csv.GlobalTravalExchange) do
-		if not _M.CheckThisItemIsLight(v, numberCount, v.id) then
+		if not _M.CheckThisItemIsLight(v, exchangeShop, numberCount, v.id) then
 			isHas = true
 			break
 		end

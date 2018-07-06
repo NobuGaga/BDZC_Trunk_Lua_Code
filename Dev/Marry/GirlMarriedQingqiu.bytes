@@ -6,6 +6,7 @@ local MGirl = JRequire"Dev.Girl.MGirl"
 local CGirl = JRequire"Dev.Girl.CGirl"
 local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MFriend = JRequire "Dev.Friend.MFriend"
 local JTweenerManager = CS.JTween.JTweenerManager
 
 local _M = Class(WindowBase)
@@ -41,159 +42,231 @@ function _R.RefreshJujueAll(self,data)
 	end
 end
 
-function _M:OnCreate()
-	self._EventNode:AddOnClick(function ()
-		SoundMgr.Play(10001)
-		self:Destroy()
-	end)
-	
-	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Qingqiu")
-	local backBtn = moudle:Get("backBtn")
+function _M:OnCreate(babyId)
+	self.mBabyId = babyId
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin5")
+	local backBtn = moudle:Get("C_Back_Btn")
 	backBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
 
+	moudle:Get("C_Text").Text = Csv.Text("married_qingqiu_title")
+
+	self.mMoudle = moudle
 	self.mContent = moudle:Get("content")
-	self.mNoneText = moudle:Get("Nonetext")
-	local title = moudle:Get("title")
-	title.Text = Csv.Text("Girl_married_qingqiu")--"提亲请求"
 
 	_P.ShowZhaoqinItems(self)
 
-	local TextDiamond = moudle:Get("quantity")
-	TextDiamond.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+	moudle:Get("Name").Text = Csv.Text("married_attr_all")
+	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab1")
+	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab2")
+	moudle:Get("MC").Text = Csv.Text("married_name_title")
+	moudle:Get("MQ").Text = Csv.Text("married_parent_title")
+	moudle:Get("SL").Text = Csv.Text("married_gongguan")
+	moudle:Get("DJ").Text = Csv.Text("married_xingzhen")
+	moudle:Get("SH").Text = Csv.Text("married_jisu")
+	moudle:Get("YX").Text = Csv.Text("married_yingxiao")
 
-	local oneKeyText = moudle:Get("C_text")
-	oneKeyText.Text = Csv.Text("Girl_married_onekeyRefuse")--"一建拒绝"
+	--往右
+	moudle:Get("JT1"):AddOnButton(function()
+		_P.OnClickNext(self,1)
+	end,nil,1.2)
 
-	local oneKeyRefused = moudle:Get("C_Btn_b")
-	oneKeyRefused:AddOnButton(function(...)
+	--往左
+	moudle:Get("JT2"):AddOnButton(function()
+		_P.OnClickNext(self,-1)
+	end,nil,1.2)
+
+	--------------------------------------------------------------------------
+	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
+	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
+
+	local goldData = Csv.Item[Define.AssetsType.Gold]
+	local goldBox = moudle:Get("goodsBox1")
+	local goldIcon = moudle:Get("goods1")
+	local goldcostText = moudle:Get("consumeText1")
+	local goldhaveText = moudle:Get("HaveText1")
+	local selectGoldText = moudle:Get("C_text")
+	local useGoldBtn = moudle:Get("Btn_b")
+
+	local costGold = MGirl.GetMarriedGoldCost(data.degree)--GetMarriedGoldCost
+	local haveGold = MBag.GetItemNum(Define.AssetsType.Gold)
+	local goldItemData = Csv.Item[Define.AssetsType.Gold]
+
+	selectGoldText.Text = Csv.Text("Girl_married_select")--"选择"
+	goldBox.SpriteName = goldData.colorIcon
+	goldIcon.SpriteName = goldData.icon
+	goldcostText.Text = Csv.Text("Girl_married_costGold",{cost = costGold})--"消耗<color=#FF2323>"..costGold.."</color>钻石"
+	goldhaveText.Text = Csv.Text("Girl_married_haveGold",{have = haveGold})--"现拥有<color=#FF2323>"..haveGold.."</color>钻石"
+
+	useGoldBtn:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		if #MGirl.MarriedQingqiu > 0 then
-			CGirl.ReqRefuseTiQin(0)--一键拒绝
+		if costGold <= haveGold then
+			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,self.SelectBabyId,Define.AssetsType.Gold)
+			WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
 		else
-			CCommon.ShowError(Csv.Text("Girl_married_noQingqiu"))--"暂无提亲请求"
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))
 		end
 	end)
 
-	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
-		if itemid == Define.AssetsType.Gold then
-			TextDiamond:DOKill()
-			local lastNum = tonumber(TextDiamond.Text)
-			local nowNum = MBag.GetItemNum(itemid)
-			if lastNum ~= nowNum then
-				local dura
-				local dec = math.abs(nowNum - lastNum)
-				if dec >= 10000 then
-					dura = 2
-				else
-					dura = math.max(0.2, dec / 10000 * 2)
-				end
-				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
-					if TextDiamond ~= nil then TextDiamond.Text = tostring(value) end
-				end, function()
-					if TextDiamond ~= nil then TextDiamond.Text = tostring(MBag.GetItemNum(itemid)) end
-				end)
-				t:SetTarget(TextDiamond.CachedTran)
-			end
+	local itemData = Csv.Item[marriedCostItem[1]]
+	local itemBox = moudle:Get("goodsBox2")
+	local itemIcon = moudle:Get("goods2")
+	local itemcostText = moudle:Get("consumeText2")
+	local itemhaveText = moudle:Get("HaveText2")
+	local selectItemText = moudle:Get("C_text_0")
+	local useItemBtn = moudle:Get("Btn_d")
+
+	local haveItem = MBag.GetItemNum(marriedCostItem[1])
+	
+	selectItemText.Text = Csv.Text("Girl_married_select")--"选择"
+	itemBox.SpriteName = itemData.colorIcon
+	itemIcon.SpriteName = itemData.icon
+	itemcostText.Text = Csv.Text("Girl_married_costItem",{name = itemData.name,num = marriedCostItem[2]})--"消耗"..itemData.name.."X"..marriedCostItem[2]
+	itemhaveText.Text = Csv.Text("Girl_married_haveItem",{have = haveItem,name = itemData.name})--"现拥有<color=#FF2323>"..haveItem.."</color>"..itemData.name
+
+	useItemBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		if marriedCostItem[2] <= haveItem then
+			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,self.SelectBabyId,marriedCostItem[1])
+			WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
+		else
+			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))
 		end
 	end)
+
 end
 
 function _P.ShowZhaoqinItems(self)
-
 	local content = self.mContent
 	content:DestroyChildren()
-	self.mNoneText.Text = ""
 
 	local itemsTab = {}
-	local datas = MGirl.MarriedQingqiu
+	local datas = MGirl.GetQingqiuById(self.mBabyId)--MGirl.MarriedQingqiu
+	local index = 0
 	for k,v in pairs(datas) do
-		local item =  _P.CreatQingqiuItem(self,content,v)
-		itemsTab[v.babyid] = item
+		index = index +1
+		local _moudle = _P.CreatItem(self,content,v,index)
+		itemsTab[index] = {data = v,moudle = _moudle}
 	end
+	self.mDataItems = itemsTab
 
 	if #datas <= 0 then
-		self.mNoneText.Text = Csv.Text("Girl_married_noQingqiu")--"暂无提亲请求"
+		--self.mNoneText.Text = Csv.Text("Girl_married_noZhaoqin")--"暂无招亲对象"
+	else
+		_P.ClickBabyItem(self,1)
+		--_P.RefreshInfo(self,datas[1])
 	end
-
-	self.mItemTab = itemsTab
 end
 
-function _P.CreatQingqiuItem(self,parent,data)
-	local moudle = JGuiManager.GetMoudle(parent, "M_Girl_Married_QinqiuItem", WindowType.UI, 10)
+function _P.CreatItem(self,content,data,index)
+	local moudle = JGuiManager.GetMoudle(content, "M_Girl_Married_Tiqin1_Item", WindowType.UI, 10)
 	
-	local name = moudle:Get("name")
-	local parentText = moudle:Get("parent")
-	local parentValue = moudle:Get("parentName")
-	local levelValue = moudle:Get("EducationText")
-	local attri = moudle:Get("attri")
-	local attriValue = moudle:Get("attriNum")
-	local costText = moudle:Get("cost")
-	local costNum = moudle:Get("costNum")
-	local headIcon = moudle:Get("head")
-	--local sceneBg = moudle:Get("scene")
-	
-
-	if data.ownerGender == 1 then
-		parentText.Text = Csv.Text("Girl_married_mother")--"母亲："
-	else
-		parentText.Text = Csv.Text("Girl_married_father")--"父亲："
-	end
-	attri.Text = Csv.Text("Girl_married_attribute")--"属性："
-	costText.Text = Csv.Text("Girl_married_cost")--"费用："
-
-	local costGold = MGirl.GetMarriedGoldCost(data.degree)
-	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
-	local itemData = Csv.Item[marriedCostItem[1]]
-	costNum.Text = Csv.Text("Girl_married_costGoldAndItem",{gold = costGold,item = itemData.name})--"80钻石/连理枝"
-	--sceneBg.SpriteName = "bg_004"
-	
-	name.Text = data.name
-	parentValue.Text = data.ownerName
-	levelValue.Text = MGirl.GetEducationName(data.degree)
-	attriValue.Text = data.sumAttr
+	local headIcon = moudle:Get("Head")
 	headIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
-	headIcon:SetNativeSize()
-
-	
-	local refuseText = moudle:Get("C_text")
-	local selectText = moudle:Get("C_text_0")
-	refuseText.Text = Csv.Text("Girl_married_refuse")--"拒绝"
-	selectText.Text = Csv.Text("Girl_married_selectBaby")--"选择孩子"
-
-	local refuseBtn = moudle:Get("RefusedBtn")
-	refuseBtn:AddOnButton(function(...)
+	headIcon:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		--请求拒绝
-		CGirl.ReqRefuseTiQin(data.babyid)
-	end)
-
-	local selectBtn = moudle:Get("selectBtn")
-	selectBtn:AddOnButton(function(...)
-		SoundMgr.Play(10001)
-		MGirl.SelectQingqiuID = data.babyid
-		WindowMgr.Create("UMarriedSelectBaby",data)
+		_P.ClickBabyItem(self,index)
 	end)
 
 	return moudle
 end
 
-function _P.RefusedItem(self,id)
-	local itemsTab = self.mItemTab
-	if itemsTab[id] ~= nil then
-		itemsTab[id].SelfRect:Destroy()
-		itemsTab[id] = nil
-		--table.remove(itemsTab,id)
+function _P.OnClickNext(self,num)
+	if self.mSelectItemIndex == nil then
+		self.mSelectItemIndex = 1
 	end
-	self.mItemTab = itemsTab
+	local index = self.mSelectItemIndex + num
+	local dataItems = self.mDataItems
+	if dataItems ~= nil then
+		if index <= 0 or index > #dataItems then
+			return
+		end
+	else
+		return
+	end
+
+	_P.ClickBabyItem(self,index)
 end
 
-function _P.RefusedAll(self)
-	self.mItemTab = {}
-	local content = self.mContent
-	content:DestroyChildren()
+function _P.ClickBabyItem(self,index)
+	if self.mSelectItemIndex ~= nil and self.mSelectItemIndex == index then
+		return
+	end
+
+	self.mSelectItemIndex = index
+	local dataItems = self.mDataItems
+	
+	local itemMoudle = self.mSelectItem
+	if itemMoudle ~= nil then
+		itemMoudle:Get("select").Activity = false
+	end
+
+	local item = dataItems[index]
+	
+	if item ~= nil then
+		itemMoudle = item.moudle
+		itemMoudle:Get("select").Activity = true
+		_P.RefreshInfo(self,item.data)
+
+		self.mSelectItem = itemMoudle
+	end
+end
+
+function _P.RefreshInfo(self,data)
+	--[[
+	if self.mSelectItem ~= nil then
+		self.mSelectItem:Get("select").Activity = false
+	end
+	self.mSelectItem = self.mDataItems[data.babyid]
+	if self.mSelectItem ~= nil then
+		self.mSelectItem:Get("select").Activity = true
+	end
+	--]]
+	self.SelectBabyId = data.babyid
+
+	local moudle = self.mMoudle
+
+	local bxsImg = moudle:Get("bxs")
+	local tab1 = moudle:Get("Tab1")
+	local tab2 = moudle:Get("Tab2")
+	local name = moudle:Get("SlNum_0")
+	local parent = moudle:Get("DjNum_0")
+	local gongguan = moudle:Get("SlNum")
+	local xingzheng = moudle:Get("DjNum")
+	local jisu = moudle:Get("ShNum")
+	local yingxiao = moudle:Get("YXjNum_0")
+
+	bxsImg.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+
+	_P.CheckTab(self,data.ownerId)
+
+	name.Text = data.name
+	parent.Text = data.ownerGender-- Csv.Girl[data.girlid].name--
+	gongguan.Text = data.attr.Wuli
+	xingzheng.Text = data.attr.Zhili
+	jisu.Text = data.attr.Zhengzhi
+	yingxiao.Text = data.attr.Meili
+end
+
+function _P.CheckTab(self,id)
+	local type = MFriend.GetTypeById(id)
+
+	local moudle = self.mMoudle
+	local tab1 = moudle:Get("Tab1")
+	local tab2 = moudle:Get("Tab2")
+
+	if type == MFriend.RelationType.QinJia then
+		tab1.Activity = true
+		tab2.Activity = true
+	elseif type == MFriend.RelationType.Friend then
+		tab1.Activity = true
+		tab2.Activity = false
+	else
+		tab1.Activity = false
+		tab2.Activity = false
+	end
 end
 
 return _M

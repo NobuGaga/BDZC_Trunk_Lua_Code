@@ -17,6 +17,7 @@ function _M:ctor(windowType, windowName, isCanPop, sysId)
 	self._CanvasTweenState = 0 --0无动画 1创建动画 2创建动画结束 3关闭动画
 	self._CallEvents = {}
 	self._Redpoints = {}
+	self._IsFull_ = false
 	-- _MusicID: 更换背景音乐ID
 	-- _BeginMemory: 开始时内存
 	-- 	_CanvasNode: 根节点
@@ -37,41 +38,41 @@ end
 --内部删除函数 (****不可以重载*****)
 --这个函数会有关闭动画, 只能用于关闭按钮, 不可以用于跳转等
 function _M:Destroy(isNoPop, ... )
-	if self._CanvasNode ~= nil then
-		if self._DestroyTweenInfo ~= nil then
-			if self._CreateOrDestroyTweenCom ~= nil then
-				self._CreateOrDestroyTweenCom:DOKill()
-			end
-			self:Lock()
-			local param = {...}
-			if self._DestroyTweenInfo.func ~= nil then
-				self._DestroyTweenInfo.func()
-			end
-			CS.JGui.JGuiManager.DestroyAllChildActor(self._CanvasNode)
-			self._CanvasTweenState = 3
-			self._CreateOrDestroyTweenCom = self._EventNode.CachedTran:GetJTweener(self._DestroyTweenInfo.name)
-			self._CreateOrDestroyTweenCom:SetOnComplete(function ()
-				WindowMgr.Destroy(self._Name, isNoPop, table.unpack(param))
-			end)
-			self._CreateOrDestroyTweenCom:Play()
-		else
+	-- if self._CanvasNode ~= nil then
+	-- 	if self._DestroyTweenInfo ~= nil then
+	-- 		if self._CreateOrDestroyTweenCom ~= nil then
+	-- 			self._CreateOrDestroyTweenCom:DOKill()
+	-- 		end
+	-- 		self:Lock()
+	-- 		local param = {...}
+	-- 		if self._DestroyTweenInfo.func ~= nil then
+	-- 			self._DestroyTweenInfo.func()
+	-- 		end
+	-- 		CS.JGui.JGuiManager.DestroyAllChildActor(self._CanvasNode)
+	-- 		self._CanvasTweenState = 3
+	-- 		self._CreateOrDestroyTweenCom = self._EventNode.CachedTran:GetJTweener(self._DestroyTweenInfo.name)
+	-- 		self._CreateOrDestroyTweenCom:SetOnComplete(function ()
+	-- 			WindowMgr.Destroy(self._Name, isNoPop, table.unpack(param))
+	-- 		end)
+	-- 		self._CreateOrDestroyTweenCom:Play()
+	-- 	else
 			WindowMgr.Destroy(self._Name, isNoPop, ...)
-		end	
-	end	
+	-- 	end	
+	-- end	
 end
 --立即关闭, 不播放关闭动画
 function _M:DestroyImmediately(isNoPop, ... )
 	WindowMgr.Destroy(self._Name, isNoPop, ...)
 end
 
-function _M:DisCreateOrDestroyTween()
-	if self._CreateOrDestroyTweenCom ~= nil then
-		self._CreateOrDestroyTweenCom:DOKill(true)	
-		if self._CanvasTweenState == 2 and self._CreateTweenInfo ~= nil and self._CreateTweenInfo.pass ~= nil then
-			self._CreateTweenInfo.pass(self)
-		end	
-	end
-end
+-- function _M:DisCreateOrDestroyTween()
+-- 	if self._CreateOrDestroyTweenCom ~= nil then
+-- 		self._CreateOrDestroyTweenCom:DOKill(true)	
+-- 		if self._CanvasTweenState == 2 and self._CreateTweenInfo ~= nil and self._CreateTweenInfo.pass ~= nil then
+-- 			self._CreateTweenInfo.pass(self)
+-- 		end	
+-- 	end
+-- end
 
 --界面构造
 function _M:OnCreate(...)

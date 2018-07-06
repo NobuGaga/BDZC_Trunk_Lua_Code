@@ -1,3 +1,5 @@
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 
 local _M = {}
@@ -10,6 +12,7 @@ _M.MsgTab = {}
 _M.UnionsMsgTab = {}
 _M.SysMessageTab = {}
 _M.CrossMsgTab = {}
+_M.SeltGotRedPacket = {}
 
 --频道类型
 _M.Channel = 
@@ -29,7 +32,9 @@ function _M.Clean()
 	_M.UnionsMsgTab = {}
 	_M.SysMessageTab = {}
 	_M.CrossMsgTab = {}
+	_M.SeltGotRedPacket = {}
 	_M.MinIndex = 999999
+	_M.MaxShowRedPacketNum = 12
 end
 
 function _M:HistoryTalkMsg(talkList)
@@ -259,5 +264,116 @@ function _M.GetLastOfChannel(channel)
 	return nil
 end
 
+_M.RedPacketType = {
+	isNotOpen = 1,
+	isGot = 2,
+	isGetOver = 4,
+	isPass = 3,
+}
+
+_M.GetResultType = {
+	GetSuccess = 1,
+	HaveGot = 2,
+	isGetOver = 3,
+	isPass = 4,
+}
+
+--红包弹窗最多显示红包数
+_M.MaxShowRedPacketNum = 12
+
+function _M.SetGotRedPacketInfo(data)
+	if data == nil or data.id == nil then
+		return
+	end
+	if _M.GetResultType.GetSuccess == data.result or _M.GetResultType.HaveGot == data.result then
+		_M.SeltGotRedPacket[data.id] = true
+	end
+end
+
+function _M.GetAllRedPacket()
+	local dataListCopy = {}
+	_M.FilterSameRedPacketData(dataListCopy, _M.MsgTab)
+	_M.FilterSameRedPacketData(dataListCopy, _M.UnionsMsgTab)
+	_M.SetSeltGotRedPacket(dataListCopy)
+	local filterRedPacket = _M.FilterGotRedPacket(dataListCopy)
+	local dataList = {}
+	local index = 1
+	for _, msgData in pairs(dataListCopy) do
+		if filterRedPacket == nil or filterRedPacket[msgData.redPacket.packetId] == nil then
+			dataList[index] = msgData
+			index = index + 1
+		end
+	end
+	table.sort(dataList, _M.SortRedPacketData)
+	_M.FilterMaxShowSelfGotNum(dataList)
+	return dataList
+end
+
+function _M.FilterSameRedPacketData(dataListCopy, msgList)
+	for _, msgData in pairs(msgList) do
+		if msgData.redPacket and msgData.redPacket.packetId then
+			if msgData.redPacket.packetId then
+				local redData = dataListCopy[msgData.redPacket.packetId]
+				if redData then
+					if msgData.redPacket.type == 2 and MPlayer.GetName() == msgData.sendername then
+						msgData.redPacket.state = _M.RedPacketType.isGot
+						dataListCopy[msgData.redPacket.packetId] = msgData
+					elseif _M.RedPacketType.isPass == msgData.redPacket.state and _M.RedPacketType.isGetOver ~= msgData.redPacket.state then
+						dataListCopy[msgData.redPacket.packetId] = msgData
+					elseif _M.RedPacketType.isGetOver == msgData.redPacket.state then
+						dataListCopy[msgData.redPacket.packetId] = msgData
+					end
+				else
+					dataListCopy[msgData.redPacket.packetId] = msgData
+				end
+			end
+		end
+	end
+end
+
+function _M.SetSeltGotRedPacket(dataListCopy)
+	for packetId, msgData in pairs(dataListCopy) do
+		if _M.SeltGotRedPacket[packetId] then
+			msgData.redPacket.state = _M.RedPacketType.isGot
+		end
+	end
+end
+
+function _M.FilterGotRedPacket(dataListCopy)
+	local filterRedPacket = {}
+	for packetId, data in pairs(dataListCopy) do
+		if data.redPacket.state ~= _M.RedPacketType.isNotOpen then
+			filterRedPacket[packetId] = true
+		end
+	end
+	return filterRedPacket
+end
+
+function _M.FilterMaxShowSelfGotNum(dataList)
+	local count = #dataList
+	if count > _M.MaxShowRedPacketNum then
+		for index = _M.MaxShowRedPacketNum + 1, count do
+			dataList[index] = nil
+		end
+	end
+end
+
+function _M.SortRedPacketData(left, right)
+	if left.redPacket.expireTime and right.redPacket.expireTime then
+		if (left.redPacket.state == _M.RedPacketType.isNotOpen and right.redPacket.state == _M.RedPacketType.isNotOpen) or 
+		   (left.redPacket.state ~= _M.RedPacketType.isNotOpen and right.redPacket.state ~= _M.RedPacketType.isNotOpen) then
+			return right.redPacket.expireTime < left.redPacket.expireTime
+		elseif left.redPacket.state == _M.RedPacketType.isNotOpen and right.redPacket.state ~= _M.RedPacketType.isNotOpen then
+			return true
+		else
+			return false
+		end
+	elseif left.redPacket.expireTime and not right.redPacket.expireTime then
+		return true
+	elseif not left.redPacket.expireTime and right.redPacket.expireTime then
+		return false
+	end
+	return true
+end
 
 return _M

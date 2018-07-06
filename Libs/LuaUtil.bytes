@@ -84,6 +84,27 @@ function _M.VoicePlayThreePoint(obj,spaceTime)
     return event
 end
 
+function _M.FriendThreePoint(obj,pointTab,spaceTime)
+    local index = 0
+    local event = obj:AddOnUpdate(function (t, ... )
+    
+        for k,v in pairs(pointTab)do
+            if k <= index then
+                v.Activity = true
+            else
+                v.Activity = false
+            end
+        end
+
+        index = index + 1
+        if index > 3 then
+            index = 0
+        end
+
+    end, nil, spaceTime or 0.6)
+    return event
+end
+
 local function _dump_table_to_ret(ret, s)
     ret.count = ret.count + 1
     if ret.count > DUMP_TABLE_LIMIT then

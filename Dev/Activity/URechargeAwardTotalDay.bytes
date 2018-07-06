@@ -93,11 +93,11 @@ function _P.CreateList(self)
 					Btn.Activity = true
 					Geted.Activity = false
 					if info.num >= v.grade then
-						-- Btn.SpriteName = "ty_024"
+						Btn.SpriteName = "HX_ty_024_1"
 						BtnText.Text = Csv.Text("chargeaward_get")
 						CanGetedState = true
 					else
-						-- Btn.SpriteName = "ty_024_5"
+						Btn.SpriteName = "ty_024"
 						BtnText.Text = Csv.Text("chargeaward_go")
 					end
 					CanGetedState = true
@@ -157,10 +157,11 @@ function _P.UpdateTime(self)
 		if second < 0 then
 			second = 0
 		end
-		for k,v in pairs(self.mItemTable) do
-			local itemMoudle = v.moudle
-			itemMoudle:Get("timetext").Text = Csv.Text("chargeaward_time",{time = LuaUtil.GetTimeHMS(second)})
-		end
+		-- 隐藏Item倒计时显示
+		-- for k,v in pairs(self.mItemTable) do
+		-- 	local itemMoudle = v.moudle
+		-- 	itemMoudle:Get("timetext").Text = Csv.Text("chargeaward_time",{time = LuaUtil.GetTimeHMS(second)})
+		-- end
 		self.mMoudle:Get("timenum").Text = LuaUtil.GetTimeHMS(second)
 	end
 end
@@ -221,10 +222,10 @@ function _M:RefreshItemGetState(data)
 			Btn.Activity = true
 			Geted.Activity = false
 			if info.num >= csvRecharge.grade then
-				-- Btn.SpriteName = "ty_024"
+				Btn.SpriteName = "HX_ty_024_1"
 				BtnText.Text = Csv.Text("chargeaward_get")
 			else
-				-- Btn.SpriteName = "ty_024_5"
+				Btn.SpriteName = "ty_024"
 				BtnText.Text = Csv.Text("chargeaward_go")
 			end
 		end

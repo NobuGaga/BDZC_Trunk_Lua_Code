@@ -14,6 +14,8 @@ local SDKMgr = JRequire "SDK.SDKMgr"
 local SDKCollectType = JRequire "SDK.SDKCollectType"
 --@RefType [Dev.RedPacket.MRedpacket.bytes#_M]
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
+--@RefType [Dev.Talk.MTalk.bytes#_M]
+local MTalk = JRequire "Dev.Talk.MTalk"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -471,8 +473,11 @@ end
 
 function _P.RepOpenRedPacket(data)
 	MRedpacket.SetRedpacketInfo(data)
-	
+	MRedpacket.RemoveRedPacket(data.id)
+	MTalk.SetGotRedPacketInfo(data)
+
 	WindowMgr.Call("URedpacketSplit","ShowRedpacket",data)
+	WindowMgr.Call("URedEnvelopes","ShowRedpacket",data)
 	WindowMgr.Call("UTalk","ShowRedpacket",data)
 	WindowMgr.Call("UTalkTips1","ShowRedpacket",data)
 end

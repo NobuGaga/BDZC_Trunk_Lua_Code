@@ -30,21 +30,28 @@ function _R.RefreshZhaoqin(self)
 	_P.ShowZhaoqinItems(self)
 end
 
-function _M:OnCreate()
-	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin4")
+function _M:OnCreate(playerId,babyList)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin2")
 	local backBtn = moudle:Get("C_Back_Btn")
 	backBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
 
-	CGirl.ReqZhaoQin(MGirl.MarriedSelectID)
-
+	self.mPlayerId = playerId
 	self.mMoudle = moudle
 	self.mContent = moudle:Get("content")
-	self.mInfoRect = moudle:Get("InfoBg")
+	self.mInfoRect = moudle:Get("InfoRect")
+	self.mNoTips = moudle:Get("TextBG")
+
+	self.mInfoRect.Activity = false
+	self.mNoTips.Activity = true
+
+	if babyList ~= nil then
+		_P.ShowZhaoqinItems(self,babyList)
+	end
 	
-	moudle:Get("C_Text").Text = Csv.Text("married_main_server")
+	moudle:Get("C_Text").Text = Csv.Text("married_baby_title")
 	moudle:Get("Name").Text = Csv.Text("married_attr_all")
 	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab1")
 	moudle:Get("TabText2").Text = Csv.Text("married_tiqin_tab2")
@@ -54,6 +61,7 @@ function _M:OnCreate()
 	moudle:Get("DJ").Text = Csv.Text("married_xingzhen")
 	moudle:Get("SH").Text = Csv.Text("married_jisu")
 	moudle:Get("YX").Text = Csv.Text("married_yingxiao")
+	moudle:Get("NoneText").Text = Csv.Text("married_baby_no")
 
 	--往右
 	moudle:Get("JT1"):AddOnButton(function()
@@ -76,6 +84,7 @@ function _M:OnCreate()
 	local goldhaveText = moudle:Get("HaveText1")
 	local selectGoldText = moudle:Get("C_text")
 	local useGoldBtn = moudle:Get("Btn_b")
+	self.mUseGoldBtn = useGoldBtn
 
 	local costGold = MGirl.GetMarriedGoldCost(data.degree)--GetMarriedGoldCost
 	local haveGold = MBag.GetItemNum(Define.AssetsType.Gold)
@@ -89,12 +98,8 @@ function _M:OnCreate()
 
 	useGoldBtn:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		if self.SelectBabyId == nil or self.SelectBabyId <= 0 then
-			CCommon.ShowError(Csv.Text("married_baby_no"))
-			return
-		end
 		if costGold <= haveGold then
-			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,self.SelectBabyId,Define.AssetsType.Gold)
+			CGirl.ReqTiQin(MGirl.MarriedSelectID,Define.AssetsType.Gold,playerId,self.SelectBabyId)
 			WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
 		else
 			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = goldItemData.name}))
@@ -108,6 +113,7 @@ function _M:OnCreate()
 	local itemhaveText = moudle:Get("HaveText2")
 	local selectItemText = moudle:Get("C_text_0")
 	local useItemBtn = moudle:Get("Btn_d")
+	self.mUseItemBtn = useItemBtn
 
 	local haveItem = MBag.GetItemNum(marriedCostItem[1])
 	
@@ -119,43 +125,17 @@ function _M:OnCreate()
 
 	useItemBtn:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		if self.SelectBabyId == nil or self.SelectBabyId <= 0 then
-			CCommon.ShowError(Csv.Text("married_baby_no"))
-			return
-		end
-
 		if marriedCostItem[2] <= haveItem then
-			CGirl.ReqMarrySomeone(MGirl.MarriedSelectID,self.SelectBabyId,marriedCostItem[1])
+			CGirl.ReqTiQin(MGirl.MarriedSelectID,marriedCostItem[1],playerId,self.SelectBabyId)
 			WindowMgr.Call("UMarriedTips","CloseView")--关闭结婚选项
 		else
 			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemData.name}))
 		end
 	end)
 
-	local timeValue = moudle:Get("Time")
-	
-	local refreshCDBtn = moudle:Get("C_Btn_a")
-	local refreshCD = moudle:Get("C_text_0_0")
-	refreshCD.Text = Csv.Text("Girl_married_refreshTimeFirst")--"立即刷新"
-	---------------------------------------------------------------------------------------------
-	refreshCDBtn:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		local cost = 100
-		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
-		CCommon.CheckTips(function(isSure,rg)self:OnClickRefreshCDBtn(isSure, arg)
-		end,{items = {[1] = GoldCount},content = Csv.Text("Girl_married_isCostGold")})--"是否花费100钻石立即刷新"
-	end, nil, 0.9)
-
-	timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
-	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
-		if MGirl.ZhaoqinCD >0 then
-			timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
-		end
-	end)
 end
 
 function _P.RefreshInfo(self,data)
-	--[[
 	if self.mSelectItem ~= nil then
 		self.mSelectItem:Get("select").Activity = false
 	end
@@ -163,41 +143,40 @@ function _P.RefreshInfo(self,data)
 	if self.mSelectItem ~= nil then
 		self.mSelectItem:Get("select").Activity = true
 	end
-	
-	--]]
 	self.SelectBabyId = data.babyid
+
 	local moudle = self.mMoudle
 
 	local bxsImg = moudle:Get("bxs")
 	local tab1 = moudle:Get("Tab1")
 	local tab2 = moudle:Get("Tab2")
-	local name = moudle:Get("MCNum")
-	local parent = moudle:Get("MQNum")
+	local name = moudle:Get("SlNum_0")
+	local parent = moudle:Get("DjNum_0")
 	local gongguan = moudle:Get("SlNum")
 	local xingzheng = moudle:Get("DjNum")
 	local jisu = moudle:Get("ShNum")
-	local yingxiao = moudle:Get("YXjNum")
+	local yingxiao = moudle:Get("YXjNum_0")
 
 	bxsImg.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
 	--ownIcon:SetNativeSize() 
-	_P.CheckTab(self,data.ownerId)
+	_P.CheckTab(self,self.mPlayerId)
 
 	name.Text = data.name
-	parent.Text = data.ownerGender
-	gongguan.Text = data.attr.Wuli
-	xingzheng.Text = data.attr.Zhili
-	jisu.Text = data.attr.Zhengzhi
-	yingxiao.Text = data.attr.Meili
+	parent.Text = Csv.Girl[data.girlid].name--
+	gongguan.Text = data.attribute.Wuli
+	xingzheng.Text = data.attribute.Zhili
+	jisu.Text = data.attribute.Zhengzhi
+	yingxiao.Text = data.attribute.Meili
 end
 
 
-function _P.ShowZhaoqinItems(self)
+function _P.ShowZhaoqinItems(self,babyList)
 	local content = self.mContent
 	content:DestroyChildren()
+	--self.mNoneText.Text = ""
 
 	local dataItems = {}
-	local datas = MGirl.ZhaoqinList
-
+	local datas = babyList
 	local index = 0
 	for k,v in pairs(datas) do
 		index = index +1
@@ -208,27 +187,29 @@ function _P.ShowZhaoqinItems(self)
 
 	if #datas <= 0 then
 		self.mInfoRect.Activity = false
-		--self.mNoneText.Text = Csv.Text("Girl_married_noZhaoqin")--"暂无招亲对象"
+		self.mNoTips.Activity = true
 	else
 		self.mInfoRect.Activity = true
+		self.mNoTips.Activity = false
 		_P.ClickBabyItem(self,1)
 	end
 end
 
 function _P.CreatItem(self,content,data,index)
-	local _moudle = JGuiManager.GetMoudle(content, "M_Girl_Married_Tiqin1_Item", WindowType.UI, 10)
-
-	local headIcon = _moudle:Get("Head")
+	local moudle = JGuiManager.GetMoudle(content, "M_Girl_Married_Tiqin1_Item", WindowType.UI, 10)
+	
+	local headIcon = moudle:Get("Head")
 	
 	headIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	--headIcon:SetNativeSize()
+	
 	headIcon:AddOnButton(function(...)
 		SoundMgr.Play(10001)
 		_P.ClickBabyItem(self,index)
 	end)
 
-	return _moudle
+	return moudle
 end
-
 
 function _P.OnClickNext(self,num)
 	if self.mSelectItemIndex == nil then
@@ -271,20 +252,6 @@ function _P.ClickBabyItem(self,index)
 	end
 end
 
-function _M:OnClickRefreshCDBtn(isSure, arg)
-	if isSure == true then
-		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
-		local cost = 100
-		local itemDate = Csv.Item[Define.AssetsType.Gold]
-
-		if cost > GoldCount then
-			CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = itemDate.name}))
-		else
-			CGirl.ReqZhaoQinRefresh(MGirl.MarriedSelectID)
-		end
-	end
-end
-
 function _P.CheckTab(self,id)
 	local type = MFriend.GetTypeById(id)
 
@@ -303,5 +270,6 @@ function _P.CheckTab(self,id)
 		tab2.Activity = false
 	end
 end
+
 
 return _M

@@ -15,6 +15,8 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local UTiqinFriends = JRequire"Dev.Marry.UTiqinFriends"
 local UTiqinServer = JRequire"Dev.Marry.UTiqinServer"
 local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
+local MMarry = JRequire"Dev.Marry.MMarry"
+local MMain = JRequire "Dev.Main.MMain"
 
 
 local _M = Class(WindowBase)
@@ -28,7 +30,8 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(chooseFuncId)
+function _M:OnCreate(id)
+	self.mBabyId = id
 	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Tiqin")
 	self.mMoudle = moudle
 
@@ -40,42 +43,75 @@ function _M:OnCreate(chooseFuncId)
 	self.PageNode = moudle:Get("Content")
 
 	moudle:Get("C_Text").Text = Csv.Text("married_tiqin_title")
-	moudle:Get("IconText1").Text = Csv.Text("married_tiqin_icon1")
-	moudle:Get("IconText2").Text = Csv.Text("married_tiqin_icon2")
-	moudle:Get("IconText3").Text = Csv.Text("married_tiqin_icon3")
 
-	--亲友提亲
-	moudle:Get("icon1"):AddOnButton(function()
-		_P.OnChoose(self, 1)
-	end,nil,1.2)
+-----------------------------------------------------------------------	
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
 
-	--指定提亲
-	moudle:Get("icon2"):AddOnButton(function()
-		_P.OnChoose(self, 2)
-	end,nil,1.2)
+	--新版toggle
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Girl_Marry, true)
+	local countToggle = #funcs
+	if countToggle > 0 then
+		local lastChoose
+		local isHave = false
 
-	--全服提亲
-	moudle:Get("icon3"):AddOnButton(function()
-		_P.OnChoose(self, 3)
-	end,nil,1.2)
+		--Table标签控制
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("icon"..index), moudle:Get("IconText"..index), v.name)
+			if lastChoose == v.id then
+				isHave = true
+			end
+		end
+		if not isHave then
+			lastChoose = funcs[1].id
+		end
+		tabHandle:Choose(lastChoose)
+		self.mTabHandle = tabHandle
+	end
 
-	_P.OnChoose(self, 1)
 end
 
-function _P.OnChoose(self, index)
+function _P.OnChoose(self, func)
 	if self.ChooseMoudle ~= nil then
 		self.ChooseMoudle:Destroy()
 		self.ChooseMoudle:delete()
 		self.ChooseMoudle = nil
 	end
-	
-	if index == 1 then
-		self.ChooseMoudle = UTiqinFriends.new(self.PageNode)
-	elseif index == 2 then
-		self.ChooseMoudle = UTiqinSpecial.new(self.PageNode)
-	elseif index == 3 then
-		self.ChooseMoudle = UTiqinServer.new(self.PageNode)
+
+	if func == Define.SysId.Married_Friends then
+		self.ChooseMoudle = UTiqinFriends.new(self.PageNode,self.mBabyId)
+	elseif func == Define.SysId.Married_Special then
+		self.ChooseMoudle = UTiqinSpecial.new(self.PageNode,self.mBabyId)
+	elseif func == Define.SysId.Married_Server then
+		self.ChooseMoudle = UTiqinServer.new(self.PageNode,self.mBabyId)
 	end
+
+	self.mSelectIndex = func
+end
+
+function _R.SetFriendQinjia(self,msg)
+	if self.mSelectIndex == Define.SysId.Married_Friends then
+		self.ChooseMoudle:SetFriendQinjia(msg)
+	end
+end
+
+function _R.SetFriendBaby(self,data)
+	if self.mSelectIndex == Define.SysId.Married_Friends then
+		self.ChooseMoudle:GetFriendBabyInfo(data)
+	elseif self.mSelectIndex == Define.SysId.Married_Special then
+		self.ChooseMoudle:ShowPlayerView(data)
+	end
+end
+
+function _R.CloseView(self)
+	
+	self:Destroy()
 end
 
 return _M

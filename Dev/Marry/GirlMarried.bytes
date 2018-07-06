@@ -182,6 +182,7 @@ function _M:OnCreate(chooseFuncId)
 	
 	self.mToggle = Toggle
 
+	
 	local tiqinText = moudle:Get("C_text_0")
 	local tiqinRedPoint = moudle:Get("tiqinRed")
 	tiqinText.Text = Csv.Text("Girl_married_qingqiu")--"提亲请求"
@@ -367,6 +368,9 @@ function _P.CreatUnMarriedItem(self,data)
 	--local attribute = moudle:Get("AttributeText")
 	local attributetValue = moudle:Get("AttributeText")
 	local selected = moudle:Get("Selected")
+	local redImg = moudle:Get("red")
+
+	redImg.Activity = false
 	selected.Activity = false
 
 	--identity.Text = Csv.Text("Girl_married_identity")--"学历："
@@ -404,6 +408,13 @@ function _P.CreatUnMarriedItem(self,data)
 		SoundMgr.Play(10001)
 		_P.SelectUnMarriedItem(self,data.babyid)
 	end)
+
+	local tiqinList = MGirl.GetQingqiuById(data.babyid)
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			redImg.Activity = true
+		end
+	end
 
 	return moudle
 end
@@ -579,7 +590,7 @@ function _R.ResfrehBabyType(self,id)
 		marriedBtn:AddOnButton(function(...)
 			SoundMgr.Play(10001)
 			if type == 0 then --无
-				WindowMgr.Create("UMarriedTips",data)
+				WindowMgr.Create("UMarriedTips",id)
 			else
 				CCommon.CheckTips(function(isSure,rg)self:OnClickEndTiqinBtn(isSure,arg,id)
 				end,{content = Csv.Text("Girl_married_sureRefused")})--确定要终止提亲吗？

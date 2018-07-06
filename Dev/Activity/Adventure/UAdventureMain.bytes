@@ -29,6 +29,8 @@ local QUALITY6 = Color(255/255,93/255,140/255,1)
 local GRAY = Color(0/255,0/255,0/255,140/255)
 local LIGHT = Color(1,1,1,1)
 local OutBack = CS.DG.Tweening.Ease.OutBack
+local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
+local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -94,47 +96,75 @@ function _P.GetSortList(self)
 	return personList
 end
 
-function _P.RefreshTime(self)
-	local time = self.time - HeartBeat.ServSecond() 
-	local isFinish = time <= 0
-	if isFinish then
-		self.timeText.Text = CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
-	else
-		self.timeText.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
-	end
-	return isFinish
-end
+-- function _P.RefreshTime(self)
+-- 	local time = self.time - HeartBeat.ServSecond() 
+-- 	local isFinish = time <= 0
+-- 	if isFinish then
+-- 		self.timeText.Text = CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
+-- 	else
+-- 		self.timeText.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
+-- 	end
+-- 	return isFinish
+-- end
 
-function _P.RefreshAskTime(self)
-	local time = self.asktime - HeartBeat.ServSecond() 
-	local isFinish = time <= 0
-	if isFinish then
-		self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
-	else
-		self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
-	end
-	return isFinish
-end
+-- function _P.RefreshAskTime(self)
+-- 	local time = self.asktime - HeartBeat.ServSecond() 
+-- 	local isFinish = time <= 0
+-- 	if isFinish then
+-- 		self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(0, Csv.Text("xinguan_rank_countdown"))
+-- 	else
+-- 		self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(time, Csv.Text("xinguan_rank_countdown"))
+-- 	end
+-- 	return isFinish
+-- end
 
 --移除1个事件
-function _P.RemoveEvent(self,eventsIndex)
-	--还要通知M
-	self.mData.personalEventlist[eventsIndex] = nil
-	_P.SetListData(self)
-end
+-- function _P.RemoveEvent(self,eventsIndex)
+-- 	--还要通知M
+-- 	self.mData.personalEventlist[eventsIndex] = nil
+-- 	_P.SetListData(self)
+-- end
 
 --更新事件
 function _R.UpdateEvent(self,data)
 	self.mData = MActivity.GetFromId(self.ActId)
-	_P.SetListData(self)
+	-- 现在个人事件更新会走完成个人事件那边，这边就不需要再刷一遍数据了，by:pyh
+	-- _P.SetListData(self)
 	_P.SetNoneText(self)
 end
 
---更新个人事件数据
-function _R.UpdateOwnData(self)
+--更新个人事件数据,isShowAnim是否播放消失出现动画，by:pyh
+function _R.UpdateOwnData(self, isShowAnim)
 	self.mData = MActivity.GetFromId(self.ActId)
-	_P.SetListData(self)
 	_P.SetOwnData(self)
+
+	if isShowAnim then
+		self:Lock()
+		for k,v in pairs(self.mRawTableItems) do
+			local itemRect = v.module
+			if itemRect ~= nil then
+				local tween = itemRect.SelfRect.CachedTran:GetJTweener(MOUDLE_FADEOUT)
+				tween:Play()
+			end
+		end
+	
+		self.mModule.SelfRect:AddOnTime(function()
+			_P.SetListData(self)
+			for k,v in pairs(self.mRawTableItems) do
+				local itemRect = v.module
+				if itemRect ~= nil then
+					local tween = itemRect.SelfRect.CachedTran:GetJTweener(MOUDLE_FADEIN)
+					tween:Play()
+				end
+			end
+		end, nil, 1)
+
+		self.mModule:Get("Content"):AddOnTime(function()
+			self:Unlock()
+		end, nil, 1.5)
+	else
+		_P.SetListData(self)
+	end
 end
 
 --红点
@@ -157,26 +187,26 @@ function _P.OnCreateItem(self,data,contentTransform)
 		itemMoudle:Get("startlv").Text = Csv.Text("adventure_startlv")
 		itemMoudle:Get("Tips").Text = Csv.Text("adventure_time_tips")
 		itemMoudle:Get("new_text").Text = Csv.Text("adventure_time_out")
-		if _P.IsNeedUpdate(self,data.eventsIndex) then
-			self.timeText = itemMoudle:Get("Time")
-			self.time = self.mData.nextUpdateTime
-			self.timeText.Text = CS.Utility.Utils.FormatSeconds(self.time - HeartBeat.ServSecond(), Csv.Text("xinguan_rank_countdown"))
-			itemMoudle:Get("TimeBg").Activity = true
-			self.countTime = self.timeText:AddOnUpdate(function() 
-				if self.mData.state.lefttime <= HeartBeat.ServSecond() then
-					itemMoudle:Get("TimeBg").Activity = false
-				elseif _P.RefreshTime(self) then
-					if self.countTime then
-						--时间到了移除事件
-						self.countTime:Destroy()
-						self.countTime = nil
-						_P.RemoveEvent(self,data.eventsIndex)
-					end
-				end
-			end, nil, 1)
-		else
-			itemMoudle:Get("TimeBg").Activity = false
-		end
+		-- if _P.IsNeedUpdate(self,data.eventsIndex) then
+		-- 	self.timeText = itemMoudle:Get("Time")
+		-- 	self.time = self.mData.nextUpdateTime or 0
+		-- 	self.timeText.Text = CS.Utility.Utils.FormatSeconds(self.time - HeartBeat.ServSecond(), Csv.Text("xinguan_rank_countdown"))
+		-- 	itemMoudle:Get("TimeBg").Activity = true
+		-- 	self.countTime = self.timeText:AddOnUpdate(function() 
+		-- 		if self.mData.state.lefttime <= HeartBeat.ServSecond() then
+		-- 			itemMoudle:Get("TimeBg").Activity = false
+		-- 		elseif _P.RefreshTime(self) then
+		-- 			if self.countTime then
+		-- 				--时间到了移除事件
+		-- 				self.countTime:Destroy()
+		-- 				self.countTime = nil
+		-- 				_P.RemoveEvent(self,data.eventsIndex)
+		-- 			end
+		-- 		end
+		-- 	end, nil, 1)
+		-- else
+		itemMoudle:Get("TimeBg").Activity = false
+		-- end
 
 		itemMoudle:Get("iCON"):AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
@@ -195,30 +225,29 @@ function _P.OnCreateItem(self,data,contentTransform)
 		local ImgIcon = itemMoudle:Get("iCON")
 		ImgIcon.SpriteName = csvEvent.icon
 		itemMoudle:Get("Name").Text = eventName
-
-		event.module = itemMoudle
 	elseif self.mData.state.lefttime > HeartBeat.ServSecond() then
 		--?事件
 		itemMoudle:Get("NewTime").Text = Csv.Text("adventure_main_refresh")
 		itemMoudle:Get("TimeBg").Activity = false
 		itemMoudle:Get("OutBox").Color = _P.GetOutColor(self, 1)
-		self.asktime = self.mData.nextUpdateTime
-		self.timeText1 = itemMoudle:Get("NewTimeNum")
-		self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(self.asktime - HeartBeat.ServSecond(), Csv.Text("xinguan_rank_countdown"))
+		-- self.asktime = self.mData.nextUpdateTime or 0
+		-- self.timeText1 = itemMoudle:Get("NewTimeNum")
+		-- self.timeText1.Text = Csv.Text("adventure_newtime_tips")..CS.Utility.Utils.FormatSeconds(self.asktime - HeartBeat.ServSecond(), Csv.Text("xinguan_rank_countdown"))
 		local ImgIcon = itemMoudle:Get("iCON")
 		ImgIcon.SpriteName = "shijiantu_2"
-		self.countTime1 = self.timeText1:AddOnUpdate(function() 
-			if _P.RefreshAskTime(self) then
-				if self.countTime1 then
-					--时间到了移除事件
-					self.countTime1:Destroy()
-					self.countTime1 = nil
-				end
-			end
-		end, nil, 1)
+		-- self.countTime1 = self.timeText1:AddOnUpdate(function() 
+		-- 	if _P.RefreshAskTime(self) then
+		-- 		if self.countTime1 then
+		-- 			--时间到了移除事件
+		-- 			self.countTime1:Destroy()
+		-- 			self.countTime1 = nil
+		-- 		end
+		-- 	end
+		-- end, nil, 1)
 	end
+
+	event.module = itemMoudle
 	return event
-	
 end
 
 function _P.GetOutColor(self, type)
@@ -255,23 +284,23 @@ function _P.GetOutColor(self, type)
 	end
 end
 
-function _P.IsNeedUpdate(self,eventsIndex)
-	if self.mData.state.lefttime <= HeartBeat.ServSecond() then
-		return false
-	end
-	local minIndex = -1
-	local count = 0
-	for k,v in pairs(self.mData.personalEventlist) do
-		if minIndex == -1 then
-			minIndex = v.eventsIndex
-		end
-		if minIndex > v.eventsIndex then
-			minIndex = v.eventsIndex
-		end
-		count = count + 1
-	end
-	return minIndex == eventsIndex and count == MAX_EVENT
-end
+-- function _P.IsNeedUpdate(self,eventsIndex)
+-- 	if self.mData.state.lefttime <= HeartBeat.ServSecond() then
+-- 		return false
+-- 	end
+-- 	local minIndex = -1
+-- 	local count = 0
+-- 	for k,v in pairs(self.mData.personalEventlist) do
+-- 		if minIndex == -1 then
+-- 			minIndex = v.eventsIndex
+-- 		end
+-- 		if minIndex > v.eventsIndex then
+-- 			minIndex = v.eventsIndex
+-- 		end
+-- 		count = count + 1
+-- 	end
+-- 	return minIndex == eventsIndex and count == MAX_EVENT
+-- end
 
 function _P.OnClickItem(self,data,activityData)
 	if data ~= nil then

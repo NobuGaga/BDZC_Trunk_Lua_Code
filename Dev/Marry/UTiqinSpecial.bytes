@@ -16,23 +16,45 @@ local UTiqinFriends = JRequire"Dev.Marry.UTiqinFriends"
 local UTiqinServer = JRequire"Dev.Marry.UTiqinServer"
 local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
 
+local LOAD_EFFECT_ID = 10166
 
 local _M = Class(WindowBase)
 local _P = {}
-local _R = {}
 
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then 
-		fun(self, ...)
-	end
-end
-
-function _M:ctor(parent)
+function _M:ctor(parent,id)
 	self._RootNode = parent
-	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_Serch", WindowType.UI, 0)
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_Serch", WindowType.Tips2, 0)
 	self.mMoudle = moudle
 
+	moudle:Get("title").Text = Csv.Text("married_serch_title")
+	moudle:Get("PursuitText").Text = Csv.Text("married_serch_playerid")
+	moudle:Get("Placeholder").Text = Csv.Text("married_serch_inputid")
+	moudle:Get("C_text").Text = Csv.Text("married_serch_btn")
+
+	self.mActorPanel = moudle:Get("ActorPanel")
+	local input = moudle:Get("input")
+
+	moudle:Get("Btn_a"):AddOnButton(function()
+		local inputNum = tonumber(input.Text)
+		
+		if input.Text == "" then
+			CCommon.ShowError(Csv.Text("Girl_married_NumberFalse"))--"请出入正确的玩家编号!"
+		else
+			if inputNum == MPlayer.GetId() then
+				CCommon.ShowError(Csv.Text("Girl_married_toself"))--不能向自己提亲
+			else
+				--发送查看玩家编号
+				CGirl.ReqLookOthersBaby(MGirl.MarriedSelectID,inputNum)
+			end
+		end
+	end,nil,1.2)
+
+end
+
+function _M:ShowPlayerView(data)
+	CCommon.CreateEffect(self.mActorPanel, LOAD_EFFECT_ID, nil, function( ... ) 
+		WindowMgr.Create("UPlayerBaby",data.tarPlayerId,data.tarBabyList)
+	end)
 end
 
 function _M:Destroy()

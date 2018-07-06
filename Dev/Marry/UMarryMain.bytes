@@ -9,6 +9,7 @@ local CGirl = JRequire"Dev.Girl.CGirl"
 local MBag = JRequire "Dev.Bag.MBag"
 local CBag = JRequire "Dev.Bag.CBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -21,7 +22,12 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(chooseFuncId)
+function _R.CloseView(self)
+	self:Destroy()
+end
+
+function _M:OnCreate(id)
+	self.mBabyId = id
 	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Atmosphere")
 	self.mMoudle = moudle
 
@@ -42,7 +48,7 @@ function _M:OnCreate(chooseFuncId)
 
 	tiqinImg:AddOnButton(function()
 		SoundMgr.Play(10001)
-		WindowMgr.Create("UMarriedTiqin")
+		WindowMgr.Create("UMarriedTiqin",self.mBabyId)
 	end)
 
 	serverImg:AddOnButton(function()
@@ -52,23 +58,48 @@ function _M:OnCreate(chooseFuncId)
 
 	tiqinQingqiuImg:AddOnButton(function()
 		SoundMgr.Play(10001)
-		WindowMgr.Create("UMarriedQingqiu")
+		WindowMgr.Create("UMarriedQingqiu",self.mBabyId)
 	end)
 	
 	tiqinQingqiuImg.Activity = false
 
-	local tiqinList = MGirl.MarriedQingqiu
+	local tiqinList = MGirl.GetQingqiuById(id)--MGirl.MarriedQingqiu
 
 	if tiqinList ~= nil then
 		if #tiqinList > 0 then
 			tiqinQingqiuImg.Activity = true
+			tiqinQingqiuImg.SpriteName = ""
 			tiqinQingqiuName.Text = _P.GetFirstTiqinName(self,tiqinList)
 		end
 	end
 end
 
+function _P.ShowBoby(self,headId,bodyId,sex)
+	if self.mHeadPrefab ~= nil then
+		self.mHeadPrefab:Destroy()
+		self.mHeadPrefab = nil
+	end
+
+	if self.mBodyPrefab ~= nil then
+		self.mBodyPrefab:Destroy()
+		self.mBodyPrefab = nil
+	end
+
+	local moudle = self.mMoudle
+	local headPrefab = MPlayer.GetPrefabID(headId, sex)
+    local bodyPrefab = MPlayer.GetPrefabID(bodyId, sex)
+    if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
+        self.mBodyPrefab, self.mHeadPrefab = CCommon.CreateRole(moudle:Get("body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.player_tiqin)
+    else
+        moudle:Get("body").SpriteName = MPlayer.GetSpFromSex(bodyId, sex)
+		moudle:Get("head").SpriteName = MPlayer.GetSpFromSex(headId, sex)
+	end
+end
+
 function _P.GetFirstTiqinName(self,list)
-	return list[1].ownerGender
+	local data = list[1]
+	_P.ShowBoby(self,data.ownerAvatar.head,data.ownerAvatar.body,data.ownerGender)
+	return data.ownerName
 end
 
 return _M

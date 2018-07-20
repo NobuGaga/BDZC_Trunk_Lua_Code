@@ -52,9 +52,17 @@ function _M:ctor(parent,id)
 end
 
 function _M:ShowPlayerView(data)
+
+	if data.tarBabyList == nil or #data.tarBabyList <= 0 then
+		CCommon.ShowError(Csv.Text("married_nobaby"))
+		return
+	end
+	WindowMgr.Create("UPlayerBaby",data.tarPlayerId,data.tarBabyList,data.tarPlayerName)
+	--[[
 	CCommon.CreateEffect(self.mActorPanel, LOAD_EFFECT_ID, nil, function( ... ) 
-		WindowMgr.Create("UPlayerBaby",data.tarPlayerId,data.tarBabyList)
+		
 	end)
+	--]]
 end
 
 function _M:Destroy()

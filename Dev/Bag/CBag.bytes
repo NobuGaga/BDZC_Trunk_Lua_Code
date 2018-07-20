@@ -10,6 +10,7 @@ local CMain = JRequire "Dev.Main.CMain"
 local CCar = JRequire "Dev.Car.CCar"
 local MAircraft = JRequire "Dev.Aircraft.MAircraft"
 local CTrigger = JRequire "Dev.Main.CTrigger"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 
 local _M = {}
 local _P = {}
@@ -118,9 +119,12 @@ function _P.OnDelItem(data)
 			CCar.CheckCarRedPoint()
 		end
 
-		-- 银行理财检测红点
 		if data.item.itemid == Define.AssetsType.Gold then
+			-- 银行理财检测红点
 			CActivity.UpdateInvestmentRed()
+			GameSetting.HttpPostDataToPHP(Define.PostUrlType.UseGold, {Expense = data.item.itemcount, 
+										  Balance = MBag.GetItemNum(Define.AssetsType.Gold),
+										  uTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 		end
 	end
 	--_P.CheckMergeRedPoint(data.item.itemid)

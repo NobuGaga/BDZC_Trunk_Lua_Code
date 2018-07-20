@@ -10,6 +10,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MFriend = JRequire "Dev.Friend.MFriend"
 
 local JTweenerManager = CS.JTween.JTweenerManager
+local DEGREE_ID = 10204
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -23,6 +24,7 @@ function _M:Dispatch(funcName, ...)
 end
 
 function _R.CloseWin(self)
+	CCommon.ShowError(Csv.Text("married_tiqin_success"))
 	self:Destroy()
 end
 
@@ -30,7 +32,7 @@ function _R.RefreshZhaoqin(self)
 	_P.ShowZhaoqinItems(self)
 end
 
-function _M:OnCreate(playerId,babyList)
+function _M:OnCreate(playerId,babyList,playerName)
 	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin2")
 	local backBtn = moudle:Get("C_Back_Btn")
 	backBtn:AddOnButton(function(...)
@@ -40,15 +42,21 @@ function _M:OnCreate(playerId,babyList)
 
 	self.mPlayerId = playerId
 	self.mMoudle = moudle
+	self.mScrollView = moudle:Get("scrollView")
 	self.mContent = moudle:Get("content")
 	self.mInfoRect = moudle:Get("InfoRect")
 	self.mNoTips = moudle:Get("TextBG")
+	self.mParentTitle = moudle:Get("Title")
 
 	self.mInfoRect.Activity = false
 	self.mNoTips.Activity = true
 
 	if babyList ~= nil then
 		_P.ShowZhaoqinItems(self,babyList)
+	end
+
+	if playerName ~= nil then
+		moudle:Get("Title").Text = Csv.Text("married_baby_playerName",{name = playerName})
 	end
 	
 	moudle:Get("C_Text").Text = Csv.Text("married_baby_title")
@@ -62,6 +70,7 @@ function _M:OnCreate(playerId,babyList)
 	moudle:Get("SH").Text = Csv.Text("married_jisu")
 	moudle:Get("YX").Text = Csv.Text("married_yingxiao")
 	moudle:Get("NoneText").Text = Csv.Text("married_baby_no")
+	moudle:Get("xl").Text = Csv.Text("Girl_married_identity")
 
 	--往右
 	moudle:Get("JT1"):AddOnButton(function()
@@ -156,17 +165,21 @@ function _P.RefreshInfo(self,data)
 	local xingzheng = moudle:Get("DjNum")
 	local jisu = moudle:Get("ShNum")
 	local yingxiao = moudle:Get("YXjNum_0")
+	local allAttr = moudle:Get("Num")
+	local xueli = moudle:Get("xlText")
 
 	bxsImg.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
 	--ownIcon:SetNativeSize() 
 	_P.CheckTab(self,self.mPlayerId)
 
+	xueli.Text = Csv.Const(DEGREE_ID)[data.degree]
 	name.Text = data.name
 	parent.Text = Csv.Girl[data.girlid].name--
 	gongguan.Text = data.attribute.Wuli
 	xingzheng.Text = data.attribute.Zhili
 	jisu.Text = data.attribute.Zhengzhi
 	yingxiao.Text = data.attribute.Meili
+	allAttr.Text = data.attribute.Wuli + data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
 end
 
 
@@ -247,27 +260,46 @@ function _P.ClickBabyItem(self,index)
 		itemMoudle = item.moudle
 		itemMoudle:Get("select").Activity = true
 		_P.RefreshInfo(self,item.data)
+		_P.MoveContent(self,itemMoudle)
 
 		self.mSelectItem = itemMoudle
 	end
 end
 
+function _P.MoveContent(self,tarItem)
+	local content = self.mContent
+	local scroll = self.mScrollView
+
+	local scrollWid = scroll.SizeDelta.x
+	local itemPox = tarItem.SelfRect.LocalPosition.x
+	local itemWid = tarItem.SelfRect.SizeDelta.x
+	local contentPox = content.LocalPosition.x
+
+	local tarPox = (itemPox + itemWid/2) - (scrollWid - contentPox)
+	local rightPox = (itemPox - itemWid/2) + contentPox
+
+	if tarPox > 0 then
+		content:DOAnchorPosX(-tarPox + contentPox,0.2)
+	elseif rightPox < 0 then
+		content:DOAnchorPosX(contentPox - rightPox,0.2)
+	end
+end
+
 function _P.CheckTab(self,id)
-	local type = MFriend.GetTypeById(id)
+	local isQinjia = MFriend.IsQingjiaById(id)
+	local isFriend = MFriend.IsFriendById(id)
 
 	local moudle = self.mMoudle
 	local tab1 = moudle:Get("Tab1")
 	local tab2 = moudle:Get("Tab2")
+	tab1.Activity = false
+	tab2.Activity = false
 
-	if type == MFriend.RelationType.QinJia then
+	if isFriend then
 		tab1.Activity = true
+	end
+	if isQinjia then
 		tab2.Activity = true
-	elseif type == MFriend.RelationType.Friend then
-		tab1.Activity = true
-		tab2.Activity = false
-	else
-		tab1.Activity = false
-		tab2.Activity = false
 	end
 end
 

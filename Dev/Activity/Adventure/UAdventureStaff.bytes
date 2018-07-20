@@ -64,23 +64,46 @@ function _P.GetSortStaffs(self,rawTable, suitData)
 	end
 	
 	table.sort(suitTable,function(a,b)
+		-- 当类型是一样的时候，按照属性->总属性->id
+		if _P.CheckIsSuit(self,suitData,a) == _P.CheckIsSuit(self,suitData,b) then
+			local staffAttrData = _P.GetStaffSuit(suitData)
+			if staffAttrData then
+				local aval = MStaff.GetAttrByType(a.id, staffAttrData.type)
+				local bval = MStaff.GetAttrByType(b.id, staffAttrData.type)
+				if aval == bval then
+					if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
+						return a.id > b.id
+					end
+					
+					return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
+				else
+					return aval > bval
+				end
+			else
+				if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
+					return a.id > b.id
+				end
+				
+				return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
+			end
+		end
+
 		return _P.CheckIsSuit(self,suitData,a) > _P.CheckIsSuit(self,suitData,b)
 	end)
+
 	table.sort(unsuitTable,function(a,b)
 		for i=1,#suitData do
-			if suitData[i].extra == 1 then
-				if suitData[i].type <= 4 then
-					local aval = MStaff.GetAttrByType(a.id, suitData[i].type)
-					local bval = MStaff.GetAttrByType(b.id, suitData[i].type)
-					if aval == bval then
-						if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
-							return a.id > b.id
-						else
-							return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
-						end
+			if suitData[i].type <= 4 then
+				local aval = MStaff.GetAttrByType(a.id, suitData[i].type)
+				local bval = MStaff.GetAttrByType(b.id, suitData[i].type)
+				if aval == bval then
+					if MStaff.GetAllAttr(a.id) ==  MStaff.GetAllAttr(b.id) then
+						return a.id > b.id
 					else
-						return aval > bval
+						return MStaff.GetAllAttr(a.id) > MStaff.GetAllAttr(b.id)
 					end
+				else
+					return aval > bval
 				end
 			end
 		end
@@ -92,12 +115,23 @@ function _P.GetSortStaffs(self,rawTable, suitData)
 	return suitTable
 end
 
+-- 获取属性
+function _P.GetStaffSuit(suitData)
+	for i=1,#suitData do
+		if suitData[i].type <= 4 then
+			return suitData[i]
+		end
+	end
+end
+
 --检测这名员工是否符合需求
 --排序：可使用》已使用可加班》已使用不可加班》不符合条件》属性数值》资质》
 function _P.CheckIsSuit(self,suitData, data)
 	local checkSum = 1 	--符合度
 	local checkSeed = 1000 --防止单属性偏差过大
 	local csvPerson = Csv.Personnel[data.id]
+
+	local isChoose = false -- 是否可选
 	for i=1,#suitData do
 		--四种基本属性：公关，行政，技术，营销 走一套
 		--先看当前属性是不是必需条件
@@ -166,6 +200,8 @@ function _P.CheckIsSuit(self,suitData, data)
 					return -9999
 				end
 			end
+		else
+			isChoose = true
 		end
 	end
 	--已选中直接置顶
@@ -181,7 +217,8 @@ function _P.CheckIsSuit(self,suitData, data)
 		return 1
 	end
 	-- print("checkSum",checkSum.."dataId:",data.id)
-	return checkSum
+	-- by:pyh 可选条件的加班要排在后面
+	return ((isChoose and checkSum == 1) and 4) or checkSum
 end
 
 --构建需求员工
@@ -463,6 +500,7 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 						else
 							_P.OnStaffOverTime(self,data)
 							sendBtnText.Text = Csv.Text("adventure_staff_send")
+							sendBtn.SpriteName = "ty_024"
 						end
 					end
 				end,{items = {[itemId] = haveNum}, content = content},nil,"UItemCheckBox")
@@ -519,6 +557,7 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	sendBtn.IsGray = isGray
 	sendBtn.RaycastTarget = not isGray
 	--派遣
+
 	if _P.IsContains(self,data.id) then
 		--召回
 		itemMoudle:Get("Tips").Activity = true
@@ -534,6 +573,7 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	elseif not _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
 		--加班
 		sendBtnText.Text = Csv.Text("adventure_staff_overtime")
+		sendBtn.SpriteName = "HX_ty_024_1"
 	else
 		--可用
 		sendBtnText.Text = Csv.Text("adventure_staff_send")
@@ -745,9 +785,7 @@ function _M:OnCreate(eventData,activityData)
 	self.confirm = module:Get("C_Btn_a")
 	self.confirm:AddOnButton(function(...)
 		--确认选择判断选择人数够了没
-	local vip = MPlayer.GetVip()
-	local extraTime = Csv.Vip[vip].adventureMainCount
-	local lefttime = Csv.Const(20101)[3] + extraTime - self.activityData.personalEventTimes
+	local lefttime = Csv.Const(20101)[3] - self.activityData.personalEventTimes
 		if #self.selectDataList < #self.mData.eventInfo then
 			CCommon.ShowError(Csv.Text("adventure_call_limit"))
 		elseif lefttime <= 0 then

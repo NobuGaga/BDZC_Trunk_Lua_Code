@@ -38,6 +38,7 @@ CompanyIconTable[Define.SysId.Patrol] = "world_004"
 CompanyIconTable[Define.SysId.Car] = "world_012"
 CompanyIconTable[Define.SysId.Aircraft] = "world_011"
 CompanyIconTable[Define.SysId.Girl_Baby] = "world_kid"
+CompanyIconTable[Define.SysId.Girl_Marry] = "world_002"
 
 local CityBtnPos = {{-510,-221},{-73,-161},{57,-391},{-497,122},{668,200},{880,-374},{525,-174},{-935,-5},{341,257},{194,57},{-732,151},{-99,181},{848,-68},{875,-412}}
 local CityBtnSizePos = {{201,358}, {323,256},{321,218},{234,295},{301,163},{259,321},{170,243},{293,189},{162,184},{182,359},{175,138},{322,207},{170,243},{353,274}}
@@ -450,6 +451,7 @@ function _R.SetCompanyIcon(self)
 	local pointGirl = MGirl.redPoint
 	local pointCar = MCar.CarRedPoint
 	local pointPatrol = MCompany.PatrolRedPoint
+	local pointMarry = MGirl.isNewCoupleRed
 	local pointAircraft = not MAircraft.IsStuding or MAircraft.IsAircraftHaveUnActivative()
 	if GameSetting.IsiOSCommit then
 		pointAircraft = false
@@ -476,6 +478,9 @@ function _R.SetCompanyIcon(self)
 		GoIcon.Activity = true
 	elseif pointBaby and MMain.FuncIsOpen(Define.SysId.Girl_Baby) then
 		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Girl_Baby]
+		GoIcon.Activity = true
+	elseif pointMarry and MMain.FuncIsOpen(Define.SysId.Girl_Marry) then
+		ImgIcon.SpriteName = CompanyIconTable[Define.SysId.Girl_Marry]
 		GoIcon.Activity = true
 	else
 		GoIcon.Activity = false

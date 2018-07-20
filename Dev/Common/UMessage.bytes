@@ -4,6 +4,7 @@ local CTalk = JRequire "Dev.Talk.CTalk"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MTalk = JRequire "Dev.Talk.MTalk"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MMain = JRequire "Dev.Main.MMain"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -189,7 +190,7 @@ function _Func.ShowMsgTips(self, data)
 		self.MsgTipsMoudle = self:CreateMoudle(self._RootNode, "M_Msg_Tips")
 		LuaUtil.TextAddThreePoint(self.MsgTipsMoudle:Get("new_text"), "")
 		self.MsgTipsData = data
-		self.MsgTipsMoudle.SelfRect:AddOnButton(function( ... )
+		self.MsgTipsMoudle:Get("Boob"):AddOnButton(function( ... )
 			SoundMgr.Play(10001)
 			if self.MsgTipsData.funcId == Define.SysId.Talk_Private then
 				WindowOpen.Open(self.MsgTipsData.funcId, self.MsgTipsData.id, self.MsgTipsData.name)
@@ -201,6 +202,16 @@ function _Func.ShowMsgTips(self, data)
 		end, nil, 0.9)
 	else
 		self.MsgTipsData = data
+	end
+	_Func.SetBoobLayer(self)
+end
+
+function _Func.SetBoobLayer(self)
+	if MMain.BoobLayer ~= nil then
+		if self.MsgTipsMoudle ~= nil then
+			local canvas = self.MsgTipsMoudle:Get("M_Msg_Tips")
+			canvas.SortingLayerName = MMain.BoobLayer
+		end
 	end
 end
 

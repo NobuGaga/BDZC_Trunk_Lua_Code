@@ -13,6 +13,8 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
+local DEGREE_ID = 10204
+
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
 	if fun ~= nil then 
@@ -52,21 +54,25 @@ function _M:OnCreate(babyId)
 	end, nil, 1.2)
 
 	moudle:Get("C_Text").Text = Csv.Text("married_qingqiu_title")
+	moudle:Get("Tips").Text = Csv.Text("married_qingqiu_tips")
 
 	self.mMoudle = moudle
 	self.mContent = moudle:Get("content")
+	self.mScrollView = moudle:Get("scrollView")
+	self.mPlayerNum = moudle:Get("playerNum")
 
 	_P.ShowZhaoqinItems(self)
 
 	moudle:Get("Name").Text = Csv.Text("married_attr_all")
 	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab1")
-	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab2")
+	moudle:Get("TabText2").Text = Csv.Text("married_tiqin_tab2")
 	moudle:Get("MC").Text = Csv.Text("married_name_title")
 	moudle:Get("MQ").Text = Csv.Text("married_parent_title")
 	moudle:Get("SL").Text = Csv.Text("married_gongguan")
 	moudle:Get("DJ").Text = Csv.Text("married_xingzhen")
 	moudle:Get("SH").Text = Csv.Text("married_jisu")
 	moudle:Get("YX").Text = Csv.Text("married_yingxiao")
+	moudle:Get("xl").Text = Csv.Text("Girl_married_identity")
 
 	--往右
 	moudle:Get("JT1"):AddOnButton(function()
@@ -77,7 +83,6 @@ function _M:OnCreate(babyId)
 	moudle:Get("JT2"):AddOnButton(function()
 		_P.OnClickNext(self,-1)
 	end,nil,1.2)
-
 	--------------------------------------------------------------------------
 	local data = MGirl.GetUnMarriedData(MGirl.MarriedSelectID)
 	local marriedCostItem = Csv.BabyDegree[data.degree].marriageItemCost --结婚道具
@@ -209,8 +214,28 @@ function _P.ClickBabyItem(self,index)
 		itemMoudle = item.moudle
 		itemMoudle:Get("select").Activity = true
 		_P.RefreshInfo(self,item.data)
+		_P.MoveContent(self,itemMoudle)
 
 		self.mSelectItem = itemMoudle
+	end
+end
+
+function _P.MoveContent(self,tarItem)
+	local content = self.mContent
+	local scroll = self.mScrollView
+
+	local scrollWid = scroll.SizeDelta.x
+	local itemPox = tarItem.SelfRect.LocalPosition.x
+	local itemWid = tarItem.SelfRect.SizeDelta.x
+	local contentPox = content.LocalPosition.x
+
+	local tarPox = (itemPox + itemWid/2) - (scrollWid - contentPox)
+	local rightPox = (itemPox - itemWid/2) + contentPox
+
+	if tarPox > 0 then
+		content:DOAnchorPosX(-tarPox + contentPox,0.2)
+	elseif rightPox < 0 then
+		content:DOAnchorPosX(contentPox - rightPox,0.2)
 	end
 end
 
@@ -233,39 +258,49 @@ function _P.RefreshInfo(self,data)
 	local tab2 = moudle:Get("Tab2")
 	local name = moudle:Get("SlNum_0")
 	local parent = moudle:Get("DjNum_0")
+	local parentTitle =  moudle:Get("MQ")
 	local gongguan = moudle:Get("SlNum")
 	local xingzheng = moudle:Get("DjNum")
 	local jisu = moudle:Get("ShNum")
 	local yingxiao = moudle:Get("YXjNum_0")
+	local allAttr = moudle:Get("Num")
+	local xueli = moudle:Get("xlText")
 
 	bxsImg.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
 
 	_P.CheckTab(self,data.ownerId)
 
+	if data.ownerGender == 1 then
+		parentTitle.Text = Csv.Text("Girl_married_mother")
+	else
+		parentTitle.Text = Csv.Text("Girl_married_father")
+	end
+
+	xueli.Text = Csv.Const(DEGREE_ID)[data.degree]
 	name.Text = data.name
-	parent.Text = data.ownerGender-- Csv.Girl[data.girlid].name--
+	parent.Text = data.ownerName
 	gongguan.Text = data.attr.Wuli
 	xingzheng.Text = data.attr.Zhili
 	jisu.Text = data.attr.Zhengzhi
 	yingxiao.Text = data.attr.Meili
+	allAttr.Text = data.attr.Wuli + data.attr.Zhili+data.attr.Zhengzhi+data.attr.Meili
 end
 
 function _P.CheckTab(self,id)
-	local type = MFriend.GetTypeById(id)
+	local isQinjia = MFriend.IsQingjiaById(id)
+	local isFriend = MFriend.IsFriendById(id)
 
 	local moudle = self.mMoudle
 	local tab1 = moudle:Get("Tab1")
 	local tab2 = moudle:Get("Tab2")
+	tab1.Activity = false
+	tab2.Activity = false
 
-	if type == MFriend.RelationType.QinJia then
+	if isFriend then
 		tab1.Activity = true
+	end
+	if isQinjia then
 		tab2.Activity = true
-	elseif type == MFriend.RelationType.Friend then
-		tab1.Activity = true
-		tab2.Activity = false
-	else
-		tab1.Activity = false
-		tab2.Activity = false
 	end
 end
 

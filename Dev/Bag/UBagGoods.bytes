@@ -305,21 +305,36 @@ function _M:RefreshItemNum(itemid,itemcount,isAdd)
 						rawTableItems[goodsData.itemid] = nil
 					end
 				else
-					itemMoudle:Get("Num").Text = goodsData.itemcount
+					if goodsData.itemcount > 0 then
+						itemMoudle:Get("Num").Text = goodsData.itemcount
+					else
+						itemMoudle:Destroy()
+						_P.OnCreateItem(self,nil,true)
+						local index = _P.GetIndex(sortGoods,goodsData.itemid)
+						table.remove(sortGoods,index)
+						if index > #sortGoods then
+							index = index - 1
+						end
+						local nextData = sortGoods[index]
+						_P.OnClickItem(self,nextData)
+						rawTableItems[goodsData.itemid] = nil
+					end
 				end
 			end
 		else
 			if isAdd then
-				local itemData = {itemid = itemid,itemcount = itemcount}
-				table.insert(sortGoods,itemData)
-				local emptyTableItems = self.mEmptyTableItems
-				if #emptyTableItems > 0 then
-					emptyTableItems[1].ShowItem(itemData)
-					table.remove(emptyTableItems,1)
-				else
-					_P.OnCreateItem(self,itemData,false)
-					for i=1,3 do
-						_P.OnCreateItem(self,nil,true)
+				if itemcount > 0 then
+					local itemData = {itemid = itemid,itemcount = itemcount}
+					table.insert(sortGoods,itemData)
+					local emptyTableItems = self.mEmptyTableItems
+					if #emptyTableItems > 0 then
+						emptyTableItems[1].ShowItem(itemData)
+						table.remove(emptyTableItems,1)
+					else
+						_P.OnCreateItem(self,itemData,false)
+						for i=1,3 do
+							_P.OnCreateItem(self,nil,true)
+						end
 					end
 				end
 			end

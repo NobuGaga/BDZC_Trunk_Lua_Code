@@ -42,6 +42,7 @@ function _M:UpdateData()
 		self.mModule:Get("GoodsNum").Text = Csv.Text("car_garage_shuliang", {num = self.SelectMatData.itemcount})
 	end
 
+	self.ImgSelect.Activity = (not self.IsBatch) and (self.SelectMatData ~= nil)
 	if next(MCar.SellGetData) ~= nil then
 		_P.PlayItemEffect(self, MCar.SellGetData)
 		MCar.SellGetData = {}
@@ -57,6 +58,7 @@ function _M:IsShowOneKeyData(isShow)
 	self.BatchPanel.Activity = isShow
 	self.hasRect.Activity = (not isShow) and self.SelectMatData
 	self.noneRect.Activity = (not isShow) and (not self.SelectMatData)
+	self.ImgSelect.Activity = (not isShow) and (self.SelectMatData ~= nil)
 
 	for i,v in ipairs(BatchSellData) do
 		if isShow then
@@ -178,16 +180,6 @@ end
 
 
 function _P.OnSelectMatData(self, data, isUpdate, index)
-	if self.SelectMatData == data then return end
-	if self.IsBatch and (not isUpdate) and data then return end
-	self.SelectMatData = data
-	self.CurSelectIndex = index or 1
-
-	self.hasRect.Activity = data and (not self.IsBatch)
-	self.noneRect.Activity = not data and (not self.IsBatch)
-
-	_P.SetItemData(self, data)
-
 	local item = self.mAllMatData[index]
 	if item ~= nil then
 		local itemModule = item.module
@@ -199,6 +191,15 @@ function _P.OnSelectMatData(self, data, isUpdate, index)
 		self.ImgSelect.LocalPosition = Vector2(0,0)
 		self.ImgSelect.CachedTran:SetSiblingIndex(0)
 	end
+
+	if self.SelectMatData == data then return end
+	if self.IsBatch and (not isUpdate) and data then return end
+	self.SelectMatData = data
+	self.CurSelectIndex = index or 1
+	self.hasRect.Activity = data and (not self.IsBatch)
+	self.noneRect.Activity = not data and (not self.IsBatch)
+
+	_P.SetItemData(self, data)
 end
 
 

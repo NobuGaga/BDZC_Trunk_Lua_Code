@@ -8,6 +8,7 @@ local CFriend = JRequire "Dev.Friend.CFriend"
 local CPlayer = JRequire "Dev.Player.CPlayer"
 local SDKMgr = JRequire "SDK.SDKMgr"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MGirl = JRequire"Dev.Girl.MGirl"
 
 ----------------------CS类引用--------------------------
 
@@ -89,7 +90,12 @@ _P.FuncTab =
 	--快捷提亲
 	[MFriend.PlayerMenu.Marry] = function(palyerId)
 		print("快捷提亲!!!")
-		WindowMgr.Create("USelectBabyFast",palyerId)
+		local canMarrieds = MGirl.GetCanMarrieds()
+		if #canMarrieds <= 0 then
+			CCommon.ShowError(Csv.Text("married_fast_tiqin_nobaby"))
+		else
+			WindowMgr.Create("USelectBabyFast",palyerId)
+		end
 	end,
 }
 

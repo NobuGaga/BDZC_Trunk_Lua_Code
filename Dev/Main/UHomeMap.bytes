@@ -463,7 +463,7 @@ function _M:OnCreate()
 	local yacht = moudle:Get("Yacht")
 	homeBtns[Define.SysId.Yacht] = {btn = yacht,canChange = false,actor = moudle:Get("ActorYacht")}
 	--homeBtns[Define.SysId.Girl_Marry] = {btn = moudle:Get("Girl_1"),btnClick = moudle:Get("Girl_1_Click")}
-	homeBtns[Define.SysId.Girl_Marry] = {btn = moudle:Get("Girl_1"),btnClick = moudle:Get("Girl_1_Click")}
+	homeBtns[Define.SysId.Girl_Marry] = {btn = moudle:Get("Girl_1"),btnClick = moudle:Get("Girl_1_Click"),redpoint = moudle:Get("QP_5")}
 
 	--车的Material
 	CS.Loader.LoadAccessor.LoadAssetImmediate(CS.Loader.LoadSession.Pop("Car", "Shaders/Car"), function(session, obj)
@@ -585,15 +585,18 @@ function _M:OnCreate()
 
 	moudle:Get("text4_0").Text = Csv.Text("home_tip3")
 	moudle:Get("text3_0").Text = Csv.Text("home_tip4")
+	moudle:Get("text5_0").Text = Csv.Text("home_tip6")
 
 	local qp1 = moudle:Get("QP_1")
 	local qp2 = moudle:Get("QP_2")
 	local qp3 = moudle:Get("QP_3")
 	local qp4 = moudle:Get("QP_4")
+	local qp5 = moudle:Get("QP_5")
 	self:RegistRedpoint(qp1, Define.SysId.Verdict)
 	self:RegistRedpoint(qp2, Define.SysId.Girl_Baby)
 	self:RegistRedpoint(qp3, Define.SysId.Girl_Unlock)
 	self:RegistRedpoint(qp4, Define.SysId.Manage)
+	self:RegistRedpoint(qp5, Define.SysId.Girl_Marry)
 	self:RegistRedpoint(moudle:Get("red1"), Define.SysId.Car)
 
 	local tQp1 = qp1.CachedTran:GetJTweener("T_Villa_Verdict")
@@ -604,6 +607,8 @@ function _M:OnCreate()
 	tQp3:Play()
 	local tQp4 = qp4.CachedTran:GetJTweener("T_Villa_Manage")
 	tQp4:Play()
+	local tQp5 = qp5.CachedTran:GetJTweener("T_Villa_GirlMarry")
+	tQp5:Play()
 
 	-- local tCar = moudle:Get("IconboxCar").CachedTran:GetJTweener("T_Effect_Guodong")
 	-- tCar:Play()

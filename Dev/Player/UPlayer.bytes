@@ -218,6 +218,18 @@ function _M:OnCreate()
 	btnMakeUp:AddOnButton(function()
 		WindowOpen.Open(Define.SysId.MakeUp)
 	end,nil,0.9)
+
+	if GameSetting.IsiOSCommit then
+		local iOSBg = moudle:Get("iOSBg")
+		iOSBg.Activity = true
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Player"), 
+												552, 766, 
+												function (sp)
+													if sp then
+														iOSBg.Sprite = sp
+													end
+												end)
+	end
 end
 
 function _P.RefreshDress(self)

@@ -171,16 +171,16 @@ function _M:OnCreate()
 	local recoveTime = moudle:Get("TimeText2")
 	local waitTime = moudle:Get("TimeText")
 	local titleImg = moudle:Get("FBname")
+	local titleEndTime = moudle:Get("TimeText_0")
 	self.mRecoveTime = recoveTime
 	self.mWaitTime = waitTime
 	self.mActorBlack = actorBlack
 	self.mActorBg = actorBg
+	self.mTitleEnd = titleEndTime
 	waitTime.Activity = false
 	recoveTime.Activity = false
 	actorBlack.Activity = false
 	actorBg.Activity = false
-
-	moudle:Get("TimeText_0").Text = Csv.Text("siege_activity_end",{time = luaUtil.TransToMD(MSiege.EndTime)})
 
 	-----------进行中---------------------------------------------------
 	local fightBtn = moudle:Get("diyu")
@@ -386,6 +386,8 @@ function _P.ShowTopImg(self,moudle)
 	if SiegeData ~= nil then
 		settleTime = SiegeData.settleTime
 	end
+
+	self.mTitleEnd.Text = Csv.Text("siege_activity_end",{time = luaUtil.TransToMD(MSiege.EndTime - SiegeData.settleTime)})
 
 	local nextImgs = {}
 	nextImgs[2] = moudle:Get("JT1")
@@ -637,7 +639,11 @@ function _P.ShowIngRect(self,moudle,index)
 					slider.FillAmount = bossProgress
 					
 					if bossData ~= nil then
-						sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100).."%"
+						sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100+0.05).."%"
+						if bossProgress <= 0 then
+							sliderText.Text = bossData.name.."：0.0%"
+						end
+
 						bosshead.SpriteName = bossData.iconRound
 						bosshead.Activity = true
 						bossBg.Activity = true
@@ -656,7 +662,10 @@ function _P.ShowIngRect(self,moudle,index)
 				end
 			else
 				slider.FillAmount = progress
-				sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100)})
+				sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100+0.05)})
+				if progress <= 0 then
+					sliderText.Text = Csv.Text("siege_progress_1",{num = "0.0"})
+				end
 
 				slider.RaycastTarget = true
 				slider:AddOnClick(function()
@@ -697,6 +706,10 @@ function _P.ShowIngRect(self,moudle,index)
 			end
 			if bossData ~= nil then
 				_head.SpriteName = bossData.iconRound
+				local teamInfo = MSiege.Teams[i]
+				_head:AddOnButton(function()
+					WindowMgr.Create("USiegeTeamMessage",teamInfo)
+				end,nil,1.2)
 			end
 
 			progressTab[i] = {slider = _slider,sliderText = _sliderText,head = _head}
@@ -722,7 +735,10 @@ function _P.ShowIngRect(self,moudle,index)
 						_slider.Value = bossProgress
 
 						if bossData ~= nil then
-							_sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100).."%"
+							_sliderText.Text = bossData.name.."："..string.format("%.1f",bossProgress*100+0.05).."%"
+							if bossProgress <= 0 then
+								_sliderText.Text = bossData.name.."：0.0%"
+							end
 						end
 
 						_slider.RaycastTarget = true
@@ -749,7 +765,10 @@ function _P.ShowIngRect(self,moudle,index)
 					end
 				else
 					_slider.Value = progress
-					_sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100)})
+					_sliderText.Text = Csv.Text("siege_progress_1",{num = string.format("%.1f",progress*100+0.05)})
+					if progress <= 0 then
+						_sliderText.Text = Csv.Text("siege_progress_1",{num = "0.0"})
+					end
 
 					if ownTeam == i then
 						_slider.RaycastTarget = true
@@ -772,7 +791,10 @@ function _P.ShowIngRect(self,moudle,index)
 		if MSiege.LastUdisk ~= nil then
 			local lossprop = (MSiege.LastUdisk.nmax - MSiege.LastUdisk.ncur)/MSiege.LastUdisk.nmax
 			if lossprop ~= nil then
-				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = string.format("%.1f",lossprop * 100)})
+				lossText.Text = Csv.Text("siege_lastUdisk_1",{num = string.format("%.1f",lossprop * 100+0.05)})
+				if lossprop <= 0 then
+					lossText.Text = Csv.Text("siege_lastUdisk_1",{num = "0.0"})
+				end
 			end
 		end
 
@@ -801,7 +823,10 @@ function _P.ShowIngRect(self,moudle,index)
 				if bossInfo.discoverer ~= nil then
 					local bossBloodProp = bossInfo.bossBlood.ncur/bossInfo.bossBlood.nmax
 					if bossBloodProp ~= nil then
-						bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = string.format("%.1f",bossBloodProp *100)})
+						bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = string.format("%.1f",bossBloodProp *100+0.05)})
+						if bossBloodProp <= 0 then
+							bossText.Text = Csv.Text("siege_bigboss",{name = bossData.name,num = "0.0"})
+						end
 					end
 				else
 					bossText.Text = Csv.Text("siege_bigboss_nil",{name = bossData.name})

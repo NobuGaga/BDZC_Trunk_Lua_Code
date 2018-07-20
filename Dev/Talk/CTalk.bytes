@@ -39,6 +39,17 @@ local ECmdId = {
 	sTalkCrossHistoryMsg				=	8,--聊天历史记录   PTalk::PTalkMsg
 }
 
+--注册进入游戏监听
+EventCenter.RegistCallEvent(Define.EventListenId.EnterGame,function( ... )
+	if _M.TipsData ~= nil then
+		if not WindowMgr.IsCreated("UMessage") then
+			WindowMgr.Create("UMessage")
+		end
+		WindowMgr.Call("UMessage","ShowMsgTips",_M.TipsData)
+		_M.TipsData = nil
+	end
+end, true)
+
 --清空模块
 function _M.ModuleClean()
 	MTalk.Clean()
@@ -95,7 +106,11 @@ function _P.ShowMsgTips(tipsData)
 	if not WindowMgr.IsCreated("UMessage") then
 		WindowMgr.Create("UMessage")
 	end
-	WindowMgr.Call("UMessage","ShowMsgTips", tipsData)
+	if WindowMgr.IsCreated("UPrivateTalk") and MFriend.NowPrivateFriendId == tipsData.id then
+		return
+	else
+		WindowMgr.Call("UMessage","ShowMsgTips", tipsData)
+	end
 end
 
 --接收新的聊天消息
@@ -162,6 +177,12 @@ function _P.OnOfflineMsg(data)
 					end
 
 					CFriend.OnPrivateTalk(msgValue)
+					--聊天气泡刷新
+					local tipsData = {}
+					tipsData.funcId = Define.SysId.Talk_Private
+					tipsData.id = msgValue.sender
+					tipsData.name = msgValue.sendername
+					_M.TipsData = tipsData
 				end
 			end
 		end
@@ -184,13 +205,15 @@ function _M:SendTalkHistoryReq(_channel,_startIndex)
 	_M.Send(ECmdId.cTalkHistoryReq,{channel = _channel,startindex = _startIndex})
 end
 
-function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
+function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName)
 	if _channel == MTalk.Channel.SystemMsg then
 		CCommon.ShowError(Csv.Text("talk_no_send_sys"))
 		return
 	end
 	if _value ~= nil and _value ~= "" then
+		local isGMMsg = false
 		if string.sub(_value, 1, 1) == '@' then
+			isGMMsg = true
 			local strTable = LuaUtil.StringSplit(string.sub(_value, 2), ' ')
 			if strTable ~= nil and #strTable > 0 then
 				local gmKey = strTable[1]
@@ -203,6 +226,10 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 			end
 		end
 
+		if not isGMMsg then
+			GameSetting.HttpPostDataToPHP(Define.PostUrlType.Talk, {sChannel = _channel, sContent = _value, ipAddress = GameSetting.IP,
+										  chatObject = recvName or "", deviceCode = GameSetting.DeviceID, sTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+		end
 		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.CheckChatUrl)
 		session:AppendParam("content", _value)
 		session:AppendParam("servId", MLogin.GetServerId())
@@ -220,9 +247,9 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 					elseif state == 1 then
 						--违法
 						if _channel == MTalk.Channel.PrivateMsg then
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state,oriValue = _value})
 						else
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state,oriValue = _value})
 							--[[
 							local ctx = {
 									index = 0,
@@ -255,6 +282,8 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime)
 		end)
 		HttpHelper.Request(session)	
 	elseif voiceIndex ~= nil and voiceTime ~= nil and voiceTime > 0 then
+		GameSetting.HttpPostDataToPHP(Define.PostUrlType.Talk, {sChannel = _channel, sContent = "", ipAddress = GameSetting.IP,
+									  chatObject = recvName or "", deviceCode = GameSetting.DeviceID, sTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime,valueFlag = 0})
 	end
 end

@@ -6,6 +6,8 @@ local rapidjson = require "rapidjson"
 local MLogin = JRequire "Dev.Login.MLogin"
 --@RefType [Dev.Setting.MSetting.bytes#_M]
 local MSetting = JRequire "Dev.Setting.MSetting"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
 --@RefType [Dev.Setting.CSetting.bytes#_M]
 local CSetting = JRequire "Dev.Setting.CSetting"
 --@RefType  [Dev.Common.CCommon.bytes#_M]
@@ -14,7 +16,12 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [SDK.SDKMgr.bytes#_M]
 local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat
 
+----------------------CS类引用--------------------------
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
 local Application = CS.UnityEngine.Application
 local UnityTime = CS.UnityEngine.Time
 local TimeDelay = CS.Utility.TimeDelay
@@ -99,13 +106,14 @@ function _M.Init()
 	_M.isHasExitAccount = (sdkParam.isHasExitAccount or 1) ~= 0
 	_M.AppName = sdkParam.appName
 	_M.PackageName = sdkParam.packageName
+	_M.IP = sdkParam.ip
 
 	_M.ClientVersion = _M.GameParam.resVersion.ShowVersion
 	_M.CdnVersion = _M.GameParam.cdnVersion.ShowVersion
 
 	--子渠道id
-	_M.Sbid = ""
-	_M.Openid = ""
+	_M.Sbid = "sbid"
+	_M.Openid = "openID"
 	
 	--公告url
 	_M.NoticeUrl = _M.GameParam.cdnVersion.noticeUrl
@@ -119,6 +127,8 @@ function _M.Init()
 	_M.SendVoiceUrl = _M.GameParam.cdnVersion.voiceTalk
 	--播放语音url
 	_M.PlayVoiceUrl = _M.GameParam.cdnVersion.voiceSave
+	--运营商推送日志url
+	_M.ChannelLog = _M.GameParam.cdnVersion.channelLog
 
 	--区ID
 	_M.AreaId = "1,2,3,4,256"
@@ -151,6 +161,31 @@ function _M.Init()
 	end
 
 	_P.InitGM()
+end
+
+function _M.HttpPostDataToPHP(urlType, argList)
+	if _M.ChannelLog == nil then
+		return
+	end
+	--断线重连接口切换账号时可能没登录游戏，作角色ID过滤
+	local playerID = MPlayer.GetId()
+	if playerID == nil or playerID == 0 then
+		return
+	end
+	local session = HttpSession(CS.Utility.HttpRequestType.Post, _M.ChannelLog)
+	session:AppendParam("urlType", urlType)
+	session:AppendParam("appID", _M.AppID)
+	session:AppendParam("roleID", playerID)
+	session:AppendParam("serverID", MLogin.SelectServer.id)
+	session:AppendParam("roleName", MPlayer.GetName())
+	session:AppendParam("roleLevel", MPlayer.GetLevel())
+	session:AppendParam("roleVip", MPlayer.PlayerInfo.vip)
+	session:AppendParam("openID", _M.Openid)
+	session:AppendParam("platform", _M.Platform)
+	for key, value in pairs(argList) do
+		session:AppendParam(key, value)
+	end
+	HttpHelper.Request(session)
 end
 
 function _M.SetAreaID(areaIdStr)
@@ -239,7 +274,16 @@ function _M.OpenLoginInput()
 	WindowMgr.Create("ULoginInput")
 end
 
+function _M.HttpPostExitDataToPHP()
+	if HeartBeat == nil then
+		HeartBeat = JRequire "Dev.Player.HeartBeat"
+	end
+	_M.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "2", 
+						 eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+end
+
 function _M.GameQuit()
+	_M.HttpPostExitDataToPHP()
 	SDKMgr.ReqExit()
 	Application.Quit()
 end
@@ -282,6 +326,7 @@ function _M.ToReLogin(reloginType)
 	EventCenter.CallEventTrigger(Define.EventListenId.ToReLogin)
 	_M.IsOnGame = false
 	CS.Utility.LogPoint.LogPost(10, 1, tostring(reloginType))
+	_M.HttpPostExitDataToPHP()
 	if _M.OnReLoginCall ~= nil then
 		_M.OnReLoginCall()
 	end

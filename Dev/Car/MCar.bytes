@@ -1,6 +1,7 @@
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local rapidjson = require "rapidjson"
 local MBag = JRequire "Dev.Bag.MBag"
+local MMain = JRequire "Dev.Main.MMain"
 local _M = {}
 
 -- 开启分（装备，未装备），未开启分（未开启，禁止）
@@ -222,13 +223,29 @@ end
 function _M.CheckShowRed(typeEnum, carData)
 	if typeEnum == _M.SeatStateEnum.Equiping then 
 		local isUp = _M.CheckIsHasUp(carData)
-		local isUpApti = _M.CheckIsCanUpApti(carData)
+		local isHas = _M.IsUpAptiExist(MMain.GetOpenedFuncs(Define.SysId.Car, true))
+		local isUpApti = _M.CheckIsCanUpApti(carData) and isHas
 		return isUp or isUpApti
 	elseif typeEnum == _M.SeatStateEnum.UnEquip then
 		return _M.CheckHasCar()
 	end
 
 	return false
+end
+
+
+function _M.IsUpAptiExist(carFuncs)
+	local isHas = false
+	if carFuncs ~= nil then
+		for k,v in pairs(carFuncs) do
+			if v.id == 15403 then
+				isHas = true
+				break
+			end
+		end
+	end
+
+	return isHas
 end
 
 

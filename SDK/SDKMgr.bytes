@@ -322,7 +322,14 @@ _P.CreateSdk =
 		end
 		return nil
 	end,
-	[Define.PlatformType.iPhone] = function(spid)
+	[Define.PlatformType.iPhone] = function(originSpid)
+		local spidPrefix = LuaUtil.StringSplit(originSpid, "_")
+		local spid
+		if spidPrefix and spidPrefix[1] then
+			spid = spidPrefix[1]
+		else
+			spid = originSpid
+		end
 		if Define.PlatformType.iOSYiWan == spid or Define.PlatformType.iOSYiWan0622 == spid then
 			local iOSSDK = JRequire "SDK.iOSYiWanSDK"
 			return iOSSDK.new()

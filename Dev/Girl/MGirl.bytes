@@ -66,7 +66,9 @@ _M.ZhaoqinCD = 0 --招亲CD
 _M.TiqinSelectID = 0
 _M.SelectQingqiuID = 0 --
 _M.MarriedScuessList = {}--存储结婚成功列表
-
+_M.isQingqiuTick = false
+_M.QingqiuHandle = nil
+_M.isNewCoupleRed = false --新婚提醒
 
 -----------------------
 --认识美女------------
@@ -99,6 +101,9 @@ function _M.Clean()
 	end
 	if _M.isRefreshBabyTick then
 		EventCenter.UnRegistCallEvent(_M.BabyHandle)
+	end
+	if _M.isQingqiuTick then
+		EventCenter.UnRegistCallEvent(_M.QingqiuHandle)
 	end
 
 	_M.redPoint = false
@@ -142,6 +147,7 @@ function _M.Clean()
 	_M.TiqinSelectID = 0
 	_M.SelectQingqiuID = 0 --
 	_M.MarriedScuessList = {}--存储结婚成功列表
+	_M.QingqiuHandle = nil
 
 	------------------
 	_M.isCanTalk = false
@@ -402,6 +408,8 @@ function _M.GetGirlSkillAttr(type)
 		return Csv.Text("Girl_skill_type3")
 	elseif type == 4 then
 		return Csv.Text("Girl_skill_type4")
+	elseif type == 5 then
+		return Csv.Text("Girl_skill_type5")
 	end
 end
 
@@ -1068,14 +1076,21 @@ function _M.InitMarriedList(dataList)--不为nil
 	else
 		_M.marrieds = {}
 	end
+	_P.CheckNewCoupleRed()
 end
 
 function _M.SetQingqiuList(dataList)--不为nil
 	if dataList ~= nil then
+		--排序
+		table.sort(dataList, function (a, b)
+			return a.expireTime < b.expireTime
+		end)
+
 		_M.MarriedQingqiu = dataList
 	else
 		_M.MarriedQingqiu = {}
 	end
+	_M.RefreshQingqiuTick()
 end
 
 function _M.NewUnMarriedBaby(data)
@@ -1102,6 +1117,7 @@ function _M.NewMarriedBaby(data)
 	end
 	table.insert(_M.marrieds,data)
 	_P.RefuseUnmarried(data.babyid)
+	_P.CheckNewCoupleRed()
 end
 
 function _M.SetZhaoqinList(dataList)
@@ -1110,7 +1126,6 @@ function _M.SetZhaoqinList(dataList)
 	else
 		_M.ZhaoqinList = {}
 	end
-	
 end
 
 function _M.MarryBack(id,isSucess)
@@ -1120,7 +1135,19 @@ function _M.MarryBack(id,isSucess)
 	end
 end
 
+function _M.SetCoupleAck(id)
+	if _M.marrieds ~= nil then
+		for k,v in pairs(_M.marrieds)do
+			if v.babyid == id then
+				v.isNew = false
+			end
+		end
+	end
+	_P.CheckNewCoupleRed()
+end
+
 function _M.TerminateTiqin(id,itemData)
+
 end
 
 function _M.SetZhaoqinCD(tick)
@@ -1189,6 +1216,17 @@ function _M.GetUnMarriedIndex(id)
 	return nil
 end
 
+function _M.GetCanMarrieds()
+	local datas = _M.unmarrieds
+	local canDatas = {}
+	for k,v in pairs(datas) do
+		if v.state == 0 then
+			table.insert(canDatas,v)
+		end
+	end
+	return canDatas
+end
+
 function _M.GetMarriedData(id)
 	if _M.marrieds ~= nil then
 		for k,v in pairs(_M.marrieds)do
@@ -1201,6 +1239,30 @@ function _M.GetMarriedData(id)
 		end 
 	end
 	return nil
+end
+
+function _M.GetNewCouple()
+	local newCoup = {}
+	if _M.marrieds ~= nil then
+		for k,v in pairs(_M.marrieds)do
+			if v.isNew then
+				table.insert(newCoup,v)
+			end
+		end
+	end
+	return newCoup
+end
+
+function _P.CheckNewCoupleRed()
+	local newCouple = _M.GetNewCouple()
+	if #newCouple > 0 then
+		_M.isNewCoupleRed = true
+		CMain.UpdateRedpoint(true,Define.SysId.Girl_Marry)
+	else
+		_M.isNewCoupleRed = false
+		CMain.UpdateRedpoint(false,Define.SysId.Girl_Marry)
+	end
+	WindowMgr.Call("UWorldMap","SetCompanyIcon")
 end
 
 function _P.RefuseUnmarried(id)
@@ -1217,11 +1279,17 @@ function _M.RefuseQingqiu(id)
 			table.remove(_M.MarriedQingqiu,k)
 		end
 	end
+	WindowMgr.Call("UGirlMarried","RefreshQingqiu")
+	WindowMgr.Call("UMarriedTips","RefreshQingqiu")
+	WindowMgr.Call("UMarriedQingqiu","RefreshQingqiu")
 	WindowMgr.Call("UGirlMarried","CheckTiqinRed")
 end
 
 function _M.RefuseAllQingqiu()
 	_M.MarriedQingqiu = {}
+	WindowMgr.Call("UGirlMarried","RefreshQingqiu")
+	WindowMgr.Call("UMarriedTips","RefreshQingqiu")
+	WindowMgr.Call("UMarriedQingqiu","RefreshQingqiu")
 	WindowMgr.Call("UGirlMarried","CheckTiqinRed")
 end
 
@@ -1279,6 +1347,39 @@ function _M.GetBabyColorByIQ(iq)
 		end
 	end
 	return Color(0,0,0)
+end
+
+----检测请求过期
+function _M.RefreshQingqiuTick()
+	if _M.isQingqiuTick == false then
+		local tick = _P.GetQingqiuTick()
+		if tick>0 then
+			_M.isQingqiuTick = true
+			_M.QingqiuHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+				local _tick = _P.GetQingqiuTick()
+				if _tick > 0 then
+					for k,v in pairs(_M.MarriedQingqiu)do
+						local leftTime = v.expireTime - HeartBeat.ServSecond() 
+						if leftTime <= 0 then
+							--请求过期移除请求
+							v.expireTime = 0
+							_M.RefuseQingqiu(v.babyid)
+						end
+					end
+				else
+					_M.isQingqiuTick = false
+					EventCenter.UnRegistCallEvent(eventHandle)
+				end
+			end)
+		end
+	end
+end
+
+function _P.GetQingqiuTick()
+	for k,v in pairs(_M.MarriedQingqiu)do
+		return v.expireTime
+	end
+	return 0
 end
 
 -------------美女改名--------------------------------

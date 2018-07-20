@@ -224,6 +224,7 @@ function _P.OnReadyForRun(data)
 	print("Clogin.OnReadyForRun", _M.isAutoReconnect)
 	GameSetting.IsOnGame = true
 	CS.Utility.LogPoint.LogPost(7, 7)
+	GameSetting.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "1", eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 	GameSetting.isFirst = data.isFirst
 	GameSetting.isFirstCopy = data.isFirst
 	HeartBeat.Start()

@@ -12,9 +12,8 @@ local MBag = JRequire "Dev.Bag.MBag"
 local CBag = JRequire "Dev.Bag.CBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MPlayer = JRequire "Dev.Player.MPlayer"
-local UTiqinFriends = JRequire"Dev.Marry.UTiqinFriends"
 local UTiqinServer = JRequire"Dev.Marry.UTiqinServer"
-local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
+local UZhaoQinPop = JRequire"Dev.Marry.GirlZhaoQinPop"
 local MMarry = JRequire"Dev.Marry.MMarry"
 local MMain = JRequire "Dev.Main.MMain"
 
@@ -32,7 +31,7 @@ end
 
 function _M:OnCreate(id)
 	self.mBabyId = id
-	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Tiqin")
+	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Tiqin4")
 	self.mMoudle = moudle
 
 	moudle:Get("C_Back_Btn"):AddOnButton(function()
@@ -50,7 +49,7 @@ function _M:OnCreate(id)
 	local colorDefault = Color(0/255,195/255,255/255,1)
 
 	--新版toggle
-	local funcs = MMain.GetOpenedFuncs(Define.SysId.Girl_Marry, true)
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Girl_MarriedServer, true)
 	local countToggle = #funcs
 	if countToggle > 0 then
 		local lastChoose
@@ -85,37 +84,26 @@ function _P.OnChoose(self, func)
 		self.ChooseMoudle = nil
 	end
 
-	if func == Define.SysId.Married_Friends then
-		self.mTips.Text = Csv.Text("married_friends_tips")
-		self.ChooseMoudle = UTiqinFriends.new(self.PageNode,self.mBabyId)
-	elseif func == Define.SysId.Married_Special then
-		self.mTips.Text = Csv.Text("married_special_tips")
-		self.ChooseMoudle = UTiqinSpecial.new(self.PageNode,self.mBabyId)
-	elseif func == Define.SysId.Married_Server then
-		self.mTips.Text = Csv.Text("married_friends_tips")
+	if func == Define.SysId.Married_Server_Tiqin then
+		self.mTips.Text = Csv.Text("married_server_tips")
 		self.ChooseMoudle = UTiqinServer.new(self.PageNode,self.mBabyId)
+	elseif func == Define.SysId.Married_Server_Zhaoqin then
+		self.mTips.Text = Csv.Text("married_zhaoqin_tips")
+		self.ChooseMoudle = UZhaoQinPop.new(self.PageNode,self.mBabyId)
 	end
 
 	self.mSelectIndex = func
 end
 
-function _R.SetFriendQinjia(self,msg)
-	if self.mSelectIndex == Define.SysId.Married_Friends then
-		self.ChooseMoudle:SetFriendQinjia(msg)
-	end
-end
-
-function _R.SetFriendBaby(self,data)
-	if self.mSelectIndex == Define.SysId.Married_Friends then
-		self.ChooseMoudle:GetFriendBabyInfo(data)
-	elseif self.mSelectIndex == Define.SysId.Married_Special then
-		self.ChooseMoudle:ShowPlayerView(data)
-	end
-end
-
 function _R.CloseView(self)
 	
 	self:Destroy()
+end
+
+function _R.RefreshZhaoqin(self)
+	if self.mSelectIndex == Define.SysId.Married_Server_Zhaoqin then
+		self.ChooseMoudle:RefreshZhaoqin()
+	end
 end
 
 return _M

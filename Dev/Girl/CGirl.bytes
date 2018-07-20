@@ -44,6 +44,7 @@ local ECmdId = {
 	cGirlRename							=	27,--美女改名 PGirl.CGirlRename
 
 	cLookOthersBaby                     =   28,--查看他人宝宝 PGirl.CLookOthersBaby
+	cNewCoupleAck                       =   29,--确认新婚宝宝 PGirl.CNewCoupleAck
 ------------------------------------------------------------------------------
 	sGirlList								=	1,--已解锁美女列表 
 	sGirlUpDate								=	2,--美女信息更新 
@@ -134,6 +135,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cDateGameStart] = "PGirl.CDateGameStart",
 		[ECmdId.cGirlRename] = "PGirl.CGirlRename",
 		[ECmdId.cLookOthersBaby] = "PGirl.CLookOthersBaby",
+		[ECmdId.cNewCoupleAck] = "PGirl.CNewCoupleAck",
 	}
 	local recv = {
 		[ECmdId.sGirlList]		=	{proto = "PGirl.SInit",		handle = _M.Init},
@@ -544,12 +546,15 @@ function _M.ReqRefuseTiQin(id)
 end
 
 function _M.ReqMarrySomeone(id,targetID,itemID)
-	print("__ReqMarrySomeone_____",id,targetID,itemID)
 	_M.Send(ECmdId.cMarrySomeone,{babyid = id,otherBabyId = targetID,costItemId = itemID})
 end
 
 function _M.ReqLookOthersBaby(_ownBabyid,_tarPlayerId)
 	_M.Send(ECmdId.cLookOthersBaby,{ownBabyid = _ownBabyid,tarPlayerId = _tarPlayerId})
+end
+
+function _M.ReqNewCoupleAck(id)
+	_M.Send(ECmdId.cNewCoupleAck,{babyid = id})
 end
 --
 
@@ -563,6 +568,8 @@ end
 
 function _P.RepTiQinList(data)
 	MGirl.SetQingqiuList(data.babyList)
+	WindowMgr.Call("UGirlMarried","RefreshQingqiu")
+	WindowMgr.Call("UMarriedTips","RefreshQingqiu")
 	WindowMgr.Call("UMarriedQingqiu","RefreshQingqiu")
 end
 
@@ -570,8 +577,11 @@ function _P.RepUnmarriedUpdate(data)
 	MGirl.UpdateUnmarriedBaby(data.baby)
 	if data.baby.tiqinCD ~= nil then
 	end
-	--UnmarriedBabyUpdatedata.babyid
 	WindowMgr.Call("UGirlMarried","ResfrehBabyType",data.baby.babyid)
+
+	if data.baby.state == 1 then
+		WindowMgr.Call("UPlayerBaby","CloseWin")
+	end
 end
 
 function _P.NewUnmarried(data)
@@ -582,10 +592,8 @@ end
 function _P.RepNewCouple(data)
 	MGirl.NewMarriedBaby(data.couple)
 
-	print("RepNewCouple!!!!!!")
 	WindowMgr.Call("UMarriedQingqiu","CloseWin")
 	WindowMgr.Call("UMarriedSelectCost","CloseWin")
-	WindowMgr.Call("UMarriedZhaoqin","CloseWin")
 	WindowMgr.Call("UMarriedTiqin","CloseWin")
 
 	if WindowMgr.IsCreated("UGirlMarried") then
@@ -600,8 +608,8 @@ function _P.RepZhaoQin(data)
 	end
 	MGirl.SetZhaoqinList(data.babyList)
 	
-	WindowMgr.Call("UMarriedZhaoqin","RefreshZhaoqin",data.babyList)
-	--RefreshZhaoqin
+	WindowMgr.Call("UMarriedServer","RefreshZhaoqin",data.babyList)
+	--
 end
 
 function _P.RepTerminateTiQin(data)
@@ -611,7 +619,6 @@ end
 function _P.RepMarrySomeone(data)
 	MGirl.MarryBack(data.babyid,data.success)
 	WindowMgr.Call("UGirlMarried","RefreshToggle")
-	--CloseWin--UMarriedZhaoqin--UMarriedTiqin
 	if data.success == true then
 		MGirl.RefuseQingqiu(MGirl.SelectQingqiuID)--结婚成功删除请求
 	end
@@ -621,9 +628,13 @@ function _P.RefuseTiQin(data)
 	--RefreshJujue
 	if data.success == true then
 		if data.babyid == 0 then
+			_M.RefuseAllQingqiu()
 			WindowMgr.Call("UMarriedQingqiu","RefreshJujueAll",data)
 		else
+			MGirl.RefuseQingqiu(data.babyid)--结婚成功删除请求
 			WindowMgr.Call("UMarriedQingqiu","RefreshJujue",data)
+			WindowMgr.Call("UGirlMarried","RefreshQingqiu")
+			WindowMgr.Call("UMarriedTips","RefreshQingqiu")
 		end
 	end
 end

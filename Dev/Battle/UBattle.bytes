@@ -15,6 +15,7 @@ local MBag = JRequire "Dev.Bag.MBag"
 local CCommon = JRequire "Dev.Common.CCommon"
 --@RefType [Dev.Main.UStoryMoudle.bytes#_M]
 local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local MMain = JRequire "Dev.Main.MMain"
 local JTweenerManager = CS.JTween.JTweenerManager
 
 ----------------------CS类引用--------------------------
@@ -41,10 +42,6 @@ local POP_HEIGHT = 123
 
 local LeftRecuitPos = Vector2(-80, -5)
 local RightRecuitPos = Vector2(85, -5)
-
-local AcquBtn_1 = "gk_031"
-local AcquBtn_2 = "gk_031_1"
-local Acqu_Vip_Level = Csv.Const(Define.Const.AcquKillVip)
 
 --界面删除前回收
 function _M:BeforeDestroy( ... )
@@ -135,7 +132,9 @@ function _R.OnResult(self, data)
 		local BtnAcqu = self.Moudle:Get("AcquBtn")
 		BtnAcqu.RaycastTarget = false
 		BtnAcqu:AddOnTime(function()
-			BtnAcqu.RaycastTarget = true
+			if MMain.FuncIsOpen(Define.SysId.Battle_Onekey) then
+				BtnAcqu.RaycastTarget = true
+			end
 		end,nil,0.5)
 		WindowMgr.Create("UBattlePartStart", newPartId, function()
 			if self.Moudle ~= nil then
@@ -477,7 +476,7 @@ function _M:OnCreate()
 			imgNum.Activity = false
 		end
 	end
-
+	moudle:Get("Btn_Text").Text = Csv.Text("battle_acqu4")
 	local BtnAcqu = moudle:Get("AcquBtn")
 	BtnAcqu:AddOnButton(function()
 		local csvBattle = Csv.Battle[MBattle.CurId]
@@ -493,12 +492,24 @@ function _M:OnCreate()
 		CBattle.AcquisitionReq()
 	end,nil,0.9)
 
-	if MPlayer.GetVip() >= Acqu_Vip_Level then
+	local textOneTips = moudle:Get("Btn_Tip")
+	local tipObj = moudle:Get("TipsBg")
+	textOneTips.Text = Csv.Func[Define.SysId.Battle_Onekey].conditionDesc
+
+	if MMain.FuncIsOpen(Define.SysId.Battle_Onekey) then
+		tipObj.Activity = false
 		BtnAcqu.RaycastTarget = true
-		BtnAcqu.SpriteName = AcquBtn_1
+		BtnAcqu.IsGray = false
 	else
+		if MPlayer.GetVip() >= Csv.Const(Define.Const.Battle_Onekey_Vip) then
+			tipObj.Activity = true
+			BtnAcqu.Activity = true
+		else
+			tipObj.Activity = false
+			BtnAcqu.Activity = false
+		end
 		BtnAcqu.RaycastTarget = false
-		BtnAcqu.SpriteName = AcquBtn_2
+		BtnAcqu.IsGray = true
 	end
 end
 

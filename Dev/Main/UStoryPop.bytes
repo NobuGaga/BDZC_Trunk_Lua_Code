@@ -69,18 +69,21 @@ function _P.AutoDestroy(self,csvstory)
 					self.mMoudle.SelfRect:AddOnTime(function()
 						self:Destroy()
 					end,nil,time/2)
+				else
+					self:Destroy()
+					_P.DoCall(self)
 				end
 			else
-				_P.DoCall(self)
 				self:Destroy()
+				_P.DoCall(self)
 			end
 		else
-			_P.DoCall(self)
 			self:Destroy()
+			_P.DoCall(self)
 		end
 	else
-		_P.DoCall(self)
 		self:Destroy()
+		_P.DoCall(self)
 	end
 end
 

@@ -104,26 +104,36 @@ function _P.ChooseGirl(self, girlId)
 		moudle:Get("Effect2").Text = Csv.Text("Wharf_addStaff")
 		moudle:Get("Effect2_0").Text = _P.GetEffectStaffName(girlId)
 		moudle:Get("Effect").Text = Csv.Text("Wharf_pokedex1")
-		local effect1 = effectInfo[1]
-		if effect1 ~= nil then
-			if effect1[1] == 1 then
-				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3]})
+		if #effectInfo >= 4 then
+			local effect = effectInfo[1]
+			if effect[1] == 1 then
+				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(5), num = effect[3]})
 			else
-				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3] / 100})
+				moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(5), num = effect[3] / 100})
 			end
-		else
-			moudle:Get("EffectText").Text = ""
-		end
-		local effect2 = effectInfo[2]
-		if effect2 ~= nil then
-			if effect2[1] == 1 then
-				moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3]})
-			else
-				moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3] / 100})
-			end
-		else
 			moudle:Get("EffectText2").Text = ""
-		end		
+		else
+			local effect1 = effectInfo[1]
+			if effect1 ~= nil then
+				if effect1[1] == 1 then
+					moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3]})
+				else
+					moudle:Get("EffectText").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect1[2]), num = effect1[3] / 100})
+				end
+			else
+				moudle:Get("EffectText").Text = ""
+			end
+			local effect2 = effectInfo[2]
+			if effect2 ~= nil then
+				if effect2[1] == 1 then
+					moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex5", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3]})
+				else
+					moudle:Get("EffectText2").Text = Csv.Text("Wharf_pokedex6", {name = MGirl.GetGirlSkillAttr(effect2[2]), num = effect2[3] / 100})
+				end
+			else
+				moudle:Get("EffectText2").Text = ""
+			end
+		end	
 	else
 		moudle:Get("Effect").Text = ""
 		moudle:Get("EffectText").Text = ""

@@ -26,6 +26,13 @@ local _R = {}
 function _M:BeforeDestroy( ... )
 	SoundMgr.DestroyVoice()
 	SoundMgr.EndVoiceRecord()
+	MFriend.NowPrivateFriendId = 0
+	if WindowMgr.IsCreated("UTalk") then
+		MMain.BoobLayer = "Main"
+	else
+		MMain.BoobLayer = "Message"
+	end
+	WindowMgr.Call("UMessage","SetBoobLayer")
 
 	if self.MenuPopObj ~= nil then
 		self.MenuPopObj:Destroy()
@@ -277,8 +284,12 @@ end
 
 --界面构建
 function _M:OnCreate(playerId, playerName)
+	MFriend.NowPrivateFriendId = playerId
+	MMain.BoobLayer = "Main"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 	WindowMgr.Call("UMessage","HideMsgTips", Define.SysId.Talk_Private)
 	self.PlayerID = playerId
+	self.PlayerName = playerName
 	CFriend.OpendPrivateTalk(self.PlayerID)
 
 	--设置录音的最短和最大长度
@@ -373,7 +384,7 @@ function _M:OnCreate(playerId, playerName)
 			--超字数
 			CCommon.ShowError(Csv.Text("talk_full"))
 		else
-			CTalk.SendNewTalk(MTalk.Channel.PrivateMsg, text, self.PlayerID)
+			CTalk.SendNewTalk(MTalk.Channel.PrivateMsg, text, self.PlayerID, nil, nil, self.PlayerName)
 			self.TextInput.Text = ""
 		end		
 	end)
@@ -424,7 +435,7 @@ function _M:OnCreate(playerId, playerName)
 			if self.DragDeltaY <= 200 then
 				if self.ClipData ~= nil then
 					--发送消息
-					CFriend.SendVoiceChat(MTalk.Channel.PrivateMsg, self.ClipData, self.ClipLen, self.PlayerID)
+					CFriend.SendVoiceChat(MTalk.Channel.PrivateMsg, self.ClipData, self.ClipLen, self.PlayerID, self.PlayerName)
 					self.ClipData = nil
 					self.ClipLen = -1
 				elseif self.ClipLen == -1 then

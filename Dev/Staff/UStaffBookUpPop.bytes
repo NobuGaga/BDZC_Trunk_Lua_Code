@@ -12,6 +12,7 @@ local levelUpActorId = 10010
 local NUM_TWEEN = "T_Club_NumSacle"
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
+local MAXBOOKSTAR = Csv.Const(Define.Const.StaffMax)[5]
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -155,7 +156,7 @@ function _M:OnCreate(staffid,bookid,bookstar)
 		end,nil,0.9)
 	end
 
-	for i=1,7 do
+	for i=1,MAXBOOKSTAR do
 		local star = moudle:Get("star"..i)
 		star.gameObject:SetActive(false)
 	end

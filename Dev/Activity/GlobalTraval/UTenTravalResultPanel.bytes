@@ -1,0 +1,107 @@
+-- 十连摇骰子奖励界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local TimeDelay = CS.Utility.TimeDelay
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local DiceEffectId = 10121
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(actId, diceList, rewardList, callBack)
+	local module = self:CreateMoudle(self._RootNode, "M_GlobalTravel_TenReward_Item")
+	self.OnCloseCall = callBack
+
+	local closeBtn = module:Get("btnGet")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 0.9)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 2)
+
+	module:Get("ShowText").Text = Csv.Text("gloabl_exchange_shop")
+	module:Get("TitleText").Text = Csv.Text("global_ten_title")
+	module:Get("textBtnGet").Text = Csv.Text("common_sure")
+
+	local travalConf = Csv.GlobalTraval[actId]
+	local iconSpriteName = travalConf.diceitem
+	local needContent = module:Get("NeedContent")
+	for k,v in pairs(diceList) do
+		TimeDelay.DelayCall((k - 1) * 0.15, false, function( ... )
+			local itemModule = JGuiManager.GetMoudle(needContent, "M_GlobalTravel_TenReward_Item2")
+			if not itemModule then return end
+
+			local iconImg = itemModule:Get("Icon")
+			local qualityImg = itemModule:Get("color")
+			iconImg.SpriteName = iconSpriteName[v]
+			qualityImg.SpriteName = 'ty_022'
+
+			itemModule:Get("Num").Activity = false
+			itemModule:Get("Shuangbei").Activity = false
+		end)
+	end
+
+	local showContent = module:Get("ShowContent")
+	for k,v in pairs(rewardList) do
+		TimeDelay.DelayCall((k - 1) * 0.2, false, function( ... )
+			local itemModule = JGuiManager.GetMoudle(showContent, "M_GlobalTravel_TenReward_Item2")
+			if itemModule ~= nil then
+				local iconImg = itemModule:Get("Icon")
+				local qualityImg = itemModule:Get("color")
+				local doubleImg = itemModule:Get("Shuangbei")
+				local numText = itemModule:Get("Num")
+
+				local itemConf = Csv.Item[v.id]
+				if itemConf ~= nil then
+					qualityImg.SpriteName = itemConf.colorIcon
+					iconImg.SpriteName = itemConf.icon
+				end
+				numText.Text = v.count
+				CCommon.CreateItemLight(iconImg, Define.SysId.GlobalTraval, v.id)
+
+				doubleImg.Activity = ((diceList[k] or 0) == 6)
+
+				itemModule.SelfRect:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					_P.OnClickIcon(v.id)
+				end, nil, 0.9)
+
+				CCommon.CreateEffect(itemModule:Get("ActorPanel"), DiceEffectId)
+			end
+		end)
+	end
+end
+
+
+-- 打开道具详情界面
+function _P.OnClickIcon(id)
+	if id ~= nil then
+		WindowMgr.Create("UBagDetailPop", id)
+	end
+end
+
+
+return _M

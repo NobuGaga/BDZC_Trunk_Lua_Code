@@ -26,6 +26,9 @@ local OffestY = 42
 local QualityScaleNumArr = Csv.Const(20159)
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
+local lastTenTime = 0
+local TENNUM = 10
+local MaxNum = 42
 
 
 function _M:Dispatch(funcName, ...)
@@ -85,21 +88,43 @@ function _M:OnCreate()
 	enterBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 
-		if not _P.CheckBtnIsClick(1) then
+		if not _P.CheckBtnIsClick(1, 1) then
 			return
 		end
 		_P.OnEnterTraval(self)
 	end, nil, 0.9)
 	module:Get("EnterText").Text = Csv.Text("global_forward")
 	module:Get("Tips_0").Text = Csv.Text("global_show")
+	module:Get("AutoText").Text = Csv.Text("global_autoTip")
+
+	local tenEnterBtn = module:Get("EnterBtn2")
+	tenEnterBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		if not _P.CheckBtnIsClick(2, 1) then
+			return
+		end
+		_P.OnTenEnterTraval(self)
+	end, nil, 0.9)
+	module:Get("EnterText2").Text = Csv.Text("global_ten_btn")
 
 	local addBtn = module:Get("AddBtn")
 	addBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		_P.OnBuyTravalCount(self)
 	end, nil, 0.9)
+	addBtn.Activity = false
 
-	self.MaxGridNum = #Csv.GlobalTravalItem
+	self.AutoGouImg = module:Get("gou")
+	self.AutoGouImg.Activity = MActivity.IsTravalAutoBuy
+	local autoAddBtn = module:Get("AutoBtn")
+	autoAddBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		MActivity.IsTravalAutoBuy = not MActivity.IsTravalAutoBuy
+		self.AutoGouImg.Activity = MActivity.IsTravalAutoBuy
+	end, nil, 0.9)
+
+	self.MaxGridNum = #Csv.GlobalTravalItem - 1
 	_P.SetGridDetail(self, self.ActInfo.curPosId)
 
 	local diceNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
@@ -119,6 +144,7 @@ function _M:OnCreate()
 	self.HeadBox = module:Get("IconRect")
 
 	_P.SetMapData(self)
+	_P.SetAutoData(self)
 end
 
 
@@ -170,20 +196,23 @@ function _P.SetOneCityData(self, data, travalLoopCount, isSetHeadPos)
 	if data ~= nil and next(data) ~= nil and data.itemId ~= 0 then
 		local iconImg = module:Get("Icon" .. data.posId)
 		local qualityImg  = module:Get("BtnBox" .. data.posId)
+		local numText = module:Get("Num" .. data.posId)
+		numText.Text = 'X' .. data.count
 		
 		local itemConf = Csv.Item[data.itemId]
-		qualityImg.SpriteName = itemConf.colorIcon
+		if data.posId == MaxNum then
+			qualityImg.SpriteName = 'bide_2'
+		else
+			qualityImg.SpriteName = itemConf.colorIcon
+		end
 
 		local scaleNum = QualityScaleNumArr[(itemConf.color or 1)]
+		iconImg.LocalScale = Vector3(scaleNum, scaleNum, scaleNum)
 		iconImg.SpriteName = itemConf.icon
 		iconImg:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			_P.OnClickIcon(itemConf.id)
-		end, nil, 1)
-
-		local offestY = (iconImg.SizeDelta.y * (1 - scaleNum) / 4)
-		iconImg.LocalScale = Vector3(scaleNum, scaleNum, scaleNum)
-		iconImg.LocalPosition = Vector2(0, iconImg.LocalPosition.y - offestY)
+		end, nil, scaleNum)
 
 		local curTruePos = (((not isSetHeadPos) and travalLoopCount and travalLoopCount > 1 and 1) or 0) * self.MaxGridNum + data.posId
 		_P.SetItemGray(self, curTruePos <= self.ActInfo.curPosId, data.posId)
@@ -192,7 +221,7 @@ function _P.SetOneCityData(self, data, travalLoopCount, isSetHeadPos)
 	if isSetHeadPos and data.posId ~= nil and data.posId == self.ActInfo.curPosId then
 		local qualityImg = module:Get("BtnBox" .. data.posId)
 		self.HeadBox.LocalPosition = Vector2(qualityImg.LocalPosition.x + OffestX , qualityImg.LocalPosition.y + OffestY)
-		_P.SetMapPosData(self)
+		_P.SetMapPosData(self, self.ActInfo.curPosId)
 	end
 end
 
@@ -208,18 +237,26 @@ end
 function _P.SetItemGray(self, isCannotClick, posId)
 	local iconImg = self.mModule:Get("Icon" .. posId)
 	local qualityImg  = self.mModule:Get("BtnBox" .. posId)
+	local numText = self.mModule:Get("Num" .. posId)
+	local numStr = numText.Text
+	local num = 1
+	if numStr ~= nil then
+		num = tonumber(string.sub(numStr, 2, string.len(numStr)))
+	end
 
 	if isCannotClick then
 		local isShow = _P.CheckIsInArr(self.ActInfo.passPosList, posId)
 		iconImg.Activity = not isShow
 		iconImg.IsGray = not isShow
 		iconImg.RaycastTarget = isShow
+		numText.Activity = (not isShow) and num > 1
 		qualityImg.IsGray = not isShow
 		qualityImg.RaycastTarget = isShow
 	else
 		iconImg.Activity = true
 		iconImg.IsGray = false
 		iconImg.RaycastTarget = true
+		numText.Activity = num > 1
 		qualityImg.IsGray = false
 		qualityImg.RaycastTarget = true
 	end
@@ -243,10 +280,58 @@ end
 
 function _P.OnEnterTraval(self)
 	local itemNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
+	local needCost = _P.GetNeedCostNum(self)
+	local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
 	if itemNum <= 0 then
-		CCommon.ShowError(Csv.Text("global_itemErr"))
+		if MActivity.IsTravalAutoBuy == false then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					_P.OnBuyDiceToUse(self, travalConf, hasNum, needCost, 2, 1, 0)
+				end
+			end, {content = Csv.Text("global_buyShow", {num = needCost})})
+		else
+			_P.OnBuyDiceToUse(self, travalConf, hasNum, needCost, 2, 1, 0)
+		end
 	else
 		CActivity.OnEnterTravalReq()
+	end
+end
+
+
+-- 十连前进
+function _P.OnTenEnterTraval(self)
+	local itemNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
+	local needCost = _P.EnterTenNeedCostNum(self, itemNum, self.ActInfo.buyCount)
+	local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
+	local leaveNum = TENNUM - itemNum
+
+	if leaveNum > 0 then
+		if MActivity.IsTravalAutoBuy == false or itemNum ~= 0 then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					_P.OnBuyDiceToUse(self, travalConf, hasNum, needCost, 4, leaveNum, leaveNum)
+				end
+			end, {content = Csv.Text("global_ten_tips", {hasNum = itemNum, cost = needCost, needNum = leaveNum})})
+		else
+			_P.OnBuyDiceToUse(self, travalConf, hasNum, needCost, 4, leaveNum, leaveNum)
+		end
+	else
+		CActivity.OnTenEnterTravalReq()
+	end
+end
+
+
+function _P.OnBuyDiceToUse(self, travalConf, hasNum, needCost, buyType, buyNum, leaveNum)
+	if hasNum < needCost then
+		CCommon.ShowError(Csv.Text("err_shop_buytype"))
+	else
+		if (self.ActInfo.buyCount + leaveNum) >= travalConf.buyLimit + self.extraBuyTime then
+			CCommon.ShowError(Csv.Text("err_siege_actime_max"))
+		else
+			CActivity.OnBuyTravalReq(buyType, buyNum)
+		end
 	end
 end
 
@@ -255,20 +340,24 @@ function _P.OnBuyTravalCount(self)
 	local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
 	local needCost = _P.GetNeedCostNum(self)
 	local hasBuyCount = travalConf.buyLimit + self.extraBuyTime - self.ActInfo.buyCount
-	CCommon.CheckTips(function(isSure,rg)
-		if isSure == true then
-			local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
-			if hasNum < needCost then
-				CCommon.ShowError(Csv.Text("err_shop_buytype"))
-			else
-				if self.ActInfo.buyCount >= travalConf.buyLimit + self.extraBuyTime then
-					CCommon.ShowError(Csv.Text("err_siege_actime_max"))
+	if hasBuyCount > 0 then
+		CCommon.CheckTips(function(isSure,rg)
+			if isSure == true then
+				local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+				if hasNum < needCost then
+					CCommon.ShowError(Csv.Text("err_shop_buytype"))
 				else
-					CActivity.OnBuyTravalReq()
+					if self.ActInfo.buyCount >= travalConf.buyLimit + self.extraBuyTime then
+						CCommon.ShowError(Csv.Text("err_siege_actime_max"))
+					else
+						CActivity.OnBuyTravalReq(1, 1)
+					end
 				end
 			end
-		end
-	end, {content = Csv.Text("global_buyShow", {num = needCost, num1 = hasBuyCount})})
+		end, {content = Csv.Text("global_buyShow", {num = needCost})})
+	else
+		CCommon.ShowError(Csv.Text("err_siege_actime_max"))
+	end
 end
 
 
@@ -280,8 +369,8 @@ function _P.OnMoveHead(self, data, callBack)
 
 		local headMoveAnim = self.HeadBox:DOAnchorPos(Vector2(pos[1], pos[2]), 0.35)
 			headMoveAnim:OnComplete(function ()
-				if curIndex == self.MaxGridNum and self.ActInfo.curPosId + data.diceNumber > self.MaxGridNum then
-					_P.OnPlayGetAnim(self, {curPosId = self.MaxGridNum})
+				if curIndex == self.MaxGridNum and self.ActInfo.curPosId + data.diceNumber[1] > self.MaxGridNum then
+					_P.OnPlayGetAnim(self, {curPosId = MaxNum})
 
 					self.mModule.SelfRect:AddOnTime(function()
 						_P.UpdateMapData(self, data.posReward, data.passPosList, data.travalLoopCount, function()
@@ -347,7 +436,7 @@ end
 
 
 function _P.SetCityActive(self, isShow)
-	for i=1,self.MaxGridNum do
+	for i=1,MaxNum do
 		local cityNode = self.mModule:Get("BtnBox" .. i)
 		cityNode.Activity = isShow
 	end
@@ -364,7 +453,7 @@ function _P.OnPlayGetAnim(self, data)
 		end
 	end
 
-	local showNum = ((data.diceNumber and data.diceNumber == 6) and 2) or 1
+	local showNum = ((data.diceNumber and data.diceNumber[1] == 6) and 2) or 1
 	local animRect = self.mModule:Get("AnimRect")
 	local curCityPos = self.mModule:Get("BtnBox" .. data.curPosId).RootCanvasPos
 	animRect.LocalPosition = Vector2(curCityPos.x + 21, curCityPos.y + 40)
@@ -402,9 +491,9 @@ function _P.SetMapSide(self, pos, lastIndex)
 end
 
 
-function _P.SetMapPosData(self)
+function _P.SetMapPosData(self, posId)
 	local mapRect = self.mModule:Get("Map")
-	local cityRect = self.mModule:Get("BtnBox" .. self.ActInfo.curPosId)
+	local cityRect = self.mModule:Get("BtnBox" .. posId)
 	local width = CS.JGui.JGuiManager.GuiRoot.Width
 
 	local moveX = width / 2 - cityRect.LocalPosition.x
@@ -435,6 +524,28 @@ function _P.GetNeedCostNum(self)
 end
 
 
+-- 前进10，骰子不足10时，需要消耗x钻石购买
+function _P.EnterTenNeedCostNum(self, curHasNum, buyCount)
+	local travalConf = Csv.GlobalTraval[self.ActId]
+	if travalConf == nil or travalConf.buyCost == nil then
+		return 0
+	end
+
+	local needBuyCount = TENNUM - curHasNum
+	local needNum = 0
+	for i=1,needBuyCount do
+		local curIndex = i + buyCount
+		for k,v in pairs(travalConf.buyCost) do
+			if curIndex >= v[1] and curIndex <= v[2] then
+				needNum = needNum + v[3]
+			end
+		end
+	end
+
+	return needNum
+end
+
+
 function _R.OnTravalEnterCallBack(self, data, callback)
 	local actorPanel = self.mModule:Get("ActorPanel")
 	local diceImg = self.mModule:Get("DiceImg")
@@ -445,7 +556,8 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 
 	self:Lock()
 	self.ExchangeBtn.RaycastTarget = false
-	diceImg.SpriteName = self.DiceNameArrs[data.diceNumber]
+	diceImg.SpriteName = self.DiceNameArrs[data.diceNumber[1]]
+
 	CCommon.CreateEffect(actorPanel, DiceEffectID, nil, function( ... )
 		diceImg.Activity = true
 
@@ -454,7 +566,7 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 
 			local posList = {}
 			local maxCount = 0
-			if self.ActInfo.curPosId + data.diceNumber > self.MaxGridNum then
+			if self.ActInfo.curPosId + data.diceNumber[1] > self.MaxGridNum then
 				maxCount = ((data.travalLoopCount > 1 and 1) or 0) * self.MaxGridNum + data.curPosId
 			else
 				maxCount = data.curPosId
@@ -473,7 +585,7 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 
 				local MoveFunc = function ( ... )
 					_P.OnMoveHead(self, data, function()
-						if data.diceNumber == 6 then-- 移动完成后
+						if data.diceNumber[1] == 6 then-- 移动完成后
 							-- 播放骰子摇到6特效
 							CCommon.CreateEffect(actorPanel, DoubleActorId, nil, function( ... ) 
 								_P.SetMapUnLock(self, data, callback)
@@ -487,11 +599,16 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 					end)
 				end
 				
-				-- 如果正好在42格，先刷新数据后移动
+				-- 如果正好在41格，先弹42格奖励奖励，后刷新数据再移动
 				if self.ActInfo.curPosId == self.MaxGridNum then
-					_P.UpdateMapData(self, data.posReward, data.passPosList, data.travalLoopCount, function()
-						MoveFunc()
-					end)
+					_P.OnPlayGetAnim(self, {curPosId = MaxNum}) -- 过圈奖励
+
+					local lastBtnBox = self.mModule:Get("BtnBox" .. MaxNum)
+					lastBtnBox:AddOnTime(function()
+						_P.UpdateMapData(self, data.posReward, data.passPosList, data.travalLoopCount, function()
+							MoveFunc()
+						end)
+					end, nil, 0.5)
 				else
 					MoveFunc()
 				end
@@ -524,12 +641,35 @@ function _P.UpdateExchangeEffect(self, exchangeShop, numberCount)
 end
 
 
-function _R.OnTravalBuyCallBack(self, data)
-	CCommon.ShowError(Csv.Text("global_buySuccess"))
+-- 设置自动购买信息
+function _P.SetAutoData(self)
+	local module = self.mModule
+	local needCost = _P.GetNeedCostNum(self)
+	local travalConf = Csv.GlobalTraval[self.ActInfo.actId]
+	local hasBuyCount = travalConf.buyLimit + self.extraBuyTime - self.ActInfo.buyCount
+	local costText = module:Get("CostText")
+	if hasBuyCount <= 0 then
+		costText.Text = Csv.Text("err_traval_buy")
+	else
+		costText.Text = Csv.Text("global_autoShow", {num = needCost})
+	end
+end
 
-	local diceNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
-	self.LeaveText.Text = Csv.Text("global_left_times", {num = diceNum})
-	self.ActInfo.buyCount = data.buyCount
+
+function _R.OnTravalBuyCallBack(self, data)
+	-- 自动购买,成功后直接前进
+	if data.type == 2 then
+		CActivity.OnEnterTravalReq()
+	elseif data.type == 4 then
+		CActivity.OnTenEnterTravalReq()
+	else -- 手动，暂时没有
+		CCommon.ShowError(Csv.Text("global_buySuccess"))
+		local diceNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
+		self.LeaveText.Text = Csv.Text("global_left_times", {num = diceNum})
+		self.ActInfo.buyCount = data.buyCount
+	end
+
+	_P.SetAutoData(self)
 end
 
 
@@ -548,13 +688,84 @@ function _R.OnUpdateViewState(self, data)
 end
 
 
--- 防止多次点击
-function _P.CheckBtnIsClick(delayTime)
-	if (UnityTime.time - lastTime) < delayTime then
-		return false
+function _R.OnTenTravalEnterCallBack(self, data, callback)
+	local actorPanel = self.mModule:Get("ActorPanel")
+
+	self:Lock()
+	self.ExchangeBtn.RaycastTarget = false
+	CCommon.CreateEffect(actorPanel, DiceEffectID, nil, function( ... )
+		self:Unlock()
+		self.ExchangeBtn.RaycastTarget = true
+
+		WindowMgr.Create("UTenTravalResultPanel",data.actId, data.diceNumber, data.DrowReward, function( ... )
+			_P.OnPlayTenDiceAnim(self, data, callback)
+		end)
+	end)
+
+	local diceNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
+	self.LeaveText.Text = Csv.Text("global_left_times", {num = diceNum})
+end
+
+
+-- 十连表现
+function _P.OnPlayTenDiceAnim(self, data, callback)
+	if data.travalLoopCount ~= self.ActInfo.travalLoopCount then -- 跨圈
+		-- 头像先移动到41格。然后弹奖励，变暗(刷新界面数据)
+		self:Lock()
+		local qualityImg = self.mModule:Get("BtnBox" .. self.MaxGridNum)
+		self.HeadBox.LocalPosition = Vector2(qualityImg.LocalPosition.x + OffestX , qualityImg.LocalPosition.y + OffestY)
+		_P.SetMapPosData(self, self.MaxGridNum)
+		_P.OnPlayGetAnim(self, {curPosId = MaxNum}) -- 过圈奖励
+
+		qualityImg:AddOnTime(function()
+			_P.UpdateMapData(self, data.posReward, data.passPosList, data.travalLoopCount, function( ... )
+				if callback ~= nil then
+					callback()
+				end
+				self.ActInfo = MActivity.GetFromId(self.ActId)
+
+				local lastBox = self.mModule:Get("BtnBox" .. data.curPosId)
+				self.HeadBox.LocalPosition = Vector2(lastBox.LocalPosition.x + OffestX , lastBox.LocalPosition.y + OffestY)
+				_P.SetMapPosData(self, data.curPosId)
+
+				-- 设置奖励灰亮
+				for k,v in pairs(data.posReward) do
+					_P.SetItemGray(self, v.posId <= self.ActInfo.curPosId, v.posId)
+				end
+
+				self:Unlock()
+			end)
+		end, nil, 0.5)
+	else
+		-- 直接刷新数据
+		if callback ~= nil then
+			callback()
+		end
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+		_P.SetMapData(self)
 	end
 
-	lastTime = UnityTime.time
+	_P.SetGridDetail(self, data.curPosId)
+	_P.UpdateExchangeEffect(self, self.ActInfo.exchangeShop, data.numberCount)
+end
+
+
+-- 防止多次点击
+function _P.CheckBtnIsClick(type, delayTime)
+	if type == 1 then
+		if (UnityTime.time - lastTime) < delayTime then
+			return false
+		end
+
+		lastTime = UnityTime.time
+	else
+		if (UnityTime.time - lastTenTime) < delayTime then
+			return false
+		end
+	
+		lastTenTime = UnityTime.time
+	end
+
 	return true
 end
 

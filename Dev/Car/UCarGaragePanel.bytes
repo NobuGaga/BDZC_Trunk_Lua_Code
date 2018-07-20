@@ -61,7 +61,7 @@ function _M:UpdateData()
 		_P.UpdateCarInfo(self)
 	end
 
-	self.mImgSelect.Activity = (not self.IsBatch) and (self.GetCurCarData ~= nil)
+	self.mImgSelect.Activity = (not self.IsBatch) and (self.SelectCarData ~= nil)
 	if self.IsBatch then
 		for i,v in ipairs(BatchBreakData) do
 			_P.UpdateCircleState(self, v)
@@ -75,7 +75,7 @@ function _M:IsShowOneKeyData(isShow)
 	self.BatchRect.Activity = isShow
 	self.hasRect.Activity = (not isShow) and self.SelectCarData
 	self.noneRect.Activity = (not isShow) and (not self.SelectCarData)
-	self.mImgSelect.Activity = (not isShow) and (self.GetCurCarData ~= nil)
+	self.mImgSelect.Activity = (not isShow) and (self.SelectCarData ~= nil)
 	for i,v in ipairs(BatchBreakData) do
 		if isShow then
 			local isSelect = MCar.BatchBreakList[v + 1]
@@ -220,6 +220,12 @@ function _P.OnSelectCarData(self, data, isUpdate, index)
 			return
 		end
 
+		local carConf = Csv.Car[data.carid]
+		if carConf.isBreak == 0 then
+			CCommon.ShowError(Csv.Text("car_decompose_fail"))
+			return
+		end
+
 		local item = self.mRawCarItems[data.id]
 		local module = item.module
 		if module ~= nil then
@@ -228,7 +234,6 @@ function _P.OnSelectCarData(self, data, isUpdate, index)
 			selectImg.Activity = not selectImg.Activity
 			_P.UpdateOneSelectData(self, data.id, isSelect)
 
-			local carConf = Csv.Car[data.carid]
 			local isExpCar = (carConf and carConf.isExpCar and carConf.isExpCar == 1)
 			_P.UpdateCircleState(self, (isExpCar and 0) or data.color)
 		end

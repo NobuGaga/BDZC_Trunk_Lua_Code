@@ -5,6 +5,7 @@ local MWelfare = JRequire"Dev.Welfare.MWelfare"
 local CWelfare = JRequire"Dev.Welfare.CWelfare"
 local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
 --@RefType [Dev.Main.UStoryMoudle.bytes#_M]
 local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
 
@@ -22,6 +23,8 @@ local SoundStaff = Csv.Const(Define.Const.FirstRechargeSound)[2][1]
 local SecondStaff = Csv.Const(Define.Const.FirstRechargeSound)[2][2]
 
 function _M:BeforeDestroy()
+	MMain.BoobLayer = "Message"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 	if self.StoryMoudle ~= nil then
 		self.StoryMoudle:delete()
 		self.StoryMoudle = nil
@@ -118,6 +121,9 @@ function _M:OnCreate()
 			SoundMgr.Play(SoundStaff)
 		end,nil,SecondStaff)
 	end
+
+	MMain.BoobLayer = "Main"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 end
 
 function _P.DoItemScale(self)

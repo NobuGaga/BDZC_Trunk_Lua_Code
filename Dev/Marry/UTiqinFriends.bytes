@@ -29,9 +29,7 @@ function _M:SetFriendQinjia(msg)
 			end
 		end
 	end
-	
 	self.mFriendMsgList = list
-
 	_P.SetFriendItems(self)
 end
 
@@ -59,6 +57,8 @@ function _M:ctor(parent,id)
 
 	local content = moudle:Get("content")
 	local infoRect = moudle:Get("Info")
+	self.mContent = content
+	self.mScrollView = moudle:Get("scrollView")
 	self.mNoTips = moudle:Get("TextBG")
 	self.mInfoRect = infoRect
 	
@@ -69,7 +69,7 @@ function _M:ctor(parent,id)
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		if self.mTarBabyList ~= nil then
 			if #self.mTarBabyList > 0 then
-				WindowMgr.Create("UPlayerBaby",self.selectFriendId,self.mTarBabyList)
+				WindowMgr.Create("UPlayerBaby",self.selectFriendId,self.mTarBabyList,self.selectName)
 			end
 		else
 			CCommon.ShowError(Csv.Text("married_nobaby"))
@@ -90,7 +90,6 @@ function _M:ctor(parent,id)
 	local relation2 = MFriend.FuncToRelation[Define.SysId.Friend_Qinjia]
 	CFriend.ReqLook(relation1)
 	CFriend.ReqLook(relation2)
-
 end
 
 function _P.SetFriendItems(self)
@@ -98,29 +97,32 @@ function _P.SetFriendItems(self)
 	local content = moudle:Get("content")
 
 	content:DestroyChildren()
+	self.mSelectItemIndex = nil
+	self.mInfoRect.Activity = false
+	self.mNoTips.Activity = false
 
 	local friendItemTab = {}
 	local friendList = self.mFriendMsgList
 	if friendList ~= nil then
 		if #friendList > 0 then
 			self.mInfoRect.Activity = true
+
+			local index = 0
+			for k,v in pairs(friendList)do
+				index = index+1
+	
+				local _item = _P.CreateFriendItem(self,content,v,index)
+				friendItemTab[index] = {id = v.id,data = v,item = _item}
+			end
+			self.mFrinedItems = friendItemTab
+			
+			_P.ClickFriendItem(self,1)
 		else
 			self.mNoTips.Activity = true
-		end
-
-		local index = 0
-		for k,v in pairs(friendList)do
-			index = index+1
-
-			local _item = _P.CreateFriendItem(self,content,v,index)
-			friendItemTab[index] = {id = v.id,data = v,item = _item}
 		end
 	else
 		self.mNoTips.Activity = true
 	end
-	self.mFrinedItems = friendItemTab
-
-	_P.ClickFriendItem(self,1)
 end
 
 function _P.OnClickNext(self,num)
@@ -157,17 +159,41 @@ function _P.ClickFriendItem(self,index)
 	local item = friendItems[index]
 	
 	if item ~= nil then
+
 		itemMoudle = item.item
-		itemMoudle:Get("select").Activity = true
+		
 		_P.RefreshInfo(self,index)
+		itemMoudle:Get("select").Activity = true
+		_P.MoveContent(self,itemMoudle)
 
 		self.mSelectItem = itemMoudle
 	end
 end
 
+function _P.MoveContent(self,tarItem)
+	local content = self.mContent
+	local scroll = self.mScrollView
+
+	local scrollWid = scroll.SizeDelta.x
+	local itemPox = tarItem.SelfRect.LocalPosition.x
+	local itemWid = tarItem.SelfRect.SizeDelta.x
+	local contentPox = content.LocalPosition.x
+
+	local tarPox = (itemPox + itemWid/2) - (scrollWid - contentPox)
+	local rightPox = (itemPox - itemWid/2) + contentPox
+
+	if tarPox > 0 then
+		content:DOAnchorPosX(-tarPox + contentPox,0.2)
+	elseif rightPox < 0 then
+		content:DOAnchorPosX(contentPox - rightPox,0.2)
+	end
+end
+
+
 function _P.RefreshInfo(self,index)
 	local itemData = self.mFrinedItems[index]
 	self.selectFriendId = itemData.id
+	self.selectName = itemData.name
 	CGirl.ReqLookOthersBaby(self.mOwnBabyId,self.selectFriendId)
 
 	local data = itemData.data
@@ -186,10 +212,7 @@ function _P.RefreshInfo(self,index)
 	local levelText = moudle:Get("DJ")
 	local babyText = moudle:Get("SH")
 
-	tab2.Activity = false
-	if data.relation == 3 then
-		tab2.Activity = true
-	end
+	_P.CheckTab(self,itemData.id)
 
 	_P.ShowBoby(self,data.headId,data.bodyId,data.sex)
 
@@ -244,6 +267,23 @@ function _P.CheckSamePlayer(list,id)
 	return false
 end
 
+function _P.CheckTab(self,id)
+	local isQinjia = MFriend.IsQingjiaById(id)
+	local isFriend = MFriend.IsFriendById(id)
+
+	local moudle = self.mMoudle
+	local tab1 = moudle:Get("Tab1")
+	local tab2 = moudle:Get("Tab2")
+	tab1.Activity = false
+	tab2.Activity = false
+
+	if isFriend then
+		tab1.Activity = true
+	end
+	if isQinjia then
+		tab2.Activity = true
+	end
+end
 
 function _M:Destroy()
 	local moudle = self.mMoudle

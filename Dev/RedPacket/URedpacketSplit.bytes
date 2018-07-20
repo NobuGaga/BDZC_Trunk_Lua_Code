@@ -70,7 +70,11 @@ function _M:OnCreate(data, onCloseCallback)
 	moudle:Get("MoneyIcon"):AddOnButton(function()
 		if not isClick then
 			isClick = true
-			CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
+			if data.redPacket and data.redPacket.packetId then
+				CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
+			else
+				CPlayer.ReqOpenRedPacket(data.id)
+			end
 
 			CCommon.CreateEffect(effectNode,EFFECT_WALLET_2)
 			moudle.SelfRect:AddOnTime(function()

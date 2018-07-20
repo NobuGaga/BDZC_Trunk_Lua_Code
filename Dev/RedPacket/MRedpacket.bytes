@@ -208,4 +208,38 @@ function _M.RefreshShowTick()
 	end
 end
 
+_M.RedPacketType = {
+	isNotOpen = 1,
+	isGot = 2,
+	isGetOver = 4,
+	isPass = 3,
+}
+
+--红包弹窗最多显示红包数
+_M.MaxShowRedPacketNum = 12
+
+function _M.GetAllRedPacket()
+	local count = #_M.redPacketList
+	if _M.redPacketList == nil or count == 0 then
+		return
+	end
+	local dataList = {}
+	for index, data in ipairs(_M.redPacketList) do
+		data.headid = data.senderHead.headid
+		data.gender = data.senderHead.gender
+		dataList[index] = data
+	end
+	if count > _M.MaxShowRedPacketNum then
+		for index = _M.MaxShowRedPacketNum + 1, count do
+			dataList[index] = nil
+		end
+	end
+	table.sort(dataList, _M.SortRedPacketData)
+	return dataList
+end
+
+function _M.SortRedPacketData(left, right)
+	return left.expireTime < right.expireTime
+end
+
 return _M

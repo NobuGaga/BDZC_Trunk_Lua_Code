@@ -91,6 +91,7 @@ _M.AdventureShopRed = false
 _M.GloalTravalRed = false
 _M.TravalDicsItemId = tonumber(Csv.Const(20158))
 _M.MaxOverTime = tonumber(Csv.Const(20101)[14]) -- 奇遇系统员工加班最大次数，by:pyh
+_M.IsTravalAutoBuy = false -- 环球旅行自动购买标记
 
 function _M.Clean()
 	_M.ActList = {}
@@ -110,6 +111,7 @@ function _M.Clean()
 	_M.FuturesReward = {}
 	_M.AdventureShopRed = false
 	_M.GloalTravalRed = false
+	_M.IsTravalAutoBuy = false
 end
 
 function _M.ClearForType(actType)
@@ -281,16 +283,23 @@ function _M.UpdatePersonEvent(actId,data)
 		local event = _M.GetNewPersonEvent(data)
 		_M.ActList[actId].personalEventlist[event.eventsIndex] = event
 		_M.ActList[actId].nextUpdateTime = (data.triggerTime or 0) + Csv.Const(20101)[1]
-		_M.ActList[actId].isNew = true
+		-- _M.ActList[actId].isNew = true
 	end
 end
 
+-- by:pyh 删除进行中的相应事件，假如是自己的事件已经完成了添加到完成列表，否则不需要处理
 function _M.UpdateGangEvent(actId,data)
 	local isJoin = false
 	if _M.ActList[actId] ~= nil then
 		for k,v in pairs(data.gangeventlist) do
 			local event = _M.GetNewGangEvent(v)
-			_M.ActList[actId].shopEventList[event.eventsIndex] = event
+			local isMine = _M.IsJoin(v.playerlist)
+			if v.type == 2 and not isMine then -- 不是自己参与的完成事件
+				_M.ActList[actId].shopEventList[event.eventsIndex] = nil
+			else
+				_M.ActList[actId].shopEventList[event.eventsIndex] = event
+			end
+			
 			if not _M.AdventureShopRed then
 				if event.playerlist ~= nil then
 					for i,j in pairs(event.playerlist) do
@@ -308,11 +317,23 @@ function _M.UpdateGangEvent(actId,data)
 	end
 end
 
-function _M.SetAdvNewFlag(actId,isShow)
-	if _M.ActList[actId] ~= nil then
-		_M.ActList[actId].isNew = isShow
+-- 是否是自己参与的事件
+function _M.IsJoin(datalist)
+	if datalist == nil then return false end
+
+	for k,v in pairs(datalist) do
+		if v.playerId == MPlayer.GetId() then
+			return true
+		end
 	end
+	return false
 end
+
+-- function _M.SetAdvNewFlag(actId,isShow)
+-- 	if _M.ActList[actId] ~= nil then
+-- 		_M.ActList[actId].isNew = isShow
+-- 	end
+-- end
 
 function _M.GetNewPersonEvent(data)
 	local eventInfo = {}

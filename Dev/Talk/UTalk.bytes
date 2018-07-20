@@ -34,6 +34,7 @@ local _R = {}
 local Redpacket_Light = Color(1, 1, 1, 1)
 local Redpacket_Got = Color(1, 1, 1, 150/255)
 local Redpacket_Pass = Color(1, 1, 1, 150/255)
+local SCROLL_HIGHT = 1055
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -45,6 +46,9 @@ end
 function _M:BeforeDestroy( ... )
 	SoundMgr.DestroyVoice()
 	SoundMgr.EndVoiceRecord()
+
+	MMain.BoobLayer = "Message"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 
 	if self.MenuPopObj ~= nil then
 		self.MenuPopObj:Destroy()
@@ -78,12 +82,12 @@ function _R.RefreshMsg(self,_data)
 			local redPack = _data.redPacket
 			if redPack == nil or _data.redPacket.type == 1 then
 				if content.SizeDelta.y >1000 then
-					content:DOAnchorPosY(-1055,0.1)
+					content:DOAnchorPosY(-SCROLL_HIGHT,0.1)
 				end
 			end
 		else
 			if content.LocalPosition.y > -1500 then
-				content:DOAnchorPosY(-1055,0.1)
+				content:DOAnchorPosY(-SCROLL_HIGHT,0.1)
 			else
 				_P.ShowNewsTips(self,1)
 			end
@@ -109,7 +113,7 @@ function _R.RefreshSysMsg(self,_data)
 
 		local content = self.mToggelContent
 		if content.SizeDelta.y >1000 then
-			content:DOAnchorPosY(-1055,0.1)
+			content:DOAnchorPosY(-SCROLL_HIGHT,0.1)
 		end
 	end
 
@@ -176,6 +180,7 @@ function _M:OnCreate(chooseFuncId)
 	voiceInputText.Text = Csv.Text("talk_inputVoice")
 
 	local scrollView = moudle:Get("new_scrollView")
+	SCROLL_HIGHT = scrollView.Rect.height
 	scrollView.OnValueChanged:RemoveAllListeners()
 	scrollView.OnValueChanged:AddListener(function(value)_P.OnValueChanged(self,value)end)
 	local closeBtn = moudle:Get("C_Back_Btn")
@@ -356,6 +361,9 @@ function _M:OnCreate(chooseFuncId)
 	self.MsgText = moudle:Get("SystemText")
 	self.MsgIndex =  #MTalk.SysMessageTab
 	self.MsgStop = true
+
+	MMain.BoobLayer = "Main"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 end
 
 function _P.RefreshTalkType(self)
@@ -543,7 +551,7 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 		if not GameSetting.IsiOSCommit then
 			HeadBox:AddOnButton(function()
 				local targetPox = headIcon.RootCanvasPos + Vector2(100, -20)
-				if targetPox.y < -350 then 
+				if targetPox.y < -320 then 
 					targetPox = targetPox + Vector2(0, 320) --位置太低转向上显示
 				end
 				if _data.channel == MTalk.Channel.CrossMsg then
@@ -1178,7 +1186,7 @@ end
 
 function _P.ClickNewMsgTips(self)
 	_P.CloseNewsTips(self)
-	self.mToggelContent:DOAnchorPosY(-1055,0.1)
+	self.mToggelContent:DOAnchorPosY(-SCROLL_HIGHT,0.1)
 end
 
 ----------------------------------------------------------------------------

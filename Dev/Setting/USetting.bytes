@@ -114,14 +114,29 @@ function _M:OnCreate()
 		end, nil, 0.9)
 		_P.OnSetAntiData(self)
 	end
-	
 	--联系客服
-	module:Get("C_text_0").Text = Csv.Text("set_ConnectServer")
-	local Service = module:Get("C_Btn_b")
-	Service:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		WindowMgr.Create("USetService")
-	end, nil, 0.9)
+	local isHaveCSBtn = true
+	local spidCsvLine = Csv.SpidAlter[1]
+	if spidCsvLine ~= nil and spidCsvLine.spid ~= nil then
+		local info = spidCsvLine.spid[string.upper(GameSetting.Spid)]
+		if info ~= nil and tonumber(info) == 2 then
+			isHaveCSBtn = false
+		end
+	end
+	if isHaveCSBtn then
+		module:Get("C_text_0").Text = Csv.Text("set_ConnectServer")
+		local Service = module:Get("C_Btn_b")
+		Service:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("USetService")
+		end, nil, 0.9)
+	else
+		module:Get("C_Btn_b").Activity = false
+		local noticeBtn = module:Get("C_Btn_b2")
+		local pos = noticeBtn.LocalPosition
+		pos.x = 0
+		module:Get("C_Btn_b2").LocalPosition = pos
+	end	
 	--游戏公告
 	module:Get("C_text_0_0").Text = Csv.Text("set_Notice")
 	local Notice = module:Get("C_Btn_b2")

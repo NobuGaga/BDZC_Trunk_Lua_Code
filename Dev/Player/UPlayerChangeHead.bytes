@@ -54,12 +54,18 @@ function _P.RefreshList(self,funcId)
 			end)
 			if v.isHave ~= nil then
 				if v.isHave then
-					head.IsGray = false
+					headMoudle.SelfRect.IsGray = false
+					headMoudle:Get("yyy").Activity = true
+					headMoudle:Get("lock").Activity = false
 				else
-					head.IsGray = true
+					headMoudle.SelfRect.IsGray = true
+					headMoudle:Get("yyy").Activity = false
+					headMoudle:Get("lock").Activity = true
 				end
 			else
-				head.IsGray = false
+				headMoudle.SelfRect.IsGray = false
+				headMoudle:Get("yyy").Activity = true
+				headMoudle:Get("lock").Activity = false
 			end
 			self.HeadTable[v.headid] = headMoudle
 		end
@@ -510,7 +516,9 @@ function _R.LiveHead(self,data)
 		local moudle = headTable[data.headid]
 		local value = valueTable[data.headid]
 		if moudle ~= nil and value ~= nil then
-			moudle:Get("Head").IsGray = false
+			moudle.SelfRect.IsGray = false
+			moudle:Get("yyy").Activity = true
+			moudle:Get("lock").Activity = false
 		end
 	end
 	_P.ChangeSelectHead(self,self.NowSelectId)

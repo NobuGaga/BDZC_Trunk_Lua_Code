@@ -6,6 +6,7 @@ local _M = {}
 
 --常量
 _M.PRIVATE_TALK_COUNT = 30
+_M.NowPrivateFriendId = 0
 
 --玩家关系类型
 _M.RelationType =
@@ -76,6 +77,7 @@ function _M.Clean( ... )
 	_M.PlayerInfoCached = {}
 	_M.RecentMessagesCached = {}
 	_M.IsHaveNewReq = false
+	_M.NowPrivateFriendId = 0
 end
 
 --判断某个玩家是否在该关系中
@@ -375,26 +377,27 @@ function _M.GetRelationIds( relationType )
 	return ret
 end
 
-function _M.GetTypeById(id)
+function _M.IsQingjiaById(id)
 	local qinjiaTab = _M.RelationCached[_M.RelationType.QinJia]
 	if qinjiaTab ~= nil then
 		for playerId,_ in pairs(qinjiaTab) do
 			if playerId == id then
-				return _M.RelationType.QinJia
+				return true
 			end
 		end
 	end
-
+	return false
+end
+function _M.IsFriendById(id)
 	local friendTab = _M.RelationCached[_M.RelationType.Friend]
 	if friendTab ~= nil then
 		for playerId,_ in pairs(friendTab) do
 			if playerId == id then
-				return _M.RelationType.Friend
+				return true
 			end
 		end
 	end
-
-	return _M.RelationType.None
+	return false
 end
 
 function _M.GetRelationPlayers(relationType, isSort)

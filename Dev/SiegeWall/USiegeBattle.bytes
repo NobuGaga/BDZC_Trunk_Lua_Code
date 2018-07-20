@@ -466,7 +466,10 @@ function _P.ReadyFight(self,data)
 	else
 		bossIcon.SpriteName = self.mBossData.body
 	end
-	bloodValue.Text = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax) .. "%"----math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"
+	bloodValue.Text = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax+0.05) .. "%"----math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"
+	if data.bossBlood.ncur <= 0 then
+		bloodValue.Text = "0.0%"
+	end
 
 	MSiege.BossPower = data.bossBlood
 	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
@@ -539,9 +542,15 @@ function _P.ShowFight(self,data,callBack)
 		end
 		
 		local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
-			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",(value / self.FullBlood) * 100).."%" end
+			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",(value / self.FullBlood) * 100+0.05).."%" end
+			if value <= 0 then
+				info.BloodText.Text = "0.0%"
+			end
 		end, function()
-			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",fill * 100).."%" end
+			if info.BloodText ~= nil then info.BloodText.Text = string.format("%.1f",fill * 100+0.05).."%" end
+			if fill <= 0 then
+				info.BloodText.Text = "0.0%"
+			end
 
 			CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
 		end)

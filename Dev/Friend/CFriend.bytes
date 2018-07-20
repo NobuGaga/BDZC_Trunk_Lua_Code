@@ -76,6 +76,17 @@ function _M.ModuleInit(isReload)
 	_M.Send = SocketMgr.Regist(Define.SysId.Friend, func_send, func_recv, isReload)	
 end
 
+--注册进入游戏监听
+EventCenter.RegistCallEvent(Define.EventListenId.EnterGame,function( ... )
+	--聊天气泡刷新
+	if MFriend.IsHaveNewReq then
+		if not WindowMgr.IsCreated("UMessage") then
+			WindowMgr.Create("UMessage")
+		end
+		WindowMgr.Call("UMessage","ShowMsgTips",{funcId = Define.SysId.Friend_Friend})
+	end
+end, true)
+
 --Client --> Server
 	function _M.ReqAdd(id, relation)
 		_M.Send(CMD_ID.cAdd, {id = id, relation = relation})
@@ -134,13 +145,13 @@ end
 		_M.CheckPrivateTalkRedpoint()		
 	end
 	--发送语音
-	function _M.SendVoiceChat(channel, clipData, clipLen, playerID)
+	function _M.SendVoiceChat(channel, clipData, clipLen, playerID, playerName)
 		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.SendVoiceUrl)
 		session:AppendParam("playerId", MPlayer.GetId())
 		session:AppendParamBytes("voice", clipData)
 		session:SetCallBack(function (isOk, param1, param2)
 			if isOk then
-				CTalk.SendNewTalk(channel,nil, playerID, param2, clipLen)
+				CTalk.SendNewTalk(channel,nil, playerID, param2, clipLen, playerName)
 				MFriend.SaveVioce(MPlayer.GetId(), param2, clipData)
 			else
 				error("SendVoiceChat error, info:", param2)

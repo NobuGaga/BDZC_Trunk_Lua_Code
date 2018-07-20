@@ -55,10 +55,7 @@ function _P.SetOwnData(self)
 	local fillAmount = math.min(MAX_MASK, (self.mData.hotval / MAX_LUCKY)*MAX_MASK + 0.1)
 	self.mLuckText.Text = tostring(math.ceil(math.min(100,(self.mData.hotval/MAX_LUCKY)*100)))..'%'
 	self.slider.SizeDelta = Vector2(fillAmount, MASK_HEIGHT)
-	local vip = MPlayer.GetVip()
-	local extraTime = Csv.Vip[vip].adventureMainCount
-	local lefttime = MAX_COUNT + extraTime - self.mData.personalEventTimes
-	self.leftTimes.Text = Csv.Text("adventure_left_times",{num = lefttime,all = MAX_COUNT + extraTime})--VIP
+	_P.SetLeftTimeTextData(self)
 end
 
 --刷新中间事件格子
@@ -129,8 +126,9 @@ end
 function _R.UpdateEvent(self,data)
 	self.mData = MActivity.GetFromId(self.ActId)
 	-- 现在个人事件更新会走完成个人事件那边，这边就不需要再刷一遍数据了，by:pyh
-	-- _P.SetListData(self)
+	_P.SetListData(self)
 	_P.SetNoneText(self)
+	_P.SetLeftTimeTextData(self) -- 刷新剩余次数
 end
 
 --更新个人事件数据,isShowAnim是否播放消失出现动画，by:pyh
@@ -180,7 +178,7 @@ function _P.OnCreateItem(self,data,contentTransform)
 	--正常格子
 	if data.eventId > 0 then
 		--Todo:显示是否即将刷新
-		for i=1,5 do
+		for i=1,7 do
 			itemMoudle:Get("Star"..i).Activity = true
 			itemMoudle:Get("Star"..i).Color = GRAY
 		end
@@ -304,9 +302,7 @@ end
 
 function _P.OnClickItem(self,data,activityData)
 	if data ~= nil then
-		local vip = MPlayer.GetVip()
-		local extraTime = Csv.Vip[vip].adventureMainCount
-		local lefttime = MAX_COUNT + extraTime - self.mData.personalEventTimes
+		local lefttime = MAX_COUNT - self.mData.personalEventTimes
 		if self.mData.state.lefttime <= HeartBeat.ServSecond() then
 			CCommon.ShowError(Csv.Text("timelimit_close"))
 		elseif lefttime <= 0 then
@@ -364,6 +360,7 @@ function _P.IninTipAnim(self,isPress)
 	end
 end
 
+
 --界面构造
 function _M:OnCreate(...)
 	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Main")
@@ -400,7 +397,6 @@ function _M:OnCreate(...)
 	end
 	self.adventureConf = adventureConf
 	
-
 	self.mRawTableItems = {}
 	self.mLuckText = module:Get("LuckText")
 	module:Get("C_Text_0").Text = adventureConf.title
@@ -420,7 +416,6 @@ function _M:OnCreate(...)
 	self.rankBtn = module:Get("C_Btn_a")
 	self.shopEventBtn = module:Get("C_Btn_b")
 	self.exchangeBtn = module:Get("C_Btn_a_0")
-	self.vipBtn = module:Get("Vip")
 	self.leftTimes = module:Get("cishu")
 	self.TipsBox = module:Get("TipsBox")
 	self.scoreText = module:Get("TipsTezt")
@@ -431,10 +426,11 @@ function _M:OnCreate(...)
 	self.scoreText.Text = adventureConf.popDesc
 	self.redpoint1 = module:Get("redpoint1_0")
 	self.redpoint2 = module:Get("redpoint2_0")
+	self.refreshTimeText = module:Get("Time")
 	self.timeText.Text = Csv.Text("charitable_main_data")..Csv.Text("charitable_main_dateInfo", 
 	{startTime = LuaUtil.TransToYMD(state.startTime),endTime = LuaUtil.TransToYMD(state.startTime + adventureConf.settleTime)})
 	-- hotOb = module:Get("HotObj")
-	MActivity.SetAdvNewFlag(self.mData.actId, false)
+	-- MActivity.SetAdvNewFlag(self.mData.actId, false)
 	CActivity.ReqUpdateRed(self.mData.actId, Define.ActivityType.Adventure)
 	self.rankBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
@@ -446,11 +442,11 @@ function _M:OnCreate(...)
 		end
 	end, nil, 1.2)
 
-	self.vipBtn:AddOnButton(function(...)
+	local addBtn = module:Get("Vip")
+	addBtn:AddOnButton(function(...)
 		SoundMgr.Play(10002)
-		--打开充值界面
-			WindowMgr.Create("URecharge")
-		-- end
+		
+		_P.OnClickAddTimes(self)
 	end, nil, 1.2)
 
 	self.exchangeBtn:AddOnButton(function(...)
@@ -496,6 +492,105 @@ function _M:OnCreate(...)
 	_R.UpdateRed(self)
 	_P.InitAnim(self)
 	_P.SetNoneText(self)
+	_P.SetTimeData(self)
+end
+
+
+function _P.OnClickAddTimes(self)
+	local lefttime = MAX_COUNT - self.mData.personalEventTimes
+	if lefttime <= 0 then
+		local vip = MPlayer.GetVip()
+		local extraTime = Csv.Vip[vip].adventureMainCount
+		if self.mData.eventBuyTimes < extraTime then
+			local needNum = _P.GetCurBuyNeedNum(self)
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+					if hasNum < needNum then
+						CCommon.ShowError(Csv.Text("err_shop_buytype"))
+					else
+						CActivity.ReqAdvBuyEvent()
+					end
+				end
+			end, {content = Csv.Text("adventure_buyTip", {num = needNum})})
+		else
+			CCommon.ShowError(Csv.Text("err_siege_actime_max"))
+		end
+	else
+		CCommon.ShowError(Csv.Text("adventure_notBuy"))
+	end
+end
+
+
+-- 当前购买次数再次购买需要花费的金额
+function _P.GetCurBuyNeedNum(self)
+	local nextBuyCount = self.mData.eventBuyTimes + 1
+	for k,v in pairs(self.adventureConf.buyCost) do
+		if nextBuyCount >= v[1] and nextBuyCount <= v[2] then
+			return v[3]
+		end
+	end
+
+	return 0
+end
+
+
+function _P.SetTimeData(self)
+	_P.OnUpdateTime(self)
+	if self.mData.refreshTime > 0 then
+		--倒计时开始
+		_P.ClearTimer(self)
+		self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+function _P.ClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+function _P.OnUpdateTime(self)
+	local time = self.mData.refreshTime - HeartBeat.ServSecond()
+	if self.mData.refreshTime ~= nil and time > 0 then
+		self.refreshTimeText.Text = Csv.Text("adventure_refreshTip", {time = LuaUtil.GetTimeHMS(time)})
+	else
+		self.refreshTimeText.Text = Csv.Text("adventure_refreshTip", {time = "00:00:00"})
+	end
+
+	self.refreshTimeText.Activity = (self.mData.personalEventTimes > 0)
+end
+
+
+function _P.SetLeftTimeTextData(self)
+	local lefttime = MAX_COUNT - self.mData.personalEventTimes
+	self.leftTimes.Text = Csv.Text("adventure_left_times", {num = lefttime, all = MAX_COUNT})
+end
+
+
+-- 购买成功返回
+function _R.OnAdvBuyEvnetCallBack(self, data)
+	self.mData.eventBuyTimes = data.eventBuyTimes
+	self.mData.personalEventTimes = data.personalEventTimes
+
+	CCommon.ShowError(Csv.Text("global_buySuccess"))
+	_P.SetLeftTimeTextData(self)
+end
+
+
+-- 刷新倒计时推送
+function _R.RefreshGetTimer(self, data)
+	self.mData.personalEventTimes = data.personalEventTimes
+	self.mData.refreshTime = data.refreshTime
+
+	_P.SetTimeData(self)
+	-- 刷新行动力剩余次数文本
+	_P.SetLeftTimeTextData(self)
 end
 
 return _M

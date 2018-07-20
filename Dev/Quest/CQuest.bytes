@@ -4,6 +4,8 @@ local MQuest = JRequire "Dev.Quest.MQuest"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [Dev.Main.CMain.bytes#_M]
 local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -151,6 +153,15 @@ end
 function _P.OnMainUpdate(data)
 	_P.UpdateMain(data)
 
+	if data.pro and data.maxval and data.pro == data.maxval and data.questid then
+		local csvMainQuest = Csv.MainQuest[data.questid]
+		if csvMainQuest and csvMainQuest.title then
+			GameSetting.HttpPostDataToPHP(Define.PostUrlType.Mission, {taskID = data.questid, 
+										  taskName = csvMainQuest.title,
+										  taskType = 1,
+										  fTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+		end
+	end
 	WindowMgr.Call("UMain","OnTaskUpdate")
 	WindowMgr.Call("UMainQuest","OnTaskUpdate")
 end

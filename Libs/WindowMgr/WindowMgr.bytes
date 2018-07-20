@@ -4,6 +4,10 @@ local EventCenter = JRequire "Dev.EventCenter"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local JGuiManager = CS.JGui.JGuiManager
 local WIN_ROOT_MOUDLE = "M_UIRootNode"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
 
 local profiler = require("Libs.xlua.profiler")
 local memory = require("Libs.xlua.memory")
@@ -321,13 +325,19 @@ function _P.SendLogPoint(isOpen, winName)
 		if not CS.UnityEngine.PlayerPrefs.HasKey(oepnKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(oepnKey, 1)
 			CS.Utility.LogPoint.LogPost(8, 1, winName)
-		end		
+		end	
+		if GameSetting.IsiOSCommit then
+			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_0")
+		end	
 	else
 		local closeKey = "close_logpoint_" .. winName
 		if not CS.UnityEngine.PlayerPrefs.HasKey(closeKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(closeKey, 1)
 			CS.Utility.LogPoint.LogPost(9, 1, winName)
 		end		
+		if GameSetting.IsiOSCommit then
+			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_1")
+		end	
 	end
 end
 

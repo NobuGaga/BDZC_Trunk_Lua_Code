@@ -35,7 +35,7 @@ local _P = {}
 local _R = {}
 --常量定义
 local LEVEL_UP_EFFECT_ID = 10006
-local TOP_BTN_COUNT = 15
+local TOP_BTN_COUNT = 18
 local BOTTOM_BTN_COUNT = 6
 local LEFT_BTN_COUNT = 3
 local RIGHT_BTN_COUNT = 3
@@ -348,13 +348,13 @@ function _P.RefreshLeftBtns(self, moudle)
 		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
 
 		---私聊气泡点点点---------
-		if v.id == Define.SysId.Friend then
-			local pointTab = {}
-			for i=1,3,1 do
-				pointTab[i] = moudle:Get("point" .. i)
-			end
-			LuaUtil.FriendThreePoint(btn,pointTab,spaceTime)
-		end
+		-- if v.id == Define.SysId.Friend then
+		-- 	local pointTab = {}
+		-- 	for i=1,3,1 do
+		-- 		pointTab[i] = moudle:Get("point" .. i)
+		-- 	end
+		-- 	LuaUtil.FriendThreePoint(btn,pointTab,spaceTime)
+		-- end
 
 		--注册小红点
 		self:RegistRedpoint(moudle:Get("leftRedpoint_" .. i), v.id)

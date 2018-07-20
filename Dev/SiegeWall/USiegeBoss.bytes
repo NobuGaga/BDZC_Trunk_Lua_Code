@@ -175,7 +175,10 @@ function _P.CreateBossItem(self,data)
 	end
 
 	local bossData = Csv.SiegeBoss[data.id]
-	local jindu = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax)-- math.ceil((data.bossBlood.ncur*100) /data.bossBlood.nmax)
+	local jindu = string.format("%.1f",(data.bossBlood.ncur*100) /data.bossBlood.nmax +0.05)-- math.ceil((data.bossBlood.ncur*100) /data.bossBlood.nmax)
+	if data.bossBlood.ncur <= 0 then
+		jindu = 0
+	end
 
 	headIcon.SpriteName = bossData.icon
 	headIcon:SetNativeSize()

@@ -16,6 +16,7 @@ local UTiqinFriends = JRequire"Dev.Marry.UTiqinFriends"
 local UTiqinServer = JRequire"Dev.Marry.UTiqinServer"
 local UTiqinSpecial = JRequire"Dev.Marry.UTiqinSpecial"
 
+local DEGREE_ID = 10204
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -32,6 +33,7 @@ function _M:ctor(RootNode,id)
 	moudle:Get("C_Text_0").Text = Csv.Text("married_tiqin_type")
 	moudle:Get("name").Text = Csv.Text("married_name_title")
 	moudle:Get("parent").Text = Csv.Text("married_parent_title")
+	moudle:Get("xl").Text = Csv.Text("Girl_married_identity")
 	moudle:Get("attrTitleText").Text = Csv.Text("married_attr_all")
 	moudle:Get("gongguan").Text = Csv.Text("married_gongguan")
 	moudle:Get("xingzheng").Text = Csv.Text("married_xingzhen")
@@ -45,6 +47,8 @@ function _M:ctor(RootNode,id)
 	local xingzheng = moudle:Get("xingzhengText")
 	local jisu = moudle:Get("jisuText")
 	local yingxiao = moudle:Get("yingxiaoText")
+	local xueli = moudle:Get("xlText")
+	local allAttr = moudle:Get("Num")
 
 	bxsImg.SpriteName =  MGirl.GetBabyIcon(data.gender,data.degree)
 	bxsImg:SetNativeSize()
@@ -55,6 +59,8 @@ function _M:ctor(RootNode,id)
 	xingzheng.Text = data.attribute.Zhili
 	jisu.Text = data.attribute.Zhengzhi
 	yingxiao.Text = data.attribute.Meili
+	xueli.Text = Csv.Const(DEGREE_ID)[data.degree]
+	allAttr.Text = data.attribute.Wuli + data.attribute.Zhili+data.attribute.Zhengzhi+data.attribute.Meili
 
 	------------------------------
 	local goldData = Csv.Item[Define.AssetsType.Gold]

@@ -4,6 +4,7 @@ local CCommon = JRequire"Dev.Common.CCommon"
 local MGirl = JRequire"Dev.Girl.MGirl"
 local MBag = JRequire "Dev.Bag.MBag"
 local CBag = JRequire "Dev.Bag.CBag"
+local CGirl = JRequire"Dev.Girl.CGirl"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 
@@ -23,8 +24,16 @@ end
 function _M:OnCreate(id)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
+		CGirl.ReqNewCoupleAck(id)
+		MGirl.SetCoupleAck(id)
 		self:Destroy()
-		WindowMgr.Call("UGirlMarried","OpenToggle",2)
+
+		local newCouple = MGirl.GetNewCouple()
+		if #newCouple > 0 then
+			WindowMgr.Call("UGirlMarried","CheckShowMarried")
+		else
+			WindowMgr.Call("UGirlMarried","OpenToggle",2)
+		end
 	end)
 	SoundMgr.Play(10009)
 	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Tab4_Married_Success")

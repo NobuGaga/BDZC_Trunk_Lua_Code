@@ -25,6 +25,8 @@ local _P = {}
 local _R = {}
 
 function _M:BeforeDestroy( ... )
+	MMain.BoobLayer = "Message"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 	if self.MenuPopObj ~= nil then
 		self.MenuPopObj:Destroy()
 		self.MenuPopObj:delete()
@@ -331,6 +333,7 @@ end
 
 function _R.OpenAddFriendWin(self)
 	_P.OnPressRecvAddFriendReqBtn(self)
+	_P.OnPressTab(self, Define.SysId.Friend_Friend)
 end
 
 --好友请求
@@ -412,6 +415,9 @@ function _M:OnCreate(chooseFunc)
 			moudle:Get("sheet_" .. i).Activity = false
 		end
 	end
+
+	MMain.BoobLayer = "Main"
+	WindowMgr.Call("UMessage","SetBoobLayer")
 end
 
 return _M

@@ -10,6 +10,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MFriend = JRequire "Dev.Friend.MFriend"
 
 local JTweenerManager = CS.JTween.JTweenerManager
+local DEGREE_ID = 10204
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -22,29 +23,33 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _R.CloseWin(self)
-	self:Destroy()
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
 end
 
-function _R.RefreshZhaoqin(self)
+function _M.RefreshZhaoqin(self)
 	_P.ShowZhaoqinItems(self)
 end
 
-function _M:OnCreate()
-	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin4")
-	local backBtn = moudle:Get("C_Back_Btn")
-	backBtn:AddOnButton(function(...)
-		SoundMgr.Play(10002)
-		self:Destroy()
-	end, nil, 1.2)
+
+--function _M:OnCreate()
+--	local moudle = self:CreateMoudle(self._RootNode,"M_Girl_Married_Tiqin4")
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Girl_Married_zhaoqin", WindowType.Tips2, 0)
+	self.mMoudle = moudle
 
 	CGirl.ReqZhaoQin(MGirl.MarriedSelectID)
 
-	self.mMoudle = moudle
 	self.mContent = moudle:Get("content")
+	self.mScrollView = moudle:Get("scrollView")
 	self.mInfoRect = moudle:Get("InfoBg")
+	self.mNoTips = moudle:Get("TextBG")
 	
-	moudle:Get("C_Text").Text = Csv.Text("married_main_server")
+	--moudle:Get("C_Text").Text = Csv.Text("married_main_server")
 	moudle:Get("Name").Text = Csv.Text("married_attr_all")
 	moudle:Get("TabText1").Text = Csv.Text("married_tiqin_tab1")
 	moudle:Get("TabText2").Text = Csv.Text("married_tiqin_tab2")
@@ -54,6 +59,9 @@ function _M:OnCreate()
 	moudle:Get("DJ").Text = Csv.Text("married_xingzhen")
 	moudle:Get("SH").Text = Csv.Text("married_jisu")
 	moudle:Get("YX").Text = Csv.Text("married_yingxiao")
+	moudle:Get("XL").Text = Csv.Text("Girl_married_identity")
+	--moudle:Get("Tips").Text = Csv.Text("married_zhaoqin_tips")
+	moudle:Get("NoneText").Text = Csv.Text("married_zhaoqin_no")	
 
 	--往右
 	moudle:Get("JT1"):AddOnButton(function()
@@ -132,10 +140,12 @@ function _M:OnCreate()
 		end
 	end)
 
-	local timeValue = moudle:Get("Time")
+	local timeValue = moudle:Get("Time_0")
+	local timeText = moudle:Get("Time1")
 	
 	local refreshCDBtn = moudle:Get("C_Btn_a")
 	local refreshCD = moudle:Get("C_text_0_0")
+	timeText.Text = Csv.Text("Girl_married_refreshTime")
 	refreshCD.Text = Csv.Text("Girl_married_refreshTimeFirst")--"立即刷新"
 	---------------------------------------------------------------------------------------------
 	refreshCDBtn:AddOnButton(function ( ... )
@@ -147,11 +157,13 @@ function _M:OnCreate()
 	end, nil, 0.9)
 
 	timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
-	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
-		if MGirl.ZhaoqinCD >0 then
-			timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
+
+	moudle.SelfRect:AddOnUpdate(function()
+		timeValue.Text =  luaUtil.GetTimeHMS(MGirl.ZhaoqinCD)
+		if MGirl.ZhaoqinCD <= 0 then
+			CGirl.ReqZhaoQin(MGirl.MarriedSelectID)
 		end
-	end)
+	end,nil,1)
 end
 
 function _P.RefreshInfo(self,data)
@@ -173,21 +185,32 @@ function _P.RefreshInfo(self,data)
 	local tab2 = moudle:Get("Tab2")
 	local name = moudle:Get("MCNum")
 	local parent = moudle:Get("MQNum")
+	local parentTitle =  moudle:Get("MQ")
 	local gongguan = moudle:Get("SlNum")
 	local xingzheng = moudle:Get("DjNum")
 	local jisu = moudle:Get("ShNum")
 	local yingxiao = moudle:Get("YXjNum")
+	local allAttr = moudle:Get("Num")
+	local xueli = moudle:Get("XKNum")
 
 	bxsImg.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
 	--ownIcon:SetNativeSize() 
-	_P.CheckTab(self,data.ownerId)
+	--_P.CheckTab(self,data.ownerId)
 
+	if data.ownerGender == 1 then
+		parentTitle.Text = Csv.Text("Girl_married_mother")
+	else
+		parentTitle.Text = Csv.Text("Girl_married_father")
+	end
+
+	xueli.Text = Csv.Const(DEGREE_ID)[data.degree]
 	name.Text = data.name
-	parent.Text = data.ownerGender
+	parent.Text = data.ownerName
 	gongguan.Text = data.attr.Wuli
 	xingzheng.Text = data.attr.Zhili
 	jisu.Text = data.attr.Zhengzhi
 	yingxiao.Text = data.attr.Meili
+	allAttr.Text = data.attr.Wuli + data.attr.Zhili+data.attr.Zhengzhi+data.attr.Meili
 end
 
 
@@ -208,9 +231,11 @@ function _P.ShowZhaoqinItems(self)
 
 	if #datas <= 0 then
 		self.mInfoRect.Activity = false
+		self.mNoTips.Activity = true
 		--self.mNoneText.Text = Csv.Text("Girl_married_noZhaoqin")--"暂无招亲对象"
 	else
 		self.mInfoRect.Activity = true
+		self.mNoTips.Activity = false
 		_P.ClickBabyItem(self,1)
 	end
 end
@@ -262,12 +287,33 @@ function _P.ClickBabyItem(self,index)
 
 	local item = dataItems[index]
 	
+	
 	if item ~= nil then
 		itemMoudle = item.moudle
 		itemMoudle:Get("select").Activity = true
 		_P.RefreshInfo(self,item.data)
+		_P.MoveContent(self,itemMoudle)
 
 		self.mSelectItem = itemMoudle
+	end
+end
+
+function _P.MoveContent(self,tarItem)
+	local content = self.mContent
+	local scroll = self.mScrollView
+
+	local scrollWid = scroll.SizeDelta.x
+	local itemPox = tarItem.SelfRect.LocalPosition.x
+	local itemWid = tarItem.SelfRect.SizeDelta.x
+	local contentPox = content.LocalPosition.x
+
+	local tarPox = (itemPox + itemWid/2) - (scrollWid - contentPox)
+	local rightPox = (itemPox - itemWid/2) + contentPox
+
+	if tarPox > 0 then
+		content:DOAnchorPosX(-tarPox + contentPox,0.2)
+	elseif rightPox < 0 then
+		content:DOAnchorPosX(contentPox - rightPox,0.2)
 	end
 end
 
@@ -286,21 +332,20 @@ function _M:OnClickRefreshCDBtn(isSure, arg)
 end
 
 function _P.CheckTab(self,id)
-	local type = MFriend.GetTypeById(id)
+	local isQinjia = MFriend.IsQingjiaById(id)
+	local isFriend = MFriend.IsFriendById(id)
 
 	local moudle = self.mMoudle
 	local tab1 = moudle:Get("Tab1")
 	local tab2 = moudle:Get("Tab2")
+	tab1.Activity = false
+	tab2.Activity = false
 
-	if type == MFriend.RelationType.QinJia then
+	if isFriend then
 		tab1.Activity = true
+	end
+	if isQinjia then
 		tab2.Activity = true
-	elseif type == MFriend.RelationType.Friend then
-		tab1.Activity = true
-		tab2.Activity = false
-	else
-		tab1.Activity = false
-		tab2.Activity = false
 	end
 end
 

@@ -26,6 +26,38 @@ function _R.CloseView(self)
 	self:Destroy()
 end
 
+function _R.RefreshQingqiu(self)
+	local tiqinQingqiuImg = self.mTiqinQingqiuImg
+	local tiqinNameBg = self.mTiqinNameBg
+	local tiqinQingqiuName = self.mTiqinQingqiuName
+
+	tiqinQingqiuImg.Activity = false
+	tiqinNameBg.Activity = false
+	
+	if self.mHeadPrefab ~= nil then
+		self.mHeadPrefab:Destroy()
+		self.mHeadPrefab = nil
+	end
+
+	if self.mBodyPrefab ~= nil then
+		self.mBodyPrefab:Destroy()
+		self.mBodyPrefab = nil
+	end
+
+	local tiqinList = MGirl.GetQingqiuById(self.mBabyId)--MGirl.MarriedQingqiu
+	self.mQingqiuList = tiqinList
+
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			tiqinQingqiuImg.Activity = true
+			tiqinNameBg.Activity = true
+			tiqinQingqiuImg.SpriteName = ""
+			self.qingqiuNum.Text = Csv.Text("married_qingqiu_playerNum",{num = _P.GetQingqiuNum(self)})
+			tiqinQingqiuName.Text = _P.GetFirstTiqinName(self,tiqinList)
+		end
+	end
+end
+
 function _M:OnCreate(id)
 	self.mBabyId = id
 	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Married_Atmosphere")
@@ -44,7 +76,13 @@ function _M:OnCreate(id)
 	local tiqinImg = moudle:Get("bsx2")
 	local serverImg = moudle:Get("bsx1")
 	local tiqinQingqiuImg = moudle:Get("bsx3")
+	local tiqinNameBg = moudle:Get("qingqiuName")
 	local tiqinQingqiuName = moudle:Get("Name")
+	self.qingqiuNum = moudle:Get("playerNum")
+
+	self.mTiqinQingqiuImg = tiqinQingqiuImg
+	self.mTiqinNameBg = tiqinNameBg
+	self.mTiqinQingqiuName = tiqinQingqiuName
 
 	tiqinImg:AddOnButton(function()
 		SoundMgr.Play(10001)
@@ -53,25 +91,24 @@ function _M:OnCreate(id)
 
 	serverImg:AddOnButton(function()
 		SoundMgr.Play(10001)
-		WindowMgr.Create("UMarriedZhaoqin")
+		WindowMgr.Create("UMarriedServer",self.mBabyId)
 	end)
 
 	tiqinQingqiuImg:AddOnButton(function()
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UMarriedQingqiu",self.mBabyId)
 	end)
-	
-	tiqinQingqiuImg.Activity = false
 
-	local tiqinList = MGirl.GetQingqiuById(id)--MGirl.MarriedQingqiu
-
-	if tiqinList ~= nil then
-		if #tiqinList > 0 then
-			tiqinQingqiuImg.Activity = true
-			tiqinQingqiuImg.SpriteName = ""
-			tiqinQingqiuName.Text = _P.GetFirstTiqinName(self,tiqinList)
+	--拒绝玩家提亲
+	moudle:Get("C_text").Text = Csv.Text("Girl_married_refuse")
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		if self.mFirstPlayerId ~= nil then
+			_P.RefuseQingqiu(self)
 		end
-	end
+	end,nil,1.2)
+	
+	_R.RefreshQingqiu(self)
 end
 
 function _P.ShowBoby(self,headId,bodyId,sex)
@@ -98,8 +135,32 @@ end
 
 function _P.GetFirstTiqinName(self,list)
 	local data = list[1]
+	self.mFirstPlayerId = data.ownerId
 	_P.ShowBoby(self,data.ownerAvatar.head,data.ownerAvatar.body,data.ownerGender)
 	return data.ownerName
+end
+
+function _P.RefuseQingqiu(self)
+	local tiqinList = self.mQingqiuList--MGirl.GetQingqiuById(self.mBabyId)--MGirl.MarriedQingqiu
+	local playerId = self.mFirstPlayerId
+	for k,v in pairs(tiqinList)do
+		if v.ownerId == playerId then
+			CGirl.ReqRefuseTiQin(v.babyid)
+		end
+	end
+end
+
+function _P.GetQingqiuNum(self)
+	local players = {}
+	local count = 0
+	local tiqinList = MGirl.GetQingqiuById(self.mBabyId)
+	for k,v in pairs(tiqinList)do
+		if players[v.ownerId] == nil then
+			players[v.ownerId] = v.ownerId
+			count = count +1
+		end
+	end
+	return count
 end
 
 return _M

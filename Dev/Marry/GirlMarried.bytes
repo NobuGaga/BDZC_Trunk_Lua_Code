@@ -47,6 +47,13 @@ function _R.OpenToggle(self,index)
 	end
 end
 
+function _R.CheckShowMarried(self)
+	local newCouple = MGirl.GetNewCouple()
+	if #newCouple > 0 then
+		WindowMgr.Create("UBabyMarriedShow",newCouple[1].babyid)
+	end
+end
+
 
 function _M:OnCreate(chooseFuncId)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Girl_Tab4_Married")
@@ -83,7 +90,9 @@ function _M:OnCreate(chooseFuncId)
 	local noneText = moudle:Get("Nonetext")
 	local nobabyTips = moudle:Get("noBabyTips")
 	local babyTipsButton = moudle:Get("babyButton")
-
+	local marriedRed = moudle:Get("marriedRed")
+	
+	self.mMarriedRedPoint = marriedRed
 	self.mParentText = parentText
 	self.mParentName = parentName
 	self.mIntimacy = intimacy
@@ -123,7 +132,7 @@ function _M:OnCreate(chooseFuncId)
 
 	local marriedText = moudle:Get("C_text")
 	local marriedBtn = moudle:Get("marriedBtn")
-
+	self.mMarriedBtnText = marriedText
 	--nameValue.Text = "未命名"
 	levelText.Text = Csv.Text("Girl_married_level")--"等级"
 	allAttriText.Text = Csv.Text("Girl_married_allAttr")--"总属性"
@@ -193,7 +202,9 @@ function _M:OnCreate(chooseFuncId)
 	end)
 
 	self.mTiqinRedPoint = tiqinRedPoint
+	
 	_R.CheckTiqinRed(self)
+	_R.CheckShowMarried(self)
 
 	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
 		self:RefreshTiqinCD()
@@ -230,7 +241,6 @@ function _P.OnChoose(self, funcId)
 	end
 	MGirl.MarriedSelectID = selectID
 	MGirl.MarriedToggleSelect = funcId
-	
 end
 
 
@@ -338,6 +348,16 @@ function _P.UnMarriedInfo(self,id)
 	attriValue_4.Text = data.attribute.Meili
 	
 	_R.ResfrehBabyType(self,data.babyid)--1无2提亲中3被拒绝
+
+	self.mMarriedRedPoint.Activity = false
+	--self.mMarriedBtnText.Text = Csv.Text("married_gobtn_text")
+	local tiqinList = MGirl.GetQingqiuById(id)
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			self.mMarriedRedPoint.Activity = true
+			self.mMarriedBtnText.Text = Csv.Text("married_goqingqiu_text")
+		end
+	end
 
 	nameValue:AddOnButton(function(...)
 		SoundMgr.Play(10001)
@@ -547,6 +567,14 @@ function _R.ResfrehBabyType(self,id)
 	local promptText = self.mPromptText 
 	local marriedText = self.mMarriedText 
 
+	local lastSelectID = MGirl.MarriedSelectID
+	local tiqinList = MGirl.GetQingqiuById(lastSelectID)
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			self.mMarriedBtnText.Text = Csv.Text("married_goqingqiu_text")
+		end
+	end
+
 	if item ~= nil then
 		local type = data.state
 		local stateText = item:Get("tiqin")
@@ -581,8 +609,7 @@ function _R.ResfrehBabyType(self,id)
 			refuseText.Activity = false
 			promptText.Activity = false
 			timeText.Activity = false
-			marriedText.Text = Csv.Text("Girl_married_beMarried")--"结婚"
-
+			marriedText.Text = Csv.Text("married_gobtn_text")--"结婚"
 			stateText.Text = ""
 		end
 	
@@ -610,6 +637,34 @@ function _R.CheckTiqinRed(self)
 		self.mTiqinRedPoint.Activity = false
 	else
 		self.mTiqinRedPoint.Activity = true
+	end
+end
+
+function _R.RefreshQingqiu(self)
+	local itemList =  self.mUnMarriedItems
+	local qingqiuList = MGirl.MarriedQingqiu
+
+	for k,v in pairs(itemList)do
+		local itemRed = v:Get("red")
+
+		itemRed.Activity = false
+		local tiqinList = MGirl.GetQingqiuById(k)
+		if tiqinList ~= nil then
+			if #tiqinList > 0 then
+				itemRed.Activity = true
+			end
+		end
+	end
+
+	local lastSelectID = MGirl.MarriedSelectID
+	self.mMarriedRedPoint.Activity = false
+	self.mMarriedBtnText.Text = Csv.Text("married_gobtn_text")
+	local tiqinList = MGirl.GetQingqiuById(lastSelectID)
+	if tiqinList ~= nil then
+		if #tiqinList > 0 then
+			self.mMarriedRedPoint.Activity = true
+			self.mMarriedBtnText.Text = Csv.Text("married_goqingqiu_text")
+		end
 	end
 end
 

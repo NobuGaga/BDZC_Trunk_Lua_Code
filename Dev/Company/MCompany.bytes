@@ -5,6 +5,7 @@ local CCompany = JRequire "Dev.Company.CCompany"
 local EventCenter = JRequire "Dev.EventCenter"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local VerdictRecovery = Csv.Const(Define.Const.CompanyVerdictCD)
+local Manage_Max_Exp = Csv.Const(Define.Const.Manage_Max_Exp)[1]
 
 _M.LastChoose = 1
 _M.ManageTable = {}
@@ -29,6 +30,9 @@ _M.OneFactory = false
 _M.OneTrain = false
 
 _M.PatrolAward = {}
+
+_M.ManageExp = nil
+_M.ManageScale = nil
 
 function _M.Clean( ... )
 	_M.LastChoose = 1
@@ -55,6 +59,9 @@ function _M.Clean( ... )
 	_M.OneTrain = false
 
 	_M.PatrolAward = {}
+
+	_M.ManageExp = nil
+	_M.ManageScale = nil
 end
 
 function _M.OnInitManage(data)
@@ -76,6 +83,29 @@ function _M.UpdateManage(data)
 		manage.isgod = data.isgod
 		if data.recovery ~= nil then
 			manage.recovery = data.recovery
+		end
+	end
+
+	if data.scale ~= nil then
+		if _M.ManageScale ~= nil then
+			if _M.ManageScale ~= data.scale then
+				_M.ManageScale = data.scale
+				if WindowMgr.IsCreated("UCompanyManage") then
+					WindowMgr.Call("UCompanyManage","RefreshItemData")
+				end
+			end
+		else
+			_M.ManageScale = data.scale
+			if WindowMgr.IsCreated("UCompanyManage") then
+				WindowMgr.Call("UCompanyManage","RefreshItemData")
+			end
+		end
+	end
+
+	if data.scaleExp ~= nil then
+		_M.ManageExp = data.scaleExp
+		if WindowMgr.IsCreated("UCompanyManage") then
+			WindowMgr.Call("UCompanyManage","RefreshScaleExp")
 		end
 	end
 end
@@ -208,6 +238,24 @@ end
 function _M.OnManage(data)
 	_M.UpdateManage(data)
 	_M.CheckTimes()
+end
+
+function _M.CheckIsLimit(num)
+	if _M.ManageExp ~= nil then
+		local scale = _M.ManageScale
+		if scale ~= nil and Csv.ManageScale[scale] ~= nil then
+			local upLimit = Csv.ManageScale[scale].upLimit
+			if num > upLimit then
+				return true,upLimit
+			else
+				return false,num
+			end
+		else
+			return false,num
+		end
+	else
+		return false,num
+	end
 end
 
 function _M.OnVerdict(data)

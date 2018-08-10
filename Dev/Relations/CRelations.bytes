@@ -12,7 +12,7 @@ _M.Handle = nil
 local ECmdId = {
 	cRelationsMain								=	1,--获取主界面状态 PRelations.CRelationsMain
 	cRelationsDaily								=	2,--日常  PRelations.CRelationsMain
-	cRelationsFight								=	3,--进入战斗选人界面  PRelations.CRelationsFight
+	cRelationsFight								=	3,--进入战斗选人界面  PRelations.CRelationsSelectStaff
 	cRelationsBuyAdd							=	4,--战前购买加成  PRelations.CRelationsBuyAdd
 	cRelationsReport							=	5,--请求战报  PRelations.CRelationsReport
 	cRelationsAdver								=	6,--请求上诉列表  PRelations.CRelationsMain
@@ -27,6 +27,9 @@ local ECmdId = {
 	cRelationsIn								=	15,--进入律所主界面（开启新闻推送）  PRelations.CRelationsMain
 	cRelationsOut								=	16,--退出律所主界面(关闭新闻推送)  PRelations.CRelationsMain
 	cRelationsClearCD							=	17,--清除下一轮战斗等待CD
+	cRelationOnekey								=	18,--一键诉讼 PRelations.CRelationOnekey
+	cRelationShopRefresh						=	19,--刷新商城			PRelations.CRefreshShop
+	cRelationShopBuy							=	20,--宴会商城购买（兑换）		PRelations.CShopBuy
 
 	sRelationsMain								=	1,--主界面初始化	PRelations.SRelationsMain
 	sRelationsDaily								=	2,--日常  PRelations.SRelationsDaily
@@ -41,13 +44,17 @@ local ECmdId = {
 	sRelationsNews								=	11,--请求新闻界面信息  PRelations.SRelationsNews
 	sRelationsInitStaff							=	12,--初始化员工挑战信息  PRelations.SRelationsInitStaff
 	sRelationsNewsPush							=	13,--新闻推送  PRelations.SRelationsNewsPush
+	sRelationOnekey								=	14,--一键诉讼 PRelations.SRelationOnekey
+	sRelationShopRefresh						=	15,--刷新律所商城		PRelations.PShop
+	sRelationShopBuy							=	16,--律所商城购买		PRelations.SShopBuy
+	sRelationShop								= 	17,--律所商城 PRelation.PShop
 }
 
 function _M.ModuleInit(isReload)
 	local send = {
 		[ECmdId.cRelationsMain] = "PRelations.CRelationsMain",
 		[ECmdId.cRelationsDaily] = "PRelations.CRelationsMain",
-		[ECmdId.cRelationsFight] = "PRelations.CRelationsFight",
+		[ECmdId.cRelationsFight] = "PRelations.CRelationsSelectStaff",
 		[ECmdId.cRelationsBuyAdd] = "PRelations.CRelationsBuyAdd",
 		[ECmdId.cRelationsReport] = "PRelations.CRelationsReport",
 		[ECmdId.cRelationsAdver] = "PRelations.CRelationsMain",
@@ -61,6 +68,9 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cRelationsFightSuper] = "PRelations.CRelationsFight",
 		[ECmdId.cRelationsIn] = "PRelations.CRelationsMain",
 		[ECmdId.cRelationsOut] = "PRelations.CRelationsMain",
+		[ECmdId.cRelationOnekey] = "PRelations.CRelationOnekey",
+		[ECmdId.cRelationShopRefresh] = "PRelations.CRefreshShop",
+		[ECmdId.cRelationShopBuy] = "PRelations.CShopBuy",
 	}
 	local recv = {
 		[ECmdId.sRelationsMain]		=		{proto = "PRelations.SRelationsMain",		handle = _P.SMainInit},
@@ -76,6 +86,10 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sRelationsNews]		=		{proto = "PRelations.SRelationsNews",		handle = _P.SNews},
 		[ECmdId.sRelationsInitStaff]=		{proto = "PRelations.SRelationsInitStaff",	handle = _P.SInitStaff},
 		[ECmdId.sRelationsNewsPush]=		{proto = "PRelations.SRelationsNewsPush",	handle = _P.SNewsPush},
+		[ECmdId.sRelationOnekey]=		{proto = "PRelations.SRelationOnekey",	handle = _P.SRelationOnekey},
+		[ECmdId.sRelationShopRefresh]=		{proto = "PRelations.PShop",	handle = _P.SShop},
+		[ECmdId.sRelationShopBuy]=		{proto = "PRelations.SShopBuy",	handle = _P.SShopBuy},
+		[ECmdId.sRelationShop]=		{proto = "PRelations.PShop",	handle = _P.SShop},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Relations, send, recv, isReload)
 end
@@ -104,8 +118,8 @@ function _M.CDaily()
 	_M.Send(ECmdId.cRelationsDaily)
 end
 
-function _M.CFight()
-	_M.Send(ECmdId.cRelationsFight)
+function _M.CFight(_staffid)
+	_M.Send(ECmdId.cRelationsFight,{staffid = _staffid})
 end
 
 function _M.CFightNormal(PLAYERID,STAFFID,FIGHTTYPE)
@@ -189,6 +203,18 @@ function _M.CRelationsClearCD()
 	_M.Send(ECmdId.cRelationsClearCD)
 end
 
+function _M.CRelationOnekey()
+	_M.Send(ECmdId.cRelationOnekey,{id = 0})
+end
+
+function _M.CRelationShopRefresh(ispay)
+	_M.Send(ECmdId.cRelationShopRefresh,{pay = ispay})
+end
+
+function _M.CRelationShopBuy(_index,_count)
+	_M.Send(ECmdId.cRelationShopBuy,{index = _index,count = _count})
+end
+
 --S
 function _P.SMainInit(data)
 	MRelations.SetInitData(data)
@@ -203,14 +229,24 @@ end
 
 function _P.SFight(data)
 	MRelations.SetFightData(data)
+
 	if WindowMgr.IsCreated("URelationsFight") or WindowMgr.IsCreated("URelationsReport") then
 		WindowMgr.Call("URelationsFight","SetData")
 	else
 		WindowMgr.Create("URelationsFight")
 		WindowMgr.Call("URelationsFight","SetData")
 	end
-	if data.type > 1 then
-		MRelations.StaffTable[data.mstaffinfo.staffid] = true
+
+	if data.type == 2 then
+		if MRelations.AppealStaffTable == nil then
+			MRelations.AppealStaffTable = {}
+		end
+		MRelations.AppealStaffTable[data.mstaffinfo.staffid] = true
+	elseif data.type == 3 then
+		if MRelations.RevengeStaffTable == nil then
+			MRelations.RevengeStaffTable = {}
+		end
+		MRelations.RevengeStaffTable[data.mstaffinfo.staffid] = true
 	end
 end
 
@@ -283,6 +319,63 @@ function _P.SNewsPush(data)
 		if WindowMgr.IsCreated("URelations") then
 			WindowMgr.Call("URelations","GetNewsPush")
 		end
+	end
+end
+
+function _P.SRelationOnekey(data)
+	MRelations.SetOneKey(data.list)
+	WindowMgr.Create("URelationsOnekey")
+end
+
+function _P.SShop(data)
+	MRelations.OnSetShopData(data)
+
+	if data.nextRefreshLeftTime > 0 then
+		MRelations.ExchangeTable.nextRefreshLeftTime = data.nextRefreshLeftTime + HeartBeat.ServSecond()
+		_P.OnStartTimer(data.nextRefreshLeftTime)
+	else
+		_M.CRelationShopRefresh(false) -- 自动更新请求
+	end
+
+	WindowMgr.Call("URelationsShop", "OnRefreshShopData", data)
+end
+
+function _P.SShopBuy(data)
+	--MRelations.ClubTable.point = MRelations.ClubTable.point - data.costpoint
+	MRelations.OnUpdateShopData(data)
+
+	WindowMgr.Call("URelationsShop", "OnExchangeCallBack", data)
+end
+
+-- 创建计时器
+function _P.OnStartTimer(time)
+	_P.OnClearTimer()
+	if time <= 0 then return end
+
+	if _M.Handle == nil then
+		_M.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+			_M.AddTimeUpdate()
+		end)
+	end
+end
+
+function _M.AddTimeUpdate()
+	local exchangeTable = MRelations.ExchangeTable
+	if exchangeTable.nextRefreshLeftTime == nil then return end
+	
+	local time = exchangeTable.nextRefreshLeftTime - HeartBeat.ServSecond()
+	if time < 0 then
+		_P.OnClearTimer()
+		_M.CRelationShopRefresh(false) -- 自动更新请求
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer()
+	if _M.Handle ~= nil then
+		EventCenter.UnRegistCallEvent(_M.Handle)
+		_M.Handle = nil
 	end
 end
 

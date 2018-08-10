@@ -54,6 +54,8 @@ function _M:OnCreate(...)
 	_P.InitSeatInfo(self)
 	_P.InitStartEndButton(self)
 	_P.InitSeatView(self)
+	self.textStudyTimes = self.moudle:Get("textStudyTimes")
+	_R.RefreshStudyTimes(self)
 end
 
 --初始化位置信息
@@ -93,7 +95,7 @@ function _P.RefreshBuffPopup(self)
 	self.textAllBuff.Text = Csv.Text("school_buffPop",  {num = MAircraft.SkinSchoolAllBuff})
 	local row = 0
 	local skinList = MAircraft.GetActivateSkinList()
-	if nil ~= skinList and "table" == type(skinList) then
+	if skinList and "table" == type(skinList) then
 		for _, __ in pairs(skinList) do
 			row = row + 1
 		end
@@ -106,11 +108,11 @@ function _P.RefreshBuffPopup(self)
 		local csvAircraftSkin = Csv.AircraftSkin
 		for skinID, _ in pairs(skinList) do
 			local csvValue = csvAircraftSkin[skinID]
-			if nil ~= csvValue then
-				if nil ~= csvValue.name then
-					if nil ~= csvValue.get then
+			if csvValue then
+				if csvValue.name then
+					if csvValue.get then
 						for index, value in pairs(csvValue.get) do
-							if nil ~= value[1] and nil ~= value[2] then
+							if value[1] and value[2] then
 								if MAircraft.SchoolSysID == value[1] then
 									local csvColor = Csv.ItemColor[csvValue.type]
 									self.textSubBuff.Text = self.textSubBuff.Text .. Csv.Text("aircraft_skin_effect_sub", 
@@ -147,7 +149,7 @@ function _P.InitStartEndButton(self)
 		elseif not MAircraft.IsStuding then
 			if MAircraft.IsNotDispatch then
 				CCommon.ShowError(Csv.Text("school_no_seat"))
-			else
+			elseif MAircraft.StudyLeftTimes > 0 then
 				if MAircraft.IsHaveEmpty then
 					CCommon.CheckTips(function(isSure, arg)
 						if isSure then
@@ -157,6 +159,8 @@ function _P.InitStartEndButton(self)
 				else
 					CAircraft.AircraftStartLearn()
 				end
+			else
+				CCommon.ShowError(Csv.Text("school_no_time"))
 			end
 		end
 	end)
@@ -173,9 +177,9 @@ function _P.RefreshBottomInfoState(self)
 	
 	if MAircraft.IsStuding then
 		self.textTween = LuaUtil.TextAddThreePoint(self.textStuding, Csv.Text("school_studingAnim"))
-		_P.OnUpdateTime(self)
-		self.tween = self.moudle.SelfRect:AddOnUpdate(function()
-			_P.OnUpdateTime(self)
+		_P.OnUpdateStudingTime(self)
+		self.studyingTimer = self.moudle.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateStudingTime(self)
 		end, nil, 1)
 	elseif MAircraft.IsHaveCompleted then
 		self.textBtnStartEnd.Text = Csv.Text("school_complete")
@@ -183,7 +187,7 @@ function _P.RefreshBottomInfoState(self)
 		self.textBtnStartEnd.Text = Csv.Text("school_startlearn")
 	end
 
-	if not MAircraft.IsStuding and nil ~= self.textTween then
+	if not MAircraft.IsStuding and self.textTween then
 		self.textTween:Destroy()
 	end
 end
@@ -205,7 +209,7 @@ end
 
 --创建座位Item
 function _P.CreateSeatItem(self, index)
-	if nil ~= self.seatData[index] then 
+	if self.seatData[index] then 
 		return 
 	end
 	local seat = {}
@@ -240,17 +244,7 @@ function _P.RefreshSeatItem(self, index)
 	local isThisSeatStudy = MAircraft.IsStuding and not isEmpty
 	seat.body.Activity = not isEmpty
 	if not isEmpty then
-		if seat.spine ~= nil then
-			seat.spine:Destroy()
-			seat.spine = nil
-		end
-		local csvPersonnel = Csv.Personnel[data.staffid]
-		if csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-			seat.spine = CCommon.CreateActor(seat.body, csvPersonnel.prefab, CCommon.ActorFieldMap.staff_aircraft)
-			seat.body.SpriteName = ""
-		else
-			seat.body.SpriteName = csvPersonnel.asset
-		end
+		seat.body.SpriteName = Csv.Personnel[data.staffid].asset
 	end
 	seat.book.Activity = isThisSeatStudy
 	seat.talkBox.Activity = isThisSeatStudy
@@ -260,7 +254,7 @@ function _P.RefreshSeatItem(self, index)
 	if isEmpty and not MAircraft.IsStuding then
 		seat.textRect.Activity = true
 		seat.textInfo.Text = Csv.Text("school_empty")
-	elseif nil ~= data and data.finish and not MAircraft.IsStuding then
+	elseif data and data.finish and not MAircraft.IsStuding then
 		seat.textRect.Activity = true
 		seat.textInfo.Text = Csv.Text("school_end")
 	elseif not MAircraft.IsStuding then
@@ -277,7 +271,7 @@ function _P.OnClickSeatItem(index)
 	if MAircraft.IsStuding then
 		CCommon.ShowError(Csv.Text("school_studing"))
 	else
-		if nil ~= data then
+		if data then
 			if data.finish then
 				CAircraft.AircraftComplete(index)
 			else
@@ -292,7 +286,7 @@ end
 --显示对话
 function _P.ShowTalk(self, seat, index)
 	local seatData = MAircraft.GetSchoolSeatData(index)
-	if MAircraft.IsStuding and nil ~= seatData then
+	if MAircraft.IsStuding and seatData then
 		local randomShow = math.random(1, 2)
 		local isShow = 1 == randomShow
 		seat.talkBox.Activity = isShow
@@ -312,7 +306,7 @@ end
 
 --获取员工对话
 function _P.GetStaffTalk(staffid)
-	if nil ~= staffid then
+	if staffid then
 		local talks = Csv.Personnel[staffid].schoolTalk
 		local length = #talks
 		local random = math.random(1, length)
@@ -323,11 +317,20 @@ function _P.GetStaffTalk(staffid)
 end
 
 --更新游学时间
-function _P.OnUpdateTime(self)
+function _P.OnUpdateStudingTime(self)
 	local lessTime = MAircraft.SchoolTime - HeartBeat.ServSecond()
 	self.textTime.Text = luaUtil.GetTimeHMS(lessTime)
-	if 0 >= lessTime and nil ~= self.tween then
-		self.tween:Destroy()
+	if 0 >= lessTime and self.studyingTimer then
+		self.studyingTimer:Destroy()
+	end
+end
+
+--更新游学次数恢复时间
+function _P.OnUpdateStudyCDTime(self)
+	local lessTime = MAircraft.StudyCDTime - HeartBeat.ServSecond()
+	self.textStudyTimes.Text = Csv.Text("school_count_time", {time = luaUtil.GetTimeHMS(lessTime)})
+	if lessTime <= 0 and self.studyCDTimer then
+		self.studyCDTimer:Destroy()
 	end
 end
 
@@ -337,6 +340,7 @@ function _R.RefreshView(self)
 	_P.RefreshBuffPopup(self)
 	_P.RefreshBottomInfoState(self)
 	_P.RefreshSeatView(self)
+	_R.RefreshStudyTimes(self)
 end
 
 function _R.RefreshSchoolState(self)
@@ -356,7 +360,7 @@ function _R.OnGetReward(self, data)
 	for _, rewardData in pairs(data) do
 		local index = rewardData.airplanes.index
 		local seat = self.seatData[index]
-		if nil ~= seat then
+		if seat then
 			CCommon.ShowFlyText(seat.moudle.SelfRect, Csv.Text("school_skill", {num = rewardData.skillexp}))
 			SoundMgr.Play(11000)
 			moudle.SelfRect:AddOnTime(function()
@@ -383,5 +387,21 @@ function _R.RefreshSeatViewAndJudge(self)
 	_P.RefreshSeatInfo(self)
 	_P.RefreshSeatView(self)
 end	
+
+--刷新游学次数文本
+function _R.RefreshStudyTimes(self)
+	if MAircraft.StudyLeftTimes <= 0 then
+		_P.OnUpdateStudyCDTime(self)
+		self.studyCDTimer = self.textStudyTimes:AddOnUpdate(function()
+			_P.OnUpdateStudyCDTime(self)
+		end, nil, 1)
+	else
+		self.textStudyTimes.Text = Csv.Text("school_left_time", {left = MAircraft.StudyLeftTimes,
+																 max = MAircraft.GetStudyMaxTime()})
+		if self.studyCDTimer then
+			self.studyCDTimer:Destroy()
+		end
+	end
+end
 
 return _M

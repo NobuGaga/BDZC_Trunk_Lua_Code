@@ -41,7 +41,9 @@ function _M:OnCreate(...)
 			else
 				MRelations.FightType = 3
 				MRelations.PlayerID = self.mPlayerID
-				WindowMgr.Create("URelationsSelectStaff")
+				--WindowMgr.Create("URelationsSelectStaff")
+				--新版改为先选书再选人
+				WindowMgr.Create("URelationsCost")
 			end
 		end
 	end,nil,0.9)
@@ -65,7 +67,9 @@ function _P.RefreshView(self)
 					SoundMgr.Play(10001)
 					MRelations.FightType = 3
 					MRelations.PlayerID = v.playerid
-					WindowMgr.Create("URelationsSelectStaff")
+					--WindowMgr.Create("URelationsSelectStaff")
+					--新版改为先选书再选人
+					WindowMgr.Create("URelationsCost")
 				end,nil,0.9)
 				local news = Csv.RelationsNews[v.type].tips
 				local staffName = Csv.Personnel[v.staffid].name

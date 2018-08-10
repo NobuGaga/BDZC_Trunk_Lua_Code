@@ -47,6 +47,9 @@ function _M:OnCreate(data)
 	local serverInfo = CLogin.GetServerInfoByID(data.serverId)
 	if serverInfo ~= nil and serverInfo.name ~= nil then
 		moudle:Get("text3").Text = Csv.Text("player_area", {name = serverInfo.name})
+		moudle:Get("scale").SizeDelta = Vector2(300,130)
+	else
+		moudle:Get("scale").SizeDelta = Vector2(300,90)
 	end
 	local chenghaoText = moudle:Get("scaleText")
 	local chenghaoBG = moudle:Get("scaleBG")
@@ -67,8 +70,7 @@ function _M:OnCreate(data)
 		moudle:Get("B1attrTitle" .. v).Text = MPlayer.Attr2Str(v)
 		moudle:Get("B1attrNum" .. v).Text = tostring(data.attr[k])
 	end
-	moudle:Get("power").Text = tostring(data.power)
-	moudle:Get("powerTitle").Text = Csv.Text("palyer_allPower")
+	moudle:Get("power").Text = Csv.Text("player_power",{num = tostring(data.power)})
 
 	moudle:Get("B2attrTitle1").Text = Csv.Text("player_exp")
 	moudle:Get("B2attrNum1").Text = tostring(data.exp)

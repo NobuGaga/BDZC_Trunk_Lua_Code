@@ -1,0 +1,124 @@
+local _M = {}
+
+_M.ActList = {}
+_M.ActIdForType = {}		--活动类型对应活动ID
+_M.ActTypeCached = {}
+_M.ActRankTypeToID = {}
+_M.ActRedpointCached = {}
+
+--全局配置表冲榜活动商会冲榜榜单类型
+local CommerceRankType = Csv.Const(85)
+_M.CommerceRank = {}
+if CommerceRankType and type(CommerceRankType) == "table" then
+	for _, rankType in ipairs(CommerceRankType) do
+		_M.CommerceRank[rankType] = true
+	end
+end
+
+function _M.Clean()
+	_M.ActList = {}
+	_M.ActIdForType = {}
+	_M.ActTypeCached = {}
+	_M.ActRankTypeToID = {}
+	_M.ActRedpointCached = {}	
+end
+
+function _M.ClearForType(actType)
+	local list = _M.ActTypeCached[actType]
+	if list ~= nil then
+		for k,v in pairs(list) do
+			_M.ActList[k] = nil
+			_M.ActRedpointCached[k] = nil
+		end
+		_M.ActTypeCached[actType] = nil
+	end
+end
+
+function _M.ClearForId(actId)
+	if _M.ActList ~= nil and _M.ActList[actId] ~= nil then
+		local actType = _M.ActList[actId].actType
+		_M.ActList[actId] = nil
+		_M.ActRedpointCached[actId] = nil
+		if _M.ActTypeCached[actType] ~= nil then
+			_M.ActTypeCached[actType][actId] = nil
+			if not _M.IsHaveActivityDataForType(actType) then
+				_M.ActTypeCached[actType] = nil
+			end
+		end
+	end
+end
+
+function _M.UpdateActivityData(id, type, data)
+	_M.ActList[id] = data
+	_M.ActIdForType[type] = id
+	if _M.ActTypeCached[type] == nil then
+		_M.ActTypeCached[type] = {}
+	end
+	_M.ActTypeCached[type][id] = data
+	if data and data.selfRank and data.rankType then
+		_M.ActRankTypeToID[data.rankType] = id
+	end
+end
+
+function _M.GetListFromType(actType)
+	return _M.ActTypeCached[actType]
+end
+
+function _M.GetFromId(actId)
+	return _M.ActList[actId]
+end
+
+function _M.IsHaveActivityDataForType(actType)
+	return _M.ActTypeCached[actType] and next(_M.ActTypeCached[actType])
+end
+
+--更新红点数据, 返回值为红点数据是否发生改变
+function _M.UpdataActivityRedpoint(id, index, isRedPoint)
+	local temp = _M.ActRedpointCached[id]
+	if temp == nil then
+		temp = {[index] = isRedPoint}
+		_M.ActRedpointCached[id] = temp
+		return true
+	elseif temp[index] ~= isRedPoint then
+		temp[index] = isRedPoint
+		return true
+	end
+	return false
+end
+
+--根据活动ID或活动索引项获取活动红点情况
+function _M.IsHaveRedpointForActivity(actId, index)
+	if actId == nil then
+		return false
+	end
+	local actRedpoint = _M.ActRedpointCached[actId]
+	if actRedpoint == nil then
+		return false
+	end
+	if index then
+		return actRedpoint[index]
+	end
+	for _, isRedPoint in pairs(actRedpoint) do
+		if isRedPoint then
+			return true
+		end
+	end
+	return false
+end
+
+--更新带有榜单类型的活动自己排名数据
+function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
+	if _M.ActRankTypeToID == nil or _M.ActRankTypeToID[rankType] == nil or _M.ActList == nil or 
+					_M.ActList[_M.ActRankTypeToID[rankType]] == nil or _M.CommerceRank[rankType] then
+		return
+	end
+	local actData = _M.ActList[_M.ActRankTypeToID[rankType]]
+	if actData.selfRank and selfRank then
+		actData.selfRank = selfRank
+	end
+	if actData.rankPro and selfValue then
+		actData.rankPro = selfValue
+	end
+end
+
+return _M

@@ -1,0 +1,213 @@
+-- 奇遇成就界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _R = {}
+local _P = {}
+
+local EFFECTID = 24
+local GRAY = Color(0/255, 0/255, 0/255, 140/255)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Achievement")
+	self.mModule = module
+	self.mData = data
+
+	module:Get("title").Text = Csv.Text("adventure_achive_title")
+	local closeBtn = module:Get("backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	_P.SetListData(self, data)
+end
+
+
+function _P.SetListData(self, data)
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	local listData = _P.GetSortListData(self)
+	if listData == nil then return end
+
+	self.mRawTableItems = {}
+	for k,v in ipairs(listData) do
+		self.mRawTableItems[v.stage] = _P.OnCreateItem(self, v, itemGrid, math.floor(data.companyLevel / 100), math.floor(data.companyLevel % 100))
+	end
+end
+
+
+function _P.GetSortListData(self)
+	local listData = {}
+	for k,v in pairs(Csv.AdventureLevel) do
+		if v.star == 1 and v.stage > 1 then
+			local isGeted = _P.CheckThisRewardIsGet(self, v.stage)
+			v.isGeted = isGeted
+			listData[#listData + 1] = v
+		end
+	end
+
+	table.sort(listData, function (a, b)
+		if a.isGeted and b.isGeted then
+			return a.id < b.id
+		elseif not a.isGeted and b.isGeted then
+			return true
+		elseif a.isGeted and not b.isGeted then
+			return false
+		else
+			return a.id < b.id
+		end
+	end)
+
+	return listData
+end
+
+
+function _P.OnCreateItem(self, data, itemGrid, curStage, curLevel)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Adventure_Achievement_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("Icon").SpriteName = data.icon
+	itemModule:Get("RewardTip").Text = Csv.Text("quest_reward")
+
+	local starMax = itemModule:Get("StarBg").CachedTran.childCount
+	local totalStar = _P.GetCurStageTotalStar(self, data.stage)
+	local curStar = 1
+	if curStage > data.stage then
+		curStar = totalStar
+	elseif curStage == data.stage then
+		curStar = curLevel
+	end
+	
+	for i=1,starMax do
+		local starImg = itemModule:Get("Star" .. i)
+		starImg.Color = (i<= curStar and Color.white) or GRAY
+		starImg.Activity = i <= totalStar
+	end
+
+	local itemGrid = itemModule:Get("rewardContent")
+	itemGrid:DestroyChildren()
+	for k,v in pairs(data.stageReward) do
+		CCommon.CreateItem(itemGrid, v[1], CCommon.ShowItemTips, {num = v[2], scale = 0.8})
+	end
+
+	itemModule:Get("C_text").Text = Csv.Text("welfare_vipget")
+	local getBtn = itemModule:Get("GetBtn")
+	getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		_P.OnGetRewards(self, data)
+	end, nil, 0.9)
+
+	local ingText = itemModule:Get("GoingText")
+	ingText.Text = Csv.Text("achieve_jinxingzhong")
+
+	local getImg = itemModule:Get("GetImg")
+	local noTouchText = itemModule:Get("NoText")
+	noTouchText.Text = Csv.Text("achieve_nofinish")
+	if curStage >= data.stage then
+		getBtn.Activity = not data.isGeted
+		getImg.Activity = data.isGeted
+		ingText.Activity = false
+		noTouchText.Activity = false
+	-- elseif curStage == data.stage then -- 进行
+	-- 	local isCanGet = totalStar == curLevel
+	-- 	getBtn.Activity = isCanGet and not data.isGeted
+	-- 	ingText.Activity = not isCanGet
+	-- 	getImg.Activity = data.isGeted
+	-- 	noTouchText.Activity = false
+	else -- 未达成
+		getBtn.Activity = false
+		ingText.Activity = false
+		getImg.Activity = false
+		noTouchText.Activity = true
+	end
+
+	return itemModule
+end
+
+
+function _P.GetCurStageTotalStar(self, stageId)
+	local totalNum = 0
+	for k,v in pairs(Csv.AdventureLevel) do
+		if v.stage == math.floor(stageId) then
+			totalNum = totalNum + 1
+		end
+	end
+
+	return totalNum
+end
+
+
+function _P.CheckThisRewardIsGet(self, stageId)
+	local isGet = false
+	if self.mData ~= nil and self.mData.stageRewardGeted ~= nil then
+		for k,v in pairs(self.mData.stageRewardGeted) do
+			if v == stageId then
+				isGet = true
+				break
+			end
+		end
+	end
+
+	return isGet
+end
+
+
+function _P.OnGetRewards(self, data)
+	if data.isGeted then
+		CCommon.ShowError(Csv.Text("err_reward_geted"))
+	else
+		CActivity.ReqAdvGetReward(data.stage)
+	end
+end
+
+
+-- 领取奖励返回
+function _R.OnGetRewardBack(self, data)
+	if self.mRawTableItems[data.taskIndex] ~= nil then
+		local lastMoudle = self.mRawTableItems[data.taskIndex]
+		if lastMoudle ~= nil then
+			SoundMgr.PlaySystem(10004)
+			lastMoudle:Get("GetBtn").Activity = false
+			local effectMoudle = CCommon.CreateEffect(lastMoudle:Get("back"), EFFECTID, Vector2(237, 0), function()
+				lastMoudle:Get("GetImg").Activity = true
+
+				if data.reward ~= nil then
+					local rewardNode = self.mModule:Get("RewardNode")
+					local lastPos = lastMoudle:Get("GetBtn").RootCanvasPos
+					rewardNode.LocalPosition = Vector2(lastPos.x, lastPos.y)
+
+					local delayCount = 0
+					for k,v in pairs(data.reward) do
+						CCommon.ShowFlyItem(rewardNode, v.id, v.count, delayCount)
+						delayCount = delayCount + 0.5
+					end
+				end
+			end, {M_Effect_Achieve_Get = "fl_030"})
+
+			effectMoudle.SelfRect.SizeDelta = Vector2(138,138)
+		end
+	end
+
+	table.insert(self.mData.stageRewardGeted, data.taskIndex)
+end
+
+
+return _M

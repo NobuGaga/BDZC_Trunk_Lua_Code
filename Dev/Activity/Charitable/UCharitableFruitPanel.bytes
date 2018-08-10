@@ -282,6 +282,8 @@ function _M:OnCreate(data)
 	self.tencostNum = CharityCsv.tenCost[2]
 	module:Get("PriceNum1").Text = tostring(CharityCsv.oneCost[2])
 	module:Get("PriceNum2").Text = tostring(CharityCsv.tenCost[2])
+	module:Get("C_text").Text = Csv.Text("charitable_act_one")
+	module:Get("C_text_0").Text = Csv.Text("charitable_act_ten")
 	self.TimeText = module:Get("Time")
 	self.TimeText.Text = Csv.Text("timelimit_last_time", {startTime = LuaUtil.TransToMD(self.mData.state.startTime),
 					endTime = LuaUtil.TransToMD(self.mData.state.endTime) .. " " .. LuaUtil.TransToHMS(self.mData.state.endTime)})

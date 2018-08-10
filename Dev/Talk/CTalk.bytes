@@ -210,6 +210,14 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 		CCommon.ShowError(Csv.Text("talk_no_send_sys"))
 		return
 	end
+
+	local _param = 2
+	local bigItemId = Define.AssetsType.Horn --是否使用大喇叭
+	if MTalk.CrossChooseID ~= nil and MTalk.CrossChooseID == bigItemId then
+		_param = 1
+	end
+	local _isUseGold = MTalk.IsCostDiamond
+
 	if _value ~= nil and _value ~= "" then
 		local isGMMsg = false
 		if string.sub(_value, 1, 1) == '@' then
@@ -243,13 +251,13 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 					local state = retTable.status
 					if state == 0 then
 						--正常
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state})
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold })
 					elseif state == 1 then
 						--违法
 						if _channel == MTalk.Channel.PrivateMsg then
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state,oriValue = _value})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold})
 						else
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state,oriValue = _value})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold})
 							--[[
 							local ctx = {
 									index = 0,
@@ -271,7 +279,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 						-- error("send talk error, state == 1")
 					else
 						--敏感
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,oriValue = _value})
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,oriValue = _value,param = _param,isUseGold = _isUseGold})
 					end
 				else
 					error("SendNewTalk --> HttpSession retTable is empty!! url:" .. GameSetting.CheckChatUrl .. ", info:" .. param2)
@@ -284,7 +292,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 	elseif voiceIndex ~= nil and voiceTime ~= nil and voiceTime > 0 then
 		GameSetting.HttpPostDataToPHP(Define.PostUrlType.Talk, {sChannel = _channel, sContent = "", ipAddress = GameSetting.IP,
 									  chatObject = recvName or "", deviceCode = GameSetting.DeviceID, sTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
-		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime,valueFlag = 0})
+		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime,valueFlag = 0,param = _param,isUseGold = _isUseGold})
 	end
 end
 

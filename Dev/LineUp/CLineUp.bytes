@@ -1,0 +1,77 @@
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local CStaff = JRequire "Dev.Staff.CStaff"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cPLineUpAddStaff				= 1,--添加员工 	PLineUp.CAddStaff
+	cPLineUpOpen					= 2,--开启格子
+	cPLineUpDownStaff				= 4,--员工下阵
+	
+	sPLineUpInit					= 1,--初始化 	PLineUp.SPLineUpInit
+	sPLineUpOpen					= 2,--开启格子	PLineUp.SPLineUpOpen
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cPLineUpAddStaff] = "PLineUp.CAddStaff",
+		[ECmdId.cPLineUpOpen] = "",
+		[ECmdId.cPLineUpDownStaff] = "PLineUp.CDownStaff",
+	}
+	local recv = {
+		[ECmdId.sPLineUpInit]		=		{proto = "PLineUp.SPLineUpInit",		handle = _P.OnLineUpInit},
+		[ECmdId.sPLineUpOpen]		=		{proto = "PLineUp.SPLineUpOpen",		handle = _P.OnLineUpOpen}
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.LineUp, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MLineUp.Clean()
+end
+
+function _M.CheckRedpoint()
+	local LineUpList = MLineUp.LineUpList
+	local SeatNum = MLineUp.SeatNum
+	for i=1,SeatNum do
+		CMain.UpdateRedpoint(LineUpList[i] == nil or LineUpList[i] <= 0, Define.SysId.LineUp, i)
+	end
+
+	CStaff.CheckStaffRedPoint()
+end
+
+function _M.LineUpAddStaff(staffid,pos)
+	_M.Send(ECmdId.cPLineUpAddStaff,{id = staffid,index = pos})
+end
+
+function _M.LineUpDownStaff(pos)
+	_M.Send(ECmdId.cPLineUpDownStaff,{index = pos})
+end
+
+function _M.LineUpOpen()
+	_M.Send(ECmdId.cPLineUpOpen)
+end
+
+function _P.OnLineUpInit(data)
+	MLineUp.InitLine(data)
+	_M.CheckRedpoint()
+
+	if WindowMgr.IsCreated("ULineUp") then
+		WindowMgr.Call("ULineUp","SetList")
+	end
+end
+
+function _P.OnLineUpOpen(data)
+	MLineUp.LineUpOpen(data)
+	_M.CheckRedpoint()
+
+	if WindowMgr.IsCreated("ULineUp") then
+		WindowMgr.Call("ULineUp","OnLineUpOpen")
+	end
+end
+
+return _M

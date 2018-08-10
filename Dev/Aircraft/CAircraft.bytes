@@ -18,7 +18,7 @@ local ECmdId = {
 	cAirplaneAward     = 5,		--完成游学		PAirplane.CAirplaneAward
 	cAirplaneActivate  = 6,		--激活皮肤		PAirplane.CAirplane
 
-	sAirplaneInit      = 1,		--飞机初始化	PAirplane.SAirplaneInit
+	sAirplaneInit      = 1,		--飞机初始化		PAirplane.SAirplaneInit
 	sAirplaneUp        = 2,		--				PAirplane.SAirplane
 	sAirplaneChoice    = 3,		--				PAirplane.SAirplaneSeats
 	sAirplaneSkin      = 4,		--选择皮肤返回   PAirplane.SAirplane
@@ -26,6 +26,7 @@ local ECmdId = {
 	sAirplaneAward     = 6,		--				PAirplane.SAirplaneAward
     sAirplaneAddSkin   = 7,		--增加皮肤列表   PAirplane.SAirplaneSkins
 	sAirplaneActivate  = 8,		--激活皮肤		PAirplane.SAirplaneActivate
+	sAirplaneStudyTimes= 9,		--更新游学次数   PAirplane.PStudyTimes
 }
 
 function _M.ModuleInit(isReload)
@@ -45,6 +46,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sAirplaneAward]		= { proto = "PAirplane.SAirplaneAward",		handle = _P.OnAircraftGetReward},
 		[ECmdId.sAirplaneAddSkin]	= { proto = "PAirplane.SAirplaneSkins",		handle = _P.OnAircraftSkinList},
 		[ECmdId.sAirplaneActivate]	= { proto = "PAirplane.SAirplaneActivate",	handle = _P.OnAircraftActivate},
+		[ECmdId.sAirplaneStudyTimes]= { proto = "PAirplane.PStudyTimes",		handle = _P.OnAircraftUpdataStudyTimes},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Aircraft, send, recv, isReload)
 end
@@ -52,9 +54,13 @@ end
 --清空模块
 function _M.ModuleClean()
 	MAircraft.Clean()
-	if nil ~= _P.Handle then
-		EventCenter.UnRegistCallEvent(_P.Handle)
-		_P.Handle = nil
+	if _P.StudingTimeHandle then
+		EventCenter.UnRegistCallEvent(_P.StudingTimeHandle)
+		_P.StudingTimeHandle = nil
+	end
+	if _P.StudyCDTimeHandle then
+		EventCenter.UnRegistCallEvent(_P.StudyCDTimeHandle)
+		_P.StudyCDTimeHandle = nil
 	end
 end
 
@@ -77,7 +83,7 @@ function _M.AircraftStartLearn()
 end
 
 function _M.AircraftComplete(seatID)
-	if nil ~= seatID then
+	if seatID then
 		_M.Send(ECmdId.cAirplaneAward, {index = seatID})
 	else
 		_M.Send(ECmdId.cAirplaneAward)
@@ -90,7 +96,8 @@ end
 ----------------------------- Server -> Client -----------------------------
 function _P.OnAircraftInit(data)
 	MAircraft.InitData(data)
-	_P.RefreshUpdateState()
+	_P.RefreshStudyUpdate()
+	_P.RefreshStudyCDUpdate()
 	WindowMgr.Call("UAircraft", "RefreshView")
 	WindowMgr.Call("UAircraftSkin", "RefreshView")
 	WindowMgr.Call("UAircraftSkinAll", "RefreshView")
@@ -105,8 +112,8 @@ function _P.OnAircraftUp(data)
 end
 
 function _P.OnAircraftSelectStaff(data)
-	if nil ~= data then
-		if nil ~= data.airplaneSeat then
+	if data then
+		if data.airplaneSeat then
 			for _, seatData in pairs(data.airplaneSeat) do
 				MAircraft.RefreshAircraftSeatData(seatData)
 			end
@@ -120,7 +127,7 @@ function _P.OnAircraftSelectStaff(data)
 end
 
 function _P.OnAircraftSelectSkin(data)
-	if nil ~= data then
+	if data then
 		MAircraft.RefreshAircraftSkinData(data.airplaneSkinID)
 		WindowMgr.Call("UAircraft", "RefreshAircraftInfo")
 		WindowMgr.Call("UAircraftSkin", "OnSelectAircraftSkin")
@@ -130,12 +137,13 @@ function _P.OnAircraftSelectSkin(data)
 end
 
 function _P.OnAircraftStartLearn(data)
-	if nil ~= data then
+	if data then
 		MAircraft.RefreshStartLearnData(data.airplaneTime)
-		_P.RefreshUpdateState()
+		_P.RefreshStudyUpdate()
 		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
 		WindowMgr.Call("USchool", "RefreshSchoolState")
 		WindowMgr.Call("USchool", "OnClose")
+		WindowMgr.Call("USchool", "RefreshStudyTimes")
 		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
 		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
 	else
@@ -144,16 +152,16 @@ function _P.OnAircraftStartLearn(data)
 end
 
 function _P.OnAircraftGetReward(data)
-	if nil ~= data then
-		if nil ~= data.airplaneAwards then
+	if data then
+		if data.airplaneAwards then
 			local temp = { ["airplaneSeat"] = {} }
 			for index, value in pairs(data.airplaneAwards) do
-				if nil ~= value.airplanes then
+				if value.airplanes then
 					temp.airplaneSeat[index] = value.airplanes
 				end
 			end
 			MAircraft.RefreshAircraftSeatListData(temp)
-			_P.RefreshUpdateState()
+			_P.RefreshStudyUpdate()
 			WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
 			WindowMgr.Call("USchool", "OnGetReward", data.airplaneAwards)
 			WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
@@ -167,7 +175,7 @@ function _P.OnAircraftGetReward(data)
 end
 
 function _P.OnAircraftSkinList(data)
-	if nil ~= data then
+	if data then
 		MAircraft.RefreshAircraftUnActivateSkinList(data.skinID)
 	else
 		error("系统ID " .. Define.SysId.Aircraft .. " 接口 " .. ECmdId.sAirplaneAddSkin .. "返回空")
@@ -175,7 +183,7 @@ function _P.OnAircraftSkinList(data)
 end
 
 function _P.OnAircraftActivate(data)
-	if nil ~= data then
+	if data then
 		MAircraft.DeleteAircraftUnActivateSkin(data.skinID)
 		WindowMgr.Call("UAircraft", "RefreshAircraftSkinInfo")
 		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
@@ -187,23 +195,31 @@ function _P.OnAircraftActivate(data)
 	end
 end
 
+function _P.OnAircraftUpdataStudyTimes(data)
+	MAircraft.RefreshStudyTimeData(data)
+	_P.RefreshStudyCDUpdate()
+	WindowMgr.Call("USchool", "RefreshStudyTimes")
+end
+
 -----------------------------   Data Concrol   -----------------------------
-function _P.RefreshUpdateState()
+--刷新游学倒计时更新
+function _P.RefreshStudyUpdate()
 	if MAircraft.IsStuding then
-		if nil == _P.Handle then
-			_P.Handle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
-				_P.UpdateTime()
+		if nil == _P.StudingTimeHandle then
+			_P.StudingTimeHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+				_P.UpdateStudyTime()
 			end)
 		end
 	else
-		if nil ~= _P.Handle then
-			EventCenter.UnRegistCallEvent(_P.Handle)
-			_P.Handle = nil
+		if _P.StudingTimeHandle then
+			EventCenter.UnRegistCallEvent(_P.StudingTimeHandle)
+			_P.StudingTimeHandle = nil
 		end
 	end
 end
 
-function _P.UpdateTime()
+--游学倒计时
+function _P.UpdateStudyTime()
 	local lessTime = MAircraft.SchoolTime - HeartBeat.ServSecond()
 	if MAircraft.FlyEndAnimTime - 1 >= lessTime and not MAircraft.IsPlayEndLearn then
 		MAircraft.IsPlayEndLearn = true
@@ -212,9 +228,38 @@ function _P.UpdateTime()
 	if 0 >= lessTime then
 		MAircraft.IsPlayEndLearn = false
 		MAircraft.RefreshAircraftSeatListState()
-		_P.RefreshUpdateState()
+		_P.RefreshStudyUpdate()
 		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
 		WindowMgr.Call("USchool", "RefreshSchoolState")
+		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
+		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
+	end
+end
+
+--刷新游学次数倒计时更新
+function _P.RefreshStudyCDUpdate()
+	if MAircraft.StudyCDTime and MAircraft.StudyCDTime > 0 then
+		if _P.StudyCDTimeHandle == nil then
+			_P.StudyCDTimeHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+				_P.UpdateStudyCDTime()
+			end)
+		end
+	else
+		if _P.StudyCDTimeHandle then
+			EventCenter.UnRegistCallEvent(_P.StudyCDTimeHandle)
+			_P.StudyCDTimeHandle = nil
+		end
+	end
+end
+
+--游学CD倒计时
+function _P.UpdateStudyCDTime()
+	local lessTime = MAircraft.StudyCDTime - HeartBeat.ServSecond()
+	if lessTime <= 0 then
+		MAircraft.AddStudyLeftTime()
+		_P.RefreshStudyCDUpdate()
+		WindowMgr.Call("UAircraft", "RefreshAircraftRedPoint")
+		WindowMgr.Call("USchool", "RefreshStudyTimes")
 		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
 		WindowMgr.Call("UWorldMap", "SetCompanyIcon")
 	end

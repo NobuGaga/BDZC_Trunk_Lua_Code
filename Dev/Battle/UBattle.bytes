@@ -23,6 +23,8 @@ local JTweenerManager = CS.JTween.JTweenerManager
 ----------------------常量定义--------------------------
 local MAX_BATTLE_COUNT = 6
 local LEVEL_UP_EFFECT_ID = 10006
+local LEVEL_UP_EFFECT_ID_2 = 10177
+local ONEKEY_EFFECT = 10176
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -222,7 +224,7 @@ function _P.RefreshLevel(self)
 end
 
 function _P.RefreshAvatar(self)
-	self.RoleIcon.SpriteName = MPlayer.GetSHeadIcon()
+	self.RoleIcon.SpriteName = MPlayer.GetHeadIcon()
 end
 
 function _P.RefreshAttr(self)
@@ -298,7 +300,8 @@ function _P.UpdateBattleState(self, chapterId, info)
 						self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, chapterCsv.startStory, function()
 							if self.Moudle ~= nil then
 								if chapterCsv.type == MBattle.BattleType.BOSS then
-									WindowMgr.Create("UBattleBoss")
+									_P.CreateBoss()
+									--WindowMgr.Create("UBattleBoss")
 								else
 									WindowMgr.Create("UBattleFight")
 								end
@@ -306,14 +309,16 @@ function _P.UpdateBattleState(self, chapterId, info)
 						end)
 					else
 						if chapterCsv.type == MBattle.BattleType.BOSS then
-							WindowMgr.Create("UBattleBoss")
+							_P.CreateBoss()
+							--WindowMgr.Create("UBattleBoss")
 						else
 							WindowMgr.Create("UBattleFight")
 						end
 					end	
 				else
 					if chapterCsv.type == MBattle.BattleType.BOSS then
-						WindowMgr.Create("UBattleBoss")
+						_P.CreateBoss()
+						--WindowMgr.Create("UBattleBoss")
 					else
 						WindowMgr.Create("UBattleFight")
 					end
@@ -354,6 +359,63 @@ function _P.RefreshBattle(self)
 	end
 end
 
+function _P.CreateBoss()
+	local money = _P.GetMoney()
+	local callBack = function()
+		local csvBattle = Csv.Battle[MBattle.CurId]
+		if csvBattle ~= nil and csvBattle.icon ~= nil then
+			local csvBattleIcon = Csv.BattleIcon[csvBattle.icon]
+			local csvBattleTab = Csv.BattleIcon[csvBattle.tableImg]
+			local csvBattleScene = Csv.BattleIcon[csvBattle.scene]
+			if csvBattleIcon ~= nil and csvBattleIcon.str ~= nil and csvBattleTab ~= nil and csvBattleScene ~= nil then
+				WindowMgr.Create("UBattleBossNew",{bossBlood = MBattle.CurBlood,bossFullBlood = csvBattle.gold,bossImg = csvBattleIcon.str,bossTab = csvBattleTab.str,bossBg = csvBattleScene.str},
+					function()
+						CBattle.BattleReq(MBattle.CurId)
+					end,
+					function(data,param)
+						if param ~= nil and param.battleid ~= nil then
+							if data.result then
+								WindowMgr.Create("UBattleWin", param.battleid, money, function() WindowMgr.Destroy("UBattleBossNew") end)
+							else
+								WindowMgr.Create("UBattleFail", param.battleid, _P.GetCost(data), function() WindowMgr.Destroy("UBattleBossNew") end)
+							end
+						end
+					end,
+					{battleid = MBattle.CurId})
+			end
+		end
+	end
+
+	WindowMgr.Create("ULineUpCheck",callBack)
+end
+
+function _P.GetMoney()
+	local zhili = MPlayer.GetAttr(Define.AttrType.Zhili)
+	if zhili ~= nil then
+		local num1,num2 = math.modf(zhili/8)
+		return num1 + 1000
+	end
+	return 0
+end
+
+function _P.GetCost(data)
+	if data.fight ~= nil then
+		if #data.fight == 1 then
+			local dataFirst = data.fight[1]
+			if dataFirst ~= nil then
+				return dataFirst.rinitblood - dataFirst.rlaveblood
+			end
+		else
+			local dataFirst = data.fight[1]
+			local dataLast = data.fight[#data.fight]
+			if dataFirst ~= nil and dataLast ~= nil then
+				return dataFirst.rinitblood - dataLast.rlaveblood
+			end
+		end
+	end
+	return 0
+end
+
 --界面构建
 function _M:OnCreate()
 	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Plot")
@@ -373,18 +435,19 @@ function _M:OnCreate()
 	self.TitleText = moudle:Get("titleText")
 	--玩家头像
 	self.RoleIcon = moudle:Get("RoleIcon")
-	local RoleLevelUp = moudle:Get("RoleLevelUp")
 	--注册小红点
-	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp"), Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp2"), Define.SysId.Player, 1)
 	--可以升级特效
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	CCommon.CreateEffect(moudle:Get("ActorPanel2"), LEVEL_UP_EFFECT_ID_2)
 	--点击头像
 	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UPlayer")
 	end, nil, 0.9)
 	--玩家战力
-	self.RolePower = moudle:Get("RolePower")
+	self.RolePower = moudle:Get("RoleName")
 	--玩家等级
 	self.RoleLv = moudle:Get("RloeLv")
 	self.StoryRoot = moudle:Get("StoryRoot")
@@ -437,11 +500,6 @@ function _M:OnCreate()
 	_P.RefreshMoney(self)
 	_P.RefreshBattle(self)
 
-	if MBattle.IsFirstCreateBattle then
-		MBattle.IsFirstCreateBattle = nil
-
-		_P.ShowFirstEnter(self)
-	end
 	_P.RefreshBuild(self)
 	_P.RefreshTips(self,false,false)
 	moudle:Get("title2").Text = Csv.Text("battle_tipT1")
@@ -457,32 +515,38 @@ function _M:OnCreate()
 	-- 	_P.ShowFirstEnter(self)
 	-- end
 
-	local vip = MPlayer.GetVip()
-	local csvVip = Csv.Vip[vip]
-	if csvVip ~= nil then
-		local imgBord = moudle:Get("VipBox")
-		if csvVip.imgBord ~= nil then
-			imgBord.Activity = true
-			imgBord.SpriteName = csvVip.imgBord
-		else
-			imgBord.Activity = false
-		end
+	-- local vip = MPlayer.GetVip()
+	-- local csvVip = Csv.Vip[vip]
+	-- if csvVip ~= nil then
+	-- 	local imgBord = moudle:Get("VipBox")
+	-- 	if csvVip.imgBord ~= nil then
+	-- 		imgBord.Activity = true
+	-- 		imgBord.SpriteName = csvVip.imgBord
+	-- 	else
+	-- 		imgBord.Activity = false
+	-- 	end
 
-		local imgNum = moudle:Get("VipNum")
-		if csvVip.icon ~= nil then
-			imgNum.Activity = true
-			imgNum.SpriteName = csvVip.icon
-		else
-			imgNum.Activity = false
-		end
-	end
+	-- 	local imgNum = moudle:Get("VipNum")
+	-- 	if csvVip.icon ~= nil then
+	-- 		imgNum.Activity = true
+	-- 		imgNum.SpriteName = csvVip.icon
+	-- 	else
+	-- 		imgNum.Activity = false
+	-- 	end
+	-- end
+	
+	local effectPanel = moudle:Get("AcquActorPanel")
+	CCommon.CreateEffect(effectPanel,ONEKEY_EFFECT)
+	effectPanel.Activity = false
+
 	moudle:Get("Btn_Text").Text = Csv.Text("battle_acqu4")
 	local BtnAcqu = moudle:Get("AcquBtn")
 	BtnAcqu:AddOnButton(function()
 		local csvBattle = Csv.Battle[MBattle.CurId]
 		if csvBattle ~= nil and csvBattle.type == MBattle.BattleType.BOSS then
 			CCommon.ShowError(Csv.Text("battle_acqu2"))
-			WindowMgr.Create("UBattleBoss")
+			_P.CreateBoss()
+			--WindowMgr.Create("UBattleBoss")
 			return 
 		end
 		if MBag.GetItemNum(Define.AssetsType.Soldier) <= 0 then
@@ -500,6 +564,7 @@ function _M:OnCreate()
 		tipObj.Activity = false
 		BtnAcqu.RaycastTarget = true
 		BtnAcqu.IsGray = false
+		effectPanel.Activity = true
 	else
 		if MPlayer.GetVip() >= Csv.Const(Define.Const.Battle_Onekey_Vip) then
 			tipObj.Activity = true
@@ -510,6 +575,12 @@ function _M:OnCreate()
 		end
 		BtnAcqu.RaycastTarget = false
 		BtnAcqu.IsGray = true
+	end
+
+	if MBattle.IsFirstCreateBattle then
+		MBattle.IsFirstCreateBattle = nil
+
+		_P.ShowFirstEnter(self)
 	end
 end
 
@@ -817,6 +888,7 @@ function _P.CheckStaff(self,list)
 						self.StoryMoudle = nil
 					end
 					local staffData = {storyType = 2, objId = csvChapter.staffId, storyId = csvChapter.endStory}
+					--print("------通过关卡获得员工-----", csvChapter.staffId, csvChapter.endStory)
 					self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, csvChapter.endStory, nil, staffData, Define.SysId.Airport)
 				end
 			end

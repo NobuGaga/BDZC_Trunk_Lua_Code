@@ -94,26 +94,18 @@ function _M:OnCreate()
 		oneMoudle:Get("IconBox").SpriteName = line.iconBg
 		oneMoudle:Get("icon").SpriteName = line.icon
 		oneMoudle:Get("ordinaryJB").Text = line.name
-		-- oneMoudle:Get("spend").Text = Csv.Text("commerce_build3")
+		oneMoudle:Get("spend").Text = Csv.Text("commerce_build3")
 		local cost = line.cost
 		if cost[1] == Define.AssetsType.Gold then
 			oneMoudle:Get("spendNum").Text = tostring(cost[2])
 		else
-			-- oneMoudle:Get("costGold").Activity = false
+			oneMoudle:Get("costGold").Activity = false
 
 			local costItemCsv = Csv.Item[cost[1]]
-			oneMoudle:Get("spendNum").Text = costItemCsv.name .. "x" .. tostring(cost[2])
-			oneMoudle:Get("icon").SpriteName = costItemCsv.icon
+			oneMoudle:Get("spendItemNum").Text = costItemCsv.name .. "x" .. tostring(cost[2])
 		end
-		-- oneMoudle:Get("Effect").Text = Csv.Text("commerce_build4")
-		-- oneMoudle:Get("EffectText").Text = line.rewardText
-		oneMoudle:Get("Effect1").Text = Csv.Text("commerce_detail4")
-		oneMoudle:Get("Effect2").Text = Csv.Text("commerce_detail5")
-		oneMoudle:Get("Effect3").Text = Csv.Text("commerce_detail26")
-
-		oneMoudle:Get("EffectText1").Text = line.reward1
-		oneMoudle:Get("EffectText2").Text = line.reward2
-		oneMoudle:Get("EffectText3").Text = line.reward3
+		oneMoudle:Get("Effect").Text = Csv.Text("commerce_build4")
+		oneMoudle:Get("EffectText").Text = line.rewardText
 		oneMoudle:Get("EnemyText").Text = Csv.Text("commerce_build2")
 		local btn = oneMoudle:Get("EnemyBtn")
 		btn:AddOnButton(function()

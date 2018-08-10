@@ -7,17 +7,14 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-local Default_Img = "yg_sx_002"
-local Select_Img = "yg_sx_003"
-
-local PageWidth = 735
-local PageHeight = 1127
-local ItemWidth = 180
-local ItemHeight = 468
-local SpaceX = 5
-local SpaceY = -11
-local PageNum = 12
-local ColNum = 4
+local PageWidth = 740
+local PageHeight = 1095
+local ItemWidth = 240
+local ItemHeight = 386
+local SpaceX = 4
+local SpaceY = 12
+local PageNum = 9
+local ColNum = 3
 
 function _M:OnPopCreate( ... )
 	self:OnCreate(...)
@@ -42,7 +39,9 @@ function _M:OnCreate(...)
 	self.GOU = moudle:Get("GOU")
 	self.GOU.Activity = MStaff.gou
 	local XZ = moudle:Get("XZ")
-	XZ:AddOnButton(function ( ... )
+	XZ.Activity = not GameSetting.IsiOSCommit
+	if not GameSetting.IsiOSCommit then
+		XZ:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		if MStaff.gou == true then
 			MStaff.gou = false
@@ -51,17 +50,19 @@ function _M:OnCreate(...)
 			MStaff.gou = true
 			self.GOU.Activity = true
 		end
-		_P.CreateStaffList(self,true)
+		_P.CreateStaffList(self)
 		end, nil, 0.9)
+	end
+		
+	self.mOrderIngText = moudle:Get("OrderIngText")
 
 	self.mRawTableItems = {}
 	self.mRawTableItems2 = {} -- 没有获得的员工
-	_P.CreateStaffList(self,false)
+	_P.CreateStaffList(self)
 	local TextTitle = moudle:Get("C_Text")
 	TextTitle.Text = Csv.Text("staff_title")
 	local TextStaffNum = moudle:Get("StaffNum")
-	TextStaffNum.Text = Csv.Text("staff_num")
-	moudle:Get("NumText").Text = tostring(MStaff.StaffNum)
+	TextStaffNum.Text = Csv.Text("staff_num",{num = tostring(MStaff.StaffNum)})
 
 	local BtnClose = moudle:Get("C_Back_Btn")
 	BtnClose:AddOnButton(function ( ... )
@@ -78,9 +79,24 @@ function _M:OnCreate(...)
 	--排序
 	self.isSorts = false
 	
-	moudle:Get("Order").Text = Csv.Text("staff_order")
+	if not GameSetting.IsiOSCommit then
+		moudle:Get("Order").Text = Csv.Text("staff_order")
+	end
 	for i = 1,5,1 do
 		moudle:Get("ordertext"..i).Text = Csv.Text("staff_order_"..i) 
+	end
+	
+	self.aword = moudle:Get("Aword")
+	self.orderRect = moudle:Get("OrderBG")
+	self.orderIng = moudle:Get("OrderIng")
+	self.orderRect.Activity = self.isSorts
+
+	local orderIngBtn  = moudle:Get("OrderIngBG")
+	orderIngBtn.Activity = not GameSetting.IsiOSCommit
+	if not GameSetting.IsiOSCommit then
+		orderIngBtn:AddOnButton(function()
+			_P.ShowSortItems(self)
+		end)
 	end
 
 	moudle:Get("order1"):AddOnButton(function()
@@ -98,79 +114,47 @@ function _M:OnCreate(...)
 	moudle:Get("order5"):AddOnButton(function()
 		_P.ClickSortItem(self,MStaff.StaffsSort.star)
 	end)
+
+	moudle:Get("C_text").Text = Csv.Text("lineup_7")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		WindowMgr.Create("ULineUp")
+	end,nil,0.9)
+
+	self:RegistRedpoint(moudle:Get("teamRed"), Define.SysId.LineUp)
+end
+
+function _P.ShowSortItems(self)
+	self.isSorts = not self.isSorts
+	self.orderRect.Activity = self.isSorts
+	
+	if self.isSorts then
+		self.aword.LocalRotation = CS.UnityEngine.Quaternion(0,0,0,1)
+		self.orderIng.SpriteName = "yg_sx_003"
+	else
+		self.aword.LocalRotation = CS.UnityEngine.Quaternion(0,0,180,1)
+		self.orderIng.SpriteName = "yg_sx_002"
+	end
 end
 
 function _R.ChangeStaffLv(self,staffid)
-	local moudle = self.mStaffMoudleTable[staffid]
+	local staffitem = self.mStaffMoudleTable[staffid]
 	local data = MStaff.GetStaffDataByID(staffid)
-	if moudle ~= nil and data ~= nil then
-		moudle:Get("Level").Text = data.level
+	if staffitem ~= nil and data ~= nil then
+		staffitem:Get("Level").Text = Csv.Text("staff_lv",{num = data.level})
 	end
 end
 
 function _R.ChangeStaffColor(self,staffid)
-	local moudle = self.mStaffMoudleTable[staffid]
+	local staffitem = self.mStaffMoudleTable[staffid]
 	local data = MStaff.GetStaffDataByID(staffid)
-	if moudle ~= nil and data ~= nil then
-		moudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
+	if staffitem ~= nil and data ~= nil then
+		staffitem:Get("BG").SpriteName = MStaff.Color2Image[data.color]
 	end
 end
 
 function _P.CreateStaffList(self,isForSort)
-	for i = 1,5 do
-		self.mMoudle:Get("order"..i).SpriteName = Default_Img
-	end
-	if MStaff.SortType ~= nil then
-		self.mMoudle:Get("order"..(MStaff.SortType + 1)).SpriteName = Select_Img
-	end
-
 	local contentTransform = self.mMoudle:Get("Content")
-	-- if not isForSort then
-	-- 	contentTransform:DestroyChildren()
-
-	-- 	local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
-	-- 	for k,v in ipairs(staffTableDatas) do
-	-- 		self.mRawTableItems[v.id] = _P.OnCreateItem(v,contentTransform)
-	-- 	end
-	-- 	self.mSortStaffDatas = staffTableDatas
-
-	-- 	staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-	-- 	for k,v in ipairs(staffTableDatas) do
-	-- 		self.mRawTableItems2[v.id] = _P.OnCreateItem(v,contentTransform)
-	-- 		self.mRawTableItems2[v.id].moudle.SelfRect.Activity = not MStaff.gou
-	-- 	end
-	-- else
-	-- 	local staffTableDatas = _P.GetSortStaffs(self,MStaff.StaffTable,MStaff.SortType)
-	-- 	for k,v in ipairs(staffTableDatas) do
-	-- 		local item = self.mRawTableItems[v.id]
-	-- 		if item ~= nil then
-	-- 			item.moudle.SelfRect.CachedTran:SetSiblingIndex(k - 1)
-	-- 		end
-	-- 	end
-
-	-- 	local num = #staffTableDatas
-	-- 	if Csv.Personnel ~= nil and MStaff.gou == false then
-	-- 		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-	-- 		for k,v in ipairs(staffTableDatas) do
-	-- 			local item = self.mRawTableItems2[v.id]
-	-- 			if item ~= nil then
-	-- 				item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
-	-- 				item.moudle.SelfRect.Activity = true
-	-- 			end
-	-- 		end
-	-- 	else
-	-- 		staffTableDatas = _P.GetSortStaffsNotObtained(self,MStaff.StaffTable,MStaff.SortType)
-	-- 		for k,v in ipairs(staffTableDatas) do
-	-- 			local item = self.mRawTableItems2[v.id]
-	-- 			if item ~= nil then
-	-- 				item.moudle.SelfRect.CachedTran:SetSiblingIndex(num + k - 1)
-	-- 				item.moudle.SelfRect.Activity = false
-	-- 			end
-	-- 		end
-	-- 	end
-	-- end
-
-
 	contentTransform:DestroyChildren()
 	self.mStaffMoudleTable = {}
 	local scroll = self.mMoudle:Get("scrollView")
@@ -210,26 +194,40 @@ end
 
 function _P.ScrollCallBack(self,index,data,itemMoudle)
 	if MStaff.NoStaff(data.id) then
-		itemMoudle:Get("BG_2").IsGray = true
+		itemMoudle:Get("pz").IsGray = true
+		itemMoudle:Get("BG").IsGray = true
 		itemMoudle:Get("Icon").IsGray = true
+		itemMoudle:Get("BG_3").IsGray = true
+		itemMoudle:Get("image").IsGray = true
+		itemMoudle:Get("light2").IsGray = true
 	else
-		itemMoudle:Get("BG_2").IsGray = false
+		itemMoudle:Get("pz").IsGray = false
+		itemMoudle:Get("BG").IsGray = false
 		itemMoudle:Get("Icon").IsGray = false
+		itemMoudle:Get("BG_3").IsGray = false
+		itemMoudle:Get("image").IsGray = false
+		itemMoudle:Get("light2").IsGray = false
 	end
 	local csvPerson = Csv.Personnel[data.id]
 
 	local ImgIcon = itemMoudle:Get("Icon")
-	ImgIcon.SpriteName = csvPerson.asset2
-	
-	itemMoudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
+	ImgIcon.SpriteName = csvPerson.asset
+	--ImgIcon.LocalPosition = Vector2(csvPerson.headPos[1],csvPerson.headPos[2])
 
-	itemMoudle:Get("BG_2"):AddOnButton(function ( ... )
+	itemMoudle:Get("BG"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		_P.OnClickItem(data.id)
-		end, nil, 1)
+		end, nil, 0.9)
 
 	local TextLevel = itemMoudle:Get("Level")
-	TextLevel.Text = data.level
+	local staffData = MStaff.GetStaffDataByID(data.id)
+	if staffData ~= nil then
+		TextLevel.Text = Csv.Text("staff_lv",{num = staffData.level})
+		itemMoudle:Get("BG").SpriteName = MStaff.Color2Image[staffData.color]
+	else
+		TextLevel.Text = Csv.Text("staff_lv",{num = data.level})
+		itemMoudle:Get("BG").SpriteName = MStaff.Color2Image[data.color]
+	end
 
 	local TextName = itemMoudle:Get("Name")
 	TextName.Text = MStaff.GetStaffName(data.id)--csvPerson.name
@@ -237,30 +235,9 @@ function _P.ScrollCallBack(self,index,data,itemMoudle)
 	local ImgRedPoint = itemMoudle:Get("RedPoint")
 	ImgRedPoint.Activity = MStaff.GetRedPointState(data.id)
 
+	
 	for i = 1,7 do
-		local imgStar = itemMoudle:Get("Star"..i)
-		if imgStar ~= nil then
-			imgStar.Activity = false
-		end
-	end
-
-	for i = 1,csvPerson.star do
-		itemMoudle:Get("Star"..i).Activity = true
-	end
-
-	for i = 1,4 do
-		local imgZizhi = itemMoudle:Get("Zizhi"..i)
-		if imgZizhi ~= nil then
-			imgZizhi.Activity = false
-		end
-	end
-
-	for k,v in ipairs(csvPerson.specialtyIcon) do
-		local imgZizhi = itemMoudle:Get("Zizhi"..k)
-		if imgZizhi ~= nil then
-			imgZizhi.Activity = true
-			imgZizhi.SpriteName = v
-		end
+		itemMoudle:Get("Star"..i).Activity = csvPerson.star >= i
 	end
 
 	self.mStaffMoudleTable[data.id] = itemMoudle
@@ -297,7 +274,8 @@ end
 function _P.ClickSortItem(self,sortType)
 	--MStaff.SortType = sortType
 	MStaff.SetStaffsSortType(sortType)
-	_P.CreateStaffList(self,true)
+	_P.CreateStaffList(self)
+	_P.ShowSortItems(self)
 end
 
 function _P.GetSortStaffsNotObtained(self,sortType)
@@ -318,6 +296,7 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 	--属性排序
 	--按照属性(实力)》综合资质》品质》星数》id排序
 	if sortType == MStaff.StaffsSort.attr then
+		self.mOrderIngText.Text = Csv.Text("staff_order_3")
 		table.sort(sortTable,function(a,b)
 			local isHaveA = MStaff.StaffTable[a.id] ~= nil
 			local isHaveB = MStaff.StaffTable[b.id] ~= nil
@@ -369,6 +348,7 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 	--等级排序
 	--按照等级》属性》综合资质》星数》id排序
 	elseif sortType == MStaff.StaffsSort.level then
+		self.mOrderIngText.Text = Csv.Text("staff_order_2")
 		table.sort(sortTable,function(a,b)
 			local isHaveA = MStaff.StaffTable[a.id] ~= nil
 			local isHaveB = MStaff.StaffTable[b.id] ~= nil
@@ -428,6 +408,7 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 	--资质排序
 	--按照综合资质》属性》品质》星数》id排序
 	elseif sortType == MStaff.StaffsSort.apitude then
+		self.mOrderIngText.Text = Csv.Text("staff_order_4")
 		table.sort(sortTable,function(a,b)
 			local isHaveA = MStaff.StaffTable[a.id] ~= nil
 			local isHaveB = MStaff.StaffTable[b.id] ~= nil
@@ -480,6 +461,7 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 	--星数排序
 	--按照星级》属性》综合资质》品质》id排序
 	elseif sortType == MStaff.StaffsSort.star then
+		self.mOrderIngText.Text = Csv.Text("staff_order_5")
 		table.sort(sortTable,function(a,b)
 			local isHaveA = MStaff.StaffTable[a.id] ~= nil
 			local isHaveB = MStaff.StaffTable[b.id] ~= nil
@@ -530,6 +512,7 @@ function _P.GetSortStaffsNotObtained(self,sortType)
 		return sortTable
 	else
 		--id排序
+		self.mOrderIngText.Text = Csv.Text("staff_order_1")
 		return sortTable
 	end
 end
@@ -540,6 +523,13 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 		table.insert(sortTable,v)
 	end
 
+	if GameSetting.IsiOSCommit then
+		table.sort(sortTable,function(a,b)
+			return a.level > b.level 
+		end)
+		return sortTable
+	end
+
 	table.sort(sortTable,function(a,b)
 		return a.id < b.id 
 	end)
@@ -548,6 +538,7 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 	--属性排序
 	--按照属性(实力)》综合资质》品质》星数》id排序
 	if sortType == MStaff.StaffsSort.attr then
+		self.mOrderIngText.Text = Csv.Text("staff_order_3")
 		table.sort(sortTable,function(a,b)
 			local aAttr = MStaff.GetAllAttr(a.id)
 			local bAttr = MStaff.GetAllAttr(b.id)
@@ -577,6 +568,7 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 	--等级排序
 	--按照等级》属性》综合资质》星数》id排序
 	elseif sortType == MStaff.StaffsSort.level then
+		self.mOrderIngText.Text = Csv.Text("staff_order_2")
 		table.sort(sortTable,function(a,b)
 			if a.level == b.level then
 				local aAttr = MStaff.GetAllAttr(a.id)
@@ -606,6 +598,7 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 	--资质排序
 	--按照综合资质》属性》品质》星数》id排序
 	elseif sortType == MStaff.StaffsSort.apitude then
+		self.mOrderIngText.Text = Csv.Text("staff_order_4")
 		table.sort(sortTable,function(a,b)
 			local aZiZhi = MStaff.GetAllApitude(a.id)
 			local bZiZhi = MStaff.GetAllApitude(b.id)
@@ -636,6 +629,7 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 	--星数排序
 	--按照星级》属性》综合资质》品质》id排序
 	elseif sortType == MStaff.StaffsSort.star then
+		self.mOrderIngText.Text = Csv.Text("staff_order_5")
 		table.sort(sortTable,function(a,b)
 			local aStar = Csv.Personnel[a.id].star
 			local bStar = Csv.Personnel[b.id].star
@@ -664,71 +658,9 @@ function _P.GetSortStaffs(self,rawTable,sortType)
 		return sortTable
 	else
 		--id排序
+		self.mOrderIngText.Text = Csv.Text("staff_order_1")
 		return sortTable
 	end
-end
-
-function _P.OnCreateItem(data,contentTransform)
-	local staff = {}
-	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Staff_Item", WindowType.UI, 0)
-	if MStaff.NoStaff(data.id) then
-		itemMoudle:Get("BG_2").IsGray = true
-		itemMoudle:Get("Icon").IsGray = true
-	else
-		itemMoudle:Get("BG_2").IsGray = false
-		itemMoudle:Get("Icon").IsGray = false
-	end
-	local csvPerson = Csv.Personnel[data.id]
-
-	local ImgIcon = itemMoudle:Get("Icon")
-	ImgIcon.SpriteName = csvPerson.asset2
-	--ImgIcon.LocalPosition = Vector2(csvPerson.headPos[1],csvPerson.headPos[2])
-
-	itemMoudle:Get("BG_2").SpriteName = MStaff.Color2Image[data.color]
-
-	itemMoudle:Get("BG_2"):AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		_P.OnClickItem(data.id)
-		end, nil, 1)
-
-	local TextLevel = itemMoudle:Get("Level")
-	TextLevel.Text = data.level
-
-	local TextName = itemMoudle:Get("Name")
-	TextName.Text = MStaff.GetStaffName(data.id)--csvPerson.name
-
-	local ImgRedPoint = itemMoudle:Get("RedPoint")
-	ImgRedPoint.Activity = MStaff.GetRedPointState(data.id)
-
-	for i = 1,7 do
-		local imgStar = itemMoudle:Get("Star"..i)
-		if imgStar ~= nil then
-			imgStar.Activity = false
-		end
-	end
-
-	for i = 1,csvPerson.star do
-		itemMoudle:Get("Star"..i).Activity = true
-	end
-
-	for i = 1,4 do
-		local imgZizhi = itemMoudle:Get("Zizhi"..i)
-		if imgZizhi ~= nil then
-			imgZizhi.Activity = false
-		end
-	end
-
-	for k,v in ipairs(csvPerson.specialtyIcon) do
-		local imgZizhi = itemMoudle:Get("Zizhi"..k)
-		if imgZizhi ~= nil then
-			imgZizhi.Activity = true
-			imgZizhi.SpriteName = v
-		end
-	end
-
-	staff.moudle = itemMoudle
-
-	return staff
 end
 
 function _P.OnClickItem(id)

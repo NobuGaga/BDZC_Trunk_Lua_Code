@@ -67,7 +67,6 @@ function _M:OnCreate(chooseFuncId)
 	local scrollView = moudle:Get("downScroll")
 	local content = moudle:Get("content")
 	self.mContent = content
-	self.SelectImgTab = {}
 	--local funcIDs = {}
 	local lastChoose = 0
 
@@ -86,22 +85,21 @@ function _M:OnCreate(chooseFuncId)
 	if count > 0 then
 		lastChoose = chooseFuncId
 		local isHave = false
-		local defaultColor = Color(1,1,1,1)
+		local WhiteColor = Color(1, 1, 1, 1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "HXbian_001_23", "HXbian_001_23",defaultColor,defaultColor,beforeBtn,nextBtn,scrollView,content)
+		end, "fl_007", "fl_008", nil, WhiteColor, nil, nil, nil, nil, WhiteColor)
 	
 		for k,v in pairs(funcs) do
 			local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item", WindowType.UI, 10)
-			local sheetRect = sheetMoudle:Get("BG")
+			local sheetRect = sheetMoudle.SelfRect
 			sheetRect.Activity = true
 
+			sheetMoudle:Get("C_text_11").Text = v.name
 			local sheetNameText =  sheetMoudle:Get("nameText_1")
 			sheetNameText.Activity = true
 
-			tabHandle:Add(v.id, sheetRect, sheetNameText, v.name)
-			self.SelectImgTab[v.id] = sheetMoudle:Get("select")
-			self.SelectImgTab[v.id].Activity = false
+			tabHandle:Add(v.id, sheetRect, sheetNameText, v.name, sheetMoudle:Get("select_1"))
 		
 			if lastChoose == v.id then
 				isHave = true
@@ -118,6 +116,19 @@ function _M:OnCreate(chooseFuncId)
 		self.mTabHandle = tabHandle
 	end	
 	
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Welfare"),
+												39, 270,
+												function (sp)
+													if moudle then
+														local node = moudle:Get("iOSBg")
+														if node and sp then
+															node.Sprite = sp
+															node.Activity = true
+														end
+													end
+												end, Vector4(7, 153, 7, 102))
+	end
 end
 
 function _P.SortFunc(funcs)
@@ -302,12 +313,6 @@ function _P.OnChoose(self, funcId)
 
 	MWelfare.selectToggle = funcId
 	self.mTitle.Text = Csv.Func[funcId].name
-
-	if self.NowSelectImg ~= nil then
-		self.NowSelectImg.Activity = false
-	end
-	self.NowSelectImg = self.SelectImgTab[funcId]
-	self.NowSelectImg.Activity = true
 end
 
 

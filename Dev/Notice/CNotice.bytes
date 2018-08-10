@@ -49,6 +49,7 @@ function _M.HttpShowNotice(keyWord)
 	local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.NoticeUrl)
 	session:AppendParam("spid", GameSetting.Spid)
 	session:AppendParam("sbid", GameSetting.Sbid)
+	session:AppendParam("areaid", GameSetting.AreaId)
 	session:SetCallBack(function (isOk, param1, param2)
 		if isOk then
 			local retTable = rapidjson.decode(param1)

@@ -15,12 +15,14 @@ function _M:ctor(parent)
 	self.munlockValue = moudle:Get("content2")
 	self.mlockView = moudle:Get("UnOpenBg")
 	self.munlockView = moudle:Get("OpenBg")
+	self.mLockBG = moudle:Get("UnOpenBg")
+	self.mUnlockBG = moudle:Get("OpenBg")
 
 	local lockTitle = moudle:Get("UnOpenTitle")
 	local unlockTitle = moudle:Get("OpenTitle")
 
-	lockTitle.Text = Csv.Text("welfare_1")
-	unlockTitle.Text = Csv.Text("welfare_2")
+	lockTitle.Text = "未解锁功能"
+	unlockTitle.Text = "已解锁功能"
 
 	_P.ShowlockFunc(self)
 end
@@ -31,6 +33,8 @@ function _P.ShowlockFunc(self)
 	local unlockValue = self.munlockValue
 	local lockView = self.mlockView
 	local unlockView = self.munlockView
+	local lockBg = self.mLockBG 
+	local unlockBg = self.mUnlockBG
 
 	local titleHeight = 100
 	local lockIndex = 0
@@ -38,21 +42,23 @@ function _P.ShowlockFunc(self)
 
 	for k,v in pairs(lockFuncs) do
 		if MMain.FuncIsOpen(v.sysID) then
-			local openNode = _P.CreateUnlockItem(unlockValue,v)
+			_P.CreateUnlockItem(unlockValue,v)
 			unlockIndex = unlockIndex+1
 		else
-			local lockNode = _P.CreateLockItem(lockValue,v)
+			_P.CreateLockItem(lockValue,v)
 			lockIndex = lockIndex +1
 		end
 	end
 	if lockIndex > 0 then
-		lockView.SizeDelta = Vector2(717,titleHeight+lockIndex*146)
+		lockView.SizeDelta = Vector2(707,titleHeight+lockIndex*150)
+		lockBg.SizeDelta = Vector2(707,titleHeight+lockIndex*150)
 	else
 		lockView.Activity = false
 	end
 
 	if unlockIndex > 0 then
-		unlockView.SizeDelta = Vector2(717,titleHeight+unlockIndex*146)
+		unlockView.SizeDelta = Vector2(707,titleHeight+unlockIndex*110)
+		unlockBg.SizeDelta = Vector2(707,titleHeight+unlockIndex*110)
 	else
 		unlockView.Activity = false
 	end

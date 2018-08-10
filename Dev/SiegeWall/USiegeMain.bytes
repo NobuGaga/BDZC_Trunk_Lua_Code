@@ -20,11 +20,14 @@ local UDISK_EFFECT_ID = 10155
 local ENEMY_EFFECT_ID = 10156
 local ITEM_EFFECT_ID = 10157
 
-local OWN_TEAM = Color(69/255,244/255,151/255,1)
-local OTHER_TEAM = Color(255/255,196/255,68/255,1)
+local OWN_TEAM_IMG = "gk_020"
+local OTHER_TEAM_IMG = "gk_021"
 
-local OWN_TEAM_BG = Color(255/255,131/255,131/255,1)
-local OTHER_TEAM_BG = Color(1,1,1,1)
+--local OWN_TEAM = Color(69/255,244/255,151/255,1)
+--local OTHER_TEAM = Color(255/255,196/255,68/255,1)
+
+--local OWN_TEAM_BG = Color(255/255,131/255,131/255,1)
+--local OTHER_TEAM_BG = Color(1,1,1,1)
 
 local BUFF_TEAM_ID = 4
 local BUFF_ALLKILL_ID = 5
@@ -264,6 +267,7 @@ function _M:OnCreate()
 			_P.ShowEndRect(self,moudle,self.mSelectPhase)
 			return
 		end
+
 		if not MSiege.CheckOpenIng() then
 			if isOpenState ~= 1 then
 				isOpenState = 1
@@ -718,12 +722,14 @@ function _P.ShowIngRect(self,moudle,index)
 				if ownTeam == i then
 					_buff.Activity = true
 					_buff.SpriteName = _P.GetBuffImg(BUFF_TEAM_ID)
-					_bloodImg.Color = OWN_TEAM
+					--_bloodImg.Color = OWN_TEAM
+					_bloodImg.SpriteName = OWN_TEAM_IMG
 					
-					_slider.Color = OWN_TEAM_BG
+					--_slider.Color = OWN_TEAM_BG
 				else
-					_bloodImg.Color = OTHER_TEAM
-					_slider.Color = OTHER_TEAM_BG
+					--_bloodImg.Color = OTHER_TEAM
+					_bloodImg.SpriteName = OTHER_TEAM_IMG
+					--_slider.Color = OTHER_TEAM_BG
 				end
 
 				local progress = MSiege.Progress[i].progressCur/MSiege.Progress[i].progressMax
@@ -877,7 +883,7 @@ function _P.ReduceTime(self)
 end
 
 function _P.GetTargetTime(hour)
-	local cur_time = os.time()
+	local cur_time = HeartBeat.ServSecond()--os.time()
 	local temp_date = os.date("*t", cur_time)
 	local targetTime =  os.time({year=temp_date.year, month=temp_date.month, day=temp_date.day, hour=hour})
 

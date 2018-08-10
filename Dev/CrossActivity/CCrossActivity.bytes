@@ -1,0 +1,162 @@
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
+--@RefType [Dev.CrossActivity.CrossRankReward.CCrossRankReward.bytes#_M]
+local CCrossRankReward = JRequire "Dev.CrossActivity.CrossRankReward.CCrossRankReward"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+-- @RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+------------------------------------活动类型方法----------------------------------
+local DataNameToType = {
+	rankReward = Define.ActivityType.CrossRankReward,
+}
+
+local DataNameToSysID = {
+	rankReward = Define.SysId.CrossRankReward,
+}
+
+local ActTypeToModule = {
+	[Define.ActivityType.CrossRankReward] = "Dev.CrossActivity.CrossRankReward.CCrossRankReward",
+}
+
+local ActivityTypeModule = {}
+function _P.GetActivityModuleForType(actType)
+	if not ActivityTypeModule[actType] then
+		local path = ActTypeToModule[actType]
+		if path then
+			--JRequire会把根层CActivity require 进来？
+			ActivityTypeModule[actType] = JRequire (path)
+		end
+	end
+	return ActivityTypeModule[actType]
+end
+
+function _P.SetRegist(func_send, func_recv)
+	for actType, _ in pairs(ActTypeToModule) do
+		local typeModule = _P.GetActivityModuleForType(actType)
+		if typeModule then
+			if typeModule.func_send then
+				if func_send == nil then
+					func_send = {}
+				end
+				for cmdID, protoName in pairs(typeModule.func_send) do
+					func_send[cmdID] = protoName
+				end	
+			end
+			if typeModule.func_recv then
+				if func_recv == nil then
+					func_recv = {}
+				end
+				for cmdID, protoData in pairs(typeModule.func_recv) do
+					if type(protoData) == "table" then
+						func_recv[cmdID] = protoData
+					end
+				end	
+			end
+		end
+	end
+	return func_send, func_recv
+end
+
+------------------------------------  C层方法  ----------------------------------
+local CMD_ID = 
+{
+	cCURankRewardGet = 1,	--领奖请求		PCrossRankReward.CCURankRewardGet
+
+	sCURankRewardGet = 1,	--返回领奖结果	PCrossRankReward.SCURankRewardGet
+	sCUActivityInit = 2,	--初始化		PCrossRankReward.SCURankReward
+	sCUActivityUpdate = 3,	--更新			PCrossRankReward.SUpdateState
+}
+
+function _M.ModuleClean()
+	MCrossActivity.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	--发送消息协议注册
+	local func_send = 
+	{
+		[CMD_ID.cCURankRewardGet] = "PActivity.CGet",
+	}
+	--接收消息协议注册
+	local func_recv = 
+	{
+		[CMD_ID.sCURankRewardGet]  = {proto = "PActivity.SActivity", 	  handle = _P.OnInit	  },
+		[CMD_ID.sCUActivityInit]   = {proto = "PActivity.SActivity", 	  handle = _P.OnUpdate	  },
+		[CMD_ID.sCUActivityUpdate] = {proto = "PActivity.SActivityGeted", handle = _P.OnGetReward},
+	}
+
+	func_send, func_recv = _P.SetRegist(func_send, func_recv)
+	--调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.CrossRankReward, func_send, func_recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset, function()
+	_P.OnDayout()
+end, true)
+
+------------------Client -- Server----------------
+--领奖请求
+function _M.GetReward(actId, index)
+	_M.Send(CMD_ID.cCURankRewardGet, {actId = actId})
+end
+
+------------------Server -- Client----------------
+function _P.OnInit(data)
+	MCrossActivity.Clean()
+	_P.RefreshData(data, true)
+end
+
+function _P.OnUpdate(data)
+	_P.RefreshData(data, false)
+	_P.RefreshMainBtn()
+end
+
+--领取奖励成功返回
+function _P.OnGetReward(data)
+	local actId = data.actId
+	local info = MCrossActivity.GetFromId(actId)
+	if info ~= nil then
+		local typeModule = _P.GetActivityModuleForType(info.actType)
+		if typeModule then
+			typeModule.OnGetReward(data, info)
+		end
+	end
+end
+
+function _P.RefreshData(data, isInit)
+	for key, value in pairs(data) do
+		local actType = DataNameToType[key]
+		if actType then
+			if not isInit then
+				MCrossActivity.ClearForType(actType)
+				local sysID = DataNameToSysID[key]
+				if sysID then
+					CMain.UpdateRedpoint(false, sysID)
+				end
+			end
+			local typeModule = _P.GetActivityModuleForType(actType)
+			if typeModule then
+				typeModule.RefreshData(actType, value)
+			end
+		end
+	end
+end
+
+function _P.RefreshMainBtn()
+	WindowMgr.Call("UMain", "RefreshTopBtns")
+end
+
+-- 每日12点重置
+function _P.OnDayout()
+	CCrossRankReward.OnDayout()
+end
+
+return _M

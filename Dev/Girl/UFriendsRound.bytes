@@ -175,6 +175,7 @@ function _P.SetFriendItem(data,parent,self,monentIndex)
 	local nameText = _moudle:Get("name")
 	local infoText = _moudle:Get("Info")
 	local img = _moudle:Get("Img")
+	local imgRect = _moudle:Get("mask")
 
 	local message = _moudle:Get("Message")
 	local messageText = _moudle:Get("messageText")
@@ -248,15 +249,18 @@ function _P.SetFriendItem(data,parent,self,monentIndex)
 		end
 		infoText.Text = LuaUtil.Format(PosData.title, {name = MPlayer.GetName()})
 	end
+	local infoHig = infoText.PreferredHeight - 30
 	messageHig = messageHig + messageValue.PreferredHeight + 30
+
 
 	if PosData.pic_id ~= nil then
 		img.SpriteName = PosData.pic_id
+		imgRect.LocalPosition = Vector2(imgRect.LocalPosition.x,imgRect.LocalPosition.y - infoHig)
 		itemHig = itemHig + 255
-		messagePoxY = -420
+		messagePoxY = -420 - infoHig
 	end
 
-	itemHig = itemHig + messageHig
+	itemHig = itemHig + messageHig + infoHig
 
 	message.LocalPosition = Vector2(55,messagePoxY)
 	message.SizeDelta = Vector2(543,messageHig)

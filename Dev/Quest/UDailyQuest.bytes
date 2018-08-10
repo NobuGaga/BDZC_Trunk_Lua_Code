@@ -20,9 +20,6 @@ local Linear = CS.DG.Tweening.Ease.Linear
 ----------------------常量定义--------------------------
 local GTE_EFFECT_ID = 5
 
-local COLOR_BLUE = Color(93/255,153/255,255/255,1)
-local COLOR_RED = Color(255/255,93/255,140/255,1)
-
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
 --私有函数模块 *** 只放置私有函数, 禁止放变量
@@ -30,14 +27,35 @@ local _P = {}
 
 local _R = {}
 
+local iOSImage = {
+	iOSBg = { 		name = "iOSBg",
+					width = 54, height = 212,
+					sliceVector4 = Vector4(8, 75, 8, 116),
+					slice = {
+							left = 8,
+							right = 8,
+							top = 116,
+							bottom = 75,
+					}, 
+			}, 
+	iOSItemBg = { 	name = "iOSItemBg",
+					width = 20, height = 17,
+					sliceVector4 = Vector4(2, 2, 2, 2),
+					slice = {
+						left = 2,
+						right = 2,
+						top = 2,
+						bottom = 2,
+					}, 
+				},  
+	iconBg = {	name = "iconBg",
+				width = 151, height = 145,
+			}
+}
+
 function _P.DoTaskUpdate(self, questid)
 	local info = self.TaskList[questid]
 	local tmp = MQuest.GetDailyQuest(questid)
-	if tmp.pro >= tmp.maxval then
-		info.targetText.Color = COLOR_BLUE
-	else
-		info.targetText.Color = COLOR_RED
-	end
 	info.targetText.Text = Csv.Text("quest_pro", {pro = tmp.pro, max = tmp.maxval})
 	if tmp.state ~= info.state then
 		if tmp.state == MQuest.State.Finish then
@@ -212,11 +230,9 @@ function _P.UpdateActiveAward(self, actId)
 			info.effect:Destroy()
 		end
 		if nowState == 1 then
-			--info.chest.SpriteNameAutoScale = line.getedIcon
-			info.chest.SpriteName = line.getedIcon
+			info.chest.SpriteNameAutoScale = line.getedIcon
 		elseif nowState == 2 then
-			--info.chest.SpriteNameAutoScale = line.lockIcon
-			info.chest.SpriteName = line.lockIcon
+			info.chest.SpriteNameAutoScale = line.lockIcon
 		else
 			info.chest.SpriteName = ""
 			info.effect = CCommon.CreateEffect(info.parent,line.canGetEffect,info.chest.LocalPosition, nil, line.effectParam)
@@ -299,31 +315,25 @@ function _M:OnCreate()
 		line = Csv.DailyQuest[k]
 		assert(line ~= nil, k)
 		taskMoudle = self:CreateMoudle(taskParent, "M_Daily_TaskItem")
-		taskMoudle:Get("HYD").Text = Csv.Text("quest_hyd")
-		taskMoudle:Get("Hydtext").Text = line.activeAward
+		taskMoudle:Get("img").Text = line.title
 		taskMoudle:Get("title").Text = line.title
 		taskMoudle:Get("target").Text = Csv.Text("quest_state")
 		taskMoudle:Get("rewardTitle").Text = Csv.Text("quest_reward")		
 
 		local rewardText = {}
-		-- if line.activeAward ~= nil and line.activeAward > 0 then
-		-- 	table.insert(rewardText, Csv.Text("quest_actAdd", {num = line.activeAward}))
-		-- end
+		if line.activeAward ~= nil and line.activeAward > 0 then
+			table.insert(rewardText, Csv.Text("quest_actAdd", {num = line.activeAward}))
+		end
 		if line.reward ~= nil then
 			for _,v in pairs(line.reward) do
 				table.insert(rewardText, string.format("%s+%d", Csv.Item[v[1]].name, v[2]))
 			end
 		end
 		if #rewardText > 0 then
-			local tmp = ""
-			if #rewardText > 0 then
-				for i=1,#rewardText do
-					-- tmp = string.format("%s,%s", tmp, rewardText[i])
-					if i == 1 then
-						tmp = rewardText[i]
-					else
-						tmp = string.format("%s,%s", tmp, rewardText[i])
-					end
+			local tmp = rewardText[1]
+			if #rewardText > 1 then
+				for i=2,#rewardText do
+					tmp = string.format("%s,%s", tmp, rewardText[i])
 				end
 			end
 			taskMoudle:Get("rewardText").Text = tmp
@@ -352,14 +362,48 @@ function _M:OnCreate()
 			_P.OnTaskPress(k)
 		end, nil, 0.9)		
 		self.TaskList[k] = info
-
-		if item.pro >= item.maxval then
-			info.targetText.Color = COLOR_BLUE
-		else
-			info.targetText.Color = COLOR_RED
-		end
 		info.targetText.Text = Csv.Text("quest_pro", {pro = item.pro, max = item.maxval})
 		_P.UpdateTaskBtn(item.state, info)
+
+		if GameSetting.IsiOSCommit then
+			CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iOSItemBg.name, "Task"),
+											iOSImage.iOSItemBg.width, iOSImage.iOSItemBg.height,
+											function (sp)
+												if taskMoudle then
+													local node = taskMoudle:Get(iOSImage.iOSItemBg.name)
+													if node and sp then
+														node.Sprite = sp
+														node.Activity = true
+													end
+												end
+											end, iOSImage.iOSItemBg.sliceVector4)
+											
+			CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iconBg.name, "Task"),
+											iOSImage.iconBg.width, iOSImage.iconBg.height,
+											function (sp)
+												if taskMoudle then
+													local node = taskMoudle:Get(iOSImage.iconBg.name)
+													if node and sp then
+														node.Sprite = sp
+													end
+												end
+											end)
+											
+		end
+	end
+
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iOSBg.name, "Task"),
+												iOSImage.iOSBg.width, iOSImage.iOSBg.height,
+												function (sp)
+													if moudle then
+														local node = moudle:Get(iOSImage.iOSBg.name)
+														if node and sp then
+															node.Sprite = sp
+															node.Activity = true
+														end
+													end
+												end, iOSImage.iOSBg.sliceVector4)
 	end
 end
 

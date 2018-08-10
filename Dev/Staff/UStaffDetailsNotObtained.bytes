@@ -2,21 +2,21 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local UStaffAptitude = JRequire "Dev.Staff.UStaffAptitude"
 local UStaffSkill = JRequire "Dev.Staff.UStaffSkill"
 local UStaffHalo = JRequire "Dev.Staff.UStaffHalo"
+local UStaffTalent = JRequire "Dev.Staff.UStaffTalent"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CStaff = JRequire "Dev.Staff.CStaff"
 local MMain = JRequire "Dev.Main.MMain"
 local MBag = JRequire "Dev.Bag.MBag"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local JTweenerManager = CS.JTween.JTweenerManager
-local UStaffAttrPageNotObtained = JRequire "Dev.Staff.UStaffAttrPageNotObtained"
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-local Staff_Attr = 10104
+local MAX_TAG = 6		--标签数量最大值
 
 function _M:BeforeDestroy()
 	if self.ChooseMoudle ~= nil then
@@ -41,8 +41,8 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = UStaffSkill.new(self.PageNode,self.mID)
 	elseif funcId == Define.SysId.Staff_Aureole then
 		self.ChooseMoudle = UStaffHalo.new(self.PageNode,self.mID)
-	elseif funcId == Staff_Attr then
-		self.ChooseMoudle = UStaffAttrPageNotObtained.new(self.PageNode, self.mID)
+	elseif funcId == Define.SysId.Staff_Talent then
+		self.ChooseMoudle = UStaffTalent.new(self.PageNode,self.mID)
 	end
 
 	MStaff.LastChoose = funcId
@@ -58,14 +58,11 @@ end
 
 --界面构建
 function _M:OnCreate(id,chooseFuncId)
-	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_UDetails")
+	local moudle = self:CreateMoudle(self._RootNode, "M_Staff_UDetails_NotOtained")
 	self.mMoudle = moudle
 	local person = Csv.Personnel[id]
 	self.mID = id
 
-	for i = 1,7 do
-		moudle:Get("Star"..i).Activity = false
-	end
 	for i = 1,person.star do
 		moudle:Get("Star"..i).Activity = true
 	end
@@ -77,37 +74,26 @@ function _M:OnCreate(id,chooseFuncId)
 	TextCost.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
 	self.mCoin = MBag.GetItemNum(Define.AssetsType.Coin)
 	moudle:Get("StaffName").Text = person.name
-	-- moudle:Get("InfoText").Text = person.tips
+	moudle:Get("InfoText").Text = person.tips
 
-	moudle:Get("ty_145").SpriteName = "ty_145"
+	moudle:Get("Level").Text = Csv.Text("staff_level")
 	moudle:Get("Speciality").Text = Csv.Text("staff_speciality")
+	moudle:Get("Property").Text = Csv.Text("staff_property")
+	moudle:Get("Attri1").Text = Csv.Text("staff_attri1")
+	moudle:Get("Attri2").Text = Csv.Text("staff_attri2")
+	moudle:Get("Attri3").Text = Csv.Text("staff_attri3")
+	moudle:Get("Attri4").Text = Csv.Text("staff_attri4")
 
-	local width = 90 + #person.specialtyIcon * 62
-	moudle:Get("ty_145").SizeDelta = Vector2(width,moudle:Get("ty_145").PreferredWidth)
+	self.TextMax = moudle:Get("MaxText")
+	self.TextMax.Text = Csv.Text("staff_lvmax")
 
-	for i = 1,4 do
-		local ygzz = moudle:Get("ygzz_"..i)
-		if ygzz ~= nil then
-			if person.specialtyIcon[i] ~= nil then
-				ygzz.Activity = true
-				ygzz.SpriteName = person.specialtyIcon[i]
-			else
-				ygzz.Activity = false
-			end
-		end
-	end
-
-	if person.prefab ~= nil and person.prefab > 0 then
-		CCommon.CreateActor(moudle:Get("StaffIcon"), person.prefab, CCommon.ActorFieldMap.staff_info)
-	else
-		moudle:Get("StaffIcon").SpriteName = person.asset
-	end	
+	moudle:Get("StaffIcon").SpriteName = person.asset
+	moudle:Get("SpecialityData").Text = person.specialty
 
 	local BtnClose = moudle:Get("C_Back_Btn")
 	BtnClose:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		WindowMgr.Call("UStaff","ResetPoint")
-		-- SoundMgr.DestroySystem()
 		self:Destroy()
 		end, nil, 1.2)
 
@@ -116,6 +102,14 @@ function _M:OnCreate(id,chooseFuncId)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URuleTips",Define.SysId.Staff)
 		end, nil, 1.2)
+
+	local BtnUp = moudle:Get("BtnUp")
+	BtnUp:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UStaffTrack", id)
+		end, nil, 0.9)
+
+	_P.OnCreateData(self,id)
 
 	local node = moudle:Get("PageNode")
 	self.PageNode = node
@@ -127,21 +121,18 @@ function _M:OnCreate(id,chooseFuncId)
 		local colorDefault = Color(0/255,195/255,255/255,1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "yth_023", "yth_023_2",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
 		local index = 0
-		--员工属性
-		index = index + 1
-		tabHandle:Add(Staff_Attr, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), Csv.Text("staff_Attr"))
 		for k,v in pairs(funcs) do
 			index = index + 1
 			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
 		end
-		tabHandle:Choose(Staff_Attr)
+		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
 	end
-	if count < 3 then
-		for i=count + 2,4 do
+	if count < 4 then
+		for i=count + 1,4 do
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
@@ -170,11 +161,17 @@ function _M:OnCreate(id,chooseFuncId)
 		end
 	end)
 
-	local sexIcon = moudle:Get("ModifyIcon")
-	if person.sex == Define.Sex.Female then
-		sexIcon.SpriteName = "dl_007"
-	else
-		sexIcon.SpriteName = "dl_006"
+	for i = 1,MAX_TAG do
+		moudle:Get("Tab"..i).Activity = false
+	end
+	if person.labelImg ~= nil then
+		for k,v in ipairs(person.labelImg) do
+			local img = moudle:Get("Tab"..k)
+			if img ~= nil then
+				img.Activity = true
+				img.SpriteName = v
+			end
+		end
 	end
 end
 

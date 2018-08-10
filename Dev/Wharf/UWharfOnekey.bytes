@@ -72,14 +72,14 @@ function _P.ShowPeopleItem(self,v)
 	local nameText = itemMoudle:Get("nameText")
 	local rewards = itemMoudle:Get("InfoText")
 
-	headIcon.SpriteName = peopleData.xieicon
-	--headIcon:SetNativeSize()
+	headIcon.SpriteName = peopleData.icon
+	headIcon:SetNativeSize()
 	headIcon.LocalPosition = Vector2(peopleData.onekeyPos[1],peopleData.onekeyPos[2])
 	nameText.Text = peopleData.name
 
 	local awardStr = ""
 	if peopleData.type == 4 then
-		awardStr = awardStr.."<color=#ff5d8c>"..Csv.Text("Wharf_nothing").."</color>".."\n\n"
+		awardStr = awardStr.."<color=#ff0000>"..Csv.Text("Wharf_nothing").."</color>".."\n\n"
 	end
 	
 	for k2,v2 in pairs(v.itemList)do
@@ -87,14 +87,14 @@ function _P.ShowPeopleItem(self,v)
 		if itemData ~= nil then
 			if v2.count >0 then
 				if v2.id == Define.SpecialItem.Intimacy then
-					awardStr = awardStr.."<color=#5d99ff>"..peopleData.name.." "..itemData.name.."+"..v2.count.."</color>"
+					awardStr = awardStr.."<color=#00ff00>"..peopleData.name.." "..itemData.name.."+"..v2.count.."</color>"
 				elseif v2.id == Define.SpecialItem.Meet then	--声望
 					self.mPrestigeNum = self.mPrestigeNum + v2.count
 				else
 					awardStr = awardStr..itemData.name.."+"..v2.count
 				end
 			else
-				awardStr = awardStr.."<color=#ff5d8c>"..itemData.name..v2.count.."</color>"
+				awardStr = awardStr.."<color=#ff0000>"..itemData.name..v2.count.."</color>"
 			end
 			awardStr = awardStr.."\n"
 		end

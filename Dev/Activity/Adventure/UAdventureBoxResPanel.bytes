@@ -1,0 +1,58 @@
+-- 奇遇宝箱获得奖励界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(data, addExp, callBack)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Success2")
+	self.OnCloseCall = callBack
+
+	module:Get("Title").Text = Csv.Text("siege_getitems_title")
+	module:Get("C_text_0").Text = Csv.Text("siege_udisk_get")
+	local getBtn = module:Get("C_Btn_b")
+	getBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil, 0.9)
+
+	local content = module:Get("content")
+	if data.reward ~= nil then
+		local rewards = MActivity.AdventureRewardSplit(data.reward)
+		for k,v in pairs(rewards.items) do
+			CCommon.CreateItem(content, v.id, CCommon.ShowItemTips, {num = v.count})
+		end
+
+		local pointText = module:Get("Tips1")
+		local expText = module:Get("Tips2")
+
+		pointText.Text = Csv.Text("adventure_enemy_point", {num = rewards.point})
+		pointText.Activity = rewards.point ~= 0
+
+		expText.Text = Csv.Text("adventure_main_expTip1", {num = addExp})
+		expText.Activity = addExp ~= 0
+	end
+end
+
+
+return _M

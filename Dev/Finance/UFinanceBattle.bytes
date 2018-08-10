@@ -71,6 +71,7 @@ end
 ----获取更新副本信息
 --------------
 function _R.RefreshInvade(self,_data)
+	print("RefreshInvade!!!")
 	local _type = MFinance.FinaceType.FinaceRank_1
 
 	local fightData = self.mFightData
@@ -323,19 +324,10 @@ end
 function _P.OnChooseStaff(self, staffId,moudle)
 	self.ChoosedStaffId = staffId
 
-	if self.selfSpine ~= nil then
-		self.selfSpine:Destroy()
-		self.selfSpine = nil
-	end
 	if staffId > 0 then
 		local info = MStaff.GetStaffDataByID(staffId)
 		local staffCsv = Csv.Personnel[staffId]
-		if staffCsv ~= nil and staffCsv.prefab ~= nil and staffCsv.prefab > 0 then
-			self.selfSpine = CCommon.CreateActor(moudle:Get("StaffBSX"), staffCsv.prefab, CCommon.ActorFieldMap.fb_self)
-			moudle:Get("StaffBSX").SpriteName = ""
-		else
-			moudle:Get("StaffBSX").SpriteName = staffCsv.asset
-		end
+		moudle:Get("StaffBSX").SpriteName = staffCsv.asset
 		moudle:Get("valueNum").Text = tostring(info.power)
 
 		MFinance.SelectHero = info
@@ -346,6 +338,8 @@ function _P.OnChooseStaff(self, staffId,moudle)
 end
 
 function _P.ReadyFight(self,data,type)
+	print("ReadyFight!!!")
+
 	self.mBossTalkBox.Activity = false
 	self.mHeroTalkBox.Activity = false
 	self.mBloodBg.Activity = true
@@ -358,10 +352,6 @@ function _P.ReadyFight(self,data,type)
 	local bossIcon = self.mBossIcon
 	
 	---------
-	if self.bossSpine ~= nil then
-		self.bossSpine:Destroy()
-		self.bossSpine = nil
-	end
 	local smallTitle1 = self.mSmallTitle1
 	local smallTitle2 = self.mSmallTitle2
 	if type == MFinance.FinaceType.FinaceRank_1 then
@@ -372,13 +362,7 @@ function _P.ReadyFight(self,data,type)
 		ownInfo.Activity = false
 		diyuText.Activity = false
 
-		local csvWaveBoss = Csv.WaveBoss[data.waves]
-		if csvWaveBoss.prefab and csvWaveBoss.prefab ~= 0 then
-			self.bossSpine = CCommon.CreateActor(bossIcon, csvWaveBoss.prefab, CCommon.ActorFieldMap.fb_boss)
-			bossIcon.SpriteName = ""
-		else
-			bossIcon.SpriteName = csvWaveBoss.icon--
-		end
+		bossIcon.SpriteName = Csv.WaveBoss[data.waves].icon--
 		bloodValue.Text = Csv.Text("finance_bossBlood",{cur =data.bossBlood.ncur,max = data.bossBlood.nmax })--data.bossBlood.ncur.."/"..data.bossBlood.nmax
 	elseif type == MFinance.FinaceType.FinaceRank_2 then
 		smallTitle1.Activity = false
@@ -386,14 +370,7 @@ function _P.ReadyFight(self,data,type)
 		ownInfo.Activity = true
 		diyuText.Activity = true
 		
-		local spineIDOrAsset = Csv.Const(15006)
-		local csvEffect = Csv.Effect[spineIDOrAsset]
-		if csvEffect and csvEffect.prefab then
-			self.bossSpine = CCommon.CreateActor(bossIcon, spineIDOrAsset, CCommon.ActorFieldMap.fb_boss)
-			bossIcon.SpriteName = ""
-		else
-			bossIcon.SpriteName = spineIDOrAsset
-		end
+		bossIcon.SpriteName = Csv.Const(15006)--
 		bloodValue.Text = math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"--data.bossBlood.ncur.."/"..data.bossBlood.nmax
 		_P.CreateOwnRank(self,data.own)
 	end
@@ -402,18 +379,9 @@ function _P.ReadyFight(self,data,type)
 	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
 	
 	local heroData = MFinance.SelectStaff()
-	if self.selfSpine ~= nil then
-		self.selfSpine:Destroy()
-		self.selfSpine = nil
-	end
 	if heroData ~= nil then
 		local PersonnelData = Csv.Personnel[heroData.id]
-		if PersonnelData ~= nil and PersonnelData.prefab ~= nil and PersonnelData.prefab > 0 then
-			self.selfSpine = CCommon.CreateActor(self.mHeroIcon, PersonnelData.prefab, CCommon.ActorFieldMap.fb_self)
-			self.mHeroIcon.SpriteName = ""
-		else
-			self.mHeroIcon.SpriteName = PersonnelData.asset
-		end
+		self.mHeroIcon.SpriteName = PersonnelData.asset
 		self.mHeroPower.Text = heroData.power
 		MFinance.SelectHero = heroData
 	else

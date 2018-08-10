@@ -4,6 +4,7 @@ local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MBag = JRequire "Dev.Bag.MBag"
 local CBag = JRequire "Dev.Bag.CBag"
 local CCommon = JRequire "Dev.Common.CCommon"
+local ScrollHorizontal = JRequire "Dev.Common.ScrollHorizontal"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class(WindowBase)
 local _P = {}
@@ -51,7 +52,7 @@ function _P.OnSetData(self,id)
     SoundMgr.Play(10002)
     self:Destroy()
     end, nil, 0.9)
-  
+
   self.Id = id
 
   local TextTitle = moudle:Get("Title")
@@ -62,19 +63,19 @@ function _P.OnSetData(self,id)
   
   local strColor = Csv.ItemColor[csvItem.color].str
   local TextName = moudle:Get("Name")
-  TextName.Text = csvItem.name
+  TextName.Text = Csv.Text("common_color",{num = strColor,name = csvItem.name})
 
   -- local TextTime = moudle:Get("Time")
   -- TextTime.Text = os.date("%H:%M:%S")
 
-  -- local TextLimit = moudle:Get("Limit")
-  -- if Csv.Merge[id].max == 0 then
-  --   --TextLimit.Text = Csv.Text("bag_syntit1",{num = Csv.Text("staff_none")})
-  --   TextLimit.Activity = false
-  -- else
-  --   TextLimit.Text = Csv.Text("bag_syntit3",{num = mergeData.count,max = Csv.Merge[id].max})
-  --   TextLimit.Activity = true
-  -- end
+  local TextLimit = moudle:Get("Limit")
+  if Csv.Merge[id].max == 0 then
+    --TextLimit.Text = Csv.Text("bag_syntit1",{num = Csv.Text("staff_none")})
+    TextLimit.Activity = false
+  else
+    TextLimit.Text = Csv.Text("bag_syntit3",{num = mergeData.count,max = Csv.Merge[id].max})
+    TextLimit.Activity = true
+  end
 
   local TextDesc = moudle:Get("Desc")
   TextDesc.Text = Csv.Text("bag_detdescsp",{num = csvItem.tips})

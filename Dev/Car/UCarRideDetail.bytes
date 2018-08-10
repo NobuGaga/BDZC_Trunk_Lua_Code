@@ -40,16 +40,15 @@ function _M:OnCreate(data, id, seatIndex)
 		end
 	end
 
-	module:Get("new_text").Text = Csv.Text("palyer_levelup")
 	module:Get("Title").Text = Csv.Text("car_rideDetail_title")
-	module:Get("StaffLv").Text = data.level
+	module:Get("StaffLv").Text = Csv.Text("staff_level") .. data.level
 	module:Get("StaffTotal").Text = Csv.Text("car_main_shili") .. "  " .. MCar.GetTotalAttrs(data.allAttr)
 	module:Get("ride").Text = Csv.Text("car_selectStaff_ride") .. "："
 
 	local staffConf = Csv.Personnel[data.id]
 	if staffConf then
-		module:Get("Staff").SpriteName = MStaff.Color3Image[data.color]
-		module:Get("StaffIcon").SpriteName = staffConf.asset3
+		module:Get("Staff").SpriteName = MStaff.Color2Image[data.color]
+		module:Get("StaffIcon").SpriteName = staffConf.asset
 		module:Get("StaffName").Text = staffConf.name
 		
 		if staffConf.specialtyIcon ~= nil then

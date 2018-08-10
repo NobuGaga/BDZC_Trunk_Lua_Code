@@ -120,7 +120,7 @@ function _M.Open(sysId, ...)
 		elseif sysId == _SysId.TimeLimit then
 			WindowMgr.Create("UTimeLimit", sysId)
 		--冲榜活动
-		elseif sysId == _SysId.RankReward then
+		elseif sysId == _SysId.RankReward or sysId == _SysId.CrossRankReward then
 			WindowMgr.Create("URankReward", sysId)
 		--新官上任活动1
 		elseif sysId == _SysId.XinGuan1 then
@@ -289,13 +289,11 @@ function _M.Open(sysId, ...)
 		elseif sysId == _SysId.BuyLand then
 			WindowMgr.Create("UBuyLandMain")
 		elseif sysId == _SysId.SuperStaff then
-			--WindowMgr.Create("USuperStaffPanel")
-			WindowMgr.Create("USuperStaffMain")
+			WindowMgr.Create("USuperStaffPanel")
 		elseif sysId == _SysId.MakeUp then
 			WindowMgr.Create("UPlayerChangeHead")
 		elseif sysId == _SysId.Investment then
 			WindowMgr.Create("UInvestmentPanel")
-		--公司(府宅) 200 ~ 255
 		elseif sysId == _SysId.Futures then
 			local futuresData = MActivity.GetFuturesData()
 			if futuresData == nil or futuresData.futuresState == MActivity.FuturesState.DEF then
@@ -303,10 +301,13 @@ function _M.Open(sysId, ...)
 			elseif futuresData.futuresState == MActivity.FuturesState.CHOU or futuresData.futuresState == MActivity.FuturesState.RECHARGE then
 				WindowMgr.Create("UFuturesReward")
 			end
+		--公司(府宅) 200 ~ 255
 		elseif sysId == _SysId.GlobalTraval then
 			WindowMgr.Create("UGlobalTravalMainPanel")
 		elseif sysId == _SysId.OneRecharge then
 			WindowMgr.Create("URechargeAward", _SysId.RechargeReward_DailyGift)
+		elseif sysId == _SysId.Fund then
+			WindowMgr.Create("UFundPanel")
 		end
 	end
 end

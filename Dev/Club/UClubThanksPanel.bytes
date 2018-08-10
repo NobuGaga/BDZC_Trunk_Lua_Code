@@ -5,7 +5,6 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 
 local DAOLUNID = 4 -- 捣乱者类型id
-local BodyHead = Csv.Const(20155)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -29,18 +28,6 @@ function _M:OnCreate(data, playerName)
 		SoundMgr.Play(10001)
 		self:Destroy()
 	end, nil)
-	
-	local bodyNode = module:Get("BSX_body")
-	local headNode = module:Get("head")
-	local csvBody, csvHead = Csv.Effect[BodyHead[1]], Csv.Effect[BodyHead[2]]
-	if csvBody and csvBody.prefab and csvHead and csvHead.prefab then
-		CCommon.CreateRole(bodyNode, BodyHead[1], BodyHead[2], CCommon.ActorFieldMap.club_join)
-		bodyNode.SpriteName = ""
-		headNode.SpriteName = ""
-	else
-		bodyNode.SpriteName = BodyHead[1]
-		headNode.SpriteName = BodyHead[2]
-	end
 
 	local isDaoLuan = (data.joinType == DAOLUNID)
 	module:Get("dialogueText").Text = ((isDaoLuan and Csv.Text("club_thanks_daolun")) or Csv.Text("club_thanks_desc"))

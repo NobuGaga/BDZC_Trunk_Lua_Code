@@ -2,7 +2,6 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class(WindowBase)
 
-local GIRL_ITEM_SIZE2 = Vector2(140, 140)
 --界面构建
 function _M:OnCreate(itemId, params)
   self._EventNode:AddOnClick(function ( ... )
@@ -13,9 +12,7 @@ function _M:OnCreate(itemId, params)
   local csvLine = Csv.Item[itemId]
   assert(csvLine ~= nil, "itemId:" .. itemId)
 
-  local moudle = self:CreateMoudle(self._RootNode, "M_Bag_DetailPop")
-  
-  LuaUtil.TextAddThreePoint(moudle:Get("new_text"), Csv.Text("common_close2"))
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bag_DetailPop")
 
 	local BtnClose = moudle:Get("BtnClose")
   BtnClose:AddOnButton(function ( ... )
@@ -29,9 +26,9 @@ function _M:OnCreate(itemId, params)
     local TextName = moudle:Get("Name")
     local strColor = Csv.ItemColor[csvLine.color].str
     if params ~= nil and params.name ~= nil then
-      TextName.Text = params.name
+      TextName.Text = Csv.Text("common_color",{num = strColor,name = params.name})
     else
-      TextName.Text = csvLine.name
+      TextName.Text = Csv.Text("common_color",{num = strColor,name = csvLine.name})
     end
 
     local TextDesc = moudle:Get("Desc")
@@ -42,9 +39,24 @@ function _M:OnCreate(itemId, params)
     end
 
     local ImgIcon = moudle:Get("Icon")
+    ImgIcon.Activity = true
+    if moudle:Get("StaffIcon") ~= nil then
+      moudle:Get("StaffIcon").Activity = false
+    end
+    -- moudle:Get("StaffIcon").Activity = true
     if params ~= nil and params.icon ~= nil then
-        ImgIcon.SpriteName = params.icon
-        ImgIcon.SizeDelta = GIRL_ITEM_SIZE2
+        if params.staff then
+          if moudle:Get("StaffIcon") ~= nil then
+            moudle:Get("StaffIcon").SpriteName = params.icon
+            moudle:Get("StaffIcon").Activity = true
+          end
+          ImgIcon.Activity = false
+        else
+          ImgIcon.SpriteName = params.icon
+          if moudle:Get("StaffIcon") ~= nil then
+            moudle:Get("StaffIcon").Activity = false
+          end
+        end
     else
         ImgIcon.SpriteName = csvLine.icon
 		end

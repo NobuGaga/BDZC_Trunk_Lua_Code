@@ -1,0 +1,92 @@
+local MStaff = JRequire"Dev.Staff.MStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = {}
+local _P = {}
+
+_M.LineUpList = {}
+_M.SeatNum = 0
+_M.LastPower = 0
+
+function _M.Clean( ... )
+	_M.LineUpList = {}
+	_M.SeatNum = 0
+	_M.LastPower = 0
+end
+
+function _M.InitLine(data)
+	_M.SeatNum = data.size
+	_M.LineUpList = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			_M.LineUpList[v.key] = v.value
+		end
+	end
+	
+end
+
+function _M.LineUpOpen(data)
+	_M.SeatNum = data.size
+end
+
+function _M.CheckIsUp(staffid)
+	if _M.LineUpList ~= nil then
+		for k,v in pairs(_M.LineUpList) do
+			if v == staffid then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetSortLineUpList()
+	local sortTable = {}
+	for k,v in pairs(_M.LineUpList) do
+		local data = {index = k,id = v}
+		table.insert(sortTable,data)
+	end
+	table.sort(sortTable,function(a,b) return a.index < b.index end)
+	return sortTable
+end
+
+function _M.GetLineAllPower()
+	local allPower = 0
+	for k,v in pairs(_M.LineUpList) do
+		local dataStaff = MStaff.StaffTable[v]
+		if dataStaff ~= nil then
+			allPower = allPower + dataStaff.power
+		end
+	end
+
+	--检测战斗力变化
+	if _M.LastPower >0 then
+		local addNum = allPower - _M.LastPower
+		if allPower >= _M.LastPower then
+			CCommon.ShowText(Define.ShowStrType.Combat,{allPower,addNum,true})
+		else
+			CCommon.ShowText(Define.ShowStrType.Combat,{allPower,-addNum,false})
+		end
+	end
+	
+	_M.LastPower = allPower
+
+	return allPower
+end
+
+function _M.GetLineStaffNum()
+	local staffNum = 0
+	for k,v in pairs(_M.LineUpList) do
+		staffNum = staffNum + 1
+	end
+	return staffNum
+end
+
+function _P.CheckAllPower()
+	local allPower = _M.GetLineAllPower()
+	print("_________",_M.LastPower)
+	
+	print("2___________",_M.LastPower)
+end
+
+return _M

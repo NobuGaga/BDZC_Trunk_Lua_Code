@@ -16,32 +16,21 @@ local ISDKManager = CS.Utility.ISDKManager
 
 local _M = Class(BaseSDK)
 
+-- ATTENTION : 是否使用SDK登陆（还是游戏登陆）
+function _M:UseSdkLogin()
+	return false
+end
+
 ------------------------------请求接口------------------------------
-function _M.ReqPay(productID, price, gold, productName, num, roleID, roleName, serverID, sbID, param)
-	local tempParam = roleID .. "|" .. roleName .. "|" .. productID .. "|" .. sbID .. "|" .. gold
-	if nil == param then
-		param = tempParam
-	else
-		param = tempParam .. "|" .. param
+--收集数据
+function _M.ReqCollectData(type, serverID, serverName, roleID, roleName, roleLevel)
+	if SDKCollectType.LvUpRole == type or SDKCollectType.ExitRole == type then
+		return
 	end
-	local data = {func = SDKFuncName.SDKPay, price = price, productName = productName, 
-				  num = num, roleID = roleID, serverID = serverID, param = param, productID = productID,
-				  account = MLogin.Account, charName = roleName }
+	local data = {func = SDKFuncName.SDKCollectData, type = type, serverID = serverID, 
+				  serverName = serverName, roleID = roleID, roleName = roleName, roleLevel = roleLevel}
 	local dataString =  rapidjson.encode(data)
 	ISDKManager.Call(dataString)
-end
-
-------------------------------回调接口------------------------------
-function _M.OnLogin(jsonStr)
-	local jsonTab = rapidjson.decode(jsonStr)
-	MLogin.Account = jsonTab.account .. "&" .. GameSetting.Spid
-	MLogin.Password = jsonTab.password
-end
-
-function _M.OnSwitchAccount(jsonStr)
-	local jsonTab = rapidjson.decode(jsonStr)
-	MLogin.Account = jsonTab.account .. "&" .. GameSetting.Spid
-	MLogin.Password = jsonTab.password
 end
 
 ------------------------------通用接口------------------------------

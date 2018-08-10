@@ -64,13 +64,6 @@ function _R.RefreshView(self,data)
 	self.IsInvited = data.isinvited
 	local list = _P.GetSeatList(data.info)
 	self.List = list
-	if self.cacheSpine then
-		for _, spine in ipairs(self.cacheSpine) do
-			spine:Destroy()
-			spine = nil
-		end
-	end
-	self.cacheSpine = {}
 	for i = 1,Seat_Num do
 		local value = list[i]
 		local bsx = moudle:Get("bsx"..i)
@@ -86,12 +79,7 @@ function _R.RefreshView(self,data)
 			local csvStaff = Csv.Personnel[value.staffid]
 			if csvStaff ~= nil then
 				bsx.Activity = true
-				if csvStaff.prefab then
-					self.cacheSpine[#self.cacheSpine + 1] = CCommon.CreateActor(bsx, csvStaff.prefab, CCommon.ActorFieldMap.commerce_study)
-					bsx.SpriteName = ""
-				else
-					bsx.SpriteName = csvStaff.asset
-				end
+				bsx.SpriteName = csvStaff.asset
 				nameBG.Activity = true
 				local staffName = csvStaff.name
 				if value.staffName ~= nil and value.staffName ~= "" then

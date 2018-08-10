@@ -1,44 +1,88 @@
+----------------------文件引用--------------------------
+-- 继承基类WindowBase
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
--- @RefType [Dev.Common.CCommon.bytes#_M] 邮件附件奖励用到
-local CCommon = JRequire "Dev.Common.CCommon"
-local CMail = JRequire"Dev.Mail.CMail"
-local luaUtil = JRequire"Libs.LuaUtil"
-local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+-- 邮件需要打开子界面，需用WindowOpen
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+
+-- @RefType [Dev.Quest.MQuest.bytes#_M]
 local MMail = JRequire "Dev.Mail.MMail"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
-local ScrollHorizontal = JRequire "Dev.Common.ScrollHorizontal"
+local luaUtil = JRequire"Libs.LuaUtil"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CMail = JRequire"Dev.Mail.CMail"
 
-local GTE_EFFECT_ID = 5
-
-local itemWidth = 179
-local itemHeight = 166
-local space = 8
-local pageNum = 4
-local pageWidth = 700
+-------------------------------------------------------
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
+local itemWidth = 636
+local itemHeight = 197
+local space = 8
+local pageNum = 7
+local pageHeight = 910
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.DeleteAllMails(self,lists)
+	if lists ~= nil then
+		CCommon.ShowError(Csv.Text("mail_onekey_deleteSuccess",{num = #lists}))
+		_P.RefreshMail(self)
+	else
+		CCommon.ShowError(Csv.Text("mail_onekey_noDelete"))
+	end
+end
+
+function _R.GainAllMails(self,awardMails)
+	if awardMails ~= nil then
+		CCommon.ShowError(Csv.Text("mail_onekey_getSuccess"))
+		_P.ShowGainAwards(self,awardMails)
+	end
+end
+
+function _M:BeforeDestroy()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+--界面构建
 function _M:OnCreate(...)
-	local module = self:CreateMoudle(self._RootNode, "M_Mail_Content")
+	local module = self:CreateMoudle(self._RootNode, "M_Mail_UMain")
 	self.mModule = module
-	
-	local closeBtn = module:Get("C_BackBtn")
-	closeBtn:AddOnButton(function ( ... )
+	self.mRawTableItems = {}
+	_P.OnCreateMailList(self)
+
+	local TitleText = module:Get("C_Text")
+	local NumShowText = module:Get("text1")
+	self.NumText = module:Get("NumText")
+
+	TitleText.Text = Csv.Text("mail_title")
+	NumShowText.Text = Csv.Text("mail_current")
+	self.NumText.Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
+
+	local BtnClose = module:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
-	end, nil, 1.2)
+		end, nil, 1.2)
 
-	_P.OnCreateMailList(self)
-	if self.mailData ~= nil then
-		_P.OnClickItem(self, self.mailData)
-	else
-		module:Get("NumText").Text = '0/0'
-	end
-
-	module:Get("C_Text_title").Text = Csv.Text("mail_title")
-	module:Get("C_text_0_0").Text = Csv.Text("mail_onekey_get")
+	self.effectRect = module:Get("ItemEffect")
+	module:Get("C_text").Text = Csv.Text("mail_onekey_get")
 	module:Get("C_text_0").Text = Csv.Text("mail_onekey_delete")
 	local oneKeyGet = module:Get("C_Btn_a")
 	local oneKeyDelete = module:Get("C_Btn_e")
@@ -60,41 +104,80 @@ function _M:OnCreate(...)
 	end)
 end
 
+-- 创建列表
 function _P.OnCreateMailList(self)
 	local contentTransform = self.mModule:Get("content")
 	contentTransform:DestroyChildren() -- 先移除所有的子item
 
 	local mailTableDatas = _P.GetSortMails(MMail.MailTable)
 	self.mSortMailDatas = mailTableDatas
-	if self.mSortMailDatas == nil or #self.mSortMailDatas == 0 then
-		self.mModule:Get("hide").Activity = false
-		self.mModule:Get("texttop").Text = Csv.Text("mail_current")
-		self.mModule:Get("NumText").Text = "0"
-		self.mModule:Get("C_Btn_b").Activity = false
-		self.mModule:Get("empty").Activity = true
-		return
-	else
-		self.mModule:Get("hide").Activity = true
-		self.mModule:Get("empty").Activity = false
-		self.mModule:Get("C_Btn_b").Activity = true
-	end
-
-	if self.mailData == nil and self.mSortMailDatas ~= nil and #self.mSortMailDatas > 0 then
-		self.mailData = self.mSortMailDatas[1]
-	end
 
 	local scroll = self.mModule:Get("scrollView")
 	if self.scrollController ~= nil then
 		self.scrollController:delete()
 		self.scrollController = nil
 	end
-	self.scrollController = ScrollHorizontal.new(scroll, contentTransform, "M_Mail_Item2", 
-							function(index, value, module)_P.ScrollCallBack(self, index, value ,module)end,
-							function(index, value)_P.ScrollCallBack2(self, index, value)end
-						)
-	self.scrollController:CreateScroll(pageNum, pageWidth, itemWidth, itemHeight, space, mailTableDatas)
+	self.scrollController = ScrollVertical.new(scroll, contentTransform, "M_Mail_Item", 
+							function(index, value, module)_P.ScrollCallBack(self, index, value ,module)end)
+	self.scrollController:CreateScroll(pageNum, pageHeight, itemWidth, itemHeight, space, mailTableDatas)
 end
 
+
+-- 设置当个item数据
+function _P.ScrollCallBack(self, index, data, itemModule)
+	if itemModule ~= nil then
+		_P.SetItemData(itemModule, data)
+
+		itemModule:Get("M_Mail_Item"):AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(data)
+		end, nil, 0.9)
+
+		local mailTimeText = itemModule:Get("DateText")
+		mailTimeText.Text = luaUtil.TransToYearMonthDay(data.sendtime)
+		itemModule.SelfRect.LocalPosition = _P.GetPos(self, index)
+	end
+end
+
+
+function _P.GetPos(self, index)
+	local allNum = #self.mSortMailDatas
+	local yPos = ((itemHeight + space) * allNum - space)/2 - ((index - 1) * (itemHeight + space) + itemHeight/2)
+	return Vector2(0, yPos)
+end
+
+
+-- 获取未读邮件数量
+function _P.GetUnReadNum(self)
+	local count = 0
+	for k,v in pairs(self.mSortMailDatas) do
+		if v.read == false then
+			count = count + 1
+		end
+	end
+
+	return count
+end
+
+function _P.SetItemData(itemModule, data)
+	local isRead = (data.read and true) or false
+	local IconImg = itemModule:Get("MailIcon")
+	IconImg.IsGray = isRead
+
+	local BgImg = itemModule:Get("MailBox")
+	BgImg.IsGray = isRead
+
+	local LightImg = itemModule:Get("Ing")
+	LightImg.Activity = not isRead
+
+	local MailNameText = itemModule:Get("MailText")
+	if data.sender ~= nil and data.title ~= nil then
+		IconImg.SpriteName = (data.awardList ~= nil and "ty_082") or "ty_081"
+		MailNameText.Text = Csv.Text("mail_showDesc", {sender = data.sender, title = data.title})
+	end
+end
+
+-- 列表排序
 function _P.GetSortMails(mailTable)
 	if mailTable == nil then return end
 	
@@ -115,283 +198,19 @@ function _P.OnSortMail(a, b)
 	return a.sendtime > b.sendtime
 end
 
-function _P.ScrollCallBack(self, index, data, itemModule)
-	if itemModule ~= nil then
-		if self.idToMoudle == nil then
-			self.idToMoudle = {}
-		end
-		self.idToMoudle[data.mailid] = itemModule
-		_P.SetItemData(self, itemModule, data)
-
-		itemModule:Get("M_Mail_Item2"):AddOnButton(function ( ... )
-			SoundMgr.Play(10001)
-			_P.OnClickItem(self, data)
-		end, nil, 0.9)
-
-		itemModule.SelfRect.LocalPosition = _P.GetPos(self, index)
-	end
-end
-
-function _P.ScrollCallBack2(self, index, data)
-	if self.idToMoudle ~= nil then
-		if self.idToMoudle[data.mailid] then
-			self.idToMoudle[data.mailid]:Get("H").Activity = false
-			self.idToMoudle[data.mailid] = nil
-		end
-	end
-end
-
-function _P.SetItemData(self, itemModule, data)
-	_P.SetMailRead(self, itemModule, data)
-
-	itemModule:Get("text1").Text = Csv.Text("mail_detail_system")
-	local mailTimeText = itemModule:Get("DateText")
-	mailTimeText.Text = luaUtil.TransToYearMonthDay(data.sendtime)
-
-	if data.mailid == self.mailData.mailid then
-		itemModule:Get("H").Activity = true
-	else
-		itemModule:Get("H").Activity = false
-	end
-end
-
-
-function _P.SetMailRead(self, itemModule, data)
-	local bgImg = itemModule:Get("BG")
-	if data.read == true then
-		if data.awardList == nil and data.gainAward ~= true then
-			bgImg.SpriteName = "yj_002_1"
-		else
-			bgImg.SpriteName = "yj_004_1"
-		end
-	else
-		if data.awardList == nil and data.gainAward ~= true then
-			bgImg.SpriteName = "yj_002"
-		else
-			bgImg.SpriteName = "yj_004"
-		end
-	end
-end
-
-
-function _P.GetPos(self, index)
-	local allNum = #self.mSortMailDatas
-	local xPos = ((index - 1) * (itemWidth + space) + itemWidth/2) - ((itemWidth + space) * allNum - space)/2
-	return Vector2(xPos, 0)
-end
-
-
-function _P.OnClickItem(self, data)
-	if self.finishEffect ~= nil then
-		self.finishEffect:Destroy()
-	end
-
-	if data == nil then
-		return
-	end
-
-	self.mailData = data
-	local moudle = self.mModule
-	moudle:Get("texttop").Text = Csv.Text("mail_current")
-	moudle:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
-	moudle:Get("titleText").Text = Csv.Text("mail_detail_title", {sender = data.sender, title = data.title})
-
-	moudle:Get("TitleBG").SpriteName = "ty_145"
-	moudle:Get("TitleBG").SizeDelta = Vector2(moudle:Get("TitleBG").SizeDelta.x, moudle:Get("titleText").PreferredHeight+15)
-
-	moudle:Get("text2").Text = Csv.Text("mail_detail_time", {time = luaUtil.TransToYearMonthDay(data.sendtime)})
-	moudle:Get("text3").Text = Csv.Text("mail_detail_remind")
-	
-	self.hasRect = moudle:Get("Has")
-	local noneRect = moudle:Get("None")
-
-	local changeContentText = '' 
-	if data and data.content then
-		changeContentText= string.gsub(data.content, '|', '/')
-		changeContentText = string.gsub(changeContentText, '&lt;', '<')
-		changeContentText = string.gsub(changeContentText, '&gt;', '>')
-		changeContentText = string.gsub(changeContentText, '/n', '\n')
-	end
-
-	if data.awardList == nil then
-		self.hasRect.Activity = false
-		noneRect.Activity = true
-		moudle:Get("C_Btn_b").Activity = false
-
-		local contentText = moudle:Get("text4_0")
-		contentText.Text = changeContentText
-	else
-		self.hasRect.Activity = true
-		noneRect.Activity = false
-
-		local oneLineRect = moudle:Get("OneLine")
-		local twoLineRect = moudle:Get("TwoLine")
-		local isOneLine = #data.awardList <= 4
-		oneLineRect.Activity = isOneLine
-		twoLineRect.Activity = not isOneLine
-
-		-- 领取
-		self.getBtn = moudle:Get("C_Btn_b")
-		local getText = moudle:Get("C_text")
-		self.getBtn.Activity = not data.gainAward
-		self.getBtn:AddOnButton(function(...)
-			SoundMgr.Play(10001)
-			CMail.GainAttachReq(data.mailid)
-		end)
-		getText.Text = Csv.Text("mail_detail_get")
-
-		-- 已领取标记
-		self.finishImg = moudle:Get("image")
-		self.finishImg.Activity = data.gainAward
-		self.effectRect = moudle:Get("ItemEffect")
-
-		-- 内容列表、附件列表
-		local contentText = (isOneLine and moudle:Get("oneLineContent")) or (moudle:Get("twoLineText"))
-		contentText.Text = changeContentText
-
-		-- 创建奖励列表
-		local Items = (isOneLine and moudle:Get("OneLineContent")) or (moudle:Get("content_attach"))
-		Items:DestroyChildren()
-		self.attachRewards = {}
-		for k,v in pairs(data.awardList) do
-			local itemModule = CCommon.CreateItem(Items, v.key, function ( ... ) -- 打开道具详情界面
-				WindowMgr.Create("UBagDetailPop", v.key)
-			end, {num = v.value})
-
-			if not data.gainAward then
-				local effectMoudle = CCommon.CreateItemLight(itemModule.SelfRect, Define.SysId.Mail, v.key)
-				if effectMoudle then
-					self.attachRewards[k] = effectMoudle
-				end
-			end
-		end
-	end
-
-	if data then
-		for k,v in pairs(self.idToMoudle) do
-			if v ~= nil then
-				v:Get("H").Activity = false
-			end
-		end
-
-		if self.idToMoudle[data.mailid] ~= nil then
-			self.idToMoudle[data.mailid]:Get("H").Activity = true
-		end
-	end
-
-	-- 无附件邮件，一打开界面为可读
-	if (not data.read and data.awardList == nil) then
-		CMail.ReadMailReq(data.mailid)
-	end
-end
-
-
--- 获取未读邮件数量
-function _P.GetUnReadNum(self)
-	local count = 0
-	for k,v in pairs(self.mSortMailDatas) do
-		if v.read == false then
-			count = count + 1
-		end
-	end
-
-	return count
-end
-
--- 播放item往上飘动画
-function _P.PlayItemEffect(self, data)
-	if self.mailData == nil or data.mailid ~= self.mailData.mailid or self.mailData.awardList == nil then return end
-
-	local delayCount = 0
-	for k,v in pairs(self.mailData.awardList) do
-		CCommon.ShowFlyItem(self.effectRect, v.key, v.value, delayCount)
-		delayCount = delayCount + 0.5
-	end
-end
-
-
--- 销毁物品特效
-function _P.OnDestroyAttachEffect(self)
-	if self.attachRewards == nil or #self.attachRewards == 0 then return end
-
-	for k,v in pairs(self.attachRewards) do
-		v:Destroy()
-	end
-
-	self.attachRewards = nil
-end
-
-
-function _R.OnRefreshItem(self, data)
-	_P.OnDestroyAttachEffect(self)
-	_P.UpdateItemData(self, data)
-
-	if data.read then
-		local curModule = self.idToMoudle[data.mailid]
-		if curModule ~= nil then
-			_P.SetMailRead(self, curModule, data)
-			self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
-		end
-	end
-end
-
+-- 更新某个item数据
 function _P.UpdateItemData(self, data)
-	if self.getBtn ~= nil then
-		self.getBtn.Activity = not data.gainAward
-	end
+	local updateItem = self.mRawTableItems[data.mailid]
+	if updateItem == nil then return end
 
-	if self.finishImg ~= nil then
-		_P.PlayItemEffect(self, data)
-		if self.idToMoudle[data.mailid] ~= nil and self.mailData ~= nil then
-			self.mailData = MMail.GetMailData(data.mailid)
-			_P.SetItemData(self, self.idToMoudle[data.mailid], self.mailData)
-			--_P.OnClickItem(self, self.mailData)
-		end
-		self.mModule.SelfRect:AddOnTime(function()
-			SoundMgr.Play(10004)
-			self.finishEffect = CCommon.CreateEffect(self.hasRect, GTE_EFFECT_ID, self.finishImg.LocalPosition, function( ... )
-				if self.finishEffect ~= nil then
-					self.finishEffect:Destroy()
-				end
-				self.finishImg.Activity = data.gainAward
-				-- if data.mailid ~= self.mailData.mailid then
-				-- 	_P.SetItemData(self.idToMoudle[self.mailData.mailid], self.mailData)
-				-- 	_P.OnClickItem(self, self.mailData)
-				-- end
-			end)
-		end, nil, 0.2)
-	end
+	_P.SetItemData(updateItem.moudle, data)
 end
 
-function _P.MoveToSelectItem(self)
-	local ItemTab = self.mItemTab
-	if ItemTab == nil then
-		return
-	end
-
-	local content = self.mModule:Get("content")
-	local scrollView =  self.mModule:Get("scrollView")
-
-	local SHeight = scrollView.SizeDelta.y --视图高度
-	local mailID = self.mailData.mailid
-	for k,v in pairs(ItemTab) do
-		if v.mailid == mailID then
-			local itemPosY = v.SelfRect.LocalPosition.y
-			local itemSizeY = v.SelfRect.SizeDelta.y
-			local moveTo = -itemPosY
-			if moveTo >= content.SizeDelta.y-itemSizeY then
-				moveTo = content.SizeDelta.y-SHeight
-			end
-			content.LocalPosition = Vector2(content.LocalPosition.x,moveTo)
-		end
-	end
+function _P.OnClickItem(data)
+	WindowMgr.Create("UMailDetailPanel", data)
 end
 
-function _R.OnAddNewMail(self, data)
-	_P.AddNewMail(self, data)
-	self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
-end
-
+-- 新邮件推送，整个列表刷新
 function _P.AddNewMail(self, data)
 	if data == nil then return end
 
@@ -400,13 +219,13 @@ function _P.AddNewMail(self, data)
 	_P.OnCreateMailList(self)
 end
 
-function _R.GainAllMails(self,awardMails)
-	if awardMails ~= nil then
-		CCommon.ShowError(Csv.Text("mail_onekey_getSuccess"))
-		_P.ShowGainAwards(self,awardMails)
-	end
+--一键删除邮件时刷新
+function _P.RefreshMail(self)
+	self.mSortMailDatas = {}
+	self.mRawTableItems = {}
+	_P.OnCreateMailList(self)
+	self.NumText.Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
 end
-
 --一键领取奖励
 function _P.ShowGainAwards(self,awardMails)
 	--奖励展示
@@ -419,48 +238,17 @@ function _P.ShowGainAwards(self,awardMails)
 	self.mSortMailDatas = {}
 	self.mRawTableItems = {}
 	_P.OnCreateMailList(self)
-	_P.OnClickItem(self, self.mailData)
-	self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
+	self.NumText.Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
 end
 
-function _R.DeleteAllMails(self,lists)
-	if lists ~= nil then
-		CCommon.ShowError(Csv.Text("mail_onekey_deleteSuccess",{num = #lists}))
-		_P.RefreshMail(self)
-	else
-		CCommon.ShowError(Csv.Text("mail_onekey_noDelete"))
-	end
+function _R.OnRefreshItem(self, data)
+	_P.AddNewMail(self, data)
+	self.NumText.Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
 end
 
---一键删除邮件时刷新
-function _P.RefreshMail(self)
-	self.mSortMailDatas = {}
-	self.mRawTableItems = {}
-	_P.OnCreateMailList(self)
-	self.mModule:Get("NumText").Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
-
-	if self.idToMoudle[self.mailData.mailid] ~= nil and self.mailData ~= nil then
-		_P.OnClickItem(self, self.mailData)
-	else
-		if self.mSortMailDatas ~= nil and #self.mSortMailDatas > 0 then
-			self.mailData = self.mSortMailDatas[1]
-			_P.OnClickItem(self, self.mailData)
-		end
-	end
-end
-
-function _M:BeforeDestroy()
-	if self.scrollController ~= nil then
-		self.scrollController:delete()
-		self.scrollController = nil
-	end
-end
-
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then 
-		fun(self, ...)
-	end
+function _R.OnAddNewMail(self, data)
+	_P.AddNewMail(self, data)
+	self.NumText.Text = _P.GetUnReadNum(self) .. '/' .. #self.mSortMailDatas
 end
 
 return _M

@@ -17,8 +17,8 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MLogin = JRequire "Dev.Login.MLogin"
 
 local JTweenerManager = CS.JTween.JTweenerManager
-local staffVec1 = Vector2(-183, -1100)
-local staffVec2 = Vector2(653, -1100)
+local staffVec1 = Vector2(-183, -1036)
+local staffVec2 = Vector2(653, -1036)
 local enemyBossVec1 = Vector2(208, -530)
 local enemyBossVec2 = Vector2(-638, -530)
 
@@ -301,7 +301,7 @@ function _P.OnPlayOneReport(self, isFast)
 			if self.isSkipBattle then self.isSkipBattle = nil end
 		else
 			local delayTime = (reportData.playType == BattleShowEnum.Task and 1.2) or 1.9
-			self.Moudle:Get("BG_Img"):AddOnTime(function()
+			self.BG:AddOnTime(function()
 				if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
 					_P.SetBloodData(self, reportData.campType, isFast)
 				end
@@ -490,36 +490,20 @@ function _P.OnPlayMove(self, data)
 		self.moveTween2:Restore()
 	end
 
-	local isMineCamp = data.campType == CampEnum.Mine
-	local staff1 = (isMineCamp and self.Own.BobyBg1) or self.Enemy.BobyBg1
-	local staff2 = (isMineCamp and self.Own.BobyBg2) or self.Enemy.BobyBg2
-	local campData = (isMineCamp and self.Own) or self.Enemy
-	if campData.BobyBg2Spine ~= nil then
-		campData.BobyBg2Spine:Destroy()
-		campData.BobyBg2Spine = nil
-	end
-	if data.staffID ~= nil and data.staffID ~= 0 then
-		local csvPersonnel = Csv.Personnel[data.staffID]
-		if csvPersonnel ~= nil and csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-			campData.BobyBg2Spine = CCommon.CreateActor(staff2, csvPersonnel.prefab, (isMineCamp and CCommon.ActorFieldMap.battle_self) or CCommon.ActorFieldMap.battle_enemy)
-			staff2.SpriteName = ""
-		else
-			staff2.SpriteName = data.newIconName
-		end
-	else
-		staff2.SpriteName = data.newIconName
-	end
+	local staff1 = (data.campType == CampEnum.Mine and self.Own.BobyBg1) or self.Enemy.BobyBg1
+	local staff2 = (data.campType == CampEnum.Mine and self.Own.BobyBg2) or self.Enemy.BobyBg2
+	staff2.SpriteName = data.newIconName
 
-	local tweenName1 = (isMineCamp and MINEMOVETWEEN1) or ENEMYMOVETWEEN1
-	local tweenName2 = (isMineCamp and MINEMOVETWEEN2) or ENEMYMOVETWEEN2
-	local staffPos1 = (isMineCamp and staffVec1) or enemyBossVec1
-	local staffPos2 = (isMineCamp and staffVec2) or enemyBossVec2
+	local tweenName1 = (data.campType == CampEnum.Mine and MINEMOVETWEEN1) or ENEMYMOVETWEEN1
+	local tweenName2 = (data.campType == CampEnum.Mine and MINEMOVETWEEN2) or ENEMYMOVETWEEN2
+	local staffPos1 = (data.campType == CampEnum.Mine and staffVec1) or enemyBossVec1
+	local staffPos2 = (data.campType == CampEnum.Mine and staffVec2) or enemyBossVec2
 	local staffTweener1 = staff1.CachedTran:GetJTweener(tweenName1)
 	local staffTweener2 = staff2.CachedTran:GetJTweener(tweenName2)
 
 	self.moveTween1 = staffTweener1
 	self.moveTween2 = staffTweener2
-	self.CurTween = {type = BattleShowEnum.TopOff, campType = data.campType, staff1 = staff1, staff2 = staff2, 
+	self.CurTween = {type = BattleShowEnum.TopOff, staff1 = staff1, staff2 = staff2, 
 					staffPos1 = staffPos1, staffPos2 = staffPos2, moveData = data}
 
 	staffTweener1:SetOnComplete(function()
@@ -532,21 +516,7 @@ function _P.OnPlayMove(self, data)
 		if self.moveTween2 == nil then return end
 
 		if self.Moudle ~= nil then
-			if campData.BobyBg1Spine ~= nil then
-				campData.BobyBg1Spine:Destroy()
-				campData.BobyBg1Spine = nil
-			end
-			if data.staffID ~= nil and data.staffID ~= 0 then
-				local csvPersonnel = Csv.Personnel[data.staffID]
-				if csvPersonnel ~= nil and csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-					campData.BobyBg1Spine = CCommon.CreateActor(staff1, csvPersonnel.prefab, (isMineCamp and CCommon.ActorFieldMap.battle_self) or CCommon.ActorFieldMap.battle_enemy)
-					staff1.SpriteName = ""
-				else
-					staff1.SpriteName = data.newIconName
-				end
-			else
-				staff1.SpriteName = data.newIconName
-			end
+			staff1.SpriteName = data.newIconName
 			staff1.LocalPosition = staffPos1
 			staff2.LocalPosition = staffPos2
 		end
@@ -608,22 +578,7 @@ function _P.KilledMoveTween(self)
 	self.CurTween.staff2.LocalPosition = self.CurTween.staffPos2
 
 	if self.CurTween.moveData ~= nil then
-		if self.Own.BobyBg1Spine ~= nil then
-			self.Own.BobyBg1Spine:Destroy()
-			self.Own.BobyBg1Spine = nil
-		end
-		if self.CurTween.moveData.staffID ~= nil then
-			local ownStaffConf = Csv.Personnel[self.CurTween.moveData.staffID]
-			if ownStaffConf ~= nil and ownStaffConf.prefab ~= nil and ownStaffConf.prefab > 0 then
-				local typeSpine = (self.CurTween.campType == CampEnum.Mine and CCommon.ActorFieldMap.battle_self) or CCommon.ActorFieldMap.battle_enemy
-				self.Own.BobyBg1Spine = CCommon.CreateActor(self.CurTween.staff1, ownStaffConf.prefab, typeSpine)
-				self.CurTween.staff1.SpriteName = ""
-			else
-				self.CurTween.staff1.SpriteName = self.CurTween.moveData.newIconName
-			end
-		else
-			self.CurTween.staff1.SpriteName = self.CurTween.moveData.newIconName
-		end
+		self.CurTween.staff1.SpriteName = self.CurTween.moveData.newIconName
 		self.CurTween.type = BattleShowEnum.Task
 		if not self.isSkipBattle then
 			_P.OnPlayTalk(self, self.CurTween.moveData)
@@ -695,9 +650,7 @@ function _P.RefreshAttr(self)
 	local csv = Csv.Battle[self.LastBattleID]
 
 	self.ownPower = MPlayer.GetAttr(Define.AttrType.Wuli)
-	self.Own.Power.Text = MPlayer.Attr2Str(Define.AttrType.Wuli)
-	self.Own.PowerNum.Text = LuaUtil.NumberFormat(self.ownPower)
-	self.Own.PingJia.Text = _P.GetBattleLevel(csv.Courage, self.ownPower)
+	self.Own.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(self.ownPower)) .. _P.GetBattleLevel(csv.Courage, self.ownPower)
 end
 
 
@@ -724,22 +677,7 @@ function _P.RefreshBG(self)
 
 	self.isBossBattle = true -- 是boss迎战
 	self.mineStaffs = _P.GetOwnRandomStaff() -- 获得随机三个员工
-	local csvBattleIcon = Csv.BattleIcon[csv.bossIcon]
-	if self.Enemy.BobyBg1Spine ~= nil then
-		self.Enemy.BobyBg1Spine:Destroy()
-		self.Enemy.BobyBg1Spine = nil
-	end
-	if csvBattleIcon.staffID ~= nil and csvBattleIcon.staffID ~= 0 then
-		local csvPersonnel = Csv.Personnel[csvBattleIcon.staffID]
-		if csvPersonnel ~= nil and csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-			self.Enemy.BobyBg1Spine = CCommon.CreateActor(self.Enemy.BobyBg1, csvPersonnel.prefab, CCommon.ActorFieldMap.battle_enemy)
-			self.Enemy.BobyBg1.SpriteName = ""
-		else
-			self.Enemy.BobyBg1.SpriteName = csvBattleIcon.str
-		end
-	else
-		self.Enemy.BobyBg1.SpriteName = csvBattleIcon.str
-	end
+	self.Enemy.BobyBg1.SpriteName = Csv.BattleIcon[csv.bossIcon].str
 end
 
 
@@ -807,16 +745,7 @@ function _P.RefreshBobyInfo(self, isRandom)
 	end
 
 	self.Own.BobyBg1.Activity = true
-	if self.Own.BobyBg1Spine ~= nil then
-		self.Own.BobyBg1Spine:Destroy()
-		self.Own.BobyBg1Spine = nil
-	end
-	if ownStaffConf.prefab ~= nil and ownStaffConf.prefab > 0 then
-		self.Own.BobyBg1Spine = CCommon.CreateActor(self.Own.BobyBg1, ownStaffConf.prefab, CCommon.ActorFieldMap.battle_self)
-		self.Own.BobyBg1.SpriteName = ""
-	else
-		self.Own.BobyBg1.SpriteName = ownStaffConf.asset
-	end
+	self.Own.BobyBg1.SpriteName = ownStaffConf.asset
 
 	return self.mineStaffs[randomNum]
 end
@@ -865,8 +794,7 @@ function _P.RefreshEnemy(self, isSeckill)
 
 	info.Head.SpriteName = chapterCsv.icon
 	info.Name.Text =  Csv.BattleName[csv.name].str 
-	info.Power.Text = MPlayer.Attr2Str(Define.AttrType.Wuli)
-	info.PowerNum.Text = LuaUtil.NumberFormat(csv.Courage)
+	info.Power.Text = string.format("%s%s", MPlayer.Attr2Str(Define.AttrType.Wuli), LuaUtil.NumberFormat(csv.Courage))
 	info.BloodBar.FillAmount = lastEnemyBlood / csv.gold
 	info.Blood.Text = LuaUtil.NumberFormat(lastEnemyBlood)
 	info.Level.Text = '(' .. chapterCsv.posName .. ')'
@@ -971,14 +899,12 @@ function _M:OnCreate()
 	self.ownPower = 0 -- 我方公关数，战斗胜利评级用到
 
 	local EnemyProgressText = moudle:Get("ProgressText")
-	local EnemyProgressRect = moudle:Get("Progress")
 	EnemyProgressText.Text = Csv.Text("battle_fight1")
-	self.enemyEffectY = EnemyProgressRect.RootCanvasPos.y
+	self.enemyEffectY = EnemyProgressText.LocalPosition.y
 
 	local MineProgressText = moudle:Get("ProgressText2")
-	local MineProgressRect = moudle:Get("Progress2")
 	MineProgressText.Text = Csv.Text("battle_fight1")
-	self.mineEffectY = MineProgressRect.RootCanvasPos.y
+	self.mineEffectY = MineProgressText.LocalPosition.y
 
 	self.EnemyProSps = {}
 	for i=1, MAX_PRO_NUM do
@@ -1014,8 +940,6 @@ function _M:OnCreate()
 		Head = moudle:Get("OwnHead"),
 		Name = moudle:Get("OwnName"),
 		Power = moudle:Get("OwnPower"),
-		PowerNum = moudle:Get("OwnPowerNum"),
-		PingJia = moudle:Get("OwnPowerPingjia"),
 		BloodBar = moudle:Get("OwnBar"),
 		Blood = moudle:Get("OwnBlood"),
 		Level = moudle:Get("OwnLevel"),
@@ -1152,7 +1076,7 @@ function _P.GetBattlerReportData(self)
 		if i ~= 1 then -- 我方旧员工替换新员工
 			local newIconConf = Csv.Personnel[curStaff]
 			local oldIconConf = Csv.Personnel[self.mineStaffs[i - 1]]
-			_P.SetOneData(self, CampEnum.Mine, BattleShowEnum.TopOff, false, _P.GetCurStaffTalkStr(curBattleConf.staffSpeak, curStaff), 2, true, i - 1, oldIconConf.asset, newIconConf.asset, curStaff)
+			_P.SetOneData(self, CampEnum.Mine, BattleShowEnum.TopOff, false, _P.GetCurStaffTalkStr(curBattleConf.staffSpeak, curStaff), 2, true, i - 1, oldIconConf.asset, newIconConf.asset)
 		else
 			_P.SetOneData(self, CampEnum.Mine, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.staffSpeak, curStaff), 1, true)
 		end
@@ -1165,7 +1089,7 @@ function _P.GetBattlerReportData(self)
 			if self.isBossBattle then
 				if _P.IsHasStaffResist(curLayerProb.resistProb) then -- 敌方有员工挡刀
 					self.isBossBattle = false
-					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, false, nil, 2, false, nil, Csv.BattleIcon[curBattleConf.bossIcon].str, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].staffID)
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, false, nil, 2, false, nil, Csv.BattleIcon[curBattleConf.bossIcon].str, Csv.BattleIcon[curBattleConf.bossStaffIcon].str)
 					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.bossStaffSpeak, curBattleConf.bossStaffId), 1, true) -- 敌方员工应答
 				else
 					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, false, _P.GetCurStaffTalkStr(curBattleConf.bossRespones, curBattleConf.bossId), 1, true)
@@ -1181,7 +1105,7 @@ function _P.GetBattlerReportData(self)
 				if self.isBossBattle then
 					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, true, _P.GetCurStaffTalkStr(curBattleConf.bossWin, curBattleConf.bossId), 1, false) -- 敌方胜利
 				else
-					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossWin, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].staffID)
+					_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossWin, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str)
 				end
 
 				return
@@ -1190,7 +1114,7 @@ function _P.GetBattlerReportData(self)
 			if self.isBossBattle then
 				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.Task, true, _P.GetCurStaffTalkStr(curBattleConf.bossFail, curBattleConf.bossId), 1, false)
 			else
-				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossFail, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].staffID)
+				_P.SetOneData(self, CampEnum.Enemy, BattleShowEnum.TopOff, true, _P.GetCurStaffTalkStr(curBattleConf.bossFail, curBattleConf.bossId), 2, false, nil, Csv.BattleIcon[curBattleConf.bossStaffIcon].str, Csv.BattleIcon[curBattleConf.bossIcon].str)
 			end
 
 			return
@@ -1200,7 +1124,7 @@ end
 
 
 -- 设置一条战报信息
-function _P.SetOneData(self, campType, playType, isFinish, showText, delay, isShowHit, curRoundFinishId, oldIconName, newIconName, staffID)
+function _P.SetOneData(self, campType, playType, isFinish, showText, delay, isShowHit, curRoundFinishId, oldIconName, newIconName)
 	if isShowHit then
 		if campType == CampEnum.Enemy then
 			self.totalMineNum = self.totalMineNum + 1
@@ -1218,8 +1142,7 @@ function _P.SetOneData(self, campType, playType, isFinish, showText, delay, isSh
 		isShowHit = isShowHit,  -- 是否需要对方受击
 		curRoundFinishId = curRoundFinishId,  -- 当前是第几轮结算
 		oldIconName = oldIconName,
-		newIconName = newIconName,
-		staffID = staffID
+		newIconName = newIconName
 	}
 
 	table.insert(self.reportData, infoData)

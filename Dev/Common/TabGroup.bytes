@@ -3,20 +3,16 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class()
 local _P = {}
 local _DefaultColor = Color(1,1,1,1)
-local _LightColor = Color(99/255,99/255,99/255,1)
+local _LightColor = Color(0,0,0,1)
+local _BtncolorLight = Color(255/255,225/255,75/255,1)
+local _BtncolorDefault = Color(0/255,195/255,255/255,1)
 
-local _DefaultImgSize = Vector2(178,57)
-local _LightImgSize = Vector2(178,70)
-
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-function _M:ctor(onChooseCall, defaultIcon, lightIcon, defaultColor, lightColor,turnLeft,turnRight,scroll,content,btnDefaultColor,btnLightColor,isBig)
+function _M:ctor(onChooseCall, defaultIcon, lightIcon, defaultColor, lightColor,turnLeft,turnRight,scroll,content,btnDefaultColor,btnLightColor)
 	self.OnChooseCall = onChooseCall
-	self.DefaultIcon = defaultIcon
-	self.LightIcon = lightIcon
-	self.DefaultColor = defaultColor
-	self.LightColor = lightColor
-	self.IsBig = isBig
+	self.DefaultIcon = defaultIcon or "yth_023"
+	self.LightIcon = lightIcon or "yth_023"
+	self.DefaultColor = defaultColor or _DefaultColor
+	self.LightColor = lightColor or _LightColor
 	self.Tabs = {}
 
 	self.LeftBtn = turnLeft
@@ -24,8 +20,8 @@ function _M:ctor(onChooseCall, defaultIcon, lightIcon, defaultColor, lightColor,
 	self.Scroll = scroll
 	self.Content = content
 
-	self.BtnDefaultColor = btnDefaultColor
-	self.BtnLightColor = btnLightColor
+	self.BtnDefaultColor = btnDefaultColor or _BtncolorDefault
+	self.BtnLightColor = btnLightColor or _BtncolorLight
 
 	self.TabsIndex = {}
 	self.LastChoose = 0
@@ -96,10 +92,6 @@ function _M:Choose(key)
 					if self.BtnLightColor ~= nil then
 						v.image.Color = self.BtnLightColor
 					end
-					if self.IsBig then
-						v.image.SizeDelta = _LightImgSize
-						v.text.FontSize = _LightFontSize
-					end
 					if v.selectIcon then
 						v.selectIcon.Activity = true
 					end
@@ -109,10 +101,6 @@ function _M:Choose(key)
 					v.image.RaycastTarget = true
 					if self.BtnDefaultColor ~= nil then
 						v.image.Color = self.BtnDefaultColor
-					end
-					if self.IsBig then
-						v.image.SizeDelta = _DefaultImgSize
-						v.text.FontSize = _DefaultFontSize
 					end
 					if v.selectIcon then
 						v.selectIcon.Activity = false

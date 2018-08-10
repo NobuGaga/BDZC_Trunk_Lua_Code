@@ -1,0 +1,44 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+
+
+--界面构建
+function _M:OnCreate(rankList)
+	local moudle = self:CreateMoudle(self._RootNode, "M_NewBossPK_Tips")
+	self.Moudle = moudle
+	moudle:Get("Black"):AddOnButton(function ( ... )
+		self:Destroy()
+	end, nil, 1)
+	moudle:Get("diyupanghang").Text = Csv.Text("commerce_battle35")
+
+	local content = moudle:Get("content")
+	if rankList ~= nil then
+		local list = _P.GetSortList(rankList)
+		for k,v in ipairs(list) do
+			local oneMoudle = self:CreateMoudle(content, "M_FB_PKRankItem")
+			oneMoudle:Get("nameText").Text = Csv.Text("commerce_battle36",{index = k,name = v.attacker})
+			oneMoudle:Get("InfoText").Text = Csv.Text("commerce_battle37",{num = v.hurt})
+		end
+	end
+end
+
+function _P.GetSortList(rankList)
+	local sortTable = {}
+	for k,v in pairs(rankList) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b) return a.hurt > b.hurt end)
+	return sortTable
+end
+
+return _M

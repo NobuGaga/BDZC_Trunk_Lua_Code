@@ -3,7 +3,6 @@ local CRelations = JRequire "Dev.Relations.CRelations"
 local JGuiManager = CS.JGui.JGuiManager
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
-local MParliament = JRequire "Dev.Parliament.MParliament"
 local _M = Class()
 local _P = {}
 
@@ -24,11 +23,11 @@ function _M:ctor(parent)
 	moudle:Get("Paiming").Text = Csv.Text("relations_findpai")
 	moudle:Get("C_text").Text = Csv.Text("relations_find")
 	moudle:Get("C_text_1").Text = Csv.Text("relations_zhuisu")
-	moudle:Get("Btn_a"):AddOnButton(function()
+	moudle:Get("C_Btn_a"):AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickFind(self)
 	end,nil,0.9)
-	moudle:Get("Btn_b"):AddOnButton(function()
+	moudle:Get("C_Btn_b"):AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickFight(self)
 	end,nil,0.9)
@@ -53,7 +52,7 @@ function _P.RefreshView(self)
 					SoundMgr.Play(10001)
 					MRelations.FightType = 2
 					MRelations.PlayerID = v.playerid
-					WindowMgr.Create("URelationsSelectStaff")
+					WindowMgr.Create("URelationsSelectStaff",2)
 				end,nil,0.9)
 			end
 		end
@@ -88,7 +87,7 @@ function _P.OnClickFight(self)
 	if self.mFindPlayerID ~= nil then
 		MRelations.FightType = 2
 		MRelations.PlayerID = self.mFindPlayerID
-		WindowMgr.Create("URelationsSelectStaff")
+		WindowMgr.Create("URelationsSelectStaff",2)
 	else
 		CCommon.ShowError(Csv.Text("relations_tip6"))
 	end
@@ -102,26 +101,8 @@ function _M:FindSuccess(data)
 	local moudle = self.mMoudle
 	self.mFindPlayerID = data.playerid
 	moudle:Get("PlayerInfo").Activity = true
-	if self.bodySpine ~= nil then
-        self.bodySpine:Destroy()
-        self.bodySpine = nil
-	end
-	if self.headSpine ~= nil then
-        self.headSpine:Destroy()
-        self.headSpine = nil
-    end
-	local bodyAsset, bodyPrefab = MParliament.GetBodyByIDSex(data.avatar.body, data.sex)
-	local headAsset, heaPrefab = MParliament.GetBodyByIDSex(data.avatar.head, data.sex)
-	local head = moudle:Get("head")
-	local body = moudle:Get("Body")
-	if bodyPrefab and heaPrefab then
-		self.bodySpine, self.headSpine = CCommon.CreateRole(body, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.lobby_search)
-		body.SpriteName = ""
-		head.SpriteName = ""
-	else
-		body.SpriteName = bodyAsset
-		head.SpriteName = headAsset
-	end
+	moudle:Get("head").SpriteName = Csv.Avatar[data.avatar.head]["asset_"..data.sex]
+	moudle:Get("Body").SpriteName = Csv.Avatar[data.avatar.body]["asset_"..data.sex]
 	moudle:Get("NameText").Text = data.name
 	moudle:Get("jifenNum").Text = data.point
 	moudle:Get("shiliNum").Text = data.power

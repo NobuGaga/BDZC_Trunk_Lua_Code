@@ -384,7 +384,6 @@ function _P.OnOut(data)
 		_M.EnterCommerce()
 	end
 end
-
 --打开界面
 function _P.OnOpen(data)
 	MCommerce.MyCommerceInfo = 
@@ -452,7 +451,9 @@ function _P.OnOpen(data)
 		--我锁定的员工列表
 		lockedStaffs = {},
 		--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
-		staffLifeNum = {}
+		staffLifeNum = {},
+		--是否打过商会副本
+		hasBattled = myInfo.hasBattled
 	}
 	if myInfo.exchangeList ~= nil then
 		for _,v in pairs(myInfo.exchangeList) do
@@ -493,6 +494,8 @@ function _P.OnOpen(data)
 	if WindowMgr.IsCreated("UCommerceExchange") then
 		WindowMgr.Call("UCommerceExchange","RefreshItems")
 	end
+
+	_P.CheckBattleRedPoint()
 end
 --界面刷新
 function _P.OnUpdate(data)
@@ -581,9 +584,13 @@ function _P.OnUpdate(data)
 			--我锁定的员工列表
 			lockedStaffs = {},
 			--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
-			staffLifeNum = {}
+			staffLifeNum = {},
+			--是否打过商会副本
+			hasBattled = myInfo.hasBattled
 		}
-		cachedInfo.myInfo = tmpMyInfo
+		if cachedInfo ~= nil then
+			cachedInfo.myInfo = tmpMyInfo
+		end
 		if myInfo.exchangeList ~= nil then
 			for _,v in pairs(myInfo.exchangeList) do
 				tmpMyInfo.exchangeList[v.key] = v.value
@@ -627,6 +634,8 @@ function _P.OnUpdate(data)
 	if WindowMgr.IsCreated("UCommerceMembers") then
 		WindowMgr.Call("UCommerceMembers", "RefreshMemberNum")
 	end
+
+	_P.CheckBattleRedPoint()
 end
 --查询信息
 function _P.OnQuery(data)
@@ -680,7 +689,35 @@ function _P.OnBattleReport(data)
 end
 function _P.OnBattleBattle(data)
 	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
-	WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+	--WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+	if not WindowMgr.IsCreated("UBattleBossNew") then
+		local csvBoss = Csv.CommerceBattle[data.info.id]
+		WindowMgr.Create("UBattleBossNew",{bossBlood = data.info.blood,bossFullBlood = csvBoss.blood,bossImg = csvBoss.asset,bossTab = csvBoss.tab,bossBg = csvBoss.bg,bossName = csvBoss.name,isBeat = MCommerce.MyCommerceInfo.myInfo.hasBattled},
+		function()
+			_M.BattleReq(data.info.id,0)
+		end,
+		function(data,param,paramEx)
+			if paramEx ~= nil then
+				if paramEx.info.state == MCommerce.BattleState.Killed then
+					WindowMgr.Create("UCommerceBattleKill", paramEx, function()
+						if WindowMgr.IsCreated("UBattleBossNew") then
+							--WindowMgr.Destroy("UBattleBossNew")
+							WindowMgr.Create("UCommerceBattleList")
+						end
+					end)
+				else
+					WindowMgr.Create("UCommerceBattleResult", paramEx, function()
+						if WindowMgr.IsCreated("UBattleBossNew") then
+							--WindowMgr.Destroy("UBattleBossNew")
+							WindowMgr.Create("UCommerceBattleList")
+						end
+					end)
+				end
+			end
+		end,nil,function()
+			WindowMgr.Create("UCommerceBattleRank",data.message)
+		end)
+	end
 end
 function _P.OnBattleResult(data)
 	local lockStaff = data.lockStaff
@@ -696,6 +733,11 @@ function _P.OnBattleResult(data)
 	end
 	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
 	WindowMgr.Call("UCommerceBattle","OnBattleResult",data)
+
+	MCommerce.MyCommerceInfo.myInfo.hasBattled = true
+	_P.CheckBattleRedPoint()
+	MCommerce.BattleData = data
+	WindowMgr.Call("UBattleBossNew","OnResult",data.fight,data)
 end
 function _P.OnUnlock(data)
 	local info = MCommerce.MyCommerceInfo
@@ -711,10 +753,11 @@ function _P.OnUnlock(data)
 	end
 end
 function _P.OnOpenBattle(data)
-	if WindowMgr.IsCreated("UCommerceBattleList") then
-		WindowMgr.Create("UCommerceBattle", data.info.id)
-	end
-	WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+	-- if WindowMgr.IsCreated("UCommerceBattleList") then
+	-- 	WindowMgr.Create("UCommerceBattle", data.info.id)
+	-- end
+	-- WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
+	_P.OnBattleBattle(data)
 end
 
 function _P.OnDayout()
@@ -724,7 +767,9 @@ function _P.OnDayout()
 		myInfo.lockedStaffs = {}
 		myInfo.staffLifeNum = {}
 		myInfo.build = 0
+		myInfo.isBeat = false
 		_P.OnUpdate({myInfo = myInfo})
+		_P.CheckBattleRedPoint()
 	end	
 end
 
@@ -755,6 +800,21 @@ function _P.OnBattleClosePush(data)
 	if WindowMgr.IsCreated("UCommerceBattleList") then
 		_M.BattleInfoReq()
 	end
+end
+
+function _P.CheckBattleRedPoint()
+	if MCommerce.MyCommerceInfo ~= nil then
+		local isHasOpenBattle = MCommerce.MyCommerceInfo.canFight
+		local isBeat = MCommerce.MyCommerceInfo.myInfo.hasBattled
+		if isHasOpenBattle and not isBeat then
+			MCommerce.BattleRedPoint = true
+		else
+			MCommerce.BattleRedPoint = false
+		end
+	else
+		MCommerce.BattleRedPoint = false
+	end	
+	WindowMgr.Call("UCommerce","OnUpdatemeCanFight")
 end
 
 

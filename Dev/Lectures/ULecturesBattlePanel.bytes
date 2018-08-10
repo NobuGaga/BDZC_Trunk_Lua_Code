@@ -52,10 +52,9 @@ function _P.OnPlayBattleAnim(self, data)
 	local actorNode = self.mModule:Get("ActorPanel")
 
 	SoundMgr.PlayNonStopUI(soundId)
-	actorNode:SetOnLoadedBeforeLoad(function ( ... )
-		actorNode:SkeletonSetAnimation(actorNameId)
-	end)
 	CCommon.CreateEffect(actorNode, BattleActorId)
+	actorNode:SkeletonSetAnimation(actorNameId)
+
 	-- self:Lock()
 	local mineNumText = self.mModule:Get("text55")
 	local enemyNumText = self.mModule:Get("text66")

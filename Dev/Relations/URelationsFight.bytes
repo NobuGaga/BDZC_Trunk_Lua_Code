@@ -20,8 +20,9 @@ local SELECT_MOVE = "T_Lobby_Staff_Choose"
 local EFFECT_ID = 10027
 
 local EFFECTID = 16
+local ONEKEY_EFFECT = 10175
 
-local POS_GROUP = {{31,128},{211,-85},{-96,-152}}
+local ONEKEY_VIPLEVEL = Csv.Const(41)[7]
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -35,18 +36,14 @@ end
 function _M:OnCreate(...)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_StarPK")
 	self.mMoudle = moudle
-	
-	self.StaffPrefab = nil
-	self.LastStaffId = 0
 
-	-- moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
+	moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
 	-- moudle:Get("C_text").Text = Csv.Text("relations_linshi")
 	-- moudle:Get("JdText").Text = Csv.Text("relations_jindu")
-	moudle:Get("comprehensive").Text = Csv.Text("relations_zongheTN")
-	moudle:Get("attack").Text = Csv.Text("relations_attackTN")
-	moudle:Get("Skill").Text = Csv.Text("relations_skillTN")
-	moudle:Get("NumText").Text = Csv.Text("relations_point")
-	moudle:Get("NumText_0").Text = Csv.Text("relations_point")
+	moudle:Get("comprehensive").Text = Csv.Text("relations_zongheT")
+	moudle:Get("attack").Text = Csv.Text("relations_attackT")
+	moudle:Get("Skill").Text = Csv.Text("relations_skillT")
+	moudle:Get("C_text").Text = Csv.Text("relations_onekey")
 
 	-- moudle:Get("C_Btn_e"):AddOnButton(function()
 	-- 	SoundMgr.Play(10001)
@@ -59,9 +56,33 @@ function _M:OnCreate(...)
 		self:Destroy()
 	end,nil,0.9)
 
+	local onekeyBtn = moudle:Get("C_Btn_a")
+	local onekeyTips = moudle:Get("TipsBg")
+	moudle:Get("Btn_Tip").Text = Csv.Text("relations_onekey_open",{num = ONEKEY_VIPLEVEL})
+	onekeyBtn:AddOnButton(function()
+		SoundMgr.Play(10002)
+		CRelations.CRelationOnekey()
+		--WindowMgr.Create("URelationsSetup")
+	end,nil,1.2)
+
+	local effectPanel = moudle:Get("EffectActorPanel")
+	CCommon.CreateEffect(effectPanel,ONEKEY_EFFECT)
+	
+	if MPlayer.GetVip() >= ONEKEY_VIPLEVEL then
+		onekeyTips.Activity = false
+		onekeyBtn.RaycastTarget = true
+		onekeyBtn.IsGray = false
+		effectPanel.Activity = true
+	else
+		onekeyTips.Activity = true
+		onekeyBtn.RaycastTarget = false
+		onekeyBtn.IsGray = true
+		effectPanel.Activity = false
+	end
+
 	--_P.RefreshView(self)
 	local actor = moudle:Get("ActorPanel")
-	--CCommon.CreateEffect(actor,EFFECT_ID)
+	CCommon.CreateEffect(actor,EFFECT_ID)
 
 	moudle:Get("ZsNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold))
 	self.mGold = MBag.GetItemNum(Define.AssetsType.Gold)
@@ -110,47 +131,25 @@ function _P.RefreshView(self)
 	local moudle = self.mMoudle
 	local data = MRelations.FightData
 	if data ~= nil then
-		moudle:Get("integral").Text = data.name
-		moudle:Get("Num").Text = data.otherpoint
-		moudle:Get("Staff").Text = Csv.Text("relations_staffnum")
-		moudle:Get("StaffNum").Text = Csv.Text("company_exp",{num = data.staffnum - data.surnum,max = data.staffnum})
-		moudle:Get("NameText").Text = data.mypoint
+		moudle:Get("integral").Text = Csv.Text("relations_namePoint",{name = data.name,num = data.otherpoint})
+		moudle:Get("Staff").Text = Csv.Text("relations_staffnum",{num = data.staffnum - data.surnum,max = data.staffnum})
+		moudle:Get("NameText").Text = Csv.Text("relations_namePointA",{num = data.mypoint})
 		local csvStaff = Csv.Personnel[data.mstaffinfo.staffid]
-		moudle:Get("StaffName").Text = MStaff.GetStaffName(csvStaff.id)
-		local staffData = MStaff.StaffTable[csvStaff.id]
-		local csvColorUp = Csv.ColorUp[staffData.color]
-		moudle:Get("Leve").Text = Csv.Text("staff_level2",{num = data.mstaffinfo.level,max = csvColorUp.lvMax})
+		moudle:Get("StaffName").Text = Csv.Text("relations_stafflv",{name = MStaff.GetStaffName(csvStaff.id),num = data.mstaffinfo.level})
 		moudle:Get("comprehensiveText").Text = data.mstaffinfo.staffattr
 		_P.SetSelfData(self,moudle,data)
-
-		if self.LastStaffId ~= csvStaff.id then
-			if self.StaffPrefab ~= nil then
-				self.StaffPrefab:Destroy()
-				self.StaffPrefab = nil
-			end
-			self.LastStaffId = csvStaff.id
-			if csvStaff.prefab ~= nil and csvStaff.prefab > 0 then
-				self.StaffPrefab = CCommon.CreateActor(moudle:Get("staff"), csvStaff.prefab, CCommon.ActorFieldMap.staff_lobby_startPk)
-				moudle:Get("staff").SpriteName = ""
-			else
-				moudle:Get("staff").SpriteName = csvStaff.asset
-			end
-		end
-
+		moudle:Get("staff").SpriteName = csvStaff.asset
 		local content = moudle:Get("content")
 		content:DestroyChildren()
 		for k,v in pairs(data.staffs) do
 			local staffMoudle = JGuiManager.GetMoudle(content, "M_Lobby_StarPKItem")
-			if k <= 3 then
-				staffMoudle.SelfRect.LocalPosition = Vector2(POS_GROUP[k][1],POS_GROUP[k][2])
-			end
-			local colorBG = staffMoudle:Get("M_Lobby_StarPKItem")
-			colorBG.SpriteName = MStaff.Color3Image[v.color]
-			staffMoudle:Get("head").SpriteName = Csv.Personnel[v.staffid].asset3
+			local colorBG = staffMoudle:Get("light")
+			colorBG.SpriteName = MStaff.Color2Image[v.color]
+			staffMoudle:Get("head").SpriteName = Csv.Personnel[v.staffid].asset
 			local textTip = staffMoudle:Get("PKtext")
 			textTip.Text = Csv.Text("relations_click_tips")
 			textTip.CachedTran:GetJTweener(SELECT_MOVE):Play()
-			staffMoudle:Get("M_Lobby_StarPKItem"):AddOnButton(function()
+			colorBG:AddOnButton(function()
 				SoundMgr.Play(10001)
 
 				if MRelations.FightData.surnum <= 0 then

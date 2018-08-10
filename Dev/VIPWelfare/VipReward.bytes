@@ -19,7 +19,7 @@ function _M:ctor(parent)
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		--前往充值
 		WindowMgr.Create("URecharge")
-	end,nil,0.9)
+	end)
 
 	moudle:Get("getBtn"):AddOnButton(function()
 		_P.SendVipReward(self)
@@ -29,6 +29,8 @@ function _M:ctor(parent)
 	moudle:Get("VIPBtn"):AddOnButton(function()
 		_P.LookPrivilege(self)
 	end)
+
+	self.mTextItemTab = {}
 end
 
 function _P.SendVipReward(self)
@@ -146,6 +148,43 @@ function _M:RefreshView(level)
 	else
 		tips.Text = ""
 	end
+
+	------------中文------------------------
+	--实例化UILabel
+	local textItemTab = self.mTextItemTab
+	for k,v in pairs(textItemTab)do
+		v.Activity = false
+	end
+	
+	for i = 1,10,1 do
+		
+		local text = _P.GetText(vipData,i)
+		local textPos = _P.GetTextPos(vipData,i)
+		local textSize = _P.GetTextSize(vipData,i)
+
+		if text ~= nil then
+			if textItemTab[i] == nil then
+				txt = JGuiManager.CreateText(moudle.SelfRect, "text"..i)
+				table.insert(textItemTab,txt)
+			else
+				txt = textItemTab[i]
+			end
+			txt.Activity = true
+
+			txt.SupportRichText = true
+			txt.Text = text
+	
+			if textPos ~= nil then
+				txt.LocalPosition = Vector2(textPos[1], textPos[2])
+			end
+			
+			if textSize ~= nil then
+				txt.FontSize = textSize
+			end
+		end
+	end
+
+	self.mTextItemTab = textItemTab
 end
 
 function _P.DestroyLights(self)
@@ -156,6 +195,51 @@ function _P.DestroyLights(self)
 			v:Destroy()
 		end
 	end
+end
+
+function _P.GetText(data,index)
+	if index == 1 then
+		return data.text1
+	elseif index == 2 then
+		return data.text2
+	elseif index == 3 then
+		return data.text3
+	elseif index == 4 then
+		return data.text4
+	elseif index == 5 then
+		return data.text5
+	end
+	return nil
+end
+
+function _P.GetTextPos(data,index)
+	if index == 1 then
+		return data.textPos1
+	elseif index == 2 then
+		return data.textPos2
+	elseif index == 3 then
+		return data.textPos3
+	elseif index == 4 then
+		return data.textPos4
+	elseif index == 5 then
+		return data.textPos5
+	end
+	return nil
+end
+
+function _P.GetTextSize(data,index)
+	if index == 1 then
+		return data.textSize1
+	elseif index == 2 then
+		return data.textSize2
+	elseif index == 3 then
+		return data.textSize3
+	elseif index == 4 then
+		return data.textSize4
+	elseif index == 5 then
+		return data.textSize5
+	end
+	return nil
 end
 
 function _M:Destroy()

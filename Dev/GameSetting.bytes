@@ -16,8 +16,6 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [SDK.SDKMgr.bytes#_M]
 local SDKMgr = JRequire "SDK.SDKMgr"
---@RefType [Dev.Player.HeartBeat.bytes#_M]
-local HeartBeat
 
 ----------------------CS类引用--------------------------
 local HttpHelper = CS.Utility.HttpHelper
@@ -143,8 +141,10 @@ function _M.Init()
 	_M.IsiOSCommit = (tonumber(isPass) == 0)
 	_M.initServerIdList = _M.GameParam.cdnVersion.serverid
 	local isPrivacy = _M.GameParam.cdnVersion.isPrivacy
-	_M.IsShowPrivacy = (tonumber(isPrivacy) == 1)
+	_M.IsShowPrivacy = (tonumber(isPrivacy) == 1)	
+end
 
+function _M.Start()
 	--作弊检查
 	-- _M.StartCheatDetect()
 
@@ -190,20 +190,20 @@ end
 
 function _M.SetAreaID(areaIdStr)
 	_M.AreaId = areaIdStr or ""
-	-- error("last areaID:" .. _M.AreaId)
+	--error("last areaID:" .. _M.AreaId)
 	if not _M.IsEditor then
 		local areaArray = LuaUtil.StringSplit(_M.AreaId, ",")
 		if areaArray ~= nil then
 			local newTab = {}
 			for i=1,#areaArray do
-				if string.find(areaArray[i], '1') ~= 1 then
+				if string.find(areaArray[i], '3') ~= 1 then
 					table.insert(newTab, areaArray[i])
 				end
 			end
 			_M.AreaId = table.concat(newTab, ",")
 		end
 	end
-	-- error("new areaID:" .. _M.AreaId)
+	--error("new areaID:" .. _M.AreaId)
 end
 
 function _M.ShowFog()
@@ -275,11 +275,8 @@ function _M.OpenLoginInput()
 end
 
 function _M.HttpPostExitDataToPHP()
-	if HeartBeat == nil then
-		HeartBeat = JRequire "Dev.Player.HeartBeat"
-	end
 	_M.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "2", 
-						 eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+						 eTime = os.date("%Y-%m-%d %H:%M:%S", os.time())})
 end
 
 function _M.GameQuit()

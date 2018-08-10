@@ -10,11 +10,11 @@ local _M = Class()
 local _P = {}
 local _R = {}
 
-local itemWidth = 735
-local itemHeight = 130
-local space = -18
-local pageNum = 8
-local pageHeight = 800
+local itemWidth = 724
+local itemHeight = 56
+local space = 10
+local pageNum = 15
+local pageHeight = 710
 
 --界面构建
 function _M:ctor(parent)
@@ -25,6 +25,7 @@ function _M:ctor(parent)
 	moudle:Get("TabText1").Text = Csv.Text("cross_rank_tab1")
 	moudle:Get("TabText2").Text = Csv.Text("cross_rank_tab2")
 	moudle:Get("TabText3").Text = Csv.Text("cross_rank_tab3")
+	moudle:Get("TabText4").Text = Csv.Text("cross_rank_tab4")
 end
 
 function _M:ResetList(data)
@@ -78,28 +79,28 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		_P.SetLevelAndTitle(value, moudle)
 		moudle:Get("value").Text = value.value
 
-		local vip = value.vip
-		local imgKuang = moudle:Get("VipBox")
-		local imgNum = moudle:Get("VipNum")
-		if vip ~= nil then
-			local csvVip = Csv.Vip[vip]
-			if vip <= 0 then
-				imgKuang.Activity = false
-				imgNum.Activity = false
-			else
-				imgKuang.Activity = true
-				imgNum.Activity = true
-				imgKuang.SpriteName = csvVip.imgBord
-				imgNum.SpriteName = csvVip.icon
-			end
-		else
-			imgKuang.Activity = false
-			imgNum.Activity = false
-		end
+		-- local vip = value.vip
+		-- local imgKuang = moudle:Get("VipBox")
+		-- local imgNum = moudle:Get("VipNum")
+		-- if vip ~= nil then
+		-- 	local csvVip = Csv.Vip[vip]
+		-- 	if vip <= 0 then
+		-- 		imgKuang.Activity = false
+		-- 		imgNum.Activity = false
+		-- 	else
+		-- 		imgKuang.Activity = true
+		-- 		imgNum.Activity = true
+		-- 		imgKuang.SpriteName = csvVip.imgBord
+		-- 		imgNum.SpriteName = csvVip.icon
+		-- 	end
+		-- else
+		-- 	imgKuang.Activity = false
+		-- 	imgNum.Activity = false
+		-- end
 
-		if value.sex ~= nil and value.headid ~= nil then
-			moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(value.headid,value.sex)
-		end
+		-- if value.sex ~= nil and value.headid ~= nil then
+		-- 	moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(value.headid,value.sex)
+		-- end
 
 		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
 
@@ -115,7 +116,7 @@ function _P.SetLevelAndTitle(data, moudle)
 		print("-------server return level < 1.    data.level:", data.level)
 	end
 	
-	local levelText = moudle:Get("levelText")
+	local levelText = moudle:Get("level")
 	local title = moudle:Get("title")
 	if data.titleid ~= nil and data.titleid > 0 then
 		--兼容没有配置称号图标, 使用文本称号显示

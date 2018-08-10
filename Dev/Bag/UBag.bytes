@@ -4,7 +4,7 @@ local UBagGoods = JRequire "Dev.Bag.UBagGoods"
 local UBagSynthetic = JRequire "Dev.Bag.UBagSynthetic"
 local UBagFashion = JRequire "Dev.Bag.UBagFashion"
 local MMain = JRequire "Dev.Main.MMain"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 
@@ -111,15 +111,27 @@ function _M:OnCreate(chooseFuncId)
 			end
 		end
 	end)
+
+	if GameSetting.IsiOSCommit then
+		local iOSBg = moudle:Get("iOSBg")
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Bag"),
+											36, 525,
+											function (sp)
+												if sp then
+													iOSBg.Sprite = sp
+													iOSBg.Activity = true
+												end
+											end, Vector4(9, 339, 9, 184))
+	end
 end
 
 function _P.SetBGSize(self,funId)
-	-- local ImgBg = self.mMoudle:Get("BG2")
-	-- local sizeY = 829
-	-- if funId == Define.SysId.Bag_Synthetic then
-	-- 	sizeY = 1125
-	-- end
-	-- ImgBg.transform.sizeDelta = Vector2(740,sizeY)
+	local ImgBg = self.mMoudle:Get("BG2")
+	local sizeY = 829
+	if funId == Define.SysId.Bag_Synthetic then
+		sizeY = 1125
+	end
+	ImgBg.transform.sizeDelta = Vector2(740,sizeY)
 end
 
 function _R.StaffChange(self,data)

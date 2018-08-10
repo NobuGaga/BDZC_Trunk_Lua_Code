@@ -1,0 +1,44 @@
+-- 分解界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CCar = JRequire "Dev.Car.CCar"
+local MCar = JRequire "Dev.Car.MCar"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_009_5", "zj_009_6"}
+
+
+function _M:OnPopCreate( ... )
+	self:OnCreate(...)
+end
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+--界面构建
+function _M:OnCreate(isHasUp, carData)
+	local viewName = (isHasUp and "M_Car_Decompose") or "M_Car_Decompose2"
+	local module = self:CreateMoudle(self._RootNode, viewName)
+	self.mModule = module
+	self.isHasUp = isHasUp
+
+	local closeBtn = module:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+end
+
+return _M

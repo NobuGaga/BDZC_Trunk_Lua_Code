@@ -1,0 +1,297 @@
+-- 商店积分兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local CRelations = JRequire "Dev.Relations.CRelations"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local NUM_TWEEN = "T_Club_NumSacle"
+local maxRefreshNum = Csv.Const(118)[2]
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	self.exchangeData = MRelations.ExchangeTable
+	if self.exchangeData == nil then return end
+
+	local module = self:CreateMoudle(self._RootNode, "M_Lobby_Exchange")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.needCost = _P.GetNeedCost(self)
+	local refreshBtn = module:Get("C_Btn_b_8")
+	refreshBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if self.exchangeData.todayRefreshCount < maxRefreshNum then
+			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+			CCommon.CheckTips(function(isSure, arg)
+				_P.OnClickRefresh(self, isSure, arg)
+			end, {items = {[1] = GoldCount} ,content = Csv.Text("club_exchange_tip",{num = self.needCost})})
+		else
+			CCommon.ShowError(Csv.Text("club_exchange_refreshError"))
+		end
+	end)
+
+	module:Get("C_Text").Text = Csv.Text("relations_shop_title")
+	module:Get("integral").Text = Csv.Text("relations_shop_jifen")
+	--module:Get("zuanshiSX").Text = Csv.Text("club_exchange_money")
+	module:Get("timeSX").Text = Csv.Text("club_exchange_auto")
+	module:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")
+	module:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")
+	module:Get("C_text_8_0").Text = Csv.Text("relations_show_show")
+
+	module:Get("C_Btn_b_9"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		WindowMgr.Create("URelationsShopShow")
+	end,nil,1.2)
+
+	self.timeText = module:Get("CXNum")
+	_P.SetData(self, self.exchangeData)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if self.mNowMoudle ~= nil then
+			CCommon.ShowFlyItem(self.mNowMoudle:Get("Node"),itemid,itemcount)
+		end
+	end)
+end
+
+
+function _P.OnClickRefresh(self, isSure, arg)
+	if isSure then
+		local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
+
+		if self.needCost > GoldCount then
+			CCommon.ShowError(Csv.Text("err_club_no_gold"))
+			return
+		end
+
+		if self.exchangeData.todayRefreshCount < maxRefreshNum then
+			CRelations.CRelationShopRefresh(true)
+		else
+			CCommon.ShowError(Csv.Text("club_exchange_refreshError"))
+		end
+	end
+end
+
+
+function _P.SetData(self, data)
+	self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
+	--self.mModule:Get("CSNum").Text = (maxRefreshNum - data.todayRefreshCount) .. '/' .. maxRefreshNum
+	
+	_P.OnUpdateTime(self)
+	if data.nextRefreshLeftTime > 0 then
+		--倒计时开始
+		_P.ClearTimer(self)
+		self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+
+	_P.SetListData(self)
+end
+
+
+function _P.ClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+function _P.OnUpdateTime(self)
+	local time = self.exchangeData.nextRefreshLeftTime - HeartBeat.ServSecond()
+	if self.exchangeData.nextRefreshLeftTime ~= nil and time > 0 then
+		self.timeText.Text = LuaUtil.GetTimeHMS(time)
+	else
+		self.timeText.Text = "00:00:00"
+	end
+end
+
+
+function _P.SetListData(self)
+	local shopList = _P.GetSortList(self.exchangeData.itemList)
+	if shopList == nil then return end
+
+	local itemGrid = self.mModule:Get("List")
+	itemGrid:DestroyChildren()
+	
+	self.mRawTableItems = {}
+	for i,v in ipairs(shopList) do
+		self.mRawTableItems[v.index] = _P.OnCreateShopItem(self, v, itemGrid)
+	end
+end
+
+
+function _P.OnCreateShopItem(self, data, itemGrid)
+	local shopItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Club_Exchange_Item", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local goodConf = Csv.RelationShop[data.goodid]
+		local itemConf = Csv.Item[goodConf.itemid]		
+
+		-- 设置item数据
+		local ItemNameText = itemModule:Get("GoodName")
+		local strColor = Csv.ItemColor[itemConf.color].str
+		ItemNameText.Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+
+		itemModule:Get("ItemNum").Text = goodConf.itemcount
+
+		local IconImg = itemModule:Get("Icon")
+		IconImg.SpriteName = itemConf.icon
+		IconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickIcon(itemConf.id)
+		end, nil, 1)
+
+		local qualityImg  = itemModule:Get("IconBox")
+		qualityImg.SpriteName = itemConf.colorIcon
+
+		local scoreText = itemModule:Get("Score")
+		scoreText.Text = goodConf.costPoint .. Csv.Text("relations_shop_score")
+
+		local discountImg = itemModule:Get("Corner")
+		local discountText = itemModule:Get("CornerText")
+		discountImg.Activity = (goodConf.discount_asset ~= nil and goodConf.discount_asset ~= "")
+		discountText.Text = goodConf.discount_asset
+
+		itemModule:Get("C_text").Text = Csv.Text("club_exchange_change")
+		local exchangeBtn = itemModule:Get("C_Btn_b")
+		exchangeBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if data.buyCount >= goodConf.maxBuy then
+				CCommon.ShowError(Csv.Text("club_exchange_numError"))
+				return
+			end
+
+			if self.exchangeData.point < goodConf.costPoint then  -- 积分不足
+				CCommon.ShowError(Csv.Text("club_exchange_pointError"))
+				return
+			end
+			CRelations.CRelationShopBuy(data.index, 1)
+		end)
+		
+		_P.SetItemGray(itemModule, data, goodConf)
+	end
+
+	shopItem.module = itemModule
+	return shopItem
+end
+
+
+-- 打开道具详情界面
+function _P.OnClickIcon(id)
+	if id ~= nil then
+		WindowMgr.Create("UBagDetailPop", id)
+	end
+end
+
+
+-- 设置item是否为灰
+function _P.SetItemGray(itemModule, data, shopConf)
+	local isMax = data.buyCount >= shopConf.maxBuy
+	
+	itemModule:Get("Icon").IsGray = isMax
+	itemModule:Get("IconBox").IsGray = isMax
+	itemModule:Get("Red").Activity = not isMax
+	itemModule:Get("Corner").IsGray = isMax
+
+	-- 判断该商品兑换次数是否达到上限，若达到上限置灰，不可点击
+	local exchangeBtn = itemModule:Get("C_Btn_b")
+	exchangeBtn.IsGray = isMax
+	exchangeBtn.RaycastTarget = not isMax
+end
+
+
+-- 排序
+function _P.GetSortList(shopList)
+	if shopList == nil then return end
+
+	local sortList = {}
+	for k, v in pairs(shopList) do
+		table.insert(sortList, v)
+	end
+
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+-- 刷新成功后
+function _R.OnRefreshShopData(self, data)
+	-- 刷新数据(弹提示)
+	CCommon.ShowError(Csv.Text("club_exchange_refreshSuccess"))
+
+	self.exchangeData = data
+	self.exchangeData.nextRefreshLeftTime = data.nextRefreshLeftTime + HeartBeat.ServSecond()
+	self.needCost = _P.GetNeedCost(self)
+	
+	_P.SetData(self, data)
+end
+
+
+-- 兑换道具回调
+function _R.OnExchangeCallBack(self, data)
+	local updateItem = self.mRawTableItems[data.index]
+	local itemModule = updateItem.module
+	if updateItem == nil or itemModule == nil then return end
+
+	local goodConf = Csv.RelationShop[data.goodid]
+	_P.SetItemGray(itemModule, data, goodConf)
+
+	-- 更新分数
+	local scoreText = self.mModule:Get("integralNum")
+	scoreText.Text = (data.point < 0 and 0) or data.point
+
+	-- 获得奖励动画
+	local ScoreTween = scoreText.CachedTran:GetJTweener(NUM_TWEEN)
+	ScoreTween:Play()
+
+	local effectRect = itemModule:Get("Score")
+	if effectRect == nil then return end
+
+	CCommon.ShowFlyItem(effectRect, goodConf.itemid, data.buyCount)
+end
+
+
+function _R.OnUpdateRefreshCount(self)
+	self.exchangeData.todayRefreshCount = 0
+	self.mModule:Get("CSNum").Text = (maxRefreshNum - self.exchangeData.todayRefreshCount) .. '/' .. maxRefreshNum
+end
+
+function _P.GetNeedCost(self)
+	local needData = Csv.RelationShopRefresh
+
+	local needCost = 0
+	local times = self.exchangeData.todayRefreshCount + 1
+	for k,v in ipairs(needData)do
+		if v.times > times then
+			return needCost
+		end
+		needCost = v.cost
+	end
+	return needCost
+end
+
+return _M

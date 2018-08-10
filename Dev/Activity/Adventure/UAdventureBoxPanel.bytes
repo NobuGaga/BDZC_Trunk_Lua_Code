@@ -1,0 +1,177 @@
+-- 奇遇宝箱类型界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local UnityTime = CS.UnityEngine.Time
+local LuckyItemId = 34116 -- 奇遇点id
+local lastTime = 0
+local GRAY = Color(0/255, 0/255, 0/255, 140/255)
+local LockActorId = 10172
+-- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
+-- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(eventData, hotval, isSelectDown)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_BBox")
+	self.mModule = module
+	self.mData = eventData
+	self.CurLuckyNum = hotval
+	self.IsSelectDown = isSelectDown
+
+	module:Get("C_Text_0").Text = Csv.Text("adventure_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local ruleBtn = module:Get("C_Full_Help_Btn")
+	ruleBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips", Define.SysId.Adventure)
+	end, nil, 1.2)
+
+	local openBtn = module:Get("OpenBtn")
+	openBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+
+		_P.OnOpenBox(self)
+	end, nil, 0.9)
+
+	local eventConf = Csv.AdventureMainEvent[eventData.taskId]
+	self.EventConf = eventConf
+	module:Get("OpenText").Text = Csv.Text("adventure_box_btn")
+	module:Get("RewardTip").Text = Csv.Text("adventure_box_pro")
+	module:Get("Name2").Text = Csv.Text("adventure_event_mush")
+	module:Get("Name").Text = eventConf.title
+	module:Get("Info").Text = eventConf.desc
+	module:Get("BoxText").Text = eventConf.taskName
+	module:Get("TypeImg").SpriteName = MActivity.AdventureTaskNames[eventConf.taskType]
+	module:Get("BoxIcon").SpriteName = eventConf.taskIcon
+	module:Get("AptiIcon").SpriteName = MActivity.AdventureConstData[12]
+	module:Get("Consume").Text = Csv.Text("adventure_main_costRefresh")
+
+	local costStr = (eventConf.costLucky > hotval and 'adventure_person_red') or 'adventure_person_green'
+	module:Get("AptiNum").Text = Csv.Text(costStr, {num = eventConf.costLucky})
+
+	local expText = module:Get("ExpText")
+	local addExp = (eventData.isDown and 0) or eventConf.addExp
+	expText.Text = Csv.Text("adventure_main_expTip", {num = addExp})
+
+	-- local starBgImg = module:Get("StarBg")
+	-- starBgImg.SpriteName = StarBgIcons[eventConf.star]
+
+	-- module:Get("ditu").SpriteName = eventConf.talkBg
+
+	for i=1,7 do
+		module:Get("Star".. i).Activity = i <= eventConf.star
+	end
+
+	_P.SetRewardData(self, eventConf.generalReward)
+end
+
+
+-- 开启宝箱
+function _P.OnOpenBox(self)
+	if self.CurLuckyNum < self.EventConf.costLucky then
+		CCommon.ShowError(Csv.Text("adventure_main_limit"))
+	else
+		CActivity.ReqAdvPersonTask(self.mData.taskIndex, nil, self.IsSelectDown)
+	end
+end
+
+
+function _P.SetRewardData(self, itemGroudId)
+	local rewardList = Csv.ItemGroup[itemGroudId].rewards
+	if rewardList == nil then
+		return 
+	end
+
+	local showContent = self.mModule:Get("content")
+	local rewards = MActivity.AdventureRewardSplit(rewardList)
+	local itemsNum = 0
+	if rewards ~= nil and rewards.items ~= nil then
+		for i=1,3 do
+			local itemData = rewards.items[i]
+			if itemData then
+				CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+				itemsNum = itemsNum + 1
+			end
+		end
+	end
+
+	if itemsNum < 3 then
+		local proGetList = Csv.ItemGroup[itemGroudId].randReward
+		local proRewards = MActivity.AdventureRewardSplit(proGetList)
+		if proRewards ~= nil and proRewards.items ~= nil then
+			for i=itemsNum + 1, 3 do
+				local itemData = proRewards.items[i]
+				if itemData then
+					CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+				end
+			end
+		end
+	end
+
+	if rewards ~= nil then
+		local pointText = self.mModule:Get("PointText")
+		pointText.Text = Csv.Text("adventure_event_point", {num = rewards.point})
+	end
+end
+
+
+function _R.OnCompleteEvent(self, data, callBack)
+	self:Lock()
+	local module = self.mModule
+
+	local actorPanel = module:Get("UnLockActorPanel")
+	CCommon.CreateEffect(actorPanel, LockActorId)
+
+	actorPanel:AddOnTime(function()
+		actorPanel.Activity = false
+		module:Get("BoxIcon").SpriteName = 'Bxx_Open'
+	end, nil, 3.1)
+
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+		local addExp = (data.isDown and 0) or self.EventConf.addExp
+		WindowMgr.Create("UAdventureBoxResPanel", data, addExp, function( ... )
+			self:Destroy()
+			callBack()
+		end)
+	end, nil, 3.3)
+end
+
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+return _M

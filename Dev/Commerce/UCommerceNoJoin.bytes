@@ -93,14 +93,6 @@ function _M:OnCreate()
 		WindowMgr.Create("UCommerceRank")
 	end)
 	rankBtn.Activity = not GameSetting.IsiOSCommit
-
-	local csv = Csv.Commerce[1]
-	if csv.dbname then
-		CCommon.CreateActor(moudle:Get("NPC"), csv.dbname, CCommon.ActorFieldMap.commerce_create)
-		moudle:Get("NPC").SpriteName = ""
-	else
-		moudle:Get("NPC").SpriteName = csv.actor
-	end
 end
 
 return _M

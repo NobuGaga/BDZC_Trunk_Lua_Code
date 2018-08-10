@@ -221,12 +221,12 @@ function _P.RefreshAllDress(self)
 end
 
 function _P.NeedMoveToPos(self, btn)
-	local mapX = self.Map.SizeDelta.x  --* self.Map.LocalScale.x
+	local mapX = self.Map.SizeDelta.x * self.Map.LocalScale.x
 	local widthHalf = mapX / 2 - CS.JGui.JGuiManager.GuiRoot.Width / 2 - 2
 
 	local ret = Vector2.zero
 	local btnPos = btn.LocalPosition
-	-- btnPos.x = btnPos.x * self.Scale
+	btnPos.x = btnPos.x * self.Scale
 	ret.x = -btnPos.x
 	if ret.x > 0 then
 		if ret.x > widthHalf then
@@ -312,10 +312,10 @@ function _M:OnCreate()
 	self.Moudle = moudle
 	local map = moudle:Get('content')
 	self.Map = map
-	-- map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
-	-- local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
-	-- self.Scale = scale
-	--map.LocalScale = Vector3(scale, scale, 1)
+	map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+	local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
+	self.Scale = scale
+	--map.LocalScale = Vector3(1, scale, 1)
 
 	local cachedEffects = _Global._CachedObjects.effects
 	local DB_MaidGirl = moudle:Get("DB_MaidGirl")
@@ -592,13 +592,18 @@ function _M:OnCreate()
 	local qp3 = moudle:Get("QP_3")
 	local qp4 = moudle:Get("QP_4")
 	local qp5 = moudle:Get("QP_5")
-	self:RegistRedpoint(qp1, Define.SysId.Verdict)
-	self:RegistRedpoint(qp2, Define.SysId.Girl_Baby)
-	self:RegistRedpoint(qp3, Define.SysId.Girl_Unlock)
-	self:RegistRedpoint(qp4, Define.SysId.Manage)
-	self:RegistRedpoint(qp5, Define.SysId.Girl_Marry)
+	-- self:RegistRedpoint(qp1, Define.SysId.Verdict)
+	-- self:RegistRedpoint(qp2, Define.SysId.Girl_Baby)
+	-- self:RegistRedpoint(qp3, Define.SysId.Girl_Unlock)
+	-- self:RegistRedpoint(qp4, Define.SysId.Manage)
+	-- self:RegistRedpoint(qp5, Define.SysId.Girl_Marry)
 	self:RegistRedpoint(moudle:Get("red1"), Define.SysId.Car)
-
+	self:RegistRedpoint(moudle:Get("red2"), Define.SysId.Girl_Marry)
+	self:RegistRedpoint(moudle:Get("red4"), Define.SysId.Girl_Baby)
+	self:RegistRedpoint(moudle:Get("red5"), Define.SysId.Girl_Unlock)
+	self:RegistRedpoint(moudle:Get("red6"), Define.SysId.Verdict)
+	self:RegistRedpoint(moudle:Get("red7"), Define.SysId.Manage)
+	
 	local tQp1 = qp1.CachedTran:GetJTweener("T_Villa_Verdict")
 	tQp1:Play()
 	local tQp2 = qp2.CachedTran:GetJTweener("T_Villa_Baby")
@@ -807,7 +812,7 @@ end
 --刷新飞机红点
 function _R.RefreshAircraftRedPoint(self)
 	if not GameSetting.IsiOSCommit then
-		self.Moudle:Get("red3").Activity = MMain.FuncIsOpen(Define.SysId.Aircraft) and (not MAircraft.IsStuding or MAircraft.IsAircraftHaveUnActivative())
+		self.Moudle:Get("red3").Activity = MMain.FuncIsOpen(Define.SysId.Aircraft) and (MAircraft.IsHaveCompleted or (not MAircraft.IsStuding and MAircraft.StudyLeftTimes > 0))
 	end
 end
 

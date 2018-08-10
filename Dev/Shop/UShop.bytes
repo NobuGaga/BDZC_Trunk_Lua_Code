@@ -1,5 +1,5 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local MShop = JRequire "Dev.Shop.MShop"
 local UShopSingle = JRequire "Dev.Shop.UShopSingle"
 local UShopPackage = JRequire "Dev.Shop.UShopPackage"
@@ -61,7 +61,7 @@ end
 function _M:OnCreate()
 	local moudle = self:CreateMoudle(self._RootNode, "M_Shop_UMain")
 	self.mMoudle = moudle
-
+	CCommon.CreateEffect(moudle:Get("FxNode"), 10128)
 	moudle:Get("Back_Btn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
@@ -82,11 +82,11 @@ function _M:OnCreate()
 	local count = #funcs
 	if count > 0 then
 		--Table标签控制
-		-- local colorLight = Color(255/255,225/255,75/255,1)
-		-- local colorDefault = Color(0/255,195/255,255/255,1)
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "yth_023_2", "yth_023",nil,nil,nil,nil,nil,nil,nil,nil,true)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
 		local index = 0
 		for k,v in pairs(funcs) do
@@ -129,6 +129,19 @@ function _M:OnCreate()
 	end)
 
 	moudle:Get("AssetAdd_2").Activity = MMain.FuncIsOpen(Define.SysId.Recharge)
+
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("bg_sc", "Shop"),
+												512, 1024,
+												function (sp)
+													if moudle then
+														local node = moudle:Get("BG_Img")
+														if node and sp then
+															node.Sprite = sp
+														end
+													end
+												end)
+	end
 end
 
 function _P.GetFuncs(funcTable)

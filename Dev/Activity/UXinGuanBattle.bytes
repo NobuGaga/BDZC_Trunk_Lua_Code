@@ -19,22 +19,6 @@ local RESTFADETWEEN = "T_Activity_XinGuan_RestFade"
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
 
---按钮图片
-local _DefaultImg = "yth_023_2"
-local _LightImg = "yth_023"
-
---按钮图片大小
-local _DefaultImgSize = Vector2(178,57)
-local _LightImgSize = Vector2(178,70)
-
---字大小
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-
---字颜色
-local _DefaultFontColor = Color(1,1,1,1)
-local _LightFontColor = Color(135/255,135/255,168/255,1)
-
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -104,10 +88,8 @@ function _M:OnCreate(activityId, selectData)
 	self.curSelectToggle = MActivity.XinGuanTypeEnum.Personal
 	self.ScreenWidth = CS.JGui.JGuiManager.GuiRoot.Width
 	self.ownRankInfo = module:Get("own")
-	self.curNameText = module:Get("Name")
-	self.curIndexText = module:Get("Num")
+	self.curNameText = module:Get("Num")
 	self.curPointText = module:Get("Fraction")
-	self.curPointNumText = module:Get("FractionNum")
 	self.personText = module:Get("PersonText")
 	self.personText.Text = Csv.Text("xinguan_rank_mine_title")
 	self.gangText = module:Get("GangText")
@@ -210,15 +192,10 @@ end
 
 function _P.OnSetPageText(self)
 	local isPerson =(self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal)
-	self.personSelectImg.SpriteName = ((isPerson and _LightImg) or _DefaultImg)
-	self.gangSelectImg.SpriteName = ((not isPerson and _LightImg) or _DefaultImg)
-	self.personSelectImg.SizeDelta = ((isPerson and _LightImgSize) or _DefaultImgSize)
-	self.gangSelectImg.SizeDelta = ((not isPerson and _LightImgSize) or _DefaultImgSize)
-
-	self.personText.FontSize = (( isPerson and _LightFontSize) or _DefaultFontSize)
-	self.gangText.FontSize = ((not isPerson and _LightFontSize) or _DefaultFontSize)
-	self.personText.Color = (( isPerson and _LightFontColor) or _DefaultFontColor)
-	self.gangText.Color = ((not isPerson and _LightFontColor) or _DefaultFontColor)
+	self.personSelectImg.Color = ((isPerson and PAGECOLOR1) or PAGECOLOR2)
+	self.gangSelectImg.Color = ((not isPerson and PAGECOLOR1) or PAGECOLOR2)
+	self.personText.Color = ((not isPerson and Color.white) or Color.black)
+	self.gangText.Color = ((isPerson and Color.white) or Color.black)
 end
 
 
@@ -243,16 +220,12 @@ function _P.SetOwnRankData(self)
 	if not curRankData then return end
 
 	local index = (curRankData.index == 0 and "10000+") or curRankData.index
-	self.curIndexText.Text = Csv.Text("xinguan_battle_num", {num = index})
-	self.curNameText.Text = curRankData.name
-	self.curPointText.Text = Csv.Text("xinguan_battle_point")
-	self.curPointNumText.Text = curRankData.score
+	self.curNameText.Text = Csv.Text("xinguan_battle_num", {num = index, name = curRankData.name})
+	self.curPointText.Text = Csv.Text("xinguan_battle_point") .. curRankData.score
 
 	local isShow = curRankData.name and curRankData.name ~= ""
-	self.curIndexText.Activity = isShow
 	self.curNameText.Activity = isShow
 	self.curPointText.Activity = isShow
-	self.curPointNumText.Activity = isShow
 end
 
 
@@ -409,18 +382,7 @@ function _P.SetCenterData(self)
 		-- 根据进度设置美女状态图片
 		local maxBossBgNum = #self.xinGuanConf.bossBg
 		local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
-		local spineActorId = self.xinGuanConf.spineActorId[bgRow]
-		if self.BobySpine ~= nil then
-			self.BobySpine:Destroy()
-			self.BobySpine = nil
-		end
-
-		if spineActorId > 0 then
-			self.BobySpine = CCommon.CreateActor(self.bobyRect, spineActorId)
-			self.bobyRect.SpriteName = ""
-		else
-			self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
-		end
+		self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
 	else
 		-- 根据进度设置boss对话
 		local maxTalkNum = #self.xinGuanConf.bossTalk
@@ -461,18 +423,7 @@ function _P.SetBossBobyData(self, talkRow, progressValue)
 	-- 根据进度设置美女状态图片
 	local maxBossBgNum = #self.xinGuanConf.bossBg
 	local bgRow = _P.GetCurState(maxBossBgNum, progressValue)
-	local spineActorId = self.xinGuanConf.spineActorId[bgRow]
-	if self.BobySpine ~= nil then
-		self.BobySpine:Destroy()
-		self.BobySpine = nil
-	end
-
-	if spineActorId > 0 then
-		self.BobySpine = CCommon.CreateActor(self.bobyRect, spineActorId)
-		self.bobyRect.SpriteName = ""
-	else
-		self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
-	end
+	self.bobyRect.SpriteName = self.xinGuanConf.bossBg[bgRow]
 end
 
 
@@ -582,7 +533,7 @@ function _R.OnNewToRestBack(self, data)
 	end)
 	fadeTweener:Play()
 
-	self.mModule:Get("Bxs"):AddOnTime(function()
+	self.fadeImg:AddOnTime(function()
 		self.mData.bossBlood = data.bossBlood
 		_P.OnSetListData(self)
 		_P.SetCenterData(self)

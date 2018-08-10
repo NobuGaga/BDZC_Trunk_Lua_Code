@@ -9,9 +9,6 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
---美女图片名或者动画ID
-local GirlAssetOrSpineID = Csv.Const(20153)
-
 function _M:BeforeDestroy()
 	if self.mUStoryMoudle ~= nil then
 		self.mUStoryMoudle:Destroy()
@@ -43,15 +40,6 @@ function _M:OnCreate(id)
 		local rewardItem = CCommon.CreateItem(content,v[1],function ( ... )
 			WindowMgr.Create("UBagDetailPop", v[1])
 		end, {num = v[2]})
-	end
-
-	local girlNode = moudle:Get("BSX")
-	local csvEffect = Csv.Effect[GirlAssetOrSpineID]
-	if csvEffect and csvEffect.prefab then
-		CCommon.CreateActor(girlNode, GirlAssetOrSpineID, CCommon.ActorFieldMap.wharf_pk_success)
-		girlNode.SpriteName = ""
-	else
-		girlNode.SpriteName = GirlAssetOrSpineID
 	end
 
 	moudle:Get("BtnText").Text = Csv.Text("lastgirl_sure")

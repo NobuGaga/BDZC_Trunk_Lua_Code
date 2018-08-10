@@ -1,0 +1,1018 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Dev.Finance.CFinance.bytes#_M]
+local CFinance = JRequire "Dev.Finance.CFinance"
+--@RefType [Dev.Finance.MFinance.bytes#_M]
+local MFinance = JRequire "Dev.Finance.MFinance"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local UBattleBossNewSkill = JRequire "Dev.Battle.UBattleBossNewSkill"
+local MBattle = JRequire "Dev.Battle.MBattle"
+
+local Linear = CS.DG.Tweening.Ease.Linear
+local JTweenerManager = CS.JTween.JTweenerManager
+local UnityTime = CS.UnityEngine.Time
+
+local TALK_TWEEN_NAME = "T_Battle_Talk"
+local dandaoActorId = 10173
+local attackActorId = 10174
+local T_FB_Staff_AttackGo = "T_FB_Staff_AttackGo"
+local T_FB_Staff_AttackBack = "T_FB_Staff_AttackBack"
+local T_FB_Boss_Dark = "T_FB_Boss_Dark"
+local T_FB_Boss_blood = "T_FB_Boss_blood"
+local T_FB_Boss_Hurt = "T_FB_Boss_Hurt"
+local T_FB_Boss_HurtBack = "T_FB_Boss_HurtBack"
+
+local Staff_Icon_Width = 145
+local Staff_Icon_Space = 10
+local Staff_Pos_Y1 = 0
+local Staff_Pos_Y2 = -8
+local Staff_Pos_Y3 = -16
+local Staff_Size1 = Vector2(145,175)
+local Staff_Size2 = Vector2(138,166)
+local Staff_Size3 = Vector2(131,158)
+
+local BG = "FbBoosBg"
+local TAB = "FbBoosBg_2"
+
+-----------------------------
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+------------
+--退出战役
+------------
+function _R.CloseBattle(self)
+	MFinance.isBattle = false
+	self:Destroy()
+end
+
+------------
+--战斗结算后返回更新
+------------
+function _R.RefreshFight(self)
+	local fightData = self.mFightData
+	if fightData ~= nil then
+		_P.ReadyFight(self,fightData.data,fightData.type)
+	end
+end
+
+-------------------------------------------------------
+----新版阵容战斗
+--------------------------------------------------
+-------------------------------------------------
+----获取更新副本信息
+--------------
+function _R.RefreshInvade(self,_data)
+	print("RefreshInvade!!!")
+	local _type = MFinance.FinaceType.FinaceRank_1
+
+	local fightData = self.mFightData
+	if fightData == nil then
+		fightData = {}
+	end
+
+	fightData = {data = _data,type = _type}
+	self.mFightData = fightData
+end
+
+function _R.RefreshResist(self,_data)
+	local _type = MFinance.FinaceType.FinaceRank_2
+	local fightData = self.mFightData
+	if fightData == nil then
+		fightData = {}
+	end
+
+	fightData = {data = _data,type = _type}
+	self.mFightData = fightData
+end
+---------------------------------
+--初始化抵御列表
+function _R.InitInvadeList(self,data)
+	MFinance.InvadeListData = data
+	local refreshCD = UnityTime.time - self.mRefreshTime
+	if refreshCD < 1 then
+		self.mAllContent:AddOnTime(function()
+			self.mRefreshTime = UnityTime.time
+
+			local type = MFinance.FinaceType.FinaceRank_1
+			_P.ShowRankView(self,MFinance.InvadeListData.list,type)--等待返回调用
+		end,nil,refreshCD)
+	else
+		self.mRefreshTime = UnityTime.time
+
+		local type = MFinance.FinaceType.FinaceRank_1
+		_P.ShowRankView(self,MFinance.InvadeListData.list,type)--等待返回调用
+	end
+end
+
+function _R.RefreshInvadeList(self,data)
+	MFinance.InvadeUpdateData = data
+	local refreshCD = UnityTime.time - self.mRefreshTime
+	if refreshCD < 1 then
+		self.mAllContent:AddOnTime(function()
+			self.mRefreshTime = UnityTime.time
+
+			local type = MFinance.FinaceType.FinaceRank_1
+			_P.AddRandItem(self,MFinance.InvadeUpdateData,type)
+		end,nil,refreshCD)
+	else
+		self.mRefreshTime = UnityTime.time
+		
+		local type = MFinance.FinaceType.FinaceRank_1
+		_P.AddRandItem(self,MFinance.InvadeUpdateData,type)
+	end
+end
+
+function _R.ShowResistRankList(self,data)
+	MFinance.ResistRankData = data
+	MFinance.ResistRankList = data.rankList
+	local refreshCD = UnityTime.time - self.mRefreshTime
+	if refreshCD < 1 then
+		self.mAllContent:AddOnTime(function()
+			self.mRefreshTime = UnityTime.time
+
+			local type = MFinance.FinaceType.FinaceRank_2
+			_P.ShowResiseRank(self,MFinance.ResistRankData.rankList,type)--等待返回调用
+		end,nil,refreshCD)
+	else
+		self.mRefreshTime = UnityTime.time
+		
+		local type = MFinance.FinaceType.FinaceRank_2
+		_P.ShowResiseRank(self,MFinance.ResistRankData.rankList,type)--等待返回调用
+	end
+end
+
+-----------
+--战斗
+------
+function _R.GetInvaderFight(self,data)
+	self:Lock()
+	self.mMoudle:Get("BackBtn").RaycastTarget = false
+	self.mData = data
+	self.IsWin = data.isWin
+	self.StaffEffectTable = {}
+	self.BuffTable = {}
+	self.ReportTable = _P.GetBattleReport(_P.GetSortReport(data.fight.fight))
+	self.PkRoot.Activity = false
+	_P.PlayNext(self)
+	self.mMoudle:Get("passBtn").Activity = true
+end
+
+function _R.GetResistFight(self,data)
+
+	self:Lock()
+	self.mMoudle:Get("BackBtn").RaycastTarget = false
+	self.mData = data
+	--self.IsWin = data.isWin
+	self.StaffEffectTable = {}
+	self.BuffTable = {}
+	self.ReportTable = _P.GetBattleReport(_P.GetSortReport(data.fight.fight))
+	self.PkRoot.Activity = false
+	_P.PlayNext(self)
+	self.mMoudle:Get("passBtn").Activity = true
+	--[[
+	_P.IsFighting(self)
+
+	self:Lock()
+	_P.ShowFightResist(self, data, function()
+		if self.mMoudle ~= nil then
+			self:Unlock()
+			WindowMgr.Create("UFinanceResult",data)
+		end
+	end)
+	--]]	
+end
+-------------------------------------
+-------------------------------------
+--非法机构奖励
+function _R.ShowResistReward(self,data)
+	if MFinance.isFighting == false then
+		WindowMgr.Create("UFinanceReward",data)
+	end
+end
+------------------------
+
+function _M:OnCreate(data,type)
+	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PK")
+	self.mMoudle = moudle
+	moudle:Get("BG").SpriteName = BG
+	moudle:Get("tab").SpriteName = TAB
+	self.mFightData = {}
+
+	MFinance.isBattle = true
+
+	local closeBtn = moudle:Get("BackBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		print("BackBtn!!!")
+		MFinance.isBattle = false
+		self:Destroy()
+	end, nil, 1.2)
+		
+	self.mBossIcon = moudle:Get("BossImg")
+	self.mHeroIcon = moudle:Get("StaffBSX")
+	self.mHeroPowerBox = moudle:Get("valueText")
+	self.mHeroPower = moudle:Get("valueNum")
+	self.mBossTalkBox = moudle:Get("DHBox2")
+	self.mBossTalkValue = moudle:Get("text1")
+	self.mHeroTalkBox = moudle:Get("DHBox1")
+	self.mHeroTalkValue = moudle:Get("text1_0")
+
+	self.mBloodBar = moudle:Get("Bar")
+	self.mBloodValue = moudle:Get("zdlNum")
+	self.mBloodBg = moudle:Get("blood")
+	self.mRankView = moudle:Get("rank")
+	self.mAllContent = moudle:Get("content")
+	self.mOwnInfo = moudle:Get("OwnInfo")
+
+	----------------------------
+	self.Enemy = 
+	{
+		Blood = moudle:Get("zdlNum"),
+		BloodBar = moudle:Get("Bar"),
+		HurtFly = moudle:Get("HurtFly"),
+	}
+
+	self.Own = 
+	{
+		Blood = moudle:Get("zdlNum2"),
+		HurtFly = moudle:Get("HurtFly2"),
+		BloodBar = moudle:Get("XueTiao2"),
+	}
+-------------------
+
+	local diyuText = moudle:Get("diyupanghang")
+	local leftTitle1 = moudle:Get("leftTitle1")
+	local rightTitle1 = moudle:Get("rightTitle1")
+	local smallTitle2 = moudle:Get("smallTitle2")
+	local smallTitleBg1 = moudle:Get("smallTitle1")
+	local smallTitleBg2 = moudle:Get("smallTitleBg")
+	self.mSmallTitle1 = smallTitleBg1
+	self.mSmallTitle2 = smallTitleBg2
+
+	diyuText.Text = Csv.Text("finance_diyuRank")
+	leftTitle1.Text = Csv.Text("finance_di")
+	rightTitle1.Text = Csv.Text("finance_bo")
+	smallTitle2.Text = Csv.Text("finance_smallTitle2")
+	smallTitleBg1.Activity = false
+	smallTitleBg2.Activity = false
+
+	self.mDiyuText = diyuText
+
+	MFinance.fightType = type
+	if type == MFinance.FinaceType.FinaceRank_1 then
+		smallTitleBg1.Activity = true
+	elseif type == MFinance.FinaceType.FinaceRank_2 then
+		smallTitleBg2.Activity = true
+	end
+	------
+	
+	--开始战斗
+	local startText = moudle:Get("new_text_0")
+	startText.Text = Csv.Text("finance_startFight")--"开始谈判"
+	
+	local startBtn = moudle:Get("beginPK")
+	startBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		--开始战斗
+		MFinance.isFighting = true
+
+		if type == MFinance.FinaceType.FinaceRank_1 then
+			CFinance.ReqInvadeFight(0)
+		elseif type == MFinance.FinaceType.FinaceRank_2 then
+			CFinance.ReqResistFight(0)
+		end
+	end, nil, 0.9)
+	self.mStartBtn = startBtn
+	
+	moudle:Get("passText").Text = Csv.Text("battle_skip")
+	moudle:Get("passBtn"):AddOnButton(function()
+		_P.PlayEnd(self)
+	end,nil,0.9)
+	moudle:Get("passBtn").Activity = false
+
+	moudle:Get("reportText").Text = Csv.Text("finance_rank_look")
+	moudle:Get("reportBtn"):AddOnButton(function()
+		self.mRankView.Activity = true
+	end,nil,1.2)
+
+	moudle:Get("rankBlack"):AddOnButton(function()
+		self.mRankView.Activity = false
+	end,nil,1.2)
+
+	local pkRoot = moudle:Get("black")
+	pkRoot.Activity = true
+	self.PkRoot = pkRoot
+
+	--已结束
+	if type == MFinance.FinaceType.FinaceRank_2 then
+		if data.isEnd then
+			WindowMgr.Create("UFinanceResistEnd",data)
+		end
+	end
+
+	_P.ReadyFight(self,data,type)--等待返回调用
+	---------------------
+	self.mRefreshTime = 0
+end
+
+function _P.ReadyFight(self,data,type)
+	print("ReadyFight!!!")
+	local moudle = self.mMoudle
+
+	self.mBossTalkBox.Activity = false
+	self.mHeroTalkBox.Activity = false
+	self.mBloodBg.Activity = true
+	self.PkRoot.Activity = true
+	self.IsEnd = false
+	self.FullBlood = data.bossBlood.nmax
+	
+	self.NowRound = 1
+
+	local ownInfo = self.mOwnInfo
+	local diyuText = self.mDiyuText
+	local bloodBar = self.mBloodBar
+	local bloodValue = self.mBloodValue
+	local bossIcon = self.mBossIcon
+
+	moudle:Get("passBtn").Activity = false
+	moudle:Get("OwnImg").LocalPosition = Vector2(0,-433)
+	local content = moudle:Get("Content")
+	content.LocalPosition = Vector2(0,0)
+	content:DestroyChildren()
+
+	local buffContent = moudle:Get("BuffNow")
+	buffContent:DestroyChildren()
+
+	self.mStartBtn.RaycastTarget = true
+	self.mStartBtn.IsGray = false
+	if data.isBattled ~= nil then
+		if data.isBattled then
+			self.mStartBtn.RaycastTarget = false
+			self.mStartBtn.IsGray = true
+		end
+	end
+	---------
+	local smallTitle1 = self.mSmallTitle1
+	local smallTitle2 = self.mSmallTitle2
+	if type == MFinance.FinaceType.FinaceRank_1 then
+		smallTitle1.Activity = true
+		smallTitle1.Text = data.waves
+		MFinance.Waves = data.waves
+		smallTitle2.Activity = false
+		ownInfo.Activity = false
+		diyuText.Activity = false
+
+		bossIcon.SpriteName = Csv.WaveBoss[data.waves].icon--
+		bloodValue.Text = data.bossBlood.ncur--Csv.Text("finance_bossBlood",{cur =data.bossBlood.ncur,max = data.bossBlood.nmax })--data.bossBlood.ncur.."/"..data.bossBlood.nmax
+	elseif type == MFinance.FinaceType.FinaceRank_2 then
+		smallTitle1.Activity = false
+		smallTitle2.Activity = true
+		ownInfo.Activity = true
+		diyuText.Activity = true
+		
+		bossIcon.SpriteName = Csv.Const(15006)--
+		bloodValue.Text = data.bossBlood.ncur--math.floor((data.bossBlood.ncur / data.bossBlood.nmax) * 100+ 0.5) .. "%"--data.bossBlood.ncur.."/"..data.bossBlood.nmax
+		_P.CreateOwnRank(self,data.own)
+	end
+
+	MFinance.BossPower = data.bossBlood --记录到M
+	bloodBar.FillAmount = data.bossBlood.ncur/data.bossBlood.nmax
+
+
+	--员工阵容--
+	self.StaffMoudleTable = {}
+	local lineUpList = MLineUp.GetSortLineUpList()
+	if lineUpList ~= nil and #lineUpList > 0 then
+		for k,v in ipairs(lineUpList) do
+			local staffData = {}
+			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
+			local canvas = staffMoudle:Get("canvas")
+			canvas.SortingLayerName = "Tips1"
+			canvas.SortingOrder = 10
+			staffMoudle:Get("battleBack").Activity = false
+			if k == self.NowRound then
+				staffMoudle.SelfRect.SizeDelta = Staff_Size1
+				staffMoudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y1)
+				staffMoudle:Get("battleBack").Activity = true
+			else
+				if math.abs(k - self.NowRound) == 1 then
+					staffMoudle.SelfRect.SizeDelta = Staff_Size2
+					staffMoudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y2)
+				else
+					staffMoudle.SelfRect.SizeDelta = Staff_Size3
+					staffMoudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y3)
+				end
+			end
+			staffMoudle:Get("Black").Activity = false
+			staffMoudle:Get("Text").Text = Csv.Text("lineup_23")
+			local csvStaff = Csv.Personnel[v.id]
+			if csvStaff ~= nil then
+				staffMoudle:Get("BSX").SpriteName = csvStaff.asset
+			end
+			local dataStaff = MStaff.StaffTable[v.id]
+			if dataStaff ~= nil then
+				staffMoudle.SelfRect.SpriteName = MStaff.Color2Image[dataStaff.color]
+			end
+			staffData.moudle = staffMoudle
+			staffData.staffid = v.id
+			self.StaffMoudleTable[k] = staffData
+		end
+		local dataFirst = lineUpList[1]
+		if dataFirst ~= nil then
+			local staffid = dataFirst.id
+			local csvStaff = Csv.Personnel[staffid]
+			local dataStaff = MStaff.StaffTable[staffid]
+			if csvStaff ~= nil and dataStaff ~= nil then
+				moudle:Get("OwnImg").SpriteName = csvStaff.asset
+				moudle:Get("zdlNum2").Text = dataStaff.power
+			end
+		end
+
+		content.LocalPosition = Vector2(_P.GetStaffContentPosX(self.NowRound),0)
+	end
+	
+	if type == MFinance.FinaceType.FinaceRank_2 then
+		if data.isEnd then
+			WindowMgr.Create("UFinanceResistEnd",data)
+		end
+	end
+end
+
+function _M:Lock()
+	local moudle = self.mMoudle
+	moudle:Get("lock").Activity = true
+end
+
+function _P.GetStaffIconPosX(index)
+	return -(index - 1) * (Staff_Icon_Width + Staff_Icon_Space)
+end
+
+function _P.GetStaffContentPosX(index)
+	return (index - 1) * (Staff_Icon_Width + Staff_Icon_Space)
+end
+
+function _P.GetSortReport(rawReports)
+	local sortReports = {}
+	if rawReports ~= nil then
+		for k,v in pairs(rawReports) do
+			table.insert(sortReports,v)
+		end
+		table.sort(sortReports,function(a,b) return a.index < b.index end)
+	end
+	return sortReports
+end
+
+function _P.GetBattleReport(reports)
+	local reportTable = {}
+	if reports ~= nil then
+		for k,v in ipairs(reports) do
+			if v.buffs ~= nil and #v.buffs > 0 then
+				for key,value in ipairs(v.buffs) do
+					local csvBuff = Csv.Buff[value.skillid]
+					if csvBuff ~= nil and csvBuff.show ~= nil and csvBuff.show > 0 then
+						local buff = {type = MBattle.BattleFightType.Buff,skillid = value.skillid,buffid = value.buffid,staffid = v.staffid,targetstaffs = value.staffid,index = v.index,
+									initblood = v.initblood,laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood}
+						table.insert(reportTable,buff)
+					end
+				end
+			end
+			local data = {type = MBattle.BattleFightType.Fight,index = v.index,result = v.result,staffid = v.staffid,initblood = v.initblood,
+			laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,rstaffid = v.rstaffid}
+			table.insert(reportTable,data)
+		end
+	end
+	return reportTable
+end
+
+--我方攻击
+function _P.OnFight(self, data)
+	local PlayFight = function()
+		--战斗效果播放
+		local t
+		if self.t ~= nil then
+			t = self.t
+		else
+			t = self.mMoudle.SelfRect.CachedTran:GetJTweener("T_Battle_FightBoss")
+			self.t = t
+		end
+
+		local doHurtBoss = function()
+			local info = self.Enemy
+			local lastBlood = data.rlaveblood
+			local startBlood = data.rinitblood
+			local oneHurt = data.rinitblood - data.rlaveblood
+			info.Blood:DOKill()
+			info.BloodBar:DOKill()
+			local fill = lastBlood / self.FullBlood
+			local ft = info.BloodBar:DOFillAmount(fill, 0.2)
+			local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
+				if info.Blood ~= nil then
+					info.Blood.Text = value
+				end
+			end, function()
+				if info.Blood ~= nil then 
+					info.Blood.Text = lastBlood
+				end
+
+				CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt,nil,nil,nil,nil,nil,64)
+			end)
+			t:SetTarget(info.Blood.CachedTran)
+		end
+
+		local doHurtStaff = function()
+			local info = self.Own
+			local lastBlood = data.laveblood
+			startBlood = data.initblood
+			local oneHurt = data.initblood - data.laveblood
+			info.Blood:DOKill()
+			info.BloodBar:DOKill()
+			local fill = lastBlood / MStaff.StaffTable[data.staffid].power
+			local ft = info.BloodBar:DOFillAmount(fill, 0.2)
+			local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
+				if info.Blood ~= nil then
+					info.Blood.Text = value
+				end
+			end, function()
+				if info.Blood ~= nil then 
+					info.Blood.Text = lastBlood
+				end
+			end)
+			t:SetTarget(info.Blood.CachedTran)
+		end
+
+		local ownFire = function ()
+			if t ~= nil then
+				t:Restore()
+				local reportTable = self.ReportTable
+				if reportTable ~= nil and reportTable[1] ~= nil then
+					table.remove(reportTable,1)
+				end
+				if #reportTable > 0 then
+					_P.PlayNextAnimate(self)		--换人动画
+					_P.RefreshStaffIcon(self)		--刷新员工头像
+				else
+					_P.PlayEnd(self)
+				end
+			end
+		end
+
+		---------------员工 --> boss----------------------------------
+		local ownTalk = function()
+			if t ~= nil then
+				t:Play(T_FB_Boss_blood)
+				t:Play(T_FB_Boss_Hurt)
+
+				SoundMgr.Play(10021)
+				local actorPanel = self.mMoudle:Get("ActorLightPanel")
+				local actorPanel2 = self.mMoudle:Get("ActorLightPanel2")
+				actorPanel:AddOnTime(function()
+					CCommon.CreateEffect(actorPanel, attackActorId)
+				end,nil,0.4)
+				CCommon.CreateEffect(actorPanel2, dandaoActorId)
+				actorPanel2:AddOnTime(function()
+					local t = actorPanel2:DOAnchorPosY(475,0.2)
+					t:SetEase(CS.DG.Tweening.Ease.Linear)
+					t:OnComplete(function()
+						actorPanel2.LocalPosition = Vector2.zero
+						actorPanel2:DestroyChildren()
+					end)
+				end,nil,0.2)
+			end
+		end
+
+		local enemyHurtBack = function()
+			if t ~= nil then
+				t:Play(T_FB_Boss_HurtBack)
+			end
+		end
+
+		local StaffAttackEnd = function()
+			doHurtBoss()
+			doHurtStaff()
+			t:Play(T_FB_Staff_AttackBack)
+		end
+
+		local staffRound = function()
+			if t ~= nil then
+				self.mMoudle.SelfRect:AddOnTime(function()
+					ownFire()	
+				end,nil,0.5)	
+			end
+		end
+
+		t:SetWaitEventOnComplete(T_FB_Staff_AttackGo, ownTalk)
+		t:SetWaitEventOnComplete(T_FB_Boss_Hurt, enemyHurtBack)
+		t:SetWaitEventOnComplete(T_FB_Boss_HurtBack, StaffAttackEnd)
+		t:SetWaitEventOnComplete(T_FB_Staff_AttackBack, staffRound)
+
+		SoundMgr.Play(10020)
+		t:Play(T_FB_Staff_AttackGo)
+		t:Play(T_FB_Boss_Dark)
+	end
+	
+	PlayFight()
+end
+
+function _P.PlayNextAnimate(self)
+	local moudle = self.mMoudle
+	local staffImg = moudle:Get("OwnImg")
+	local t1 = staffImg:DOAnchorPosX(700,0.15)
+	t1:SetEase(CS.DG.Tweening.Ease.Linear)
+	t1:OnComplete(
+		function()
+			staffImg.LocalPosition = Vector2(0,-1173)
+			local reportData = self.ReportTable[1]
+			if reportData ~= nil then
+				local csvStaff = Csv.Personnel[reportData.staffid]
+				if csvStaff ~= nil then
+					staffImg.SpriteName = csvStaff.asset
+				end
+			end
+			self.Own.BloodBar.FillAmount = 1
+			local t2 = staffImg:DOAnchorPosY(-443,0.15)
+			t2:SetEase(CS.DG.Tweening.Ease.Linear)
+			t2:OnComplete(
+				function()
+					_P.PlayNext(self)
+				end)
+				moudle:Get("zdlNum2").Text = reportData.baseblood
+			self.T2 = t2
+		end
+	)
+	self.T1 = t1
+end
+
+function _P.RefreshStaffIcon(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("Content")
+	content:AddOnTime(function()
+		local staffMoudleTable = self.StaffMoudleTable
+		for k,v in pairs(staffMoudleTable) do
+			if k < self.NowRound then
+				v.moudle:Get("Black").Activity = true
+			elseif k == self.NowRound then
+				v.moudle:Get("Black").Activity = false
+			else
+				v.moudle:Get("Black").Activity = false
+			end
+
+			v.moudle:Get("battleBack").Activity = false
+			if k == self.NowRound then
+				v.moudle.SelfRect.SizeDelta = Staff_Size1
+				v.moudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y1)
+				v.moudle:Get("battleBack").Activity = true
+			else
+				if math.abs(k - self.NowRound) == 1 then
+					v.moudle.SelfRect.SizeDelta = Staff_Size2
+					v.moudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y2)
+				else
+					v.moudle.SelfRect.SizeDelta = Staff_Size3
+					v.moudle.SelfRect.LocalPosition = Vector2(_P.GetStaffIconPosX(k),Staff_Pos_Y3)
+				end
+			end
+		end
+		local t = moudle:Get("Content"):DOAnchorPosX(_P.GetStaffContentPosX(self.NowRound),0.3)
+		t:SetEase(CS.DG.Tweening.Ease.Linear)
+	end,nil,0.35)
+
+	local nowStaffMoudle = self.StaffMoudleTable[self.NowRound + 1]
+	if nowStaffMoudle ~= nil then
+		local actor = nowStaffMoudle.moudle:Get("actor")
+		if actor ~= nil then
+			actor:DestroyChildren()
+		end
+	end
+	_P.RefreshNowSkillIcon(self)
+	_P.RefreshStaffEffect(self,true)
+end
+
+function _P.RefreshStaffEffect(self,isAdd)
+	local staffMoudleTable = self.StaffMoudleTable
+	for k,v in pairs(staffMoudleTable) do
+		local actor = v.moudle:Get("actor")
+		local round = self.NowRound
+		if isAdd then
+			round = round + 1
+		end
+		if k == round + 1 or k == round + 2 then
+			if actor ~= nil then
+				local buff = self.BuffTable[v.staffid]
+				if buff ~= nil and buff[1] ~= nil then
+					local csvBuff = Csv.Buff[buff[1]]
+					if csvBuff ~= nil and csvBuff.effect ~= nil then
+						if _P.CheckIsNeedRefreshEffect(self,v.staffid,csvBuff.effect) then
+							if actor ~= nil then
+								actor:DestroyChildren()
+							end
+							CCommon.CreateEffect(actor,csvBuff.effect)
+							self.StaffEffectTable[v.staffid] = csvBuff.effect
+						end
+					end
+				end
+			end
+		else
+			if actor ~= nil then
+				actor:DestroyChildren()
+			end
+		end
+	end
+end
+
+function _P.RefreshNowSkillIcon(self)
+	local reportData = self.ReportTable[1]
+	local moudle = self.mMoudle
+	if reportData ~= nil then
+		local buffContent = moudle:Get("BuffNow")
+		buffContent:DestroyChildren()
+		if reportData ~= nil then
+			local buffs = self.BuffTable[reportData.staffid]
+			if buffs ~= nil then
+				for k,v in ipairs(buffs) do
+					local csvBuff = Csv.Buff[v]
+					if csvBuff ~= nil and csvBuff.fightIcon ~= nil then
+						local buffMoudle = JGuiManager.GetMoudle(buffContent, "M_NewBossPK_Bufficon")
+						buffMoudle:Get("Icon").SpriteName = csvBuff.fightIcon
+					end
+				end
+			end
+		end
+	end
+end
+
+function _P.CheckIsNeedRefreshEffect(self,staffid,effect)
+	local staffEffectTable = self.StaffEffectTable
+	if staffEffectTable[staffid] ~= nil then
+		if staffEffectTable[staffid] == effect then
+			return false
+		else
+			return true
+		end
+	else
+		return true
+	end
+end
+
+--播放技能
+function _P.OnBuff(self,data)
+	local skillNode = self.mMoudle:Get("SkillNode")
+	local skillWin = UBattleBossNewSkill.new(skillNode,data,function()
+		local reportTable = self.ReportTable
+		if reportTable ~= nil and reportTable[1] ~= nil then
+			table.remove(reportTable,1)
+		end
+		_P.PlayNext(self)
+	end,function()
+		_R.RefreshEffectAndNowSkillIcon(self)
+	end)
+end
+
+function _P.PlayNext(self)
+	if self.IsEnd then
+		return
+	end
+	local battleTable = self.ReportTable
+	if battleTable ~= nil and #battleTable > 0 then
+		local data = battleTable[1]
+		if data ~= nil then
+			self.NowStaffId = data.staffid
+			self.NowRound = data.index
+			if data.type == MBattle.BattleFightType.Fight then
+				_P.OnFight(self,data)
+			elseif data.type == MBattle.BattleFightType.Buff then
+				_P.CreateBuffData(self,data)
+				_P.OnBuff(self,data)
+			end
+		else
+			_P.PlayEnd(self)
+		end
+	end
+end
+
+function _P.PlayEnd(self)
+	self.IsEnd = true
+	local moudle = self.mMoudle
+	self.mMoudle:Get("BackBtn").RaycastTarget = true
+
+	if self.t ~= nil then
+		self.t:Restore()
+	end
+	if self.T1 ~= nil or self.T2 ~= nil then
+		local staffImg = moudle:Get("OwnImg")
+		staffImg:DOKill()
+	end
+	local infoEnemy = self.Enemy
+	infoEnemy.Blood:DOKill()
+	local infoOwn = self.Own
+	infoOwn.Blood:DOKill()
+
+	_P.SetViewEnd(self)
+
+	--结束
+	if MFinance.fightType == MFinance.FinaceType.FinaceRank_1 then
+		if self.IsWin then
+			WindowMgr.Create("UFinanceWin",self.mData)
+		else
+			WindowMgr.Create("UFinanceFail",self.mData)
+		end
+	elseif MFinance.fightType == MFinance.FinaceType.FinaceRank_2 then
+		WindowMgr.Create("UFinanceResult",self.mData)
+	end
+	
+	local onDoneCall = self.DoneCall
+	if onDoneCall ~= nil then
+		onDoneCall(self.mData,self.mParam)
+	end
+end
+
+function _P.SetViewEnd(self)
+	local moudle = self.mMoudle
+	local data = self.mData
+	if data.fight ~= nil then
+		local lastData = data.fight[#data.fight]
+		if lastData ~= nil then
+			local csvStaff = Csv.Personnel[lastData.staffid]
+			self.NowRound = lastData.index
+			_P.RefreshStaffIcon(self)
+			moudle:Get("zdlNum").Text = lastData.rlaveblood
+			moudle:Get("zdlNum2").Text = lastData.laveblood
+			self.Own.BloodBar.FillAmount = lastData.laveblood/lastData.initblood
+			self.Enemy.BloodBar.FillAmount = lastData.rlaveblood/self.FullBlood
+		end
+	end
+end
+
+function _P.CreateBuffData(self,data)
+	if data.skillid ~= nil then
+		if data.buffid ~= nil then
+			if data.targetstaffs ~= nil then
+				for k,v in pairs(data.targetstaffs) do
+					_P.InsertBuff(self,v,data.buffid)
+				end
+			end
+		else
+			if self.NowStaffId ~= nil then
+				_P.InsertBuff(self,self.NowStaffId,data.skillid)
+			end
+		end
+	end
+end
+
+function _P.InsertBuff(self,staffid,buffid)
+	local buffTable = self.BuffTable
+	if buffTable[staffid] ~= nil then
+		local buffForStaff = buffTable[staffid]
+		local isHaveBuff = false
+		for k,v in pairs(buffForStaff) do
+			if v == buffid then
+				isHaveBuff = true
+			end
+		end
+		if not isHaveBuff then
+			table.insert(buffForStaff,1,buffid)
+		end
+	else
+		local buffForStaff = {}
+		table.insert(buffForStaff,buffid)
+		buffTable[staffid] = buffForStaff
+	end
+end
+
+function _R.RefreshEffectAndNowSkillIcon(self)
+	_P.RefreshStaffEffect(self,false)
+	_P.RefreshNowSkillIcon(self)
+	local reportData = self.ReportTable[1]
+	if reportData ~= nil then
+		self.mMoudle:Get("zdlNum2").Text = reportData.initblood
+	end
+end
+
+-----------------------------------------------------------------
+
+--[[
+function _P.IsFighting(self)
+	local changeBtn = self.mChangeBtn 
+	local startBtn =  self.mStartBtn 
+	local heroPowerBox = self.mHeroPowerBox
+
+	if MFinance.isFighting then
+		startBtn.Activity = false
+	else
+		startBtn.Activity = true
+	end
+end
+
+function _P.GetBossTalk()
+	if MFinance.fightType == MFinance.FinaceType.FinaceRank_1 then
+		return LuaUtil.Shuffle(Csv.WaveBoss[MFinance.Waves].talk)
+	elseif MFinance.fightType == MFinance.FinaceType.FinaceRank_2 then
+		return LuaUtil.Shuffle(Csv.Const(15002))
+	end
+end
+--]]
+---------------------------------------------------------------------
+
+function _P.ShowRankView(self,listData,type)
+	local rankView = self.mRankView
+	local content = self.mAllContent
+	
+	content:DestroyChildren()
+
+	local rankData = listData
+	
+	if rankData ~= nil then
+		for k,v in pairs(rankData) do
+			local itemMoudle =  _P.CreatRankItem(type,content,v)
+			itemMoudle.SelfRect.CachedTran:SetSiblingIndex(-1)
+		end
+	end
+end
+
+function _P.ShowResiseRank(self,listData,type)
+	local rankView = self.mRankView
+	local content = self.mAllContent
+
+	content:DestroyChildren()
+	
+	if listData ~= nil then
+		table.sort(listData, function (a, b)
+			return a.index > b.index
+		end)
+	end
+	
+	local rankData = listData
+	
+	local itemTable = {}
+	if rankData ~= nil then
+		for k,v in pairs(rankData) do
+			_P.CreatRankItem(type,content,v)
+		end
+	end
+end
+
+function _P.AddRandItem(self,data,type)
+	local content = self.mAllContent
+
+	local rankData = data.list
+	if rankData ~= nil then
+		for k,v in pairs(rankData) do
+			_P.CreatRankItem(type,content,v)
+		end
+	end
+	
+end
+
+function _P.CreateOwnRank(self,data)
+	local ownInfo = self.mOwnInfo
+	ownInfo.Activity = true
+	ownInfo:DestroyChildren()
+	
+	if data ~= nil then
+		_P.CreatRankItem(MFinance.FinaceType.FinaceRank_2,ownInfo,data)
+	end
+end
+
+function _P.CreatRankItem(type,content,data)
+	local itemMoudle = JGuiManager.GetMoudle(content,"M_FB_PKRankItem", WindowType.UI, 10)
+	
+	local name = itemMoudle:Get("nameText")
+	local infoText = itemMoudle:Get("InfoText")
+
+	if type == MFinance.FinaceType.FinaceRank_1 then
+		local itemData
+		if data.items ~= nil then
+			itemData = Csv.Item[data.items[1].id]
+		end
+		name.Text = data.name
+		if itemData ~= nil then
+			infoText.Text = Csv.Text("finance_battleget_fb1",{num = data.waves,name = itemData.name})--"抵御了第"..data.waves.."波股市做空获得了"..itemData.name
+		end
+	elseif type == MFinance.FinaceType.FinaceRank_2 then
+		infoText.Text = Csv.Text("finance_battleget_fb2",{num = data.hurt})---"对非法机构抵御了"..data.hurt
+		name.Text = data.index.."."..data.name
+	end
+	itemMoudle.SelfRect.CachedTran:SetSiblingIndex(0)
+	return itemMoudle
+end
+
+return _M

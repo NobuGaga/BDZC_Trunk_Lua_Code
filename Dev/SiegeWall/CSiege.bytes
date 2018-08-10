@@ -30,7 +30,7 @@ local ECmdId = {
 	sInitFight						=	5,  -- 请求进入备战	--PSiegeWall.SInitFight
 	sBuyBuffInBattle				=	6,  -- 备战界面中购买buff	--PSiegeWall.SBuyBuffInBattle
 	sUsekillBuff					=	7,  -- 使用击杀buff	--PSiegeWall.SUsekillBuff
-	sSiegeFight						=	8, 	-- 战斗返回	--PSiegeWall.SSiegeFight
+	sSiegeFight						=	8, 	-- 战斗返回	PSiegeWall.SSiegeNewFight --PSiegeWall.SSiegeFight
 	sUnlockStaff					=	9, 	-- 解锁员工	--PSiegeWall.SUnlockStaff
 	sOpenUdisk						=	10, 	-- 开启U盘	--PSiegeWall.SOpenUdisk
 	sDonate 						=	11, -- 捐赠 --PSiegeWall.SDonate
@@ -73,7 +73,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sInitFight]    		= { proto = "PSiegeWall.SInitFight",   	 		handle = _P.OnInitFight},
 		[ECmdId.sBuyBuffInBattle]   = { proto = "PSiegeWall.SBuyBuffInBattle",      handle = _P.OnBuyBuffInBattle},
 		[ECmdId.sUsekillBuff]      	= { proto = "PSiegeWall.SUsekillBuff",  	 	handle = _P.OnUsekillBuff},
-		[ECmdId.sSiegeFight]       	= { proto = "PSiegeWall.SSiegeFight",       	handle = _P.OnSiegeFight},
+		[ECmdId.sSiegeFight]       	= { proto = "PSiegeWall.SSiegeNewFight",       	handle = _P.OnSiegeFight},
 		[ECmdId.sUnlockStaff]  		= { proto = "PSiegeWall.SUnlockStaff",  	 	handle = _P.OnUnlockStaff},
 		[ECmdId.sOpenUdisk]    		= { proto = "PSiegeWall.SOpenUdisk", 	 		handle = _P.OnOpenUdiskBack},
 		[ECmdId.sDonate]        	= { proto = "PSiegeWall.SDonate", 	 			handle = _P.OnDonateBack},
@@ -127,8 +127,8 @@ function _M.ReqUsekillBuff(_id)
 	_M.Send(ECmdId.cUsekillBuff,{id = _id})
 end
 
-function _M.ReqSiegeFight(_staffid,_bossId)
-	_M.Send(ECmdId.cSiegeFight,{staffid = _staffid,bossIndexID = _bossId})
+function _M.ReqSiegeFight(_bossId)
+	_M.Send(ECmdId.cSiegeFight,{bossIndexID = _bossId})
 end
 
 function _M.ReqUnlockStaff(_staffid,_bossID)
@@ -259,7 +259,8 @@ function _P.OnUsekillBuff(data)
 end
 
 function _P.OnSiegeFight(data)
-	WindowMgr.Call("USiegeBattle", "UpdateFight", data)
+	WindowMgr.Call("USiegeBattle", "OnResult", data)
+	--WindowMgr.Call("USiegeBattle", "UpdateFight", data)
 
 	--请求进度信息
 	WindowMgr.Call("USiegeMain", "UpdateMain")

@@ -2,7 +2,6 @@ local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MWharf = JRequire "Dev.Wharf.MWharf"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
-local CCommon = JRequire "Dev.Common.CCommon"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -47,12 +46,10 @@ function _M:OnCreate(id,isEvent)
 		data = Csv.WharfEvent[id]
 		moudle:Get("Lock").Activity = true
 		lockText.Text = data.prestige
-		if not _P.SetSpineOrSprite(self, bxs, data.spineID) then
-			bxs.SpriteName = data.bigIcon
-			bxs:SetNativeSize()
-			bxs.LocalPosition = Vector2(data.eventIconPox[1],data.eventIconPox[2])
-			bxs.SizeDelta = Vector2(data.eventIconSize[1],data.eventIconSize[2])
-		end
+		bxs.SpriteName = data.bigIcon
+		bxs:SetNativeSize()
+		bxs.LocalPosition = Vector2(data.eventIconPox[1],data.eventIconPox[2])
+		bxs.SizeDelta = Vector2(data.eventIconSize[1],data.eventIconSize[2])
 
 		nameText.Text = data.name
 		ageText.Text = data.age
@@ -71,17 +68,6 @@ function _M:OnCreate(id,isEvent)
 		aihaoText.Text = data.hobby
 
 		tips.Text = data.wharfDesc
-	end
-end
-
---设置Spine动画或者图片
-function _P.SetSpineOrSprite(self, node, effectID)
-	if effectID and Csv.Effect[effectID] and Csv.Effect[effectID].prefab then
-		CCommon.CreateActor(node, effectID, CCommon.ActorFieldMap.wharf_event)
-		node.SpriteName = ""
-		return true
-	else
-		return false
 	end
 end
 

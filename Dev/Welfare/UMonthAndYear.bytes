@@ -31,6 +31,8 @@ end
 function _P.ShowMonthCard(self)
 	local moudle = self.mMoudle
 	--月卡--
+	local titleText = moudle:Get("title")
+	local chixuText = moudle:Get("timetext")
 	local getFirst1 = moudle:Get("text1")
 	local getFirst2 = moudle:Get("text2")
 	local getFirst3 = moudle:Get("text3")
@@ -46,6 +48,8 @@ function _P.ShowMonthCard(self)
 	local buyText = moudle:Get("buy")
 	local tipsText = moudle:Get("text7_0")
 
+	titleText.Text = Csv.Text("welfare_monthCard_title")
+	chixuText.Text = Csv.Text("welfare_monthCard_chixu")
 	getFirst1.Text = Csv.Text("welfare_monthCard_getfirst1")
 	getFirst2.Text = Csv.Const(11006)[2]
 	getFirst3.Text = Csv.Text("welfare_monthCard_getfirst3")
@@ -71,7 +75,7 @@ function _P.ShowMonthCard(self)
 	buyBtn:AddOnButton(function(...)
 		local monthData = Csv.Recharge[MONTHCARD_ID]
 		local cardName = Csv.Text("welfare_monthCard")
-		SDKMgr.ReqPay(monthData.id,monthData.cost,monthData.diamond,cardName) 
+		SDKMgr.ReqPay(monthData.id,monthData.sdkProductId,monthData.cost,monthData.diamond,cardName) 
 	end)
 
 	if MWelfare.monthCardData ~= nil then
@@ -108,6 +112,8 @@ end
 function _P.ShowYearCard(self)
 	local moudle = self.mMoudle
 
+	local titleText = moudle:Get("title_0")
+	local chixuText = moudle:Get("timetext_0")
 	local getFirst1 = moudle:Get("text1_0")
 	local getFirst2 = moudle:Get("text2_0")
 	local getFirst3 = moudle:Get("text3_0")
@@ -120,6 +126,8 @@ function _P.ShowYearCard(self)
 	local buyText = moudle:Get("buy_0")
 	local tipsText = moudle:Get("text7_2")
 
+	titleText.Text = Csv.Text("welfare_yearCard_title")
+	chixuText.Text = Csv.Text("welfare_longlife")
 	getFirst1.Text = Csv.Text("welfare_yearCard_getfirst1")
 	getFirst2.Text = Csv.Const(11007)[2]
 	getFirst3.Text = Csv.Text("welfare_yearCard_getfirst3")
@@ -141,7 +149,7 @@ function _P.ShowYearCard(self)
 	buyBtn:AddOnButton(function(...)
 		local monthData = Csv.Recharge[YEARCARD_ID]
 		local cardName = Csv.Text("welfare_yearCard")
-		SDKMgr.ReqPay(monthData.id,monthData.cost,monthData.diamond,cardName) 
+		SDKMgr.ReqPay(monthData.id,monthData.sdkProductId,monthData.cost,monthData.diamond,cardName) 
 	end)
 
 	if MWelfare.yearCard ~= nil then

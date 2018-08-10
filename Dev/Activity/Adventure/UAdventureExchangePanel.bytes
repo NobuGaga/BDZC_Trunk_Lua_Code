@@ -11,8 +11,9 @@ local MBag = JRequire "Dev.Bag.MBag"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local NUM_TWEEN = "T_Club_NumSacle"
-local maxRefreshNum = Csv.Const(20101)[7]
-local QIYUCOIN = 34116
+local QyData = Csv.Const(20162)
+local MaxRefreshNum = QyData[3] -- 商店刷新最大次数
+local QIYUCOIN = QyData[7]	    -- 奇遇币id
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -49,7 +50,7 @@ function _M:OnCreate(data)
 	refreshBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 
-		if self.exchangeData.todayRefreshCount < maxRefreshNum + self.extraTime then
+		if self.exchangeData.todayRefreshCount < MaxRefreshNum + self.extraTime then
 			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
 			CCommon.CheckTips(function(isSure, arg)
 				_P.OnClickRefresh(self, isSure, arg)
@@ -82,7 +83,7 @@ function _P.OnClickRefresh(self, isSure, arg)
 			return
 		end
 
-		if self.exchangeData.todayRefreshCount < maxRefreshNum  + self.extraTime then
+		if self.exchangeData.todayRefreshCount < MaxRefreshNum  + self.extraTime then
 			CActivity.ReqAdvRefrashShop(true)
 		else
 			CCommon.ShowError(Csv.Text("adventure_exchange_refreshError"))
@@ -91,8 +92,7 @@ function _P.OnClickRefresh(self, isSure, arg)
 end
 
 function _P.SetData(self, data)
-	-- self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
-	self.mModule:Get("CSNum").Text = (maxRefreshNum + self.extraTime - data.todayRefreshCount) .. '/' .. maxRefreshNum + self.extraTime
+	self.mModule:Get("CSNum").Text = (MaxRefreshNum + self.extraTime - data.todayRefreshCount) .. '/' .. MaxRefreshNum + self.extraTime
 	
 	_P.OnUpdateTime(self)
 	if data.nextRefreshLeftTime > 0 then
@@ -285,7 +285,7 @@ end
 
 function _R.OnUpdateRefreshCount(self)
 	self.exchangeData.todayRefreshCount = 0
-	self.mModule:Get("CSNum").Text = (maxRefreshNum + self.extraTime - self.exchangeData.todayRefreshCount) .. '/' .. maxRefreshNum + self.extraTime
+	self.mModule:Get("CSNum").Text = (MaxRefreshNum + self.extraTime - self.exchangeData.todayRefreshCount) .. '/' .. MaxRefreshNum + self.extraTime
 end
 
 return _M

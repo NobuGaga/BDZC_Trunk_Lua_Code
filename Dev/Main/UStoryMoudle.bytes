@@ -38,10 +38,6 @@ local HAVE_WHO_POS = Vector2(17, -85)
 local COLOR_BLACK = Color(84 / 255, 62 / 255, 62 / 255, 1)
 local SECOND_COUNT = 30
 
-local LeftHidePos = Vector2(-800, 0)
-local ShowPos = Vector2.zero
-local RightHidePos = Vector2(800, 0)
-
 function _M:Destroy( ... )
 	if self._Root ~= nil then
 
@@ -251,156 +247,94 @@ function _P.doCreate(self, id)
 			end
 			
 			self.Name.Text = LuaUtil.Format(_name, {name = MPlayer.GetName()})
+			--self.Text.LocalPosition = HAVE_WHO_POS
 			moudle:Get("NameBox").Activity = true
 			local nameSizeX = self.Name.PreferredWidth
 			self.NameBox.SizeDelta = Vector2(nameSizeX + 74,99)
 		else
 			self.Name.Text = ""
+			--self.Text.LocalPosition = NO_WHO_POS
 			moudle:Get("NameBox").Activity = false
 		end
-
-		local leftHeadId = MPlayer.GetHeadID() 
-		local leftBodyId = MPlayer.GetBodyID()
-
 		if csvLine.myHeadId ~= nil and csvLine.myHeadId > 0 then
-			leftHeadId = csvLine.myHeadId
+			self.Head.SpriteNameAutoScale = MPlayer.GetSpFromSex(csvLine.myHeadId, MPlayer.GetSex())
+		else
+			self.Head.SpriteNameAutoScale = MPlayer.GetHeadSp()
 		end
 		if csvLine.myBodyId ~= nil and csvLine.myBodyId > 0 then
-			leftBodyId = csvLine.myBodyId
+			self.Left.SpriteNameAutoScale = MPlayer.GetSpFromSex(csvLine.myBodyId, MPlayer.GetSex())
+		else
+			self.Left.SpriteNameAutoScale = MPlayer.GetBodySp()
 		end
-
-		if self.LastLeftHeadId ~= leftHeadId or self.LastLeftBodyId ~= leftBodyId then
-			if self.LeftHeadPrefab ~= nil then
-				self.LeftHeadPrefab:Destroy()
-				self.LeftHeadPrefab = nil
-			end
-			if self.LeftBodyPrefab ~= nil then
-				self.LeftBodyPrefab:Destroy()
-				self.LeftBodyPrefab = nil
-			end
-			self.LastLeftHeadId = leftHeadId
-			self.LastLeftBodyId = leftBodyId
-			local sex = MPlayer.GetSex()
-			local headPrefab = MPlayer.GetPrefabID(leftHeadId, sex)
-			local bodyPrefab = MPlayer.GetPrefabID(leftBodyId, sex)
-			if headPrefab ~= nil and bodyPrefab ~= nil and headPrefab > 0 and bodyPrefab > 0 then
-				self.LeftBodyPrefab,self.LeftHeadPrefab = CCommon.CreateRole(self.LeftActor, bodyPrefab, headPrefab, CCommon.ActorFieldMap.story_left)
-				self.Head.SpriteName = ""
-				self.Left.SpriteName = ""
-			else
-				self.Head.SpriteNameAutoScale = MPlayer.GetSpFromSex(leftHeadId, MPlayer.GetSex())
-				self.Left.SpriteNameAutoScale = MPlayer.GetSpFromSex(leftBodyId, MPlayer.GetSex())
-			end
-		end
-
+		
 		if who == self.LastWho then
-			--这里继续使用图片名来作为切换依据
-			if self.LastThatSp ~= csvLine.icon then
-				if csvLine.icon ~= nil then
-					if who == 2 then
-						if self.Tweener ~= nil then
-							self.Tweener:Restore()
-						end
-						self.LeftObj.LocalPosition = LeftHidePos
-						self.RightObj.LocalPosition = ShowPos
-						self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right_Right")
-						self.Tweener:SetOnComplete(function()
-							if self.RightObj ~= nil then
-								if self.RightPrefab ~= nil then
-									self.RightPrefab:Destroy()
-									self.RightPrefab = nil
-								end
-								if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
-									self.RightPrefab = CCommon.CreateActor(self.RightActor, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
-									self.Right.SpriteName = ""
-								else
-									self.Right.SpriteNameAutoScale = csvLine.icon
-								end							
-								self.LastThatSp = csvLine.icon
-								self.Tweener:Play("Event_Next")
-							end
-						end)
-						self.Tweener:Play()
-					else
-						if self.RightPrefab ~= nil then
-							self.RightPrefab:Destroy()
-							self.RightPrefab = nil
-						end
-						if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
-							self.RightPrefab = CCommon.CreateActor(self.RightActor, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
-							self.Right.SpriteName = ""
-						else
+			if self.LastThatSp ~= csvLine.icon and csvLine.icon ~= nil then
+				if who == 2 then
+					if self.Tweener ~= nil then
+						self.Tweener:Restore()
+					end
+					self.Left.Alpha = 0
+					self.Head.Alpha = 0
+					self.Right.Alpha = 1
+					self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right_Right")
+					self.Tweener:SetOnComplete(function()
+						if self.Right ~= nil then
 							self.Right.SpriteNameAutoScale = csvLine.icon
+							self.LastThatSp = csvLine.icon
+							self.Tweener:Play("Event_Next")
 						end
-						self.LastThatSp = csvLine.icon
-					end
+					end)
+					self.Tweener:Play()
 				else
-					if self.RightPrefab ~= nil then
-						self.RightPrefab:Destroy()
-						self.RightPrefab = nil
-					end
-					self.Right.SpriteName = ""
-					self.LastThatSp = ""
+					self.Right.SpriteNameAutoScale = csvLine.icon
+					self.LastThatSp = csvLine.icon
 				end
 			end
 		else
 			--说话的人
-			if self.LastThatSp ~= csvLine.icon then
-				if csvLine.icon ~= nil then
-					if self.RightPrefab ~= nil then
-						self.RightPrefab:Destroy()
-						self.RightPrefab = nil
-					end
-					if csvLine.prefab ~= nil and csvLine.prefab > 0 and csvLine.prefabScaletype ~= nil and csvLine.prefabScaletype > 0 then
-						self.RightPrefab = CCommon.CreateActor(self.RightActor, csvLine.prefab, CCommon.ActorFieldMap.story_right .. csvLine.prefabScaletype)
-						self.Right.SpriteName = ""
-					else
-						self.Right.SpriteNameAutoScale = csvLine.icon
-					end
-					self.LastThatSp = csvLine.icon
-				end
+			if csvLine.icon ~= nil then
+				self.Right.SpriteNameAutoScale = csvLine.icon
+				self.LastThatSp = csvLine.icon
 			end
 			self.LastWho = who	
 			if self.Tweener ~= nil then
 				self.Tweener:Restore()
 			end	
 			if who == 1 then
-				self.LeftObj.Activity = true
-				self.RightObj.Activity = true
+				self.Left.Activity = true
+				self.Right.Activity = true
 				--自己
 				
 				if self.IsFirst then
 					self.IsFirst = false
-					self.RightObj.LocalPosition = RightHidePos
+					self.Right.Alpha = 0
 				else
-					self.LeftObj.LocalPosition = LeftHidePos
-					self.RightObj.LocalPosition = ShowPos
+					self.Left.Alpha = 0
+					self.Head.Alpha = 0
+					self.Right.Alpha = 1
 				end	
 				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Left")
 				self.Tweener:Play()		
 			elseif who == 2 then
-				self.LeftObj.Activity = true
-				self.RightObj.Activity = true
+				self.Left.Activity = true
+				self.Right.Activity = true
 				--对方
 				if self.IsFirst then
 					self.IsFirst = false
-					self.LeftObj.LocalPosition = LeftHidePos
+					self.Left.Alpha = 0
+					self.Head.Alpha = 0
 				else
-					self.LeftObj.LocalPosition = ShowPos
-					self.RightObj.LocalPosition = RightHidePos
+					self.Left.Alpha = 1
+					self.Head.Alpha = 1
+					self.Right.Alpha = 0
 				end
 				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right")
 				self.Tweener:Play()
 			else
 				--没有	
-				self.LeftObj.Activity = false
-				self.RightObj.Activity = false
-				if self.RightPrefab ~= nil then
-					self.RightPrefab:Destroy()
-					self.RightPrefab = nil
-				end
-				self.Right.SpriteName = ""
-				self.LastThatSp = ""
+				self.Left.Activity = false
+				self.Right.Activity = false
+
 				self.IsFirst = true
 			end
 		end
@@ -471,6 +405,12 @@ end
 
 -- isBattle是否是在战斗界面播放剧情
 function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
+	if GameSetting.IsiOSCommit then
+		if doneCall then
+			doneCall()
+		end
+		return
+	end
 	self._Root = JGuiManager.CreateEmpty(parent, "storyRoot")
 	self._Root:SetFullSize()
 	--点击完成
@@ -503,18 +443,15 @@ function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
 	self.LastThatSp = nil
 	self.objData = objData
 
-	self.LastLeftHeadId = 0
-	self.LastLeftBodyId = 0
-	self.LeftHeadPrefab = nil
-	self.LeftBodyPrefab = nil
-	self.RightPrefab = nil
-
 	local moudle = JGuiManager.GetMoudle(self._Root, "M_Guidance_Story")
 	self.Moudle = moudle
 
 	--点击继续
 	self.Continue = moudle:Get("continue")
 	self.Continue.Text = Csv.Text("guide_continue")
+	-- local t = self.Continue.CachedTran:GetJTweener("T_Guide_Continue")
+	-- t:Play()
+
 	local tween = moudle:Get("Next"):DOAnchorPosY(-107,0.5)
 	tween:SetEase(CS.DG.Tweening.Ease.Linear)
 	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
@@ -535,19 +472,17 @@ function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
 	self.Name = moudle:Get("text1")
 	self.NameBox = moudle:Get("NameBox")
 	self.Text = moudle:Get("text2")
+	--self.Text.LocalPosition = NO_WHO_POS
 	self.Left = moudle:Get("Left")
 	self.Head = moudle:Get("Head")
 	self.Right = moudle:Get("Right")
+	self.Head.SpriteNameAutoScale = MPlayer.GetHeadSp()
+	self.Left.SpriteNameAutoScale = MPlayer.GetBodySp()
+	self.Left.Activity = false
+	self.Right.Activity = false
 	self.Lock = moudle:Get("Lock")
 	self.Dialog = moudle:Get("dialog")
 	self.Dialog.Activity = false
-	self.LeftObj = moudle:Get("LeftObj")
-	self.RightObj = moudle:Get("RightObj")
-	self.LeftObj.Activity = false
-	self.RightObj.Activity = false
-
-	self.LeftActor = moudle:Get("LeftActor")
-	self.RightActor = moudle:Get("RightActor")
 
 	local canvasActor = moudle:Get("EffectCanvas")
 	canvasActor.SortingLayerName = "Tips3"

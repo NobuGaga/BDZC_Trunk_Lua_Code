@@ -190,8 +190,7 @@ function _M:OnCreate(data)
 
 ----------------------------------------------------------------
 	local fortuneText = moudle:Get("fortuneText")
-	local energyText = moudle:Get("energy_num")
-	moudle:Get("energy_text").Text = Csv.Text("Wharf_energy")
+	local energyText = moudle:Get("energy_text")
 	local vipText = moudle:Get("VIP_text")
 	local fortuneBtn = moudle:Get("FortuneBtn")
 	local findBtn = moudle:Get("C_Btn1")
@@ -266,7 +265,7 @@ function _M:OnCreate(data)
 		if MWharf.energyTimes <= 0 then
 			--self.ChooseMoudle:UpdateEnergyTick()
 			local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
-			energyText.Text = luaUtil.GetTimeHMS(leftTime)--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+			energyText.Text = Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
 		end
 	end)
 
@@ -362,9 +361,9 @@ end
 function _P.CreateTopGirl(self,content,v)
 	local girlMoudle = JGuiManager.GetMoudle(content, "M_Inquiries_UMain_Item", WindowType.UI, 10)
 	local girlData = Csv.Girl[v.id]
-	girlMoudle:Get("head").SpriteName = girlData.xieicon
+	girlMoudle:Get("head").SpriteName = girlData.icon
 	girlMoudle:Get("PKtext").Text = girlData.name
-	girlMoudle:Get("BG").SpriteName = girlData.colorBg
+	girlMoudle.SelfRect.SpriteName = girlData.colorBg
 
 	_P.RefreshTopGirl(self,girlMoudle,v)
 	
@@ -376,19 +375,19 @@ function _P.RefreshTopGirl(self,girlMoudle,v)
 	local red = girlMoudle:Get("red")
 	local success = girlMoudle:Get("Success")
 	local question = girlMoudle:Get("Question")
-	local head = girlMoudle:Get("head")
+	local black = girlMoudle:Get("Black")
 
 	light.Activity = false
 	red.Activity = false
 	success.Activity = false
 	question.Activity = false
-	head.Color = Color(1,1,1,1)
+	black.Activity = false
 
 	if v.state == 0 then
-		head.Color = Color(0.5,0.5,0.5,1)
+		black.Activity = true
 	end
 
-	girlMoudle:Get("BG"):AddOnButton(function()
+	girlMoudle.SelfRect:AddOnButton(function()
 		_P.SelectTopGirl(self,girlMoudle)
 		WindowMgr.Create("UWharfGirlRelation",v.peopleId)
 	end)
@@ -475,13 +474,13 @@ function _R.RefreshTili(self)
 	 local maxEnergyMax = Csv.Vip[MPlayer.GetVip()].wharfEnergt
 
 	if MWharf.energyTimes > 0 then
-		energyText.Text = MWharf.energyTimes.."/"..maxEnergyMax--"体力："..MWharf.energyTimes.."/"..MWharf.EnergyMax
+		energyText.Text = Csv.Text("Wharf_energy",{value = MWharf.energyTimes.."/"..maxEnergyMax})--"体力："..MWharf.energyTimes.."/"..MWharf.EnergyMax
 		findText.Text =  Csv.Text("Wharf_find")--寻访
 		oneKeyBtn.IsGray = false
 		oneKeyBtn.RaycastTarget = true
 	else
 		local leftTime = MWharf.energyTick - HeartBeat.ServSecond()
-		energyText.Text =  luaUtil.GetTimeHMS(leftTime)--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
+		energyText.Text =  Csv.Text("Wharf_energy",{value = luaUtil.GetTimeHMS(leftTime)})--"体力："..luaUtil.GetTimeHMS(MWharf.energyTick)
 		findText.Text = Csv.Text("Wharf_restore")--"恢复"
 
 		oneKeyBtn.IsGray = true

@@ -11,22 +11,6 @@ local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
 local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
 local EFFECT_ID = 12
 
---按钮图片
-local _DefaultImg = "yth_023_2"
-local _LightImg = "yth_023"
-
---按钮图片大小
-local _DefaultImgSize = Vector2(178,57)
-local _LightImgSize = Vector2(178,70)
-
---字大小
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-
---字颜色
-local _DefaultFontColor = Color(1,1,1,1)
-local _LightFontColor = Color(135/255,135/255,168/255,1)
-
 -- 商店类型
 local ShopTypeEnum = {
 	Shop = 1,
@@ -101,16 +85,10 @@ end
 
 function _P.OnSetPageText(self)
 	local isShop =(self.curSelectToggle == ShopTypeEnum.Shop)
-
-	self.shopSelectImg.SpriteName = ((isShop and _LightImg) or _DefaultImg)
-	self.houseSelectImg.SpriteName = ((not isShop and _LightImg) or _DefaultImg)
-	self.shopSelectImg.SizeDelta = ((isShop and _LightImgSize) or _DefaultImgSize)
-	self.houseSelectImg.SizeDelta = ((not isShop and _LightImgSize) or _DefaultImgSize)
-
-	self.shopText.FontSize = ((isShop and _LightFontSize) or _DefaultFontSize)
-	self.wareHouseText.FontSize = ((not isShop and _LightFontSize) or _DefaultFontSize)
-	self.shopText.Color = ((isShop and _LightFontColor) or _DefaultFontColor)
-	self.wareHouseText.Color = ((not isShop and _LightFontColor) or _DefaultFontColor)
+	self.shopSelectImg.Color = ((isShop and PAGECOLOR1) or PAGECOLOR2)
+	self.houseSelectImg.Color = ((not isShop and PAGECOLOR1) or PAGECOLOR2)
+	self.shopText.Color = ((isShop and Color.black) or Color.white)
+	self.wareHouseText.Color = ((not isShop and Color.black) or Color.white)
 end
 
 
@@ -208,8 +186,7 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 	end
 
 	-- 添加环形特效
-	local light = CCommon.CreateItemLight(iconBox, Define.SysId.XinGuan1, data.itemId)
-	light.SelfRect.SizeDelta = Vector2(180,180)
+	CCommon.CreateItemLight(iconBox, Define.SysId.XinGuan1, data.itemId)
 
 	local priceRect = itemModule:Get("Need")
 	local getText = itemModule:Get("GetText")

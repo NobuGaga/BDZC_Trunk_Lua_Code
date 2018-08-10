@@ -37,11 +37,6 @@ end
 
 --界面构建
 function _M:OnCreate()
-    --播放剧情
-    if not GameSetting.IsiOSCommit then
-        WindowMgr.Create("UMoviePlay", CS.UnityEngine.Application.streamingAssetsPath .. "/Movie/StartMovie.mp4", 714, 0, 29)
-    end
-
     local moudle = self:CreateMoudle(self._RootNode, "M_Login_Establish")
     self.mMoudle = moudle
 
@@ -82,8 +77,8 @@ function _M:OnCreate()
     self.BtnGenderMale = moudle:Get("BtnGenderMale")
     self.BtnGenderFemale = moudle:Get("BtnGenderFemale")
 
-    local bigSize = Vector2(132, 136)
-    local minSize = Vector2(99, 102)
+    local bigSize = Vector2(97, 98)
+    local minSize = Vector2(77, 78)
     self.BtnGenderMale:AddOnButton(
         function()
             SoundMgr.Play(10001)

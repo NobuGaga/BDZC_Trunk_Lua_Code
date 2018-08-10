@@ -3,7 +3,6 @@ local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MWharf = JRequire "Dev.Wharf.MWharf"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MGirl = JRequire"Dev.Girl.MGirl"
-local CCommon = JRequire "Dev.Common.CCommon"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -67,16 +66,12 @@ function _P.CreatItem(parent,id)
 	local meetText = _moudle:Get("meet")
 
 	bgSp.SpriteName = _data.bg
-	if _data.prefab and _data.prefab ~= 0 then
-		CCommon.CreateActor(bsx, _data.prefab, CCommon.ActorFieldMap.wharf_build)
-		bsx.SpriteName = ""
-	else
-		bsx.SpriteName = _data.icon
-		bsx:SetNativeSize()
-	end
+	bsx.SpriteName = _data.icon
 	name.Text = _data.name
 	jobText.Text = _data.job
 	desc.Text = _data.desc
+
+	bsx:SetNativeSize()
 
 	if _data.type == 2 then
 		lockText.Text = _data.lock

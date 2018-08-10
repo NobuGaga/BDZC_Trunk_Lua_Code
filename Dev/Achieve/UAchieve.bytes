@@ -36,6 +36,20 @@ function _M:OnCreate(...)
 		achieve.moudle = achieveMoudle
 		self.mAchieveTable[v.questid] = achieve
 	end
+
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Achieve"),
+												54, 212,
+												function (sp)
+													if moudle then
+														local node = moudle:Get("iOSBg")
+														if node and sp then
+															node.Sprite = sp
+															node.Activity = true
+														end
+													end
+												end, Vector4(8, 75, 8, 116))
+	end
 end
 
 function _P.CreateItem(self,moudle,data)
@@ -92,6 +106,19 @@ function _P.CreateItem(self,moudle,data)
 		end
 	end
 	moudle:Get("slider").FillAmount = sliderValue/sliderMax
+
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("cj_022", "Achieve"),
+												250, 288,
+												function (sp)
+													if moudle then
+														local node = moudle:Get("bg")
+														if node and sp then
+															node.Sprite = sp
+														end
+													end
+												end)
+	end
 end
 
 function _P.GetLastPro(questid,pro)

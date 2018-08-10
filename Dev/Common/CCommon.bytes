@@ -31,8 +31,6 @@ function _M.ShowItemTips( itemId, params )
 	WindowMgr.Create("UBagDetailPop", itemId, params)
 end
 
-local GIRL_ITEM_SIZE = Vector2(70, 70)
-local GIRL_ITEM_SIZE2 = Vector2(140, 140)
 --创建物品
 function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 	local csvLine = Csv.Item[itemId]
@@ -46,39 +44,55 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 		moudleNmae = params.moudleName
 	end
 	local one = JGuiManager.GetMoudle(parent, moudleNmae, "", 0)
-	one:Get("color").SpriteName = csvLine.colorIcon
+	one.SelfRect.SpriteName = csvLine.colorIcon
 	one:Get("Icon").SpriteName = csvLine.icon
 
-	if onBtnCall ~= nil then
-		one.SelfRect:AddOnButton(function ( ... )
-			SoundMgr.Play(10001)
-			onBtnCall(itemId, params)
-		end, nil, 0.9)
-	end
-	
 	if params ~= nil then
 		if params.num ~= nil then
 			one:Get("Num").Text = tostring(params.num)
 		end
 		if params.icon ~= nil then
-			one:Get("Icon").SpriteName = params.icon
-			if moudleNmae == "M_Common_Item" then
-				one:Get("Icon").SizeDelta = GIRL_ITEM_SIZE2
+			if params.staff then
+				if one:Get("StaffIcon") ~= nil then
+					one:Get("StaffIcon").SpriteName = params.icon
+					one:Get("StaffIcon").Activity = true
+				end
+				one:Get("Icon").Activity = false
 			else
-				one:Get("Icon").SizeDelta = GIRL_ITEM_SIZE
+				one:Get("Icon").SpriteName = params.icon
+				if one:Get("StaffIcon") ~= nil then
+					one:Get("StaffIcon").Activity = false
+				end
 			end
 		end
-		-- if params.scale ~= nil then
-		-- 	one.SelfRect.LocalScale = Vector3(0.5, 0.5, 1)
-		-- end
+
+		if params.scale ~= nil then
+			one.SelfRect.LocalScale = Vector3(params.scale, params.scale, 1)
+		end
 	end
+
+	if onBtnCall ~= nil then
+		local btnClickScale = 0.9
+		if params ~= nil and params.btnScale ~= nil then
+			btnClickScale = params.btnScale
+		end
+
+		one.SelfRect:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			onBtnCall(itemId, params)
+		end, nil, btnClickScale)
+	end
+	if one:Get("StaffIcon") ~= nil then
+		one:Get("StaffIcon").Activity = false
+	end
+	one:Get("Icon").Activity = true
 	
-	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color, 2)
+	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color)
 	return one, effectMoudle
 end
 
 --创建物品发光外框
-function _M.CreateItemLight(parent, sysId, itemId, itemColor, siblingIndex)
+function _M.CreateItemLight(parent, sysId, itemId, itemColor)
 	local effectMoudle
 	if sysId ~= nil and Csv.ItemSysEffect[sysId] then
 		if itemId ~= nil then
@@ -93,14 +107,9 @@ function _M.CreateItemLight(parent, sysId, itemId, itemColor, siblingIndex)
 				local csvEffect = Csv.Effect[csvColorEffect.effectID]
 				if csvEffect.prefab ~= nil then
 					effectMoudle = JGuiManager.GetMoudle(parent, csvEffect.prefab, "", 0)
-					local effect = effectMoudle.SelfRect.CachedTran:GetJTweener("T_Item_Role")
-					effect:Play()
 				end
 			end
 		end
-	end
-	if effectMoudle ~= nil then
-		effectMoudle.SelfRect.CachedTran:SetSiblingIndex(siblingIndex)
 	end
 	return effectMoudle
 end
@@ -149,7 +158,6 @@ local M_Fly_Item_Right = "M_Fly_Item_Right"
 local M_Fly_Text = "M_Fly_Text"
 local M_Fly_Icon = "M_Fly_Icon"
 local T_Fly_Text = "T_Fly_Text"
-local T_Fly_TextManage = "T_Fly_TextManage"
 local M_Fly_ArtFont = "M_Fly_ArtFont"
 --飘物品和数量
 --[[
@@ -226,7 +234,7 @@ end
 	--@spSize: 图片大小(可选, 不填为图片的原始大小)
     return
 ]]
-function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos, callback)
+function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos, callback, fontSize)
 	local moudld
 	if spName ~= nil then
 		moudle = JGuiManager.GetMoudle(parent, M_Fly_Icon)
@@ -238,9 +246,15 @@ function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos, callback)
 			icon.SpriteNameAutoScale = spName
 		end
 		moudle:Get('Text').Text = text
+		if fontSize ~= nil then
+			moudle:Get('Text').FontSize = fontSize
+		end
 	else
 		moudle = JGuiManager.GetMoudle(parent, M_Fly_Text)
 		moudle.SelfRect.Text = text
+		if fontSize ~= nil then
+			moudle.SelfRect.FontSize = fontSize
+		end
 	end
 	if pos ~= nil then
 		moudle.SelfRect.LocalPosition = pos
@@ -253,45 +267,6 @@ function _M.ShowFlyText(parent, text, delayTime, spName, spSize, pos, callback)
 				callback()
 			end
 		end, nil, delayTime)
-	end
-	tween:SetDestoryAtComplete()
-	tween:Play()
-end
-
---经营飘字
---[[
-    @desc: 
-    author:{author}
-    time:2017-11-16 13:19:13
-    --@parent: 挂载点
-	--@text: 显示文本
-	--@delayTime: 延迟播放时间 (可选, 不填没有延迟)
-	--@spName: 图片名(可选, 不填没有图片)
-	--@spSize: 图片大小(可选, 不填为图片的原始大小)
-    return
-]]
-function _M.ShowFlyTextManage(parent, text, delayTime, spName, spSize, pos)
-	local moudld
-	if spName ~= nil then
-		moudle = JGuiManager.GetMoudle(parent, M_Fly_Icon)
-		local icon = moudle:Get('Icon')
-		if spSize ~= nil then
-			icon.SizeDelta = spSize
-			icon.SpriteName = spName
-		else
-			icon.SpriteNameAutoScale = spName
-		end
-		moudle:Get('Text').Text = text
-	else
-		moudle = JGuiManager.GetMoudle(parent, M_Fly_Text)
-		moudle.SelfRect.Text = text
-	end
-	if pos ~= nil then
-		moudle.SelfRect.LocalPosition = pos
-	end
-	local tween = moudle.SelfRect.CachedTran:GetJTweener(T_Fly_TextManage)
-	if delayTime ~= nil and delayTime > 0 then
-		tween:DelayAll(delayTime)
 	end
 	tween:SetDestoryAtComplete()
 	tween:Play()
@@ -446,7 +421,7 @@ function _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, d
 	return moudle
 end
 
-function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale, scaleArg)
+function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
 	local csv = Csv.Effect[effectId]
 	if csv == nil then
 		error(string.format( "cont find id from Effect csv, id:%d", effectId ))
@@ -471,22 +446,15 @@ function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale, scale
 		parent.LocalPosition = Vector2(csv.pos[1], csv.pos[2])
 	end
 	if scale ~= nil then
-		if scaleArg ~= nil then
-			parent.LocalScale = Vector3(scale * scaleArg.x, scale * scaleArg.y, scale * scaleArg.z)
-		else
-			parent.LocalScale = Vector3(scale, scale, scale)
-		end
+		parent.LocalScale = Vector3(scale, scale, scale)
 	elseif csv.scale ~= nil then
 		parent.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
 	end
-
-	-- 飞哥说先删掉，出现问题再说
-	-- if dura ~= nil and dura > 0 then
-	-- 	parent:LoadEffect(csv.prefab,dura)
-	-- else
-	-- 	parent:LoadEffect(csv.prefab,0)
-	-- end
-	parent:LoadEffect(csv.prefab,0)
+	if dura ~= nil and dura > 0 then
+		parent:LoadEffect(csv.prefab,dura)
+	else
+		parent:LoadEffect(csv.prefab,0)
+	end
 end
 
 function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
@@ -499,18 +467,11 @@ function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, 
 end
 
 --自动创建Actor节点
-function _M.CreateEffectEx(parent, effectId, onLoadedCall, pos, doneCall, spMap, textMap, dura, delay, scale)
+function _M.CreateEffectEx(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
 	if effectId < 10000 then
-		local ret = _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
-		if onLoadedCall ~= nil then
-			onLoadedCall()
-		end
-		return ret
+		return _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
 	else
 		local prefab = JGuiManager.CreateActor(parent, tostring(effectId))
-		if onLoadedCall ~= nil then
-			prefab:SetOnLoadedBeforeLoad(onLoadedCall)
-		end
 		_M.LoadPrefabEffect(prefab, effectId, pos, doneCall, dura, scale)
 		return prefab
 	end
@@ -518,7 +479,6 @@ end
 
 _M.ActorFieldMap = 
 {
-	--角色
 	login = "login",
 	player = "player",
 	girl = "girl",
@@ -529,101 +489,9 @@ _M.ActorFieldMap =
 	rank = "rank",
 	parliament = "parliament",
 	parliament_worship = "	parliament_worship"	,
-	story_left = "story_left",
-	player_tiqin = "player_tiqin",
-
-	--殿堂
-	parliament_head = "parliament_head",
-	parliament_body = "parliament_body",
-
-	--美女
-	girl_show = "girl_show",
 	girl_home = "girl_home",
 	girl_game = "girl_game",
 	girl_get = "girl_get",
-	girl_date_choose = "girl_date_choose",
-	girl_one = "girl_one",
-
-	--员工
-	staff_info = "staff_info",
-	staff_get = "staff_get",
-	staff_up = "staff_up",
-	staff_lobby_main = "staff_lobby_main",
-	staff_lobby_box = "staff_lobby_box",
-	staff_aircraft = "staff_aircraft",
-	staff_lobby_startPk = "staff_lobby_startPk",
-	staff_lobby_pk_own = "staff_lobby_pk_own",
-	staff_lobby_pk_that = "staff_lobby_pk_that",
-
-	--商会
-	commerce_staff = "commerce_staff",
-	commerce_main = "commerce_main",
-	commerce_boss = "commerce_boss",
-	commerce_study = "commerce_study",
-	commerce_create = "commerce_create",
-
-	--围攻华尔街
-	siege_staff = "siege_staff",
-	siege_boss = "siege_boss",
-
-	--NPC
-	story_right = "story_right_",
-	-- story_right_1 = "story_right_1",
-	-- story_right_2 = "story_right_2",
-	-- story_right_3 = "story_right_3",
-	-- story_right_4 = "story_right_4",
-
-	--关卡战斗
-	battle_self = "battle_self",
-	battle_enemy = "battle_enemy",
-	battle_boss_self = "battle_boss_self",
-	battle_boss_enemy = "battle_boss_enemy",
-
-	--经营
-	company_girl = "company_girl",
-
-	--金融机构
-	fb_self = "fb_self",
-	fb_boss = "fb_boss",
-
-	--超级员工
-	super_small = "super_small",
-	super_big = "super_big",
-	super_get = "super_get",
-	super_getF4 = "super_getF4",
-
-	--出游
-	wharf = "wharf",
-	wharf_event = "wharf_event",
-	wharf_pk_enemy = "wharf_pk_enemy",
-	wharf_pk_self = "wharf_pk_self",
-	wharf_pk_success = "wharf_pk_success",
-	wharf_pk_fail = "wharf_pk_fail",
-	wharf_build = "wharf_build",
-	wharf_game_info = "wharf_game_info",
-
-	--美容
-	metology_body = "metology_body",
-	metology_head = "metology_head",
-
-	--选举大厅
-	election_head = "election_head",
-	election_body = "election_body",
-
-	--游艇会
-	club_join = "club_join",
-
-	--公司
-	lobby_end = "lobby_end",
-	lobby_one_fail = "lobby_one_fail",
-	lobby_search = "lobby_search",
-
-	--背包
-	bag_use_girl = "bag_use_girl",
-	bag_use_staff = "bag_use_staff",
-
-	--美女
-	girl_info = "girl_info",
 }
 
 --[[
@@ -631,68 +499,42 @@ _M.ActorFieldMap =
 	@effectId: 特效表ID
 	@posScaleField: 位置和缩放值参数表索引
 ]]
-function _M.CreateActor(parent, prefabId, posScalefield, onLoadedCall, scaleArg)
+function _M.CreateActor(parent, prefabId, posScalefield)
 	local prefab = JGuiManager.CreateActor(parent, tostring(prefabId))
-	if onLoadedCall ~= nil then
-		prefab:SetOnLoadedBeforeLoad(onLoadedCall)
-	end
 	local pos = nil
 	local scale = nil
 	if posScalefield ~= nil then
-		local posScaleCsv = Csv.EffectIDPosScale[prefabId]
-		if posScaleCsv ~= nil and posScaleCsv.field ~= nil then
-			for k,v in pairs(posScaleCsv.field) do
-				if v == posScalefield then
-					local posInfo = posScaleCsv.pos[k]
-					if posInfo ~= nil then
-						pos = Vector2(posInfo[1], posInfo[2])
+		local uiPosScaleCsv = Csv.EffectUIPosScale[posScalefield]
+		if uiPosScaleCsv ~= nil then
+			pos = Vector2(uiPosScaleCsv.pos[1], uiPosScaleCsv.pos[2])
+			scale = uiPosScaleCsv.scale
+		else
+			local posScaleCsv = Csv.EffectIDPosScale[prefabId]
+			if posScaleCsv ~= nil and posScaleCsv.field ~= nil then
+				for k,v in pairs(posScaleCsv.field) do
+					if v == posScalefield then
+						local posInfo = posScaleCsv.pos[k]
+						if posInfo ~= nil then
+							pos = Vector2(posInfo[1], posInfo[2])
+						end
+						scale = posScaleCsv.scale[k]
+						break
 					end
-					scale = posScaleCsv.scale[k]
-					break
 				end
 			end
 		end
-		if scale == nil then
-			local uiPosScaleCsv = Csv.EffectUIPosScale[posScalefield]
-			if uiPosScaleCsv ~= nil then
-				pos = Vector2(uiPosScaleCsv.pos[1], uiPosScaleCsv.pos[2])
-				scale = uiPosScaleCsv.scale
-			end
-		end
 	end
-	_M.LoadPrefabEffect(prefab, prefabId, pos, nil, nil, scale, scaleArg)
+	_M.LoadPrefabEffect(prefab, prefabId, pos, nil, nil, scale)
 	return prefab
 end
 
-function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield, onLoadedCall, scaleArg)
-	local isThatLoaded = false
-	local body, head
-	local func = function(actor)
-		if isThatLoaded then
-			body.Activity = true
-			head.Activity = true
-			
-			local headGrap = head:SkeletonGetGraphic()
-			if headGrap ~= nil then
-				body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
-			end
-			if onLoadedCall ~= nil then
-				onLoadedCall(body, head)
-			end
-		else
-			isThatLoaded = true
-
-			actor.Activity = false
-		end		
+function _M.CreateRole(parent, bodyPrefabId, headPrefabId, posScalefield)
+	local body = _M.CreateActor(parent, bodyPrefabId, posScalefield)
+	local head = _M.CreateActor(parent, headPrefabId, posScalefield)
+	local headGrap = head:SkeletonGetGraphic()
+	if headGrap ~= nil then
+		body:SkeletonFollowerGraphic(headGrap.gameObject, "head")
 	end
-	body = _M.CreateActor(parent, bodyPrefabId, posScalefield, function(actor)
-		body = actor
-		func(actor)
-	end, scaleArg)
-	head = _M.CreateActor(parent, headPrefabId, posScalefield, function(actor)
-		head = actor
-		func(actor)
-	end, scaleArg)	
 	return body, head
 end
 

@@ -48,7 +48,7 @@ function _M:OnCreate(...)
 	self.mAssetNum[Define.AssetsType.Gold] =  MBag.GetItemNum(Define.AssetsType.Gold)
 
 	local ImgHead = moudle:Get("head")
-	ImgHead.SpriteName = MPlayer.GetSHeadIcon()
+	ImgHead.SpriteName = MPlayer.GetHeadIcon()
 
 	local TextShili = moudle:Get("textPower")
 	TextShili.Text = Csv.Text("company_verShili",{num = MPlayer.GetPower()})
@@ -143,33 +143,13 @@ function _M:OnCreate(...)
 
 	CCompany.CompanyRefreshVerdict()
 	moudle:Get("iconExp").SpriteName = Csv.Item[Define.AssetsType.Record].miniIcon
-
-	local vip = MPlayer.GetVip()
-	local csvVip = Csv.Vip[vip]
-	if csvVip ~= nil then
-		local imgBord = moudle:Get("VipBox")
-		if csvVip.imgBord ~= nil then
-			imgBord.Activity = true
-			imgBord.SpriteName = csvVip.imgBord
-		else
-			imgBord.Activity = false
-		end
-
-		local imgNum = moudle:Get("VipNum")
-		if csvVip.icon ~= nil then
-			imgNum.Activity = true
-			imgNum.SpriteName = csvVip.icon
-		else
-			imgNum.Activity = false
-		end
-	end
 end
 
 function _P.SetSlider(self,moudle)
 	local cost = Csv.Company[MPlayer.GetLevel()].cost
 	if cost ~= nil then
 		local ImgSlider = moudle:Get("img")
-		ImgSlider.SizeDelta = Vector2(530,17)
+		ImgSlider.SizeDelta = Vector2(540,17)
 		local TextExp = moudle:Get("textExp")
 		TextExp.Text = Csv.Text("company_exp",{num = MPlayer.GetExp(),max = cost})
 		local RectExp = moudle:Get("rect")
@@ -177,13 +157,13 @@ function _P.SetSlider(self,moudle)
 		if sliderNum > 1 then
 			sliderNum = 1
 		end
-		RectExp.transform.sizeDelta = Vector2(530*sliderNum,21)
+		RectExp.transform.sizeDelta = Vector2(540*sliderNum,21)
 		if sliderNum <= 0 then
 			RectExp.transform.sizeDelta = Vector2(0.1,21)
 		end
 	else
 		moudle:Get("textExp").Text = Csv.Text("staff_max")
-		moudle:Get("rect").transform.sizeDelta = Vector2(530,21)
+		moudle:Get("rect").transform.sizeDelta = Vector2(540,21)
 	end
 	self.mLastExp = MPlayer.GetExp()
 end

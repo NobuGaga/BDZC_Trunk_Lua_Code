@@ -2,13 +2,12 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local UStaffAptitude = JRequire "Dev.Staff.UStaffAptitude"
 local UStaffSkill = JRequire "Dev.Staff.UStaffSkill"
 local UStaffHalo = JRequire "Dev.Staff.UStaffHalo"
-local UStaffAttrPage = JRequire "Dev.Staff.UStaffAttrPage"
-local UStaffAttributePop = JRequire "Dev.Staff.UStaffAttributePop"
+local UStaffTalent = JRequire "Dev.Staff.UStaffTalent"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CStaff = JRequire "Dev.Staff.CStaff"
 local MMain = JRequire "Dev.Main.MMain"
 local MBag = JRequire "Dev.Bag.MBag"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local JTweenerManager = CS.JTween.JTweenerManager
@@ -17,12 +16,17 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
--- local HEIGHT = 25
--- local WIDTH = 570
+local HEIGHT = 25
+local WIDTH = 570
 local levelUpAttrActorId = 10001
 local bobyUpActorId = 10113
-local Staff_Attr = 10104
--- local EFFECT_ID = 18
+local PromoteItemId = 22
+local PromoteUseType = 6
+
+local STAFFMAXCOLOR = Csv.Const(Define.Const.StaffMax)[4]
+local EFFECT_ID = 18
+local LVLUP_ONEKEY = 10 -- 一键升多少级
+local MAX_TAG = 6		--标签数量最大值
 
 function _M:BeforeDestroy()
 	if self.ChooseMoudle ~= nil then
@@ -47,23 +51,11 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = UStaffSkill.new(self.PageNode,self.mID)
 	elseif funcId == Define.SysId.Staff_Aureole then
 		self.ChooseMoudle = UStaffHalo.new(self.PageNode,self.mID)
-	elseif funcId == Staff_Attr then
-		self.ChooseMoudle = UStaffAttrPage.new(self.PageNode, self.mID)
+	elseif funcId == Define.SysId.Staff_Talent then
+		self.ChooseMoudle = UStaffTalent.new(self.PageNode,self.mID)
 	end
 
 	MStaff.LastChoose = funcId
-end
-
-function _R.StaffLvUp(self,data)
-	if MStaff.LastChoose == Staff_Attr then
-		self.ChooseMoudle:SetExpSlider(data.staffid,data.levelexp,data.level,true,data.success,data.isgod)
-	end
-
-	if data.isgod ~= nil then
-		if data.isgod == true then
-			SoundMgr.PlaySystem(10003)
-		end
-	end
 end
 
 --事件派发
@@ -81,45 +73,48 @@ function _M:OnCreate(id,chooseFuncId)
 	local data = MStaff.GetStaffDataByID(id)
 	local person = Csv.Personnel[id]
 	self.mID = id
+	self.Lvl10 = false
 
-	SoundMgr.PlaySystem(person.sound)
-	for i = 1,7 do
-		moudle:Get("Star"..i).Activity = false
-	end
 	for i = 1,person.star do
 		moudle:Get("Star"..i).Activity = true
 	end
 
-	moudle:Get("C_Text").Text = Csv.Text("staff_details")
+	SoundMgr.PlaySystem(person.sound)
+
+	local TextTitle = moudle:Get("C_Text")
+	TextTitle.Text = Csv.Text("staff_details")
 	local TextCost = moudle:Get("CostText")
 	TextCost.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Coin))
 	self.mCoin = MBag.GetItemNum(Define.AssetsType.Coin)
-	self.mTextName = moudle:Get("StaffName")
-	self.mTextName.Text = MStaff.GetStaffName(id)--person.name
+	local TextName = moudle:Get("StaffName")
+	self.mTextName = TextName
+	TextName.Text = MStaff.GetStaffName(id)--person.name
 
-	moudle:Get("ty_145").SpriteName = "ty_145"
-	moudle:Get("Speciality").Text = Csv.Text("staff_speciality")
+	local TextDetail = moudle:Get("textDetail")
+	TextDetail.Text = Csv.Text("staff_detail")
 
-	local width = 90 + #person.specialtyIcon * 62
-	moudle:Get("ty_145").SizeDelta = Vector2(width,moudle:Get("ty_145").PreferredWidth)
+	local TextLevel = moudle:Get("Level")
+	TextLevel.Text = Csv.Text("staff_level")
+	local TextSpeciality = moudle:Get("Speciality")
+	TextSpeciality.Text = Csv.Text("staff_speciality")
+	local TextProperty = moudle:Get("Property")
+	TextProperty.Text = Csv.Text("staff_property")
+	local TextAttri1 = moudle:Get("Attri1")
+	TextAttri1.Text = Csv.Text("staff_attri1")
+	local TextAttri2 = moudle:Get("Attri2")
+	TextAttri2.Text = Csv.Text("staff_attri2")
+	local TextAttri3 = moudle:Get("Attri3")
+	TextAttri3.Text = Csv.Text("staff_attri3")
+	local TextAttri4 = moudle:Get("Attri4")
+	TextAttri4.Text = Csv.Text("staff_attri4")
 
-	for i = 1,4 do
-		local ygzz = moudle:Get("ygzz_"..i)
-		if ygzz ~= nil then
-			if person.specialtyIcon[i] ~= nil then
-				ygzz.Activity = true
-				ygzz.SpriteName = person.specialtyIcon[i]
-			else
-				ygzz.Activity = false
-			end
-		end
-	end
+	self.TextMax = moudle:Get("MaxText")
+	self.TextMax.Text = Csv.Text("staff_lvmax")
 
-	if person.prefab ~= nil and person.prefab > 0 then
-		CCommon.CreateActor(moudle:Get("StaffIcon"), person.prefab, CCommon.ActorFieldMap.staff_info)
-	else
-		moudle:Get("StaffIcon").SpriteName = person.asset
-	end	
+	local ImgIcon = moudle:Get("StaffIcon")
+	ImgIcon.SpriteName = person.asset
+	local TextSpecialityData = moudle:Get("SpecialityData")
+	TextSpecialityData.Text = person.specialty
 
 	local BtnClose = moudle:Get("C_Back_Btn")
 	BtnClose:AddOnButton(function ( ... )
@@ -134,7 +129,85 @@ function _M:OnCreate(id,chooseFuncId)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URuleTips",Define.SysId.Staff)
 		end, nil, 1.2)
+
+	if data ~= nil then
+		local BtnDetails = moudle:Get("BtnDetails")
+		BtnDetails:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UStaffAttributePop",id)
+			end, nil, 0.9)
+
+		local addButton = moudle:Get("Add_Btn")
+		addButton:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+
+			local listData = MBag.GetBagItemsByUseType(PromoteUseType, true)
+			if listData == nil or next(listData) == nil then
+				WindowMgr.Create("UItemTrack", PromoteItemId, 1)
+			else
+				WindowMgr.Create("UStaffQuickPromotion", id)
+			end
+		end, nil, 1.2)
+
+		moudle:Get("SSJ").Text = Csv.Text("staff_lvlup_10", {num = LVLUP_ONEKEY})
+		local GOU = moudle:Get("GOU")
+		GOU.Activity = self.Lvl10
+		local XZ = moudle:Get("XZ")
+		XZ:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if GOU.Activity == true then
+				GOU.Activity = false
+				self.Lvl10 = false
+			else
+				GOU.Activity = true
+				self.Lvl10 = true
+				CCommon.ShowError(Csv.Text("staff_lvlup_10_tips", {num = LVLUP_ONEKEY}))
+			end
+			local staffData = MStaff.GetStaffDataByID(id)
+			_P.SetLvlUpInfo(self, staffData)
+			_P.SetExpSlider(self,id,staffData.levelexp,staffData.level,false,false,false)
+			end, nil, 0.9)
 		
+		local BtnUp = moudle:Get("BtnUp")
+		BtnUp:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			local Data = MStaff.GetStaffDataByID(id)
+			if Data.level >= Csv.ColorUp[Data.color].lvMax and Data.color < STAFFMAXCOLOR then
+				WindowMgr.Create("UStaffPromotePop",id)
+			else
+				local production = MBag.GetItemNum(Define.AssetsType.Coin)
+				if production > 0 then
+					local lvlupCount = self.Lvl10 == false and 1 or LVLUP_ONEKEY
+					CStaff.StaffLevelUp(id, lvlupCount)
+					BtnUp.RaycastTarget = false
+				else
+					if not MBag.CheckItemEnough(Define.AssetsType.Coin, 1) then
+						return
+					end
+				end
+			end
+			end, nil, 0.9)
+	else
+		moudle:Get("Add1").Activity = false
+		moudle:Get("XZ").Activity = false
+		local BtnUp = moudle:Get("BtnUp")
+		BtnUp:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UStaffTrack", id)
+			end, nil, 0.9)
+	end
+
+	_P.OnCreateData(self,id)
+	if data ~= nil then
+		if data.level >= Csv.ColorUp[STAFFMAXCOLOR].lvMax then
+			self.mLastVal = 1
+		else
+			local num,val = math.modf(data.levelexp/Csv.LevelUp[data.level].cost)
+			self.mLastVal = val
+		end
+		_P.SetExpSlider(self,id,data.levelexp,data.level,false,false,false)
+	end
+
 	local node = moudle:Get("PageNode")
 	self.PageNode = node
 	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff, true))
@@ -145,12 +218,9 @@ function _M:OnCreate(id,chooseFuncId)
 		local colorDefault = Color(0/255,195/255,255/255,1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "yth_023", "yth_023_2",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
 		local index = 0
-		--员工属性
-		index = index + 1
-		tabHandle:Add(Staff_Attr, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), Csv.Text("staff_Attr"))
 		for k,v in pairs(funcs) do
 			index = index + 1
 			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
@@ -158,11 +228,11 @@ function _M:OnCreate(id,chooseFuncId)
 			--注册小红点
 			self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
 		end
-		tabHandle:Choose(Staff_Attr)
+		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
 	end
-	if count < 3 then
-		for i=count + 2,4 do
+	if count < 4 then
+		for i=count + 1,4 do
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
@@ -196,31 +266,205 @@ function _M:OnCreate(id,chooseFuncId)
 	end)
 
 	--改名
-	-- local changeNameBtn = moudle:Get("ModifyIcon")
-	-- changeNameBtn:AddOnButton(function()
-	-- 	WindowMgr.Create("UStaffChaneName",id)
-	-- end)
-	-- if MMain.FuncIsOpen(Define.SysId.Staff_ChangeName) then
-	-- 	changeNameBtn.Activity = true
-	-- else
-	-- 	changeNameBtn.Activity = false
-	-- end
-
-	local sexIcon = moudle:Get("ModifyIcon")
-	if person.sex == Define.Sex.Female then
-		sexIcon.SpriteName = "dl_007"
+	local changeNameBtn = moudle:Get("ModifyIcon")
+	changeNameBtn:AddOnButton(function()
+		WindowMgr.Create("UStaffChaneName",id)
+	end)
+	if MMain.FuncIsOpen(Define.SysId.Staff_ChangeName) then
+		changeNameBtn.Activity = true
 	else
-		sexIcon.SpriteName = "dl_006"
+		changeNameBtn.Activity = false
 	end
-	_P.RefreshHuiZhang(self)
+
+	for i = 1,MAX_TAG do
+		moudle:Get("Tab"..i).Activity = false
+	end
+	if person.labelImg ~= nil then
+		for k,v in ipairs(person.labelImg) do
+			local img = moudle:Get("Tab"..k)
+			if img ~= nil then
+				img.Activity = true
+				img.SpriteName = v
+			end
+		end
+	end
 end
 
--- 播放升级特效
-function _R.OnPlayLevelUpAnim(self)
-	--CCommon.CreateEffect(self.mMoudle:Get("AttiActorPanel"), levelUpAttrActorId)
-	if MStaff.LastChoose == Staff_Attr then
-		self.ChooseMoudle:ShowAttrEffect()
+function _P.OnCreateData(self,id)
+	local data = MStaff.GetStaffDataByID(id)
+	local moudle = self.mMoudle
+	if data ~= nil then
+		local csvColorUp = Csv.ColorUp[data.color]
+		local TextLevelData = moudle:Get("LevelData")
+		TextLevelData.Text = Csv.Text("company_exp",{num = data.level,max = csvColorUp.lvMax})
+		local TextPropertyData = moudle:Get("PropertyData")
+		TextPropertyData.Text = data.allAttr.Wuli + data.allAttr.Zhili + data.allAttr.Zhengzhi + data.allAttr.Meili
+		local TextAttri1Data = moudle:Get("Attri1Data")
+		TextAttri1Data.Text = data.allAttr.Wuli
+		local TextAttri2Data = moudle:Get("Attri2Data")
+		TextAttri2Data.Text = data.allAttr.Zhili
+		local TextAttri3Data = moudle:Get("Attri3Data")
+		TextAttri3Data.Text = data.allAttr.Zhengzhi
+		local TextAttri4Data = moudle:Get("Attri4Data")
+		TextAttri4Data.Text = data.allAttr.Meili
+
+		local ImgColorupPoint = moudle:Get("redPoint_colorup")
+		ImgColorupPoint.Activity = MStaff.GetRedPointColorUp(id)
+
+		_P.SetLvlUpInfo(self, data)
+
+		local imgPos = moudle:Get("PositionIcon")
+		if csvColorUp ~= nil and csvColorUp.posIcon ~= nil then
+			imgPos.Activity = true
+			imgPos.SpriteName = csvColorUp.posIcon
+		else
+			imgPos.Activity = false
+		end
+	else
+		local def = Csv.Personnel[id]
+		local csvColorUp = Csv.ColorUp[def.color]
+		moudle:Get("LevelData").Text = Csv.Text("company_exp",{num = def.level,max = csvColorUp.lvMax})
+		local attr1, attr2, attr3, attr4 = MStaff.GetStaffAttrLvlOne(id)
+		moudle:Get("PropertyData").Text = math.ceil(attr1 + attr2 + attr3 + attr4)
+		moudle:Get("Attri1Data").Text = math.ceil(attr1)
+		moudle:Get("Attri2Data").Text = math.ceil(attr2)
+		moudle:Get("Attri3Data").Text = math.ceil(attr3)
+		moudle:Get("Attri4Data").Text = math.ceil(attr4)
+		moudle:Get("redPoint_colorup").Activity = MStaff.GetRedPointColorUp(id)
+
+		_P.SetLvlUpInfo(self, def)
+		self.mMoudle:Get("C_text").Text = Csv.Text("staff_get")
+
+		local imgPos = moudle:Get("PositionIcon")
+		if csvColorUp ~= nil and csvColorUp.posIcon ~= nil then
+			imgPos.Activity = true
+			imgPos.SpriteName = csvColorUp.posIcon
+		else
+			imgPos.Activity = false
+		end
 	end
+end
+
+function _P.SetLvlUpInfo(self, data)
+	local BtnUp = self.mMoudle:Get("BtnUp")
+	local TextBtnUp = self.mMoudle:Get("C_text")
+	TextBtnUp.Text = ((self.Lvl10 == false and Csv.Text("staff_up")) or Csv.Text("staff_lvlup_10", {num = LVLUP_ONEKEY}))
+	if data.level >= Csv.ColorUp[data.color].lvMax and data.color >= STAFFMAXCOLOR then
+		self.TextMax.Activity = true
+		BtnUp.Activity = false
+		self.mMoudle:Get("XZ").Activity = false
+		self.Lvl10 = false
+		self.mMoudle:Get("GOU").Activity = self.Lvl10
+	else
+		if data.level >= Csv.ColorUp[data.color].lvMax then
+			TextBtnUp.Text = Csv.Text("staff_max_up")
+		end
+	end
+end
+
+function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
+	local moudle = self.mMoudle
+	local slider = moudle:Get("Fill")
+	local textSlider = moudle:Get("SliderText")
+	if level >= Csv.ColorUp[STAFFMAXCOLOR].lvMax then
+		if isAnimate then
+			SoundMgr.PlayNonStopUI(10010)
+			local tween = slider:DOFillAmount(1,0.3)
+			tween:OnComplete(function(...)
+				_P.OnCreateData(self,id)
+				textSlider.Text = Csv.Text("staff_max")
+				_P.OnPlayLevelUpAnim(self)
+			end)
+		else
+			slider.FillAmount = 1
+			textSlider.Text = Csv.Text("staff_max")
+		end
+		self.mLastVal = 1
+		return
+	end
+	local lvlupCount = ((self.Lvl10 == false and 1) or LVLUP_ONEKEY)
+	local maxExp = _P.GetLvlUpExpNeed(id, level, lvlupCount) --Csv.LevelUp[level].cost
+	local num,val = math.modf(exp/maxExp)
+	if slider ~= nil then
+		slider:DOKill()
+		slider.FillAmount = 0
+	end
+	moudle.SelfRect:DOKill()
+	if isGod then
+		local tween
+		SoundMgr.PlayNonStopUI(10010)
+		tween = slider:DOFillAmount(1,(1 - self.mLastVal)*0.3)
+		tween:OnComplete(function(...)
+			slider.FillAmount = 0
+			moudle:Get("BtnUp").RaycastTarget = true
+			_P.OnCreateData(self,id)
+			_P.OnPlayLevelUpAnim(self)
+		end)
+		self.mTween = tween
+		SoundMgr.Play(10004)
+		local nodeTrans = moudle:Get("EffectNodeGod")
+		CCommon.PlayEffectGod(nodeTrans,Define.SysId.Staff)
+	else
+		if isAnimate then
+			local tween
+			if isUp then
+				SoundMgr.PlayNonStopUI(10010)
+				tween = slider:DOFillAmount(1,(1 - self.mLastVal)*0.3)
+				tween:OnComplete(function(...)
+					slider.FillAmount = 0
+					moudle:Get("BtnUp").RaycastTarget = true
+					_P.OnCreateData(self,id)
+					_P.OnPlayLevelUpAnim(self)
+				end)
+			else
+				tween = slider:DOFillAmount(val,(val - self.mLastVal)*0.3)
+				tween:OnComplete(function(...)
+					moudle:Get("BtnUp").RaycastTarget = true
+					_P.OnCreateData(self,id)
+				end)
+			end
+			self.mTween = tween
+		else
+			slider.FillAmount = val
+		end
+	end
+	local upNeeded = maxExp - exp
+	local have = MBag.GetItemNum(Define.AssetsType.Coin)
+	if have >= upNeeded then
+		textSlider.Text = Csv.Text("staff_needG",{num = upNeeded})
+	else
+		textSlider.Text = Csv.Text("staff_needR",{num = upNeeded})
+	end
+	self.mLastVal = val
+end
+
+function _P.GetLvlUpExpNeed(id, lvl, lvlupCount)
+	local expNeed = Csv.LevelUp[lvl].cost
+	if lvlupCount > 1 then
+		local maxLvl = lvl + lvlupCount-1
+		local data = MStaff.GetStaffDataByID(id)
+		local csvColorUp = Csv.ColorUp[data.color]
+		if lvl == csvColorUp.lvMax then
+			maxLvl = lvl + lvlupCount - 1
+		elseif maxLvl > csvColorUp.lvMax then
+			maxLvl = csvColorUp.lvMax - 1
+		end
+
+		expNeed = 0
+		for index = lvl, maxLvl do
+			if Csv.LevelUp[index] ~= nil and Csv.LevelUp[index].cost ~= nil then
+				expNeed = expNeed + Csv.LevelUp[index].cost
+			end
+		end
+	end
+
+	return expNeed
+end
+
+
+-- 播放升级特效
+function _P.OnPlayLevelUpAnim(self)
+	CCommon.CreateEffect(self.mMoudle:Get("AttiActorPanel"), levelUpAttrActorId)
 	CCommon.CreateEffect(self.mMoudle:Get("BobyActorPanel"), bobyUpActorId)
 end
 
@@ -240,12 +484,23 @@ function _P.GetDetailFuncs(self,funcs)
 	return tableFuncs
 end
 
+function _R.StaffLvUp(self,data)
+	_P.SetExpSlider(self,data.staffid,data.levelexp,data.level,true,data.success,data.isgod)
+
+	if data.isgod ~= nil then
+		if data.isgod == true then
+			SoundMgr.PlaySystem(10003)
+		end
+	end
+
+	if MStaff.LastChoose == Define.SysId.Staff_Talent and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:StaffLevelUp(data.staffid)
+	end
+end
+
 function _R.StaffColorUp(self,data)
 	WindowMgr.Create("UStaffPromoteSucPop",data.staffid)
-	_P.RefreshHuiZhang(self)
-	if MStaff.LastChoose == Staff_Attr then
-		self.ChooseMoudle:OnCreateData(data.staffid)
-	end
+	_P.OnCreateData(self,data.staffid)
 	if MStaff.LastChoose == Define.SysId.Staff_Skill then
 		self.ChooseMoudle:ResetAllSkill(data.staffid)
 	elseif MStaff.LastChoose == Define.SysId.Staff_Book then
@@ -253,26 +508,9 @@ function _R.StaffColorUp(self,data)
 	end
 end
 
-function _P.RefreshHuiZhang(self)
-	local moudle = self.mMoudle
-	local iconHuiZhang = moudle:Get("HuiZhang")
-	local data = MStaff.StaffTable[self.mID]
-	if iconHuiZhang ~= nil and data ~= nil then
-		local csvColor = Csv.ColorUp[data.color]
-		if csvColor ~= nil and csvColor.posIcon ~= nil then
-			iconHuiZhang.Activity = true
-			iconHuiZhang.SpriteName = csvColor.posIcon
-		else
-			iconHuiZhang.Activity = false
-		end
-	end
-end
-
 function _R.StaffBookUp(self,data)
 	if data.success then
-		if MStaff.LastChoose == Staff_Attr then
-			self.ChooseMoudle:OnCreateData(data.staffid)
-		end
+		_P.OnCreateData(self,data.staffid)
 		if MStaff.LastChoose == Define.SysId.Staff_Book then
 			self.ChooseMoudle:ChangeBookLv(data.staffid,data.bookid,data.booklv)
 		end
@@ -288,9 +526,7 @@ function _R.StaffSkillUp(self,data)
 end
 
 function _R.StaffAureoleUp(self,data)
-	if MStaff.LastChoose == Staff_Attr then
-		self.ChooseMoudle:OnCreateData(data.staffid)
-	end
+	_P.OnCreateData(self,data.staffid)
 	if MStaff.LastChoose == Define.SysId.Staff_Aureole then
 		self.ChooseMoudle:ChangeAureoleLv(data.staffid,data.aureoleid,data.aureolelv,true)
 		SoundMgr.PlayNonStopUI(10019)
@@ -304,38 +540,11 @@ end
 
 
 function _R.UpdateStaffAttr(self)
-	if MStaff.LastChoose == Staff_Attr then
-		self.ChooseMoudle:OnCreateData(self.mID)
-	end
+	_P.OnCreateData(self, self.mID)
 end
 
 function _R.RefreshName(self)
 	self.mTextName.Text = MStaff.GetStaffName(self.mID)--person.name
-end
-
--- 点击了详情
-function _R.OnClickDesc(self)
-	if MStaff.LastChoose == Staff_Attr then
-		if self.ChooseMoudle ~= nil then
-			self.ChooseMoudle:Destroy()
-			self.ChooseMoudle:delete()
-			self.ChooseMoudle = nil
-		end
-
-		self.ChooseMoudle = UStaffAttributePop.new(self.PageNode, self.mID)
-	end
-end
-
-function _R.OnClickBackFromDesc(self)
-	if MStaff.LastChoose == Staff_Attr then
-		if self.ChooseMoudle ~= nil then
-			self.ChooseMoudle:Destroy()
-			self.ChooseMoudle:delete()
-			self.ChooseMoudle = nil
-		end
-
-		self.ChooseMoudle = UStaffAttrPage.new(self.PageNode, self.mID)
-	end
 end
 
 return _M

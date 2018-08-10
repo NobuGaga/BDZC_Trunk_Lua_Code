@@ -83,7 +83,7 @@ end
 function _P.OnMainUpdate(data)
 	MMail.OnUpdateList(data) -- 更新列表
 	WindowMgr.Call("UMailPanel", "OnRefreshItem", data) -- 更新邮件某个item
-	-- WindowMgr.Call("UMailDetailPanel", "OnRefreshItem", data)
+	WindowMgr.Call("UMailDetailPanel", "OnRefreshItem", data)
 
 	_P.CheckMailRedPoint()
 end
@@ -93,7 +93,6 @@ end
 function _P.OnAddNewMail(data)
 	MMail.OnAddNewMail(data)
 	WindowMgr.Call("UMailPanel", "OnAddNewMail", data) -- 更新邮件列表
-	-- WindowMgr.Call("UMailDetailPanel", "OnAddNewMail", data) -- 更新邮件列表
 	_P.CheckMailRedPoint()
 end
 
@@ -119,17 +118,18 @@ function _P.CheckMailRedPoint()
 end
 
 function _P.OnGainList(data)
+	print("OnGainList!")
 	MMail.GainAllMails(data)
 	WindowMgr.Call("UMailPanel", "GainAllMails", data.awardList) -- 更新邮件列表
-	-- WindowMgr.Call("UMailDetailPanel", "GainAllMails", data.awardList) -- 更新邮件列表
 	_P.CheckMailRedPoint()
 end
 
 function _P.OnDeleteList(data)
+	print("OnDeleteList!")
 	MMail.DeleteAllMails(data)
 	WindowMgr.Call("UMailPanel", "DeleteAllMails", data.mails) -- 更新邮件列表
-	-- WindowMgr.Call("UMailDetailPanel", "DeleteAllMails", data.mails) -- 更新邮件列表
 	_P.CheckMailRedPoint()
 end
+
 
 return _M

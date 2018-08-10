@@ -56,7 +56,7 @@ function _M:OnCreate(data)
 	local colorDefault = Color(0/255,195/255,255/255,1)
 	local tabHandle = TabGroup.new(function (funcId)
 		_P.OnChoose(self, funcId)
-	end, "yth_023", "yth_023_2",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 
 	tabHandle:Add(1, moudle:Get("toggle_1"), moudle:Get("C_text_1"), Csv.Text("adventure_follow_1"))
 	tabHandle:Add(2, moudle:Get("toggle_2"), moudle:Get("C_text_2"), Csv.Text("adventure_follow_2"))
@@ -151,7 +151,7 @@ function _P.AddItemToContent(self,content,data, type)
 			local vip = MPlayer.GetVip()
 			local extraTime = Csv.Vip[vip].adventureSubCount
 			local lefttime = Csv.Const(20101)[5] + extraTime - self.mData.shopEventtimes
-			if lefttime <= 0 then
+			if lefttime < 0 then
 				CCommon.ShowError(Csv.Text("adventure_main_limit"))
 			else
 				_P.OnClickSendPlayer(self,data)

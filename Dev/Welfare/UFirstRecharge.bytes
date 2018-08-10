@@ -47,7 +47,9 @@ function _M:OnCreate()
 
 	local getBtn = moudle:Get("Btn")
 	local getImg = moudle:Get("get")
+	local name = moudle:Get("name")
 	local content = moudle:Get("Content")
+	
 
 	local itemLights = {}
 	local itemTable = {}
@@ -119,6 +121,7 @@ function _M:OnCreate()
 	if SoundStaff ~= nil and SecondStaff ~= nil then
 		moudle:Get("Bg"):AddOnTime(function()
 			SoundMgr.Play(SoundStaff)
+			name.Text = Csv.Text("welfare_first_name")
 		end,nil,SecondStaff)
 	end
 

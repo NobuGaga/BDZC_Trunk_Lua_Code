@@ -82,6 +82,8 @@ LuaUtil = JRequire "Libs.LuaUtil"
 Define = JRequire "Dev.Define"
 --@RefType [Dev.GameSetting.bytes#_M]
 GameSetting = JRequire "Dev.GameSetting"
+GameSetting.Init()
+
 --@RefType [Libs.Csv.CsvReader.bytes#_M]
 Csv = JRequire "Libs.Csv.CsvReader"
 --@RefType [Libs.WindowMgr.WindowMgr.bytes#_M]
@@ -126,16 +128,21 @@ local SoundClipPool = JRequire "Libs.Sound.SoundClipPool"
 local CLectures = JRequire "Dev.Lectures.CLectures"
 local CBuyLand = JRequire "Dev.BuyLand.CBuyLand"
 local CSiege = JRequire "Dev.SiegeWall.CSiege"
+local CLineUp = JRequire "Dev.LineUp.CLineUp"
 
 CS.Utility.LogPoint.LogPost(6, 2)
 
-GameSetting.Init()
+GameSetting.Start()
 
 local prevImage = {
 	"Floor_alpha",	--Floor	
+	"dj_005",	--Package
+	"dj_0026",	--Package2
 	"ty_020",	--Box
 	"computer",	--VilaGirl
+	"ty_096",	--Main
 	"ty_juhua",	--Common
+	"xf_tb_003",--Icon
 }
 local firstStoryCsv = Csv.Story[101]
 if firstStoryCsv ~= nil then

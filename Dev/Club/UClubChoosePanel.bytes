@@ -6,8 +6,8 @@ local CClub = JRequire "Dev.Club.CClub"
 local MBag = JRequire "Dev.Bag.MBag"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 
-local COLOR_GREEN = Color(93 / 255, 153 / 255, 255 / 255, 1)
-local COLOR_RED = Color(255 / 255, 93 / 255, 140 / 255, 1)
+local COLOR_GREEN = Color(0 / 255, 255 / 255, 0 / 255, 1)
+local COLOR_RED = Color(255 / 255, 0 / 255, 0 / 255, 1)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -55,7 +55,7 @@ function _P.CreatePartyItem(self, itemGrid, itemName, data)
 	itemModule:Get("NumText").Text = data.cost
 	itemModule:Get("Condition").Text = Csv.Text("club_choose_condition")
 	itemModule:Get("C_text").Text = Csv.Text("club_choose_open")
-	local joinBtn = itemModule:Get("Btn_b")
+	local joinBtn = itemModule:Get("C_Btn_b")
 	joinBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		_P.OnClickJoin(self, data)
@@ -71,9 +71,6 @@ function _P.CreatePartyItem(self, itemGrid, itemName, data)
 			_P.SetCheckBoxData(self)
 			checkImg.Activity = self.isSelectOpen
 		end, nil, 1)
-		itemModule:Get("TitleText").Text = Csv.Text("club_join_private")
-	else
-		itemModule:Get("TitleText").Text = Csv.Text("club_join_good")
 	end
 
 	-- 奖励列表

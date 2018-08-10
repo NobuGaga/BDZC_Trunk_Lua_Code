@@ -14,12 +14,14 @@ local _P = {}
 local _R = {}
 
 local PasswordIds = {34001, 34002, 34003}
-local BLACKCOLOR = Color(99/255, 99/255, 99/255, 1)
+local BLACKCOLOR = Color(0, 0, 0, 1)
 local WHITECOLOR = Color(1, 1, 1, 1)
 local SelectImgName = "yth_023"
-local DefaultImgName = "yth_023_2"
-local DefaultImgSize = Vector2(178,57)
-local LightImgSize = Vector2(178,70)
+local DefaultImgName = "yth_023"
+local SELECTCOLOR = Color(1, 1, 75/255, 1)
+local UNSELECTCOLOR = Color(0, 195/255, 1, 1)
+local DefaultImgSize = Vector2(167,60)
+local LightImgSize = Vector2(167,60)
 
 local PASSWARD_ID_CONST_ID = 113
 local KILL_ITEM_ID = 34103
@@ -186,10 +188,15 @@ function _P.OnSetPageText(self)
 
 	self.mineSelectImg.SpriteName = ((isMine and SelectImgName) or DefaultImgName)
 	self.mineSelectImg.SizeDelta = ((isMine and LightImgSize) or DefaultImgSize)
+	self.mineSelectImg.Color = ((isMine and SELECTCOLOR) or UNSELECTCOLOR)
+
 	self.diskSelectImg.SpriteName = ((isDisk and SelectImgName) or DefaultImgName)
 	self.diskSelectImg.SizeDelta = ((isDisk and LightImgSize) or DefaultImgSize)
+	self.diskSelectImg.Color = ((isDisk and SELECTCOLOR) or UNSELECTCOLOR)
+
 	self.orderSelectImg.SpriteName = ((isOrder and SelectImgName) or DefaultImgName)
 	self.orderSelectImg.SizeDelta = ((isOrder and LightImgSize) or DefaultImgSize)
+	self.orderSelectImg.Color = ((isOrder and SELECTCOLOR) or UNSELECTCOLOR)
 
 	self.mineSelectText.Color = ((isMine and BLACKCOLOR) or WHITECOLOR)
 	self.diskSelectText.Color = ((isDisk and BLACKCOLOR) or WHITECOLOR)

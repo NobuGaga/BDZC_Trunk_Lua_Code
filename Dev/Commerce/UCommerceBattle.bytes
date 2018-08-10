@@ -340,31 +340,17 @@ function _P.BeginPK(self)
 end
 
 function _P.OnChooseStaff(self, staffId)
+	self.ChooseStaff = staffId
+
 	if staffId > 0 then
-		local csvPersonnel = Csv.Personnel[staffId]
-		if self.ChooseStaff ~= staffId then
-			if self.StaffPrefab ~= nil then
-				self.StaffPrefab:Destroy()
-				self.StaffPrefab = nil
-			end
-			if csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-				self.StaffPrefab = CCommon.CreateActor(self.STAFF.Actor, csvPersonnel.prefab, CCommon.ActorFieldMap.commerce_staff)
-				self.STAFF.Actor.SpriteName = ""
-			else
-				self.STAFF.Actor.SpriteName = csvPersonnel.asset
-			end
-		end
 		local info = MStaff.GetStaffDataByID(staffId)
+		local staffCsv = Csv.Personnel[staffId]
+		self.STAFF.Actor.SpriteName = staffCsv.asset
 		self.STAFF.Power.Text = tostring(info.power)
 	else
-		if self.StaffPrefab ~= nil then
-			self.StaffPrefab:Destroy()
-			self.StaffPrefab = nil
-		end
 		self.STAFF.Actor.SpriteName = DEFAULT_BODY_NAME
 		self.STAFF.Power.Text = ""
 	end	
-	self.ChooseStaff = staffId
 end
 
 function _P.Sort(a, b)
@@ -456,22 +442,6 @@ function _M:OnCreate(battleId)
 	self.FullBlood = csv.blood
 	moudle:Get("BG").SpriteName = csv.bg
 	moudle:Get("BossBSX").SpriteName = csv.asset
-
-	if csv.dbname ~= nil then
-		if self.BossPrefab ~= nil then
-			self.BossPrefab:Destroy()
-			self.BossPrefab = nil
-		end
-		self.BossPrefab = CCommon.CreateActor(moudle:Get("BossBSX"), csv.dbname, CCommon.ActorFieldMap.commerce_boss)
-		moudle:Get("BossBSX").SpriteName = ""
-	else
-		if self.BossPrefab ~= nil then
-			self.BossPrefab:Destroy()
-			self.BossPrefab = nil
-		end
-		moudle:Get("BossBSX").SpriteName = csv.asset
-	end
-
 	moudle:Get("NameText").Text = csv.name
 	moudle:Get("KilledTipsText").Text = Csv.Text("commerce_battle28")
 	moudle:Get("KilledBtnText").Text = Csv.Text("commerce_battle7")
@@ -545,7 +515,6 @@ function _M:OnCreate(battleId)
 		ZW = moudle:Get("ZW"),
 	}
 	-- self.BottomMsg.Root.Activity = false
-	moudle:Get("MoreText").Text = Csv.Text("relations_tip3")
 end
 
 return _M

@@ -38,6 +38,11 @@ function _M.Init()
 	end
 end
 
+-- 是否使用SDK登陆（还是游戏登陆）
+function _M:UseSdkLogin()
+	return _M.SdkObj and _M.SdkObj.UseSdkLogin and _M.SdkObj.UseSdkLogin()
+end
+
 function _M.OnSdkCallBack(jsonStr)
 	local jsonTab = rapidjson.decode(jsonStr)
 	local funcName = jsonTab.func
@@ -88,7 +93,10 @@ function _M.ReqCollectData(type, roleID, roleName, roleLevel)
 	_M.SdkObj.ReqCollectData(type, MLogin.SelectServer.id, MLogin.SelectServer.name, roleID, roleName, roleLevel)
 end
 
-function _M.ReqPay(productID, price, gold, productName, param, callback)
+function _M.ReqPay(csvID, sdkProductId, price, gold, productName, param, callback)
+	if GameSetting.Platform == Define.PlatformType.Editor then
+		return
+	end 
 	local num = 1
 	if nil == productName then
 		productName = Csv.Text("recharge_coin", {num = ""})
@@ -98,7 +106,7 @@ function _M.ReqPay(productID, price, gold, productName, param, callback)
 		_M.PayCallBack = callback
 	end
 	CS.Utility.LogPoint.LogPost(12, 1)
-	_M.SdkObj.ReqPay(productID, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, GameSetting.Sbid, param)
+	_M.SdkObj.ReqPay(csvID, sdkProductId, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, GameSetting.Sbid, param)
 end
 
 function _M.ReqExit()
@@ -316,7 +324,7 @@ _P.CreateSdk =
 		return nil
 	end,
 	[Define.PlatformType.AndroidPad] = function(spid)
-		if Define.PlatformType.DEVELOP ~= spid then
+		if Define.PlatformType.DEVELOP == spid then
 			local AndroidSDK = JRequire "SDK.AndroidYiWanSDK"
 			return AndroidSDK.new()
 		end
@@ -330,7 +338,7 @@ _P.CreateSdk =
 		else
 			spid = originSpid
 		end
-		if Define.PlatformType.iOSYiWan == spid or Define.PlatformType.iOSYiWan0622 == spid then
+		if Define.PlatformType.iOSYiWan == spid then
 			local iOSSDK = JRequire "SDK.iOSYiWanSDK"
 			return iOSSDK.new()
 		elseif Define.PlatformType.iOSDefault == spid then

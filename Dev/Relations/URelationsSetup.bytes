@@ -1,0 +1,80 @@
+-- 商店积分兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Lobby_Setup")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		
+		
+		WindowMgr.Create("URelationsOnekey")
+
+		
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = Csv.Text("relations_onekey")
+	module:Get("Tips").Text = Csv.Text("relations_onekey_select")
+
+	local content  = module:Get("conten")
+
+	local sortAdds = _P.GetSortTable(data.adds)
+	for k,v in pairs(sortAdds) do
+		local csvAdd = Csv.Relationsbonus[v.key]
+		local csvItem = Csv.Item[csvAdd.cost[1]]
+
+		local cost = csvAdd.cost
+	end
+
+	self.mSelectType = 0
+	local items = {}
+	for i=1,4,1 do
+		local name = module:Get("name"..i)
+		local value = module:Get("cost"..i)
+
+		name.Text = Csv.Text("relations_setup_title"..i)
+		value.Text = Csv.Text("relations_setup_value"..i)
+
+		local gou = module:Get("gou"..i)
+		gou.Activity = false
+
+		table.insert(items,{type = i-1,img = gou})
+
+		module:Get("box"..i):AddOnButton(function()
+			self.mSelectType = i-1
+			_P.SetSelect(self,self.mSelectType)
+		end,nil,1.2)
+	end
+	self.mItemTab =  items
+
+	_P.SetSelect(self,self.mSelectType)
+end
+
+function _P.SetSelect(self,type)
+	for k,v in pairs(self.mItemTab)do
+		if v.type == type then
+			v.img.Activity = true
+		else
+			v.img.Activity = false
+		end
+	end
+end
+
+return _M

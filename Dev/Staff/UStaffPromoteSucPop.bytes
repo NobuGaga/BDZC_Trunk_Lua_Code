@@ -19,16 +19,14 @@ function _M:OnCreate(id)
 	end, nil, 0.9)
 
 	SoundMgr.Play(10013)
-
-	local csvPerson = Csv.Personnel[id]
 	local ImgIcon = moudle:Get("Icon")
-	ImgIcon.SpriteName = csvPerson.asset2
+	ImgIcon.SpriteName = Csv.Personnel[id].asset
 
 	local TextTitle = moudle:Get("Title")
 	TextTitle.Text = Csv.Text("staff_prosuc")
 
 	local TextName = moudle:Get("Name")
-	TextName.Text = csvPerson.name
+	TextName.Text = Csv.Personnel[id].name
 
 	local TextStar = moudle:Get("Star")
 	if data.color <= 1 then
@@ -51,17 +49,6 @@ function _M:OnCreate(id)
 
 	local TextAward = moudle:Get("Award")
 	TextAward.Text = Csv.Text("staff_proaward",{num = _P.GetAwardToString(csvStar.item,csvStar.bookExp)})
-
-	for i = 1,7 do
-		local imgStar = moudle:Get("star"..i)
-		if imgStar ~= nil then
-			if csvPerson.star ~= nil and csvPerson.star >= i then
-				imgStar.Activity = true
-			else
-				imgStar.Activity = false
-			end
-		end
-	end
 end
 
 function _P.GetAwardToString(items,bookExp)

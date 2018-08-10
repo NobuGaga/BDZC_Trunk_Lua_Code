@@ -18,6 +18,7 @@ local MQuest = JRequire "Dev.Quest.MQuest"
 local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
 --@RefType [Dev.Welfare.MWelfare.bytes#_M]
 local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local MStaff = JRequire "Dev.Staff.MStaff"
 
 local TimeDelay = CS.Utility.TimeDelay
 
@@ -122,6 +123,9 @@ _M.EventFunc =
 {
 	--执行引导
 	[_M.EventType.Guide] = function (csvLine)
+		if GameSetting.IsiOSCommit then
+			return
+		end
 		WindowMgr.Create("UGuide", csvLine.eventParam, function( ... )
 			_M.OnEventDone(csvLine)
 		end)
@@ -268,6 +272,10 @@ _M.ConditionType =
 	TaskDone = 10,
 	--指定任务没有完成 (任务id)
 	TaskNotDone = 11,
+	--员工个数>= (数量)
+	StaffNum = 12,
+	--最大的员工等级>= (等级)
+	StaffMaxLv = 13,
 }
 _M.ConditionFunc = 
 {
@@ -348,6 +356,20 @@ _M.ConditionFunc =
 		end
 		return true
 	end,
+	--员工数量>=
+	[_M.ConditionType.StaffNum] = function (condParam)
+		if MStaff.GetStaffCount() < condParam then
+			return false
+		end
+		return true
+	end,
+	--最大的员工等级>=
+	[_M.ConditionType.StaffMaxLv] = function (condParam)
+		if MStaff.GetStaffMaxLv() < condParam then
+			return false
+		end
+		return true
+	end,
 }
 
 --触发类型
@@ -397,6 +419,7 @@ _M.TriggerFunc =
 	end,
 	--获得新员工 (staffId)
 	[EventListenId.GetStaff] = function (line, staffId)
+		--print(line.id, "!!!!!!!!!!!!!!!!!!  EventListenId.GetStaff", staffId, line.listenParam)
 		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam ~= staffId then
 			return false
 		end
@@ -572,6 +595,11 @@ end
 function _M.OnGetNewStaff(staffId)
 	local csv = Csv.Personnel[staffId]
 	if csv.story ~= nil then
+		if csv.story <= 0 then
+			--表示是靠关卡触发
+			return
+		end
+
 		if csv.showSysid == Define.SysId.VIPWelfare then
 			MVipWelfare.EnqueueWaitShow(2,staffId,csv.story)
 			WindowMgr.Call("UVipWelfare","ShowMoudle")

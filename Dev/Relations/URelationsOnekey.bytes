@@ -1,0 +1,236 @@
+-- 商店积分兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MRelations = JRequire "Dev.Relations.MRelations"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local WinImgName = "ys_027"
+local FailImgName = "ys_030"
+
+local T_RELATION_ALL = "T_Effect_Get"
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate()
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10002)
+
+		if self.mIsClickPast then
+			WindowMgr.Call("URelations","OnFightEnd")
+			WindowMgr.Destroy("URelationsFight")
+		else
+			_P.ClickItemAll(self)
+		end
+	end)
+
+	local module = self:CreateMoudle(self._RootNode, "M_Lobby_NweStraight")
+	self.mModule = module
+
+	self.mIsClickPast = false
+	self.mDelay = 0.5
+	self.mItemCount = 0
+	self.mDatasCount = 0
+	self.mIsBottom = false
+	self.mKillNum = 0
+
+	--[[
+	local closeBtn = module:Get("btnClose")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+
+		if self.mIsClickPast then
+			WindowMgr.Call("URelations","OnFightEnd")
+			WindowMgr.Destroy("URelationsFight")
+		else
+			_P.ClickItemAll(self)
+		end
+	end, nil, 1.2)
+	--]]
+
+	module:Get("Tips").Text = Csv.Text("relations_click_close")
+	module:Get("C_Text").Text = Csv.Text("relations_onekey")
+	--local btnText = module:Get("C_text")
+	local content = module:Get("content")
+	local scroll = module:Get("scrollView")
+	self.mScollview = scroll
+	self.mContent = content
+	self.mBtnText = btnText
+
+	local data = _P.GetRewardList(self)
+	self.mDatas = data
+
+	local key = 0
+	local delay = 0.5
+	if data ~= nil then
+		self.mDatasCount = #data
+		for k,v in pairs(data) do
+			key = key+1
+			if key <= #data then
+				if data[key].reward then
+					_P.CreatItem2(self,data[key].data)
+				else
+					_P.CreatItem(self,data[key].data)
+				end
+			end
+		end
+	end
+
+	local lissNum = MRelations.FightData.staffnum - MRelations.FightData.surnum - self.mKillNum
+	module:Get("Num1").Text = Csv.Text("relations_onekey_killnum",{num = self.mKillNum})
+	module:Get("Num2").Text = Csv.Text("relations_onekey_lissnum",{num = lissNum})
+
+	_P.RefreshBtnText(self)
+
+	local allKillImg = module:Get("All")
+	local _Tweener = allKillImg.CachedTran:GetJTweener(T_RELATION_ALL)
+	_Tweener:SetOnComplete(function()
+	end)
+
+	if lissNum <= 0 then
+		module.SelfRect:AddOnTime(function()
+			_Tweener:Play()
+		end,nil,0.5)
+	end
+end
+
+function _P.GetRewardList(self)
+	local rewardList = {}
+
+	local data = MRelations.RewardList
+	for k,v in pairs(data)do
+		
+		table.insert(rewardList,{data = v,reward = false})
+		if v.exaward ~= nil then
+			table.insert(rewardList,{data = v,reward = true})
+		end
+	end
+	return rewardList
+end
+
+function _P.CreatItem(self,data)
+	if self.mIsClickPast then
+		return
+	end
+	self.mItemCount = self.mItemCount +1
+	if self.mItemCount >= self.mDatasCount then
+		self.mIsClickPast = true
+		_P.RefreshBtnText(self)
+	end
+
+	local content = self.mContent
+	local scollview = self.mScollview
+
+	itemMoudle = JGuiManager.GetMoudle(content, "M_Lobby_NweStraight_Item")
+	local staffIcon = itemMoudle:Get("staffIcon")
+	local winImg = itemMoudle:Get("JgImg")
+	local text1 = itemMoudle:Get("text1")
+	local text2 = itemMoudle:Get("text2")
+	local text3 = itemMoudle:Get("text3")
+	local title = itemMoudle:Get("Title")
+
+	local emenyStaff = Csv.Personnel[data.ostaffinfo.staffid]
+	staffIcon.SpriteName = emenyStaff.asset
+
+	local leftBlood = data.reports[#data.reports].mleftblood
+	text1.Text = Csv.Text("relations_onekey_killenemy",{name = emenyStaff.name})
+	text2.Text = Csv.Text("relations_onekey_blood1",{num = data.blood.blood - leftBlood})
+	text3.Text = Csv.Text("relations_onekey_blood2",{num = leftBlood})
+	
+	if data.state == 0 then
+		winImg.SpriteName = FailImgName
+		title.Text = Csv.Text("relations_onekey_itemtitle",{num = data.liansheng + 1})
+		text1.Text = Csv.Text("relations_onekey_bekillenemy",{name = emenyStaff.name})
+	else
+		self.mKillNum = self.mKillNum +1
+		title.Text = Csv.Text("relations_onekey_itemtitle",{num = data.liansheng})
+		text1.Text = Csv.Text("relations_onekey_killenemy",{name = emenyStaff.name})
+		winImg.SpriteName = WinImgName
+	end
+end
+
+function _P.CreatItem2(self,data)
+	if self.mIsClickPast then
+		return
+	end
+	self.mItemCount = self.mItemCount +1
+	if self.mItemCount >= self.mDatasCount then
+		self.mIsClickPast = true
+		_P.RefreshBtnText(self)
+	end
+
+	local content = self.mContent
+	local scollview = self.mScollview
+
+	itemMoudle2 = JGuiManager.GetMoudle(content, "M_Lobby_NweStraight_Item2")
+	local staffIcon2 = itemMoudle2:Get("staffIcon")
+	local staffBg = itemMoudle2:Get("StaffBg")
+	local exreward = itemMoudle2:Get("JL")
+	local title = itemMoudle2:Get("Title")
+
+	local ownStaff = Csv.Personnel[data.mstaffinfo.staffid]
+	local staffInfo = MStaff.GetStaffDataByID(data.mstaffinfo.staffid)
+	staffIcon2.SpriteName = ownStaff.asset
+	staffBg.SpriteName = MStaff.Color2Image[staffInfo.color] 
+
+	local rewardData = Csv.Item[data.exaward.key]
+	if rewardData ~= nil then
+		exreward.Text = Csv.Text("relations_onekey_get1",{name = rewardData.name,num = data.exaward.value})
+	end
+
+	title.Text = Csv.Text("relations_onekey_itemtitle2")
+
+	--[[
+	if not self.mIsBottom then
+		if content.SizeDelta.y >= scollview.SizeDelta.y then
+			content.LocalPosition = Vector2(content.LocalPosition.x,-content.SizeDelta.y)
+			content.Pivot = Vector2(0.5,0)
+
+			self.mIsBottom = true
+		end
+	end
+	--]]
+end
+
+function _P.RefreshBtnText(self)
+	local btnText = self.mBtnText
+
+	if self.mIsClickPast then
+		--btnText.Text = Csv.Text("relations_onekey_close")
+	else
+		--btnText.Text = Csv.Text("relations_onekey_past")
+	end
+end
+
+function _P.ClickItemAll(self)
+	local data = self.mDatas
+	local itemCount = self.mItemCount
+	
+	local index = 0
+	if data ~= nil then
+		for k,v in pairs(data)do
+			index = index +1
+
+			if index > itemCount then
+				if data[index].reward then
+					_P.CreatItem2(self,data[index].data)
+				else
+					_P.CreatItem(self,data[index].data)
+				end
+			end
+		end
+	end
+	self.mIsClickPast = true
+	_P.RefreshBtnText(self)
+end
+
+return _M

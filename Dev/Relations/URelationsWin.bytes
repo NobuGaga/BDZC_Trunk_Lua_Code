@@ -41,6 +41,10 @@ function _M:OnCreate(...)
 	moudle:Get("RewardText1").Text = Csv.Text("relations_point")
 	moudle:Get("text1").Text = Csv.Text("relations_addnum",{num = data.point})
 
+	print("M_Lobby_Success__________",data.shopPoint)
+	moudle:Get("Point").Text = Csv.Text("relations_shop_point")
+	moudle:Get("PointNum").Text = Csv.Text("relations_addnum",{num = data.shopPoint})
+
 	local liansheng = data.liansheng
 	for i=1, 10 do
 		local node = moudle:Get("LsNum"..i)
@@ -57,7 +61,6 @@ function _M:OnCreate(...)
 
 	local remainNum = Interval - data.liansheng % Interval
 	moudle:Get("closeText").Text = Csv.Text("relations_wintimesget",{num = remainNum})
-	LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
 
 	local textTip = moudle:Get("closeText1")
 	if data.liansheng%3 == 0 then

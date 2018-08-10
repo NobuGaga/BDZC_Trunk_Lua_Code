@@ -1,10 +1,12 @@
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local EventCenter = JRequire "Dev.EventCenter"
 local _M = {}
 
 _M.InitData = nil		--主界面数据
 _M.FightData = nil		--选人界面数据
 _M.ReportData = nil		--战报数据
-_M.StaffTable = {}		--今天已使用过的员工（不包含日常）
+_M.AppealStaffTable = {}		--今天已使用过的员工（上诉）
+_M.RevengeStaffTable = {}		--今天已使用过的员工（诉讼）
 _M.AdverData = nil		--上诉（仇人）数据
 _M.DefenseData = nil	--防守信息数据
 _M.RankData = nil		--排行榜数据
@@ -26,11 +28,25 @@ _M.isWaitingReport = false --标记是否处于获取战报中
 
 _M.isRedPoint = false
 
+---新-----------
+_M.isRefreshTime = false
+_M.RefreshHandle = nil
+
+_M.RewardList = {}
+_M.ExchangeTable = {}         -- 兑换商店数据
+_M.NorStaffs = {}
+_M.OnekeyPoint = 0 --一键总积分
+
 function _M.Clean( ... )
+	if _M.isRefreshTime then
+		EventCenter.UnRegistCallEvent(_M.RefreshHandle )
+	end
+
 	_M.InitData = nil
 	_M.FightData = nil
 	_M.ReportData = nil
-	_M.StaffTable = {}
+	_M.AppealStaffTable = {}		--今天已使用过的员工（上诉）
+	_M.RevengeStaffTable = {}		--今天已使用过的员工（诉讼）
 	_M.AdverData = nil
 	_M.DefenseData = nil
 	_M.RankData = nil
@@ -51,6 +67,9 @@ function _M.Clean( ... )
 	_M.isWaitingReport = false
 
 	_M.isRedPoint = false
+	_M.isRefreshTime = false 
+	_M.RewardList = {}
+	_M.OnekeyPoint = 0 --一键总积分
 end
 
 function _M.OnBuyAdd(data)
@@ -69,6 +88,26 @@ function _M.OnBuyAdd(data)
 end
 
 function _M.InitStaff(data)
+
+	local appealStaffTable = {}		--今天已使用过的员工（上诉）
+	local revengeStaffTable = {}		--今天已使用过的员工（诉讼）
+
+	if data ~= nil and data.appealList ~= nil then
+		for k,v in pairs(data.appealList) do
+			appealStaffTable[v] = true
+		end
+	end
+
+	if data ~= nil and data.revengeList ~= nil then
+		for k,v in pairs(data.revengeList) do
+			revengeStaffTable[v] = true
+		end
+	end
+
+	_M.AppealStaffTable = appealStaffTable
+	_M.RevengeStaffTable = revengeStaffTable
+
+	--[[
 	local staffTable = {}
 	if data ~= nil and data.list ~= nil then
 		for k,v in pairs(data.list) do
@@ -76,6 +115,7 @@ function _M.InitStaff(data)
 		end
 	end
 	_M.StaffTable = staffTable
+	--]]
 end
 
 function _M.SetInitData(data)
@@ -92,7 +132,30 @@ function _M.SetInitData(data)
 	initData.freenum = data.info.freenum
 	initData.cdnum = data.info.cdnum
 	initData.maxcdnum = data.info.maxcdnum
+
+	--敌方玩家名称
+	initData.name = "XX"
+	if data.info.name ~= nil then
+		initData.name = data.info.name
+	end
+	--下一次体力恢复时间
+	if data.info.recoveTime ~= nil then
+		initData.recoveTime = data.info.recoveTime + HeartBeat.ServSecond()
+	end
+	--体力点
+	if data.info.action ~= nil then
+		initData.action = {ncur = data.info.action.ncur,nmax = data.info.action.nmax}
+	end
+	--已用过员工列表
+	initData.staffs = {}
+	if data.info.staffs ~= nil then
+		for k,v in pairs(data.info.staffs)do
+			initData.staffs[v] = v
+		end
+	end
+
 	_M.InitData = initData
+	_M.RefreshTime()
 end
 
 function _M.SetFightData(data)
@@ -120,10 +183,13 @@ function _M.SetFightData(data)
 	fightData.staffs = staffs
 
 	local adds = {}
-	for k,v in pairs(data.adds) do
-		local add = {key = v.key,value = v.value}
-		table.insert(adds,add)
+	if data.adds ~= nil then
+		for k,v in pairs(data.adds) do
+			local add = {key = v.key,value = v.value}
+			table.insert(adds,add)
+		end
 	end
+	
 	fightData.adds = adds
 
 	_M.FightData = fightData
@@ -137,6 +203,7 @@ function _M.SetReportData(data)
 	reportData.liansheng = data.liansheng
 	reportData.allpoint = data.allpoint
 	reportData.name = data.name
+	reportData.shopPoint = data.shopPoint
 
 	reportData.blood = {blood = data.blood.blood,maxblood = data.blood.maxblood}
 	reportData.oblood = {blood = data.oblood.blood,maxblood = data.oblood.maxblood}
@@ -167,13 +234,27 @@ function _M.SetReportData(data)
 	end
 
 	local reports = {}
-	for k,v in pairs(data.reports) do
-		local report = {attack = v.attack,oleftblood = v.oleftblood,mleftblood = v.mleftblood,index = v.index,iscrit = v.iscrit}
-		table.insert(reports,report)
+	if data.reports ~= nil then
+		for k,v in pairs(data.reports) do
+			local report = {attack = v.attack,oleftblood = v.oleftblood,mleftblood = v.mleftblood,index = v.index,iscrit = v.iscrit}
+			table.insert(reports,report)
+		end
 	end
 	reportData.reports = reports
 
+	local shopPoint = {}
+	if data.shopPoint ~= nil then
+		_M.AddShopPoint(data.shopPoint)
+	end
+
+	reportData.allshopPoint = 0
+	if data.allshopPoint ~= nil then
+		reportData.allshopPoint = data.allshopPoint
+	end
+
 	_M.ReportData = reportData
+
+	return _M.ReportData 
 end
 
 function _M.SetAdverData(data)
@@ -279,6 +360,99 @@ function _M.CheckisAdd()
 	end
 
 	return false
+end
+
+function _M.SetOneKey(rewardlist)
+	_M.RewardList = {}
+
+	if rewardlist ~= nil then
+		for k,v in pairs(rewardlist)do
+			local reward =  _M.SetReportData(v)
+			table.insert(_M.RewardList,reward)
+		end
+	end
+end
+
+-- 刷新后，更新商店数据
+function _M.OnSetShopData(data)
+	local _nextRefreshLeftTime = 0
+	local _todayRefreshCount = 0
+	local _point = 0
+	local _itemList = {}
+
+	if data.nextRefreshLeftTime ~= nil then
+		_nextRefreshLeftTime = data.nextRefreshLeftTime
+	end
+	if data.todayRefreshCount ~= nil then
+		_todayRefreshCount = data.todayRefreshCount
+	end
+	if data.point ~= nil then
+		_point = data.point
+	end
+	if data.itemList ~= nil then
+		_itemList = data.itemList
+	end
+
+	_M.ExchangeTable = {
+		nextRefreshLeftTime = _nextRefreshLeftTime,
+		todayRefreshCount = _todayRefreshCount,
+		point = _point,
+		itemList = _itemList
+	}
+end
+
+
+function _M.OnUpdateShopData(data)
+	local shopData =  _M.ExchangeTable
+	for k,v in pairs(shopData.itemList) do
+		if v.index == data.index then
+			v.buyCount = data.buyCount
+			break
+		end
+	end
+
+	shopData.point = data.point
+end
+
+function _M.AddShopPoint(num)
+	local shopData =  _M.ExchangeTable
+
+	if shopData ~= nil then
+		if shopData.point ~= nil then
+			shopData.point = shopData.point + num
+		end
+	end
+	_M.ExchangeTable = shopData
+end
+
+----------
+function _M.RefreshTime()
+	local tick = _M.InitData.recoveTime
+
+	if _M.isRefreshTime == false then
+		if _M.InitData.action.ncur < _M.InitData.action.nmax and  tick>0 then
+			_M.isRefreshTime = true
+
+			_M.RefreshHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
+
+				local tick = _M.InitData.recoveTime - HeartBeat.ServSecond()
+				_M.InitData.recoveTime = HeartBeat.ServSecond() + tick
+				
+				if tick <= 0 then
+					if _M.InitData.action.ncur <  _M.InitData.action.nmax then
+						_M.InitData.action.ncur = _M.InitData.action.ncur +1
+						--刷新体力
+					end
+					if _M.InitData.action.ncur >= _M.InitData.action.nmax then
+						EventCenter.UnRegistCallEvent(eventHandle)
+						_M.isRefreshTime = false
+					-- else
+					-- 	_M.InitData.recoveTime =  1800 + HeartBeat.ServSecond()
+					end
+				end
+			end)
+		end
+	end
 end
 
 return _M

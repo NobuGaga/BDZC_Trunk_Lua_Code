@@ -25,7 +25,7 @@ function _R.CloseView(self)
 end
 
 --界面构建
-function _M:OnCreate(...)
+function _M:OnCreate(_fightType)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_tips3")
 	self.mMoudle = moudle
 
@@ -39,31 +39,57 @@ function _M:OnCreate(...)
 
 	local csvItem1 = Csv.Item[COST1]
 	local num1 = MBag.GetItemNum(COST1)
-	moudle:Get("Challenge").Text = Csv.Text("relations_cost",{name = csvItem1.name})
-	moudle:Get("ChallengeText").Text = num1
+	--moudle:Get("Challenge").Text = Csv.Text("relations_cost",{name = csvItem1.name})
+	--moudle:Get("ChallengeText").Text = num1
 
 	local csvItem2 = Csv.Item[COST2]
 	local num2 = MBag.GetItemNum(COST2)
-	moudle:Get("Challenge2").Text = Csv.Text("relations_cost",{name = csvItem2.name})
-	moudle:Get("ChallengeText_0").Text = num2
+	--moudle:Get("Challenge2").Text = Csv.Text("relations_cost",{name = csvItem2.name})
+	--moudle:Get("ChallengeText_0").Text = num2
 
 	local content = moudle:Get("content")
-	local sortStaffTable = _P.GetSortStaffTable()
-	local upingTable = MRelations.StaffTable
+
+	local upingTable = {}
+	if _fightType == 0 then
+		if MRelations.InitData.staffs ~= nil then
+			upingTable = MRelations.InitData.staffs
+		end
+	elseif  _fightType == 1 then
+		if MRelations.AppealStaffTable ~= nil then
+			upingTable = MRelations.AppealStaffTable
+		end
+	elseif _fightType == 2 then
+		if MRelations.RevengeStaffTable ~= nil then
+			upingTable = MRelations.RevengeStaffTable
+		end
+	end
+	
+	local sortStaffTable = _P.GetSortStaffTable(self)
+
+	table.sort(sortStaffTable,function(a,b)
+		local aSX = MStaff.GetAllAttr(a.id)
+		local bSX = MStaff.GetAllAttr(b.id)
+		return aSX > bSX
+	end)
+
+	local staffItemUpTab = {}
 	for k,v in ipairs(sortStaffTable) do
 		local staffMoudle = JGuiManager.GetMoudle(content, "M_Dispatch_Item")
 		local csvStaff = Csv.Personnel[v.id]
-		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color3Image[v.color]
-		staffMoudle:Get("Head").SpriteName = csvStaff.asset3
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[v.color]
+		staffMoudle:Get("Head").SpriteName = csvStaff.asset
 		staffMoudle:Get("textName").Text = MStaff.GetStaffName(v.id)--csvStaff.name
 		staffMoudle:Get("textLevel").Text = Csv.Text("school_level",{num = v.level})
 		staffMoudle:Get("textExp").Text = Csv.Text("relations_powerZ",{num = MStaff.GetAllAttr(v.id)})
 		staffMoudle:Get("C_text").Text = Csv.Text("school_select")
+		staffMoudle:Get("textAllQuality").Text = Csv.Text("staff_aptitude_all",{num = MStaff.DoGetAllApitude(v)})
+		-- staffMoudle:Get("textAllPower").Text = Csv.Text("school_allPower", {num = MStaff.GetAllAttr(v.id)})
 		local ImgUping = staffMoudle:Get("Dispatched")
 		local BtnUp = staffMoudle:Get("C_Btn_b")
 		if upingTable[v.id] then
 			ImgUping.Activity = true
 			BtnUp.Activity = false
+			table.insert(staffItemUpTab,staffMoudle)
 		else
 			ImgUping.Activity = false
 			BtnUp.Activity = true
@@ -71,13 +97,25 @@ function _M:OnCreate(...)
 		BtnUp:AddOnButton(function()
 			SoundMgr.Play(10001)
 			MRelations.SelectStaffID = v.id
-			if MRelations.FightType == 2 then
-				WindowMgr.Create("URelationsCostSingle")
-			else
-				WindowMgr.Create("URelationsCost")
+
+			if _fightType == 0 then
+				CRelations.CFight(MRelations.SelectStaffID)
+				--CRelations.CFightRefreshMsg()
+			elseif  _fightType == 1 then
+				CRelations.CFightNormal(MRelations.PlayerID,MRelations.SelectStaffID,MRelations.FightType)
+			elseif _fightType == 2 then
+				CRelations.CFightSuper(MRelations.PlayerID,MRelations.SelectStaffID,MRelations.FightType)
 			end
+			self:Destroy()
 		end,nil,0.9)
 	end
+
+	if staffItemUpTab ~= nil then
+		for k,v in pairs(staffItemUpTab)do
+			v.SelfRect.CachedTran:SetSiblingIndex(-1)
+		end
+	end
+	
 end
 
 function _P.GetSortStaffTable()
@@ -87,12 +125,15 @@ function _P.GetSortStaffTable()
 			table.insert(sortTable,v)
 		end
 	end
-	table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
+	--table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
 	return sortTable
 end
 
+--[[
+--改为属性排序
 function _P.Sort(a,b)
 	local upingTable = MRelations.StaffTable
+
 	if upingTable[a.id] and not upingTable[b.id] then
 		return false
 	elseif not upingTable[a.id] and upingTable[b.id] then
@@ -103,5 +144,6 @@ function _P.Sort(a,b)
 	end
 	return a.power > b.power
 end
+--]]
 
 return _M

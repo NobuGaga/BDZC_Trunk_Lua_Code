@@ -26,6 +26,14 @@ _M.CharityGetState =
 	CanNotGet = 3,--不能领取
 }
 
+_M.AdventureTaskType = 
+{
+	Event = 1,
+	Box = 2,
+	PersonBoss = 3,
+	GangBoss = 4,
+}
+
 _M.AdventureTypeEnum = {
 	Person = 1,
 	Gang = 2,
@@ -57,12 +65,13 @@ _M.AdvSexEnum = {
 }
 
 --全局配置表冲榜活动商会冲榜榜单类型
-_M.CommerceRank = {
-	[Csv.Const(67)] = true,
-	[Csv.Const(85)] = true,
-	[Csv.Const(86)] = true,
-	[Csv.Const(92)] = true,
-}
+local CommerceRankType = Csv.Const(67)
+_M.CommerceRank = {}
+if CommerceRankType and type(CommerceRankType) == "table" then
+	for _, rankType in ipairs(CommerceRankType) do
+		_M.CommerceRank[rankType] = true
+	end
+end
 
 _M.FuturesState = {
 	DEF = 1, -- 未抽取
@@ -88,10 +97,13 @@ _M.InvestmentRed = false
 _M.FuturesSelectIndex = 0 -- 操纵期货 选择的文件
 _M.FuturesReward = {} -- 操纵期货中奖信息
 _M.AdventureShopRed = false
+_M.AdventureAchieveRed = false
 _M.GloalTravalRed = false
 _M.TravalDicsItemId = tonumber(Csv.Const(20158))
-_M.MaxOverTime = tonumber(Csv.Const(20101)[14]) -- 奇遇系统员工加班最大次数，by:pyh
 _M.IsTravalAutoBuy = false -- 环球旅行自动购买标记
+_M.AdventureTaskNames = Csv.Const(20161) -- 奇遇任务四大类型图片
+_M.AdventureConstData = Csv.Const(20162) -- 奇遇系统全局配置表数据
+_M.AdventureBattleRewards = {}			 -- 奇遇系统战斗奖励
 
 function _M.Clean()
 	_M.ActList = {}
@@ -110,8 +122,10 @@ function _M.Clean()
 	_M.FuturesSelectIndex = 0
 	_M.FuturesReward = {}
 	_M.AdventureShopRed = false
+	_M.AdventureAchieveRed = false
 	_M.GloalTravalRed = false
 	_M.IsTravalAutoBuy = false
+	_M.AdventureBattleRewards = {}
 end
 
 function _M.ClearForType(actType)
@@ -264,56 +278,24 @@ function _M.UpdatePersonEvent(actId,data)
 	if _M.ActList[actId] ~= nil then
 		--看下事件是不是满了
 		local count = 0
-		for k,v in pairs(_M.ActList[actId].personalEventlist) do
+		for k,v in pairs(_M.ActList[actId].personalTasklist) do
 			count = count + 1
 		end
-		if count == Csv.Const(20101)[2] then
+		if count == Csv.Const(20162)[1] then
 			local removeIndex = -1
-			for k,v in pairs(_M.ActList[actId].personalEventlist) do
+			for k,v in pairs(_M.ActList[actId].personalTasklist) do
 				if removeIndex == -1 then
-					removeIndex = v.eventsIndex
+					removeIndex = v.taskIndex
 				end
-				if removeIndex > v.eventsIndex then
-					removeIndex = v.eventsIndex
+				if removeIndex > v.taskIndex then
+					removeIndex = v.taskIndex
 				end
 			end
 			--移除
-			_M.ActList[actId].personalEventlist[removeIndex] = nil
+			_M.ActList[actId].personalTasklist[removeIndex] = nil
 		end
-		local event = _M.GetNewPersonEvent(data)
-		_M.ActList[actId].personalEventlist[event.eventsIndex] = event
-		_M.ActList[actId].nextUpdateTime = (data.triggerTime or 0) + Csv.Const(20101)[1]
-		-- _M.ActList[actId].isNew = true
-	end
-end
-
--- by:pyh 删除进行中的相应事件，假如是自己的事件已经完成了添加到完成列表，否则不需要处理
-function _M.UpdateGangEvent(actId,data)
-	local isJoin = false
-	if _M.ActList[actId] ~= nil then
-		for k,v in pairs(data.gangeventlist) do
-			local event = _M.GetNewGangEvent(v)
-			local isMine = _M.IsJoin(v.playerlist)
-			if v.type == 2 and not isMine then -- 不是自己参与的完成事件
-				_M.ActList[actId].shopEventList[event.eventsIndex] = nil
-			else
-				_M.ActList[actId].shopEventList[event.eventsIndex] = event
-			end
-			
-			if not _M.AdventureShopRed then
-				if event.playerlist ~= nil then
-					for i,j in pairs(event.playerlist) do
-						if j.playerId == MPlayer.GetId() then
-							isJoin = true
-						end
-					end
-				end
-				if event.playerInfo.playerId ~= MPlayer.GetId() 
-				and (event.triggerTime or 0) + Csv.Const(20101)[10] > HeartBeat.ServSecond() then
-					_M.AdventureShopRed = not isJoin
-				end
-			end
-		end
+		local event = _M.GetNewOneTask(data)
+		_M.ActList[actId].personalTasklist[event.taskIndex] = event
 	end
 end
 
@@ -329,20 +311,15 @@ function _M.IsJoin(datalist)
 	return false
 end
 
--- function _M.SetAdvNewFlag(actId,isShow)
--- 	if _M.ActList[actId] ~= nil then
--- 		_M.ActList[actId].isNew = isShow
--- 	end
--- end
-
-function _M.GetNewPersonEvent(data)
+function _M.GetNewOneTask(data)
 	local eventInfo = {}
 	local otherEventRule = {}
-	local adventureItemCsv = Csv.AdventureMainEvent[data.eventId]
+	local adventureItemCsv = Csv.AdventureMainEvent[data.taskId]
 	if adventureItemCsv == nil then
-		error("事件id"..data.eventId.."错误")
+		error("事件id"..data.taskId.."错误")
 		return
 	end
+
 	if data.eventInfo ~= nil then
 		for i=1, #data.eventInfo do
 			if data.eventInfo[i].index < 100 then
@@ -366,73 +343,24 @@ function _M.GetNewPersonEvent(data)
 			end
 		end
 	end
+
 	local one = {
 		title = adventureItemCsv.title,
 		start = adventureItemCsv.start,
 		quality = adventureItemCsv.quality,
 		desc = adventureItemCsv.desc,
 		eventInfo = eventInfo,
-		eventId = data.eventId,
-		eventsIndex = data.eventsIndex,
+		taskId = data.taskId,
+		taskIndex = data.taskIndex,
 		otherEventRule = otherEventRule,
+		curblood = data.curblood or 0,
+		totalBlood = data.totalBlood or 0,
+		bossTriTime = data.bossTriTime or 0,
+		taskState = data.state or 0,
+		joinInfo = data.joinInfo or {},
+		isDown = data.isDown
 	}
 	return one
-end
-
-function _M.GetNewGangEvent(data)
-	local one = {}
-	local tplayerlist = {}
-	one.eventId = data.eventId
-	one.eventsIndex = data.eventsIndex
-	one.triggerTime = data.triggerTime or 0
-	one.type = data.type --1 进行中的 2是领奖的
-	one.playerInfo = {
-		icon = data.playerInfo.icon,
-		level = data.playerInfo.level,
-		power = data.playerInfo.power,
-		devote = data.playerInfo.devote,
-		job = data.playerInfo.job,
-		name = data.playerInfo.name,
-		sex = data.playerInfo.sex,
-		playerId = data.playerInfo.playerId,
-		vip = data.playerInfo.vip,
-	}
-	if data.playerlist ~= nil then
-		for k, v in pairs(data.playerlist) do
-			local playerInfo = {
-				icon = v.icon,
-				level = v.level,
-				power = v.power,
-				devote = v.devote,
-				staffId = v.staffId,
-				job = v.job,
-				name = v.name,
-				sex = v.sex,
-				playerId = v.playerId,
-				vip = v.vip,
-			}
-			table.insert(tplayerlist, playerInfo)
-		end
-	end
-	--需求
-	if data.eventInfo.index < 100 and data.eventInfo.attrInfo ~= nil then
-		one.eventInfo = {
-			--params -1为任意员工，其他为指定员工 不管只读第一个
-			type = data.eventInfo.attrInfo[1].type,
-			val = data.eventInfo.attrInfo[1].value,
-			params = data.eventInfo.attrInfo[1].params,
-		}
-	end
-
-	one.playerlist = tplayerlist
-	return one
-end
-
---获取奇遇已使用员工列表
-function _M.GetAdvUseList(actId)
-	if _M.ActList[actId] ~= nil then
-		return _M.ActList[actId].staffjoinlist
-	end
 end
 
 --奇遇更新商城数据
@@ -448,22 +376,57 @@ function _M.UpdateAdvShop(data)
 	end
 end
 
-function _M.RemoveGangEvent(actId,data)
-	if _M.ActList[actId] ~= nil then
-		_M.ActList[actId].shopEventList[data.eventIndex] = nil
-	end
-end
-
 --奇遇刷新后商店数据更新
 function _M.SetShopAdvData(data)
 	_M.ActList[data.actId].shop = data
 end
 
---获取奇遇加班员工列表
-function _M.GetAdvOverList(actId)
-	if _M.ActList[actId] ~= nil then
-		return _M.ActList[actId].staffoverlist
+-- 奇遇，拆分奖励，得到普通物品奖励、积分、奇遇币
+function _M.AdventureRewardSplit(rewardList)
+	local rewards = {}
+	rewards.items = {}
+	rewards.point = 0
+	rewards.currency = 0
+	rewards.exp = 0
+
+	if rewardList ~= nil then
+		for k,v in pairs(rewardList) do
+			if v.id == _M.AdventureConstData[10] or v[1] == _M.AdventureConstData[10] then 		-- 积分
+				rewards.point = (v.count or v[2])
+			elseif v.id == _M.AdventureConstData[11] or v[1] == _M.AdventureConstData[11] then	-- 商会经验
+				rewards.exp = (v.count or v[2])
+			else
+				if v.id == _M.AdventureConstData[7] or v[1] == _M.AdventureConstData[7] then	-- 奇遇币
+					rewards.currency = (v.count or v[2])
+				end
+				rewards.items[#rewards.items + 1] = v
+			end
+		end
 	end
+
+	return rewards
+end
+
+-- isBossBattle是否是商会boss
+function _M.OpenBattleView(addExp, isBossBattle, blood, bossFullBlood, bossImg, bossTab, bossBg, startCallBack)
+	local csvBattleTab = Csv.BattleIcon[bossTab]
+	local csvBattleScene = Csv.BattleIcon[bossBg]
+	WindowMgr.Create("UBattleBossNew", {bossBlood = blood, bossFullBlood = bossFullBlood, bossImg = bossImg, bossTab = csvBattleTab.str, bossBg = csvBattleScene.str},
+		function()
+			if startCallBack ~= nil then startCallBack() end
+		end,
+		function(data,param)
+			if not isBossBattle and (data.result == nil or data.result == false) then
+				WindowMgr.Create("UAdventureBattleFail", function( ... )
+					WindowMgr.Destroy("UBattleBossNew")
+				end)
+			else
+				WindowMgr.Create("UAdventureBattleWin", addExp, function( ... )
+					WindowMgr.Destroy("UBattleBossNew")
+				end)
+			end
+		end
+	)
 end
 
 function _M.GetFuturesData()

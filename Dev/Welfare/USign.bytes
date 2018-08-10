@@ -30,19 +30,8 @@ function _P.ShowSignItems(self)
 	local signData = Csv.Sign
 
 	local itemTab = {}
-	local hang = math.floor(signDay/3)
-	if signDay%3 >0 then
-		hang = hang +1
-	end
-	local min = 1
-	local max = 9
-	if hang > 2 then
-		min = (hang - 1)*3 -2
-		max = (hang + 1)*3
-	end
-	
 	for k,v in pairs(signData) do
-		if k >= min and k<= max then
+		if k >= signDay-7 and k<= signDay+7 then
 			local item = _P.CreatSignItem(self,content,v)
 			itemTab[k] = item
 		end
@@ -61,30 +50,24 @@ function _P.MoveToSelectItem(self)
 	local scrollView =  self.mScrollView
 
 	local SHeight = scrollView.SizeDelta.y --视图高度
+	local contentPOSY = content.LocalPosition.y 
+
 	local itemID = MWelfare.SignDay
 	for k,v in pairs(ItemTab) do
 		if k == itemID then
-			local itemPosY = v.SelfRect.LocalPosition.y
-			local itemSizeY = v.SelfRect.SizeDelta.y
-			local moveTo = -itemPosY
-			if moveTo >= content.SizeDelta.y-itemSizeY then
-				moveTo = content.SizeDelta.y-SHeight
+			local moudleRect = v.SelfRect
+			local itemPosY = moudleRect.LocalPosition.y
+			local itemSizeY = moudleRect.SizeDelta.y
+
+			local moveTo = -(itemPosY+SHeight/2)
+			if moveTo < 0 then
+				moveTo = 0
+			elseif moveTo >= SHeight+itemSizeY/2 then
+				moveTo = SHeight+itemSizeY/2
 			end
-			content.LocalPosition = Vector2(content.LocalPosition.x,moveTo)
-
-			-- local moudleRect = v.SelfRect
-			-- local itemPosY = moudleRect.LocalPosition.y
-			-- local itemSizeY = moudleRect.SizeDelta.y
-
-			-- local moveTo = -(itemPosY+SHeight/2)
-			-- if moveTo < 0 then
-			-- 	moveTo = 0
-			-- elseif moveTo >= SHeight+itemSizeY/2 then
-			-- 	moveTo = SHeight+itemSizeY/2
-			-- end
 			
-			-- content.LocalPosition = Vector2(content.LocalPosition.x,moveTo)
-			-- print("------------itemPosY:", itemPosY, " SHeight:", SHeight, " moveTo:", -(itemPosY+SHeight/2), " itemSizeY:", itemSizeY, " SHeight+itemSizeY/2:", SHeight+itemSizeY/2, moveTo)
+			content.LocalPosition = Vector2(content.LocalPosition.x,moveTo)
+			
 		end
 	end
 end
@@ -95,7 +78,7 @@ function _P.CreatSignItem(self,parent,data)
 	moudleRect.SpriteName = "fl_027"
 	
 	local bg = moudle.SelfRect
-	-- local rewardRect = moudle:Get("rewardRect")
+	local rewardRect = moudle:Get("rewardRect")
 	local dayText = moudle:Get("DayText")
 	local dayLeftText = moudle:Get("leftText")
 	local dayRightText = moudle:Get("rightText")
@@ -115,7 +98,7 @@ function _P.CreatSignItem(self,parent,data)
 	bg.SpriteName = "fl_065"
 
 	if data.id == MWelfare.SignDay then
-			-- rewardRect.Activity = true
+			rewardRect.Activity = true
 			getBtn.Activity = true
 			getBtn.RaycastTarget = true
 			bg.SpriteName = "fl_065"
@@ -124,20 +107,20 @@ function _P.CreatSignItem(self,parent,data)
 
 		if MWelfare.isSign == true then
 			getImg.Activity = true
-			-- rewardRect.Activity = false
+			rewardRect.Activity = false
 			getBtn.Activity = false
 			dark.Activity = true
 		end
 	else
 		if data.id > MWelfare.SignDay then
-			-- rewardRect.Activity = true
+			rewardRect.Activity = true
 			dark.Activity = false
 
 			getBtn.Activity = true
 			getBtn.RaycastTarget = false
 			getBtn.IsGray = true
 		elseif data.id < MWelfare.SignDay then
-			-- rewardRect.Activity = false
+			rewardRect.Activity = false
 			dark.Activity = true
 			getImg.Activity = true
 			getBtn.Activity = false
@@ -187,24 +170,42 @@ function _P.CreatSignItem(self,parent,data)
 		end
 	end
 
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("fl_065", "Welfare"),
+												49, 52,
+												function (sp)
+													if moudle then
+														local node = moudle:Get("iOSItemBg")
+														if node and sp then
+															node.Sprite = sp
+															node.Activity = true
+														end
+													end
+												end, Vector4(24, 18, 24, 18))
+	end
+
 	return moudle
 end
 
 function _M:RefreshSign(data)
 	if data.success == true then
+
 		local signDay = MWelfare.SignDay
+		
 		local moudle = self.mItemTab[signDay]
+
+		
 		if moudle ~= nil then
-			local getImg = moudle:Get("getImg")
-			-- local rewardRect = moudle:Get("rewardRect")
+			--local getImg = moudle:Get("getImg")
+			local rewardRect = moudle:Get("rewardRect")
 			local dark = moudle:Get("dark")
 			local getBtn = moudle:Get("C_Btn_a")
 			SoundMgr.Play(10004)
 			CCommon.CreateEffect(moudle.SelfRect,EFFECTID,Vector2(261,-0.1))
 			moudle.SelfRect:AddOnTime(function(...)
 				if MWelfare.isSign == true then
-					getImg.Activity = true
-					-- rewardRect.Activity = false
+					--getImg.Activity = true
+					rewardRect.Activity = false
 					getBtn.Activity = false
 					dark.Activity = true
 
@@ -212,10 +213,10 @@ function _M:RefreshSign(data)
 				end
 			end,nil,0.1)
 
-			-- for i = 1,2,1 do
-			-- 	local itemLight = moudle:Get("light_"..i)
-			-- 	itemLight.Activity = false
-			-- end
+			for i = 1,2,1 do
+				local itemLight = moudle:Get("light_"..i)
+				itemLight.Activity = false
+			end
 		end
 	end
 end

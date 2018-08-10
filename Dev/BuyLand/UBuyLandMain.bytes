@@ -17,6 +17,7 @@ local MBuyLand = JRequire "Dev.BuyLand.MBuyLand"
 ----------------------常量定义--------------------------
 local MAX_BATTLE_COUNT = 3
 local LEVEL_UP_EFFECT_ID = 10006
+local LEVEL_UP_EFFECT_ID_2 = 10177
 local DefaultNoReward = "ty_023" --默认无奖励底图
 local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
 local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
@@ -55,11 +56,12 @@ function _M:OnCreate()
 
 	--玩家头像
 	self.RoleIcon = moudle:Get("RoleIcon")
-	local RoleLevelUp = moudle:Get("RoleLevelUp")
 	--注册小红点
-	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp"), Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp2"), Define.SysId.Player, 1)
 	--可以升级特效
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	CCommon.CreateEffect(moudle:Get("ActorPanel2"), LEVEL_UP_EFFECT_ID_2)
 	--点击头像
 	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -155,26 +157,6 @@ function _M:OnCreate()
 	local curBattleId = MBuyLand.GetNextID()
 	if maxLvl >= curBattleId then
 		CBuyLand.CInit()
-	end
-
-	local vip = MPlayer.GetVip()
-	local csvVip = Csv.Vip[vip]
-	if csvVip ~= nil then
-		local imgBord = moudle:Get("VipBox")
-		if csvVip.imgBord ~= nil then
-			imgBord.Activity = true
-			imgBord.SpriteName = csvVip.imgBord
-		else
-			imgBord.Activity = false
-		end
-
-		local imgNum = moudle:Get("VipNum")
-		if csvVip.icon ~= nil then
-			imgNum.Activity = true
-			imgNum.SpriteName = csvVip.icon
-		else
-			imgNum.Activity = false
-		end
 	end
 end
 
@@ -313,9 +295,9 @@ function _P.DoRefreshLandInfo(self)
 							local csvGirl = Csv.Girl[v.id]
 							if csvGirl ~= nil then
 								local idesc = Csv.Text("buyland_main_girldesc",{name = csvGirl.name, num = v.value})
-								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {girl = true, name = csvGirl.name, desc = idesc, icon = csvGirl.yuanicon, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {name = csvGirl.name, desc = idesc, icon = csvGirl.icon, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
 								end
 								numAdd = numAdd+1
 							end
@@ -325,9 +307,9 @@ function _P.DoRefreshLandInfo(self)
 								local lnum = v.value
 								local textStr = (v.type == 2 and "buyland_main_staffdesc") or "buyland_main_staffdesc2"
 								local idesc = Csv.Text(textStr,{name = staffConf.name, num = lnum})
-								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset4, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
+								local rewardItem, effectMoudle = CCommon.CreateItem(content, 1, CCommon.ShowItemTips, {staff = true, name = staffConf.name, desc = idesc, icon = staffConf.asset, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
 								end
 								numAdd = numAdd + 1
 							end
@@ -342,16 +324,16 @@ function _P.DoRefreshLandInfo(self)
 							if v ~= nil then
 								local rewardItem, effectMoudle = CCommon.CreateItem(content, v.id, CCommon.ShowItemTips, {num = v.count, moudleName = "M_Common_Item_70_55"}, Define.SysId.BuyLand)
 								if effectMoudle ~= nil then
-									effectMoudle.SelfRect.SizeDelta = Vector2(90, 90)
+									effectMoudle.SelfRect.SizeDelta = Vector2(105, 105)
 								end
 							else
 								local rewardItem = CCommon.CreateItem(content, 1, nil, {moudleName = "M_Common_Item_70_55"})
-								rewardItem:Get("color").SpriteName = DefaultNoReward
+								rewardItem.SelfRect.SpriteName = DefaultNoReward
 								rewardItem:Get("Icon").Activity = false
 							end
 						else
 							local rewardItem = CCommon.CreateItem(content, 1, nil, {moudleName = "M_Common_Item_70_55"})
-							rewardItem:Get("color").SpriteName = DefaultNoReward
+							rewardItem.SelfRect.SpriteName = DefaultNoReward
 							rewardItem:Get("Icon").Activity = false
 						end
 					end
@@ -474,7 +456,7 @@ function _R.OnWinRefreshLandInfo(self)
 end
 
 function _P.RefreshAvatar(self)
-	self.RoleIcon.SpriteName = MPlayer.GetSHeadIcon()
+	self.RoleIcon.SpriteName = MPlayer.GetHeadIcon()
 end
 
 function _P.RefreshAttr(self)

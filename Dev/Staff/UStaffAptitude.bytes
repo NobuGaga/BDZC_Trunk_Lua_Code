@@ -4,7 +4,6 @@ local MStaff = JRequire "Dev.Staff.MStaff"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class()
 local _P = {}
-local MAXBOOKSTAR = Csv.Const(Define.Const.StaffMax)[5]
 
 --界面构建
 function _M:ctor(parent,id)
@@ -50,12 +49,6 @@ function _M:ctor(parent,id)
 		local TextDetailData = bookMoudle:Get("DetailD")
 		TextDetailData.Text = Csv.BookLv[v[2]*1000 + bookLevel].aptitude
 
-		for i=1,MAXBOOKSTAR do
-			local star = bookMoudle:Get("star"..i)
-			if star ~= nil then
-				star.gameObject:SetActive(false)
-			end
-		end
 		for i=1,v[2] do
 			local star = bookMoudle:Get("star"..i)
 			star.gameObject:SetActive(true)

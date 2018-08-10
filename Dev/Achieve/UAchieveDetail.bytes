@@ -5,15 +5,15 @@ local JGuiManager = CS.JGui.JGuiManager
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
--- local IMG_SELECT = "cj_027"
--- local IMG_NORMAL = "cj_027"
+local IMG_SELECT = "cj_027"
+local IMG_NORMAL = "cj_027"
 local EFFECTID = 24
 
 local itemWidth = 676
 local itemHeight = 143
-local space = 4
+local space = 10
 local pageNum = 10
-local pageHeight = 868
+local pageHeight = 690
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -71,7 +71,7 @@ function _P.ScrollCallBack(self,index,value,moudle)
 	local desc = csvAchievement.descIn
 	local TextTask = moudle:Get("taskText")
 	local TextReward = moudle:Get("reward")
-	-- local ImgBack = moudle:Get("back")
+	local ImgBack = moudle:Get("back")
 	local TextIng = moudle:Get("Btn_1")
 	TextIng.Text = Csv.Text("achieve_jinxingzhong")
 	local ImgGeted = moudle:Get("Btn_2")
@@ -79,15 +79,15 @@ function _P.ScrollCallBack(self,index,value,moudle)
 	local TextNoFinish = moudle:Get("Text")
 	TextNoFinish.Text = Csv.Text("achieve_nofinish")
 	moudle:Get("C_text").Text = Csv.Text("quest_get")
-	-- ImgBack.SpriteName = IMG_SELECT
+	ImgBack.SpriteName = IMG_SELECT
 	ImgBtn.Activity = false
 	TextNoFinish.Activity = false
 	ImgGeted.Activity = false
 	TextIng.Activity = false
 	if data.pro <= 0 then
 		ImgGeted.Activity = true
-		_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
-		-- ImgBack.SpriteName = IMG_NORMAL
+		_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+		ImgBack.SpriteName = IMG_NORMAL
 	else
 		if data.pro >= value.id then
 			if data.pro == value.id then
@@ -99,14 +99,14 @@ function _P.ScrollCallBack(self,index,value,moudle)
 					_P.SetTask(TextTask,2,value.index,csvAchievement.type,desc,data.val,value.max)
 				end
 				self.mNowPro = data.pro
-				-- ImgBack.SpriteName = IMG_SELECT
+				ImgBack.SpriteName = IMG_SELECT
 			else
 				ImgGeted.Activity = true
-				_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
-				-- ImgBack.SpriteName = IMG_NORMAL
+				_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+				ImgBack.SpriteName = IMG_NORMAL
 			end
 		else
-			-- ImgBack.SpriteName = IMG_SELECT
+			ImgBack.SpriteName = IMG_SELECT
 			--ImgBack.IsGray = true
 			TextNoFinish.Activity = true
 			if data.val >= value.max then
@@ -211,7 +211,7 @@ function _R.GetAward(self,data)
 		end
 		if lastMoudle ~= nil then
 			lastMoudle:Get("C_Btn_b").Activity = false
-			local effectMoudle = CCommon.CreateEffect(lastMoudle:Get("back"),EFFECTID,Vector2(201,-15),function()
+			local effectMoudle = CCommon.CreateEffect(lastMoudle:Get("back"),EFFECTID,Vector2(237,0),function()
 				lastMoudle:Get("Btn_2").Activity = true
 			end,{M_Effect_Achieve_Get = "fl_030"})
 			effectMoudle.SelfRect.SizeDelta = Vector2(138,138)
@@ -220,16 +220,13 @@ function _R.GetAward(self,data)
 		end
 		if nowMoudle ~= nil then
 			nowMoudle:Get("Text").Activity = false
-			local csvAchieveLv = Csv.AchieveLevel[data.pro]
-			local need = csvAchieveLv.value
+			local need = Csv.AchieveLevel[data.pro].value
 			if data.val >= need then
 				nowMoudle:Get("C_Btn_b").Activity = true
 			else
 				nowMoudle:Get("Btn_1").Activity = true
-				local csvAchievement = Csv.Achievement[self.mQuestID]
-				_P.SetTask(nowMoudle:Get("taskText"),2,csvAchieveLv.index,csvAchievement.type,csvAchievement.descIn,MAchieve.AchieveTable[self.mQuestID].val,csvAchieveLv.value)
 			end
-			-- nowMoudle:Get("back").SpriteName = IMG_SELECT
+			nowMoudle:Get("back").SpriteName = IMG_SELECT
 			--nowMoudle:Get("back").IsGray = false
 		end
 		self.mNowPro = data.pro

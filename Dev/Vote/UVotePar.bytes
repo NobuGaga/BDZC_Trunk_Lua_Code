@@ -19,8 +19,6 @@ local _R = {}
 
 local DefaultBody = "body_007"
 local DefaultHead = "head_004"
-local DefaultBodyID = 2
-local DefaultHeadID = 1001
 
 local ColorBlack = Color(0, 0, 0, 1)
 local ColorWhite = Color(1, 1, 1, 1)
@@ -241,48 +239,16 @@ function _P.RefreshBody(self,index)
 			local head = moudle:Get("PosHead")
 			local body = moudle:Get("PosBody")
 			moudle:Get("BG").SpriteName = csvTitle.background
-			if self.bodySpine ~= nil then
-				self.bodySpine:Destroy()
-				self.bodySpine = nil
-			end
-			if self.headSpine ~= nil then
-				self.headSpine:Destroy()
-				self.headSpine = nil
-			end
 			if data.playerID ~= nil then
-				local bodySprite, bodyPrefab = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
-				local headSprite, heaPrefab = MParliament.GetBodyByIDSex(data.head, data.sex)
-				
-				if bodyPrefab and bodyPrefab ~= 0 and heaPrefab and heaPrefab ~= 0 then
-					self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("bosySpine"), bodyPrefab, heaPrefab, CCommon.ActorFieldMap.election_body)
-					body.SpriteName = ""
-					head.SpriteName = ""
-				else
-					body.SpriteName = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
-					body.Color = ColorWhite
-					head.SpriteName = MPlayer.GetOtherHeadAsset(data.head,data.sex)
-					head.Color = ColorWhite
-				end
+				head.SpriteName = MPlayer.GetOtherHeadAsset(data.head,data.sex)
+				head.Color = ColorWhite
+				body.SpriteName = MParliament.GetBodyByTitleID(csvVote.titleID, data.sex)
+				body.Color = ColorWhite
 			else
-				body.SpriteName = ""
-				head.SpriteName = ""
-
-				local bodySprite, bodyPrefab = MParliament.GetBodyByIDSex(DefaultBodyID, data.sex)
-				local headSprite, heaPrefab = MParliament.GetBodyByIDSex(DefaultHeadID, data.sex)
-
-				if bodyPrefab and bodyPrefab ~= 0 and heaPrefab and heaPrefab ~= 0 then
-					self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("bosySpine"), bodyPrefab, heaPrefab, CCommon.ActorFieldMap.election_body,
-						function(body, head)
-							if body then
-								body.SkeletonColor = ColorBlack
-								body:SkeletonGetGraphic().freeze = true
-							end
-							if head then
-								head.SkeletonColor = ColorBlack
-								head:SkeletonGetGraphic().freeze = true
-							end
-						end)
-				end
+				head.SpriteName = DefaultHead
+				head.Color = ColorBlack
+				body.SpriteName = DefaultBody
+				body.Color = ColorBlack
 			end
 
 			local nameBG = moudle:Get("NameBox")

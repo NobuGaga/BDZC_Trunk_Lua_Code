@@ -15,15 +15,9 @@ local _M = Class(WindowBase)
 local _P = {}
 local CostItemID = tonumber(Csv.Const(Define.Const.CompanyManageCostID))
 local EFFECT_ID = 18
-local BtnStr1 = "HX_ty_024_1"
-local BtnStr2 = "ty_024"
+local BtnStr1 = "ty_024_5"
+local BtnStr2 = "ty_024_1"
 local GainItemSoundId = {11000, 11000, 11000}
-
-local COLOR_B = Color(93/255,153/255,255/255,1)
-local COLOR_R = Color(255/255,93/255,140/255,1)
-
---美女图片名或者动画ID
-local GirlAssetOrSpineID = Csv.Const(20152)
 
 local _R = {}
 --事件派发
@@ -31,6 +25,30 @@ function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
 	if fun ~= nil then 
 		fun(self, ...)
+	end
+end
+
+function _R.RefreshScaleExp(self)
+	local moudle = self.mMoudle
+	local exp = MCompany.ManageExp
+	local maxExp = Csv.Const(Define.Const.Manage_Max_Exp)[1]
+	if exp ~= nil and maxExp ~= nil then
+		local fill = math.min(exp/maxExp,1)
+		moudle:Get("Fill").FillAmount = fill
+		moudle:Get("FillNum").Text = math.min(exp,maxExp)
+	end
+end
+
+function _R.RefreshItemData(self)
+	local tableItems = self.mTableItems
+	if tableItems ~= nil then
+		for k,v in pairs(tableItems) do
+			local data = MCompany.ManageTable[k]
+			if data ~= nil and v.moudle ~= nil then
+				local moudle = v.moudle
+				_P.SetManageData(self,moudle,data)
+			end
+		end
 	end
 end
 
@@ -58,8 +76,6 @@ function _M:OnCreate(...)
 	local TextMoney = moudle:Get("text5")
 	TextMoney.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Soldier))
 
-	moudle:Get("BtnText2").Text = Csv.Text("company_one")
-
 	self.mAssetNum = {}
 	self.mAssetNum[Define.AssetsType.Coin] =  MBag.GetItemNum(Define.AssetsType.Coin)
 	self.mAssetNum[Define.AssetsType.Food] =  MBag.GetItemNum(Define.AssetsType.Food)
@@ -78,7 +94,8 @@ function _M:OnCreate(...)
 	local BtnOne = moudle:Get("Btn")
 	local TextTips = moudle:Get("TextTips")
 	TextTips.Activity = true
-	TextTips.Text = Csv.Text("company_PA19")
+	TextTips.Text = Csv.Text("company_manageTip1")
+	moudle:Get("SliderName").Text = Csv.Text("company_manageTip2")
 	if MPlayer.GetLevel() >= oneKeyLevel or MPlayer.GetVip() >= oneKeyVip then
 		BtnOne.IsGray = false
 	else
@@ -102,13 +119,9 @@ function _M:OnCreate(...)
 		self:Destroy()
 	end, nil, 1.2)
 
-	moudle:Get("C_Text").Text = Csv.Text("company_jingying")
-
-	_P.UpdateTime(self)
-
 	local helpBtn = moudle:Get("C_Full_Help_Btn")
 	if helpBtn ~= nil then
-		if self._SysId ~= nil and Csv.Rule[self._SysId] ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
 			helpBtn:AddOnButton(function ( ... )
 				SoundMgr.Play(10001)
 				WindowMgr.Create("URuleTips", self._SysId)
@@ -118,14 +131,10 @@ function _M:OnCreate(...)
 		end
 	end
 
-	local girlNode = moudle:Get("bigGirlSpine")
-	local csvEffect = Csv.Effect[GirlAssetOrSpineID]
-	if csvEffect and csvEffect.prefab then
-		CCommon.CreateActor(girlNode, GirlAssetOrSpineID, CCommon.ActorFieldMap.company_girl)
-		girlNode.SpriteName = ""
-	else
-		girlNode.SpriteName = GirlAssetOrSpineID
-	end
+	moudle:Get("C_Text").Text = Csv.Text("company_jingying")
+
+	_P.UpdateTime(self)
+	_R.RefreshScaleExp(self)
 end
 
 function _P.OnClickOne()
@@ -159,7 +168,7 @@ function _P.SetManageData(self,moudle,data)
 			local times = manage.times
 			if times > 0 then
 				if csvManage.costType ~= nil then
-					local cost = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+					local isLimit,cost = MCompany.CheckIsLimit(math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5))
 					local have = MBag.GetItemNum(csvManage.costType)
 					local itemName = Csv.Item[csvManage.costType].name
 					if cost > have then
@@ -186,17 +195,30 @@ function _P.SetManageData(self,moudle,data)
 	moudle:Get("BG_1").SpriteName = csvManage.bgIcon
 	moudle:Get("title_text_1").Text = Csv.Text("company_manageT",{name = csvManage.name})
 	moudle:Get("knowledge_1").Text = Csv.Text("company_manageDsp",{name = Csv.Text("Girl_skill_type"..csvManage.dependType)})
-	moudle:Get("earnings_1").Text = Csv.Text("company_manageYuji")
 	local TextCost = moudle:Get("consume")
 	if csvManage.costType ~= nil then
 		TextCost.gameObject:SetActive(true)
 		TextCost.Text = Csv.Text("company_manageCos",{name = Csv.Item[csvManage.costType].name})
-		moudle:Get("text_11").Text = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+		local costNum = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+		local isLimit,resultNum = MCompany.CheckIsLimit(costNum)
+		if isLimit then
+			moudle:Get("text_11").Text = resultNum
+		else
+			moudle:Get("text_11").Text = costNum
+		end
 	else
 		TextCost.gameObject:SetActive(false)
 	end
 	moudle:Get("text_9").Text = MPlayer.GetAttr(csvManage.dependType)
-	moudle:Get("text_10").Text = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+	local getNum = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+	local isLimit,resultNum = MCompany.CheckIsLimit(getNum)
+	if isLimit then
+		moudle:Get("earnings_1").Text = Csv.Text("company_manageYujiR")
+		moudle:Get("text_10").Text = Csv.Text("company_manageRedNum",{num = resultNum})
+	else
+		moudle:Get("earnings_1").Text = Csv.Text("company_manageYuji")
+		moudle:Get("text_10").Text = getNum
+	end
 	local manage = MCompany.ManageTable[data.id]
 	if manage ~= nil then
 		local times = manage.times
@@ -208,10 +230,8 @@ function _P.SetManageData(self,moudle,data)
 	end
 	if data.times > 0 then
 		moudle:Get("text_8").Text = Csv.Text("company_exp",{num = data.times,max = maxTimes})
-		moudle:Get("text_8").Color = COLOR_B
 	else
 		moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time)
-		moudle:Get("text_8").Color = COLOR_R
 	end
 end
 
@@ -288,7 +308,7 @@ function _P.CheckPlaying(self,data)
 				self.mAssetNum[itemid] = nowNum
 			end,nil,0.5)
 			local csvItem = Csv.Item[itemid]
-			CCommon.ShowFlyTextManage(self._RootNode,itemcount,1,csvItem.miniIcon,Vector2(35,35),TextUpdate.RootCanvasPos)
+			CCommon.ShowFlyText(self._RootNode,itemcount,1,csvItem.miniIcon,Vector2(35,35),TextUpdate.RootCanvasPos)
 		end
 	end
 end
@@ -323,14 +343,12 @@ function _P.UpdateTime(self)
 					local maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[k]
 					if times <= 0 then
 						moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time - HeartBeat.ServSecond())
-						moudle:Get("text_8").Color = COLOR_R
 						moudle:Get("C_text").Text = Csv.Text("company_revert")
-						moudle:Get("btn_new").SpriteName = BtnStr1
+						moudle:Get("Btn").SpriteName = BtnStr1
 					else
 						moudle:Get("text_8").Text = Csv.Text("company_exp",{num = data.times,max = maxTimes})
-						moudle:Get("text_8").Color = COLOR_B
 						moudle:Get("C_text").Text = Csv.Text("company_get"..k)
-						moudle:Get("btn_new").SpriteName = BtnStr2
+						moudle:Get("Btn").SpriteName = BtnStr2
 					end
 				end
 			end
@@ -354,7 +372,7 @@ function _P.PlayEffect(self,getid,moudleid)
 	for k,v in pairs(self.EffectIndex) do
 		if k == getid then
 			for i=1,30 do
-				local x = math.random(-200,200)
+				local x = math.random(-250,250)
 				local y = math.random(-65,65)
 				local delay = math.random(5,20)/100
 				CCommon.CreateEffect(trans, v, Vector2(x,y), nil, nil, nil, nil, delay)

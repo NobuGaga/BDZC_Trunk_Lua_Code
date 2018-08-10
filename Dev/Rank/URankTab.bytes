@@ -2,7 +2,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local URankWealth = JRequire "Dev.Rank.URankWealth"
 local URankCheckPoint = JRequire "Dev.Rank.URankCheckPoint"
 local URankClose = JRequire "Dev.Rank.URankClose"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local MMain = JRequire "Dev.Main.MMain"
 local MRank = JRequire "Dev.Rank.MRank"
 local CRank = JRequire "Dev.Rank.CRank"
@@ -40,26 +40,24 @@ function _P.SetBottomData(self,funcId)
 	local rankid = RankID[funcId]
 	local rankinfo = MRank.RankTable[rankid]
 	local moudle = self.mMoudle
+	local TextTitle = moudle:Get("text4")
 	local TextValue = moudle:Get("text4_1")
-	local TextValueBattle = moudle:Get("text4_2")
-	local heart = moudle:Get("heart")
-	TextValue.Text = ""
-	TextValueBattle.Text = ""
-	heart.Activity = false
 	if rankinfo ~= nil then
 		if rankinfo.rankid == Define.RankType.Power then
+			TextTitle.Text = Csv.Text("rank_wealthT")
 			TextValue.Text = rankinfo.selfvalue
 		elseif rankinfo.rankid == Define.RankType.Battle then
+			TextTitle.Text = Csv.Text("rank_cpT")
 			local csvBattle = Csv.Battle[rankinfo.selfvalue]
 			if csvBattle ~= nil then
 				local csvPart = Csv.Part[csvBattle.part]
 				if csvPart ~= nil then
-					TextValueBattle.Text = Csv.Text("battle_title",{index = csvPart.id,name = csvPart.name..MRank.GetNumText(csvBattle.chapter%10)})
+					TextValue.Text = Csv.Text("battle_title",{index = csvPart.id,name = csvPart.name..MRank.GetNumText(csvBattle.chapter%10)})
 				end
 			end
 		elseif rankinfo.rankid == Define.RankType.Intimacy then
+			TextTitle.Text = Csv.Text("rank_closeT")
 			TextValue.Text = rankinfo.selfvalue
-			heart.Activity = true
 		end
 		moudle:Get("text2_1").Text = rankinfo.selfrank
 		_P.ChangeShipState(self,rankinfo.isworshiped)
@@ -101,8 +99,10 @@ function _M:OnCreate(chooseFuncId)
 	
 	moudle:Get("text").Text = Csv.Text("rank_tips")
 	moudle:Get("C_text").Text = Csv.Text("rank_btn")
+	moudle:Get("text1").Text = Csv.Text("rank_nameT")
 	moudle:Get("text2").Text = Csv.Text("rank_rankT")
-	
+	moudle:Get("text3").Text = Csv.Text("rank_modeT")
+
 	moudle:Get("text1_1").Text = MPlayer.GetName()
 	moudle:Get("text3_1").Text = Csv.Company[MPlayer.GetLevel()].name
 
@@ -117,9 +117,11 @@ function _M:OnCreate(chooseFuncId)
 	local count = #funcs
 	if count > 0 then
 		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
 		local index = 0
 		for k,v in pairs(funcs) do
@@ -130,19 +132,6 @@ function _M:OnCreate(chooseFuncId)
 		end
 		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
-	end
-
-	moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
-	local vip = MPlayer.GetVip()
-	local csvVip = Csv.Vip[vip]
-	local imgKuang = moudle:Get("VipBox")
-	local imgNum = moudle:Get("VipNum")
-	if vip <= 0 then
-		imgKuang.Activity = false
-		imgNum.Activity = false
-	else
-		imgKuang.SpriteName = csvVip.imgBord
-		imgNum.SpriteName = csvVip.icon
 	end
 end
 

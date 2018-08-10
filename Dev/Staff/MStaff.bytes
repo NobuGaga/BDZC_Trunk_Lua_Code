@@ -1,4 +1,5 @@
 local MPlayer = JRequire "Dev.Player.MPlayer"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
 
 local _M = {}
 local _P = {}
@@ -49,6 +50,22 @@ _M.Color3Image =
 	[6] = "ls_024_5",
 	[7] = "ls_024_5",
 }
+
+function _M.GetStaffCount()
+	local count = 0
+	for k,v in pairs(_M.StaffTable) do
+		count = count + 1
+	end
+	return count
+end
+
+function _M.GetStaffMaxLv()
+	local level = 0
+	for k,v in pairs(_M.StaffTable) do
+		level = math.max(level, v.level)
+	end
+	return level
+end
 
 function _M.Clean( ... )
 	_M.SortType = 0
@@ -178,9 +195,7 @@ function _M.OnStaffNew(data)
 		staffTable[data.id] = {id = data.id,level = data.level,levelexp = data.levelexp,color = data.color,skillexp = data.skillexp,
 								bookexp = data.bookexp,book = bookTable,skill = skillTable,aureole = aureoleTable,originAttr = data.originAttr,
 								itemAttr = data.itemAttr,girlAttr = data.girlAttr,aureoleAttr = data.aureoleAttr,allAttr = data.allAttr,power = data.power,
-								name = _P.SetStaffName(data.id,data.name)}
-		
-		
+								name = _P.SetStaffName(data.id,data.name),link = data.link}
 	end
 end
 
@@ -231,6 +246,17 @@ function _M.OnStaffAddItem(data)
 	end
 end
 
+function _M.CheckLineUpRedpoint()
+	local LineUpList = MLineUp.LineUpList
+	local SeatNum = MLineUp.SeatNum
+	for i=1,SeatNum do
+		if LineUpList[i] == nil or LineUpList[i] <= 0 then
+			return true
+		end
+	end
+	return false
+end
+
 function _M.GetRedPointStaff()
 	local staffTable = _M.StaffTable
 	for k,v in pairs(staffTable) do
@@ -239,7 +265,7 @@ function _M.GetRedPointStaff()
 			return true
 		end
 	end
-	return false
+	return _M.CheckLineUpRedpoint()
 end
 
 function _M.GetRedPointState(staffid)

@@ -1,0 +1,223 @@
+-- 奇遇公司敌人界面（原后续事件）
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _R = {}
+local _P = {}
+
+local CONTINUE_TIME = Csv.Const(20162)[6]
+local GRAY = Color(0/255, 0/255, 0/255, 140/255)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(actId, data)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_List")
+	self.mModule = module
+	self.ActId = actId
+
+	module:Get("C_Text").Text = Csv.Text("adventure_gang_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local noneText = module:Get("NoneText")
+	noneText.Text = Csv.Text("club_info_none")
+	self.NoneText = noneText
+
+	_P.SetEnemyListData(self, data.commerBossList)
+end
+
+
+function _P.SetEnemyListData(self, commerBossList)
+	local content = self.mModule:Get("content")
+	content:DestroyChildren()
+
+	local listNum = 0
+	if commerBossList ~= nil and next(commerBossList) ~= nil then
+		self.NoneText.Activity = false
+		self.EnemyTables = {}
+		for k,v in pairs(commerBossList) do
+			local time = (v.bossTriTime or 0) + CONTINUE_TIME - HeartBeat.ServSecond()
+			if time > 0 then
+				local item = _P.CreateEnemyItem(self, content, v)
+				self.EnemyTables[v.taskIndex] = item
+				listNum = listNum + 1
+			end
+		end
+	end
+
+	self.NoneText.Activity = listNum == 0
+end
+
+
+function _P.CreateEnemyItem(self, itemGrid, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Adventure_List_Item", WindowType.UI, 1)
+	if itemModule ~= nil then
+		local taskConf = Csv.AdventureMainEvent[data.taskId]
+		if taskConf then
+			itemModule:Get("BossName").Text = taskConf.taskName
+			itemModule:Get("bsx").SpriteName = taskConf.taskIcon
+
+			local rewards = MActivity.AdventureRewardSplit(Csv.ItemGroup[taskConf.joinReward].rewards)
+			itemModule:Get("RewardText2").Text = rewards.exp
+
+			local fillAmount = data.curblood / data.totalBlood
+			itemModule:Get("BarText").Text = tostring(math.ceil(fillAmount * 100))..'%'
+			itemModule:Get("Bar").FillAmount = fillAmount
+
+			local levelConf = Csv.AdventureLevel[taskConf.level]
+			if levelConf then
+				itemModule:Get("Icon").SpriteName = levelConf.icon
+
+				local curStageMax = _P.GetCurStageTotalStar(self, levelConf.stage)
+				local maxStar = itemModule:Get("StarBg").CachedTran.childCount
+				for i=1,maxStar do
+					local curStarImg = itemModule:Get("Star" .. i)
+					if i <= levelConf.star then
+						curStarImg.Color = Color.white
+					else
+						curStarImg.Color = GRAY
+					end
+					curStarImg.Activity = i<= curStageMax
+				end
+			end
+		end
+
+		itemModule:Get("rewardTitle2").Text = Csv.Text("adventure_enemy_reward")
+		local battleBtn = itemModule:Get("BattleBtn")
+		battleBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+	
+			_P.OnEnterBattle(self, data, taskConf)
+		end, nil, 0.9)
+		_P.SetBattleBtnState(self, battleBtn, itemModule:Get("C_text_0"), data)
+
+		-- 倒计时、血条进度条
+		_P.SetTimeData(self, itemModule:Get("NumText"), battleBtn, data)
+		itemModule:Get("rewardTitle").Text = Csv.Text("adventure_enemy_start")
+		itemModule:Get("RewardText").Text = data.joinInfo[1].name
+		itemModule:Get("TimeText").Text = Csv.Text("welfare_yearCard_leftTime1")
+	end
+	return itemModule
+end
+
+
+function _P.SetTimeData(self, liveTimeText, battleBtn, data)
+	self.TimerTable = {}
+	_P.OnUpdateTime(self, liveTimeText, battleBtn, data)
+	if data.bossTriTime > 0 then
+		_P.ClearTimer(self, data.taskIndex)
+		self.TimerTable[data.taskIndex] = liveTimeText:AddOnUpdate(function()
+			_P.OnUpdateTime(self, liveTimeText, battleBtn, data)
+		end, nil, 1)
+	end
+end
+
+
+function _P.ClearTimer(self, taskIndex)
+	if self.TimerTable ~= nil and self.TimerTable[taskIndex] ~= nil then
+		self.TimerTable[taskIndex]:Destroy()
+		self.TimerTable[taskIndex] = nil
+	end
+end
+
+
+function _P.OnUpdateTime(self, liveTimeText, battleBtn, data, isFirst)
+	local time = (data.bossTriTime or 0) + CONTINUE_TIME - HeartBeat.ServSecond()
+	if data.bossTriTime ~= nil and time > 0 then
+		liveTimeText.Text = LuaUtil.GetTimeHMS(time)
+	else
+		liveTimeText.Text = "00:00:00"
+
+		_P.ClearTimer(self, data.taskIndex)
+		battleBtn.IsGray = true
+		battleBtn.RaycastTarget = false
+	end
+end
+
+
+function _P.SetBattleBtnState(self, battleBtn, battleBtnText, data)
+	local isMine = _P.CheckIsJoinThisBoss(data)
+	if data.bossTriTime <= 0 or isMine then
+		battleBtn.IsGray = true
+		battleBtn.RaycastTarget = false
+	else
+		battleBtn.IsGray = false
+		battleBtn.RaycastTarget = true
+	end
+
+	if isMine then
+		battleBtnText.Text = Csv.Text("adventure_joined")
+	else
+		battleBtnText.Text = Csv.Text("adventure_enemy_battle")
+	end
+end
+
+
+-- 是否是我参与的商会BOSS
+function _P.CheckIsJoinThisBoss(data)
+	local playerId = MPlayer.GetId()
+	if data ~= nil and data.joinInfo ~= nil then
+		for k,v in pairs(data.joinInfo) do
+			if v.playerId == playerId then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+
+-- 进入战斗
+function _P.OnEnterBattle(self, data, taskConf)
+	local isMine = _P.CheckIsJoinThisBoss(data)
+	if isMine then
+		CCommon.ShowError(Csv.Text("adventure_enemy_joined"))
+	else
+		MActivity.OpenBattleView(0, true, data.curblood, data.totalBlood, taskConf.taskIcon, taskConf.tableImg, taskConf.scene, function( ... )
+			CActivity.ReqAdvGangBossEnd(self.ActId, data.taskIndex)
+		end)
+	end
+end
+
+
+function _R.OnNewGangEnmeyPush(self, listData)
+	if self.TimerTable ~= nil then
+		for k,v in pairs(self.TimerTable) do
+			_P.ClearTimer(self, k)
+		end
+	end
+
+	_P.SetEnemyListData(self, listData)
+end
+
+
+function _P.GetCurStageTotalStar(self, stageId)
+	local totalNum = 0
+	for k,v in pairs(Csv.AdventureLevel) do
+		if v.stage == math.floor(stageId) then
+			totalNum = totalNum + 1
+		end
+	end
+
+	return totalNum
+end
+
+
+return _M

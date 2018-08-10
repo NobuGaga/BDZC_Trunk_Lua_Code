@@ -149,7 +149,7 @@ function _P.CreateItem(self, index, data)
 		local rechargeData = Csv.Recharge[item.data.productID]
 		if MActivity.RewardGetState.CanNotGet == item.data.getState then
 			self.selectBuyIndex = index
-			SDKMgr.ReqPay(rechargeData.id, rechargeData.cost, rechargeData.diamond, item.data.productName, self.actId, function(jsonStr)
+			SDKMgr.ReqPay(rechargeData.id, rechargeData.sdkProductId, rechargeData.cost, rechargeData.diamond, item.data.productName, self.actId, function(jsonStr)
 				local jsonTab = rapidjson.decode(jsonStr)
 				if nil ~= jsonTab and nil ~= jsonTab.stateCode then
 					_P.OnPayCallback(self, jsonTab.stateCode)
@@ -200,10 +200,10 @@ function _P.RefreshItem(self, index, data)
 		item.btnGet.Activity = not isGeted
 		item.getFlag.Activity = isGeted
 		if isCanGet then
-			item.btnGet.SpriteName = "HX_ty_024_1"
+			-- item.btnGet.SpriteName = "ty_024_5"
 			item.textBtnGet.Text = Csv.Text("quest_get")
 		elseif not isGeted then
-			item.btnGet.SpriteName = "ty_024"
+			-- item.btnGet.SpriteName = "ty_024"
 			item.textBtnGet.Text = Csv.Text("shop_buy")
 		end
 		if nil == self.firstNotGetIndex and MActivity.RewardGetState.CanNotGet == data.getState then

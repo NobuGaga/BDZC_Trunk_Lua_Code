@@ -84,7 +84,7 @@ function _P.InitRewardView(self, actId, rankType)
 							{text = self.proTextTips}), Csv.Text("timelimit_rank"), Csv.Text("rank_name"))
 		end)
 		self.moudle:Get("textBtnCheck").Text = Csv.Text("timelimit_rank")
-	end	
+	end
 end
 
 --刷新档位奖励列表
@@ -189,7 +189,6 @@ function _P.InitItem(self, index, data)
 		end
 	end
 
-	item.proTextT = itemMoudle:Get("textLimitT")
 	item.proText = itemMoudle:Get("textLimit")
 	item.maxPro = data.maxVal
 	item.getedPos = itemMoudle:Get("GetPos")
@@ -232,7 +231,7 @@ function _P.RefreshItemReward(self, index, item, data)
 		end
 		for i = 1, row * self.rewardColumnCount - num do
 			local rewardItem = CCommon.CreateItem(item.content, DefaultItemId)
-			rewardItem:Get("color").SpriteName = DefaultNoReward
+			rewardItem.SelfRect.SpriteName = DefaultNoReward
 			rewardItem:Get("Icon").Activity = false
 			num = num + 1
 			self.listRewardCache[index][num] = rewardItem
@@ -266,7 +265,6 @@ function _P.RefreshItemProState(self, item, isGeted)
 		csvTips = "timelimit_limit_not"
 	end
 	item.proText.Text = Csv.Text(csvTips, {text = self.proTextTips, cur = self.curPro, max = item.maxPro})
-	item.proTextT.Text = self.proTextTips
 
 	item.btnGet.Activity = not isGeted
 	item.getedPos.Activity = isGeted

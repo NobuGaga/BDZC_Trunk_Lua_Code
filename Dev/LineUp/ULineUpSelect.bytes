@@ -1,0 +1,125 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local CLineUp = JRequire "Dev.LineUp.CLineUp"
+local JGuiManager = CS.JGui.JGuiManager
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local Btn_Img1 = "ty_024_1"
+local Btn_Img2 = "ty_024_5"
+
+function _P.Sort(a, b)
+	local isUpA = MLineUp.CheckIsUp(a.id)
+	local isUpB = MLineUp.CheckIsUp(b.id)
+	if isUpA == isUpB then
+		if a.power == b.power then
+			return a.id < b.id
+		end
+		return a.power > b.power
+	else
+		if isUpA then
+			return false
+		else
+			return true
+		end
+	end
+end
+
+--界面构建
+function _M:OnCreate(index,staffid)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_ChooseStaff")
+	self.mMoudle = moudle
+	local csvItem = Csv.Item[itemid]
+	moudle:Get("btnClose"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("textTitle").Text = Csv.Text("battle_chooseTitle")
+	local staffTable = _P.GetSortStaffTable(MStaff.StaffTable,staffid)
+	local content = moudle:Get("content")
+	self.mTableItems = {}
+	for k,v in ipairs(staffTable) do
+		local staff = {}
+		local staffMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_ChooseStaff_Item")
+		local csvStaff = Csv.Personnel[v.id]
+		staffMoudle:Get("Grade").Text = Csv.Text("lineup_10")
+		staffMoudle:Get("combat").Text = Csv.Text("lineup_11")
+
+		staffMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[v.color]
+		staffMoudle:Get("head").SpriteName = csvStaff.asset
+		staffMoudle:Get("name").Text = csvStaff.name
+		staffMoudle:Get("number1").Text = v.level
+		staffMoudle:Get("number2").Text = v.power
+		local BtnUp = staffMoudle:Get("C_Btn_b")
+		BtnUp:AddOnButton(function()
+			SoundMgr.Play(10001)
+
+			if v.id == staffid then
+				--下阵
+				if MLineUp.GetLineStaffNum() > 1 then
+					_P.OnDownBtn(self,index)
+				else
+					CCommon.ShowError(Csv.Text("lineup_27"))
+				end
+			else
+				_P.OnClickBtn(self,v.id,index)
+			end
+		end,nil,0.9)
+
+		if MLineUp.CheckIsUp(v.id) then
+			BtnUp.SpriteName = Btn_Img2
+
+			if v.id == staffid then
+				staffMoudle:Get("C_text_0").Text = Csv.Text("lineup_26")
+			else
+				staffMoudle:Get("C_text_0").Text = Csv.Text("lineup_21")
+			end
+		else
+			BtnUp.SpriteName = Btn_Img1
+			staffMoudle:Get("C_text_0").Text = Csv.Text("lineup_9")
+		end
+
+		self.mTableItems[v.id] = {moudle = staffMoudle,data = v}
+	end
+
+	--选中员工放首位
+	local selectStaff = self.mTableItems[staffid]
+	if selectStaff ~= nil then
+		local selectMoudle = selectStaff.moudle
+		selectMoudle.SelfRect.CachedTran:SetSiblingIndex(0)
+	end
+end
+
+function _P.OnClickBtn(self,staffid,index)
+	WindowMgr.Call("ULineUp","SetNowSelect",index)
+	CLineUp.LineUpAddStaff(staffid,index)
+	self:Destroy()
+end
+
+function _P.OnDownBtn(self,index)
+	WindowMgr.Call("ULineUp","SetNoSelect")
+	CLineUp.LineUpDownStaff(index)
+	self:Destroy()
+end
+
+function _P.GetSortStaffTable(staffTable,staffid)
+	local sortTable = {}
+	
+	for k,v in pairs(staffTable) do
+		table.insert(sortTable,v)
+	end
+	table.sort(sortTable,function(a,b)return _P.Sort(a,b) end)
+	return sortTable
+end
+
+return _M

@@ -28,8 +28,8 @@ local PosItemTextName = "PositionText"
 --官职ItemText2名
 local PosItemTextName2 = "PositionText2"
 
-local DefaultBodyID = 2
-local DefaultHeadID = 1001
+local DefaultBody = "body_007"
+local DefaultHead = "head_004"
 local GetFlagImage = "ph_010"
 
 --官职列表移动动画时间
@@ -93,11 +93,6 @@ function _M:OnCreate()
 	_R.RefreshViewData(self, {list = MParliament.list, isGet = MParliament.isGet})
 
 	CParliament.GetGivenList()
-
-	self.moudle:Get("CompanySizeText").Text = Csv.Text("parliament_tip20")
-	self.moudle:Get("CompanySizeText3").Text = Csv.Text("parliament_tip21")
-	self.moudle:Get("WelfareText").Text = Csv.Text("parliament_tip22")
-	self.moudle:Get("WelfareText3").Text = Csv.Item[Define.AssetsType.Gold].name
 end
 
 --初始化殿堂背景
@@ -328,7 +323,6 @@ function _P.InitBody(self)
 			CPlayer.LookPlayerReq(posData.playerID)
 		end
 	end, nil, 1)
-	self.bosySpine = self.moudle:Get("bosySpine")
 	self.Head = self.moudle:Get("PosHead")
 
 	self.Words = self.moudle:Get("Words")
@@ -356,20 +350,17 @@ function _P.InitBody(self)
 	self.PosNameText = self.moudle:Get("PosNameText")
 	self.PlayerNameBox = self.moudle:Get("NameBox")
 	self.PlayerNameText = self.moudle:Get("NameText")
+	_P.SetDefaultBody(self)
 end
 
 --设置默认形象
 function _P.SetDefaultBody(self, dataIndex)
-	if self.bodySpine ~= nil then
-        self.bodySpine:Destroy()
-        self.bodySpine = nil
-	end
-	if self.headSpine ~= nil then
-        self.headSpine:Destroy()
-        self.headSpine = nil
-	end
-	_P.SetBodySpineOrSprite(self, nil, Define.Sex.Male, nil, nil, true)
+	self.Body.SpriteName = DefaultBody
+	self.Body.Color = ColorBlack
 	self.Body.RaycastTarget = false
+	
+	self.Head.SpriteName = DefaultHead
+	self.Head.Color = ColorBlack
 
 	self.Words.Activity = false
 	self.MsgButton.Activity = false
@@ -396,63 +387,21 @@ function _P.GetBodyDataToSet(self, index)
 	end
 end
 
---设置身体形象
-function _P.SetBodySpineOrSprite(self, titleID, sex, headID, bodyID, isDefault)
-	if self.bodySpine ~= nil then
-        self.bodySpine:Destroy()
-        self.bodySpine = nil
-	end
-	if self.headSpine ~= nil then
-        self.headSpine:Destroy()
-        self.headSpine = nil
-    end
-	local body, bodyPrefab
-	if isDefault then
-		body, bodyPrefab = MParliament.GetBodyByIDSex(DefaultBodyID, sex)
-	elseif bodyID then
-		body, bodyPrefab = MParliament.GetBodyByIDSex(bodyID, sex)
-	else
-		body, bodyPrefab = MParliament.GetBodyByTitleID(titleID, sex)
-	end
-	local head, heaPrefab
-	if isDefault then
-		head, heaPrefab = MParliament.GetBodyByIDSex(DefaultHeadID, sex)
-	else
-		head, heaPrefab = MParliament.GetBodyByIDSex(headID, sex)
-	end
-	if nil ~= bodyPrefab and 0 ~= bodyPrefab and nil ~= heaPrefab and 0 ~= heaPrefab then
-		self.bodySpine, self.headSpine = CCommon.CreateRole(self.bosySpine, bodyPrefab, heaPrefab, CCommon.ActorFieldMap.parliament_body,
-			function(body, head)
-				if isDefault then
-					if body then
-						body.SkeletonColor = ColorBlack
-						body:SkeletonGetGraphic().freeze = true
-					end
-					if head then
-						head.SkeletonColor = ColorBlack
-						head:SkeletonGetGraphic().freeze = true
-					end
-				end
-			end)
-		self.Body.SpriteName = ""
-		self.Head.SpriteName = ""
-	else
-		self.Body.SpriteName = body
-		self.Head.SpriteName = head
-		if isDefault then
-			self.Body.Color = ColorBlack
-			self.Head.Color = ColorBlack
-		else
-			self.Body.Color = ColorWhite
-			self.Head.Color = ColorWhite
-		end
-	end
-end
-
 --设置形象
 function _P.SetBody(self, dataIndex, posData)
-	_P.SetBodySpineOrSprite(self, posData.titleID, posData.sex, posData.head)
-	self.Body.RaycastTarget = true
+	local csvData = Csv.Title[dataIndex]
+	local body = MParliament.GetBodyByTitleID(posData.titleID, posData.sex)
+	if nil ~= body then
+		self.Body.SpriteName = body
+		self.Body.Color = ColorWhite
+		self.Body.RaycastTarget = true
+	end
+
+	local head = MParliament.GetBodyByIDSex(posData.head, posData.sex)
+	if nil ~= head then
+		self.Head.SpriteName = head
+		self.Head.Color = ColorWhite
+	end
 
 	local isSelf = MPlayer.GetId() == posData.playerID
 	if nil ~= posData.msg and "" ~= posData.msg then
@@ -465,7 +414,6 @@ function _P.SetBody(self, dataIndex, posData)
 	end
 
 	self.NoneText.Activity = false
-	local csvData = Csv.Title[dataIndex]
 	self.PosNameText.Text = csvData.name
 	self.PlayerNameBox.Activity = true
 	self.PlayerNameText.Text = posData.playerName
@@ -562,12 +510,12 @@ function _P.InitInfo(self)
 	self.moudle:Get("TipsText").Text = Csv.Text("parliament_join")
 	local csvSize = Csv.Company[MPlayer.GetLevel()]
 	if nil ~= csvSize then
-		self.moudle:Get("CompanySizeText2").Text = MPlayer.GetLevel()
+		self.moudle:Get("CompanySizeText").Text = Csv.Text("parliament_size", {size = csvSize.name})
 		local csvReward = Csv.ParliamentReward[csvSize.id]
 		if nil ~= csvReward and nil ~= csvReward.item then
 			self.baseRewards = csvReward.item
 			self.extraRewards = csvReward.extra
-			self.WelfareText = self.moudle:Get("WelfareText2")
+			self.WelfareText = self.moudle:Get("WelfareText")
 		end
 	end
 	self.moudle:Get("BtnMsgText").Text = Csv.Text("parliament_set_msg_button")
@@ -663,7 +611,7 @@ function _R.RefreshViewData(self, data)
 	if MParliament.GetSelfTitleState() then 
 		goldNum = goldNum + _P.GetGoldRewardNum(self, self.extraRewards) 
 	end
-	self.WelfareText.Text = goldNum
+	self.WelfareText.Text = Csv.Text("parliament_reward", {num = goldNum})
 	self.btnPower.Activity = true	--MParliament.GetSelfTitleState()
 	_P.SetButton(self, data.isGet)
 end

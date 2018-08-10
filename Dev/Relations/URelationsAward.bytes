@@ -32,17 +32,10 @@ function _M:OnCreate(...)
 	moudle:Get("text_Item").Text = Csv.Text("relations_point")
 	moudle:Get("Numtext").Text = Csv.Text("relations_addnum",{num = data.allpoint})
 
-	if data.mstaffinfo.staffid ~= nil and data.mstaffinfo.staffid ~= 0 then
-		local csvPersonnel = Csv.Personnel[data.mstaffinfo.staffid]
-		if csvPersonnel ~= nil and csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-			CCommon.CreateActor(moudle:Get("BSX"), csvPersonnel.prefab, CCommon.ActorFieldMap.lobby_end)
-			moudle:Get("BSX").SpriteName = ""
-		else
-			moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
-		end
-	else
-		moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
-	end
+	moudle:Get("text_Point").Text = Csv.Text("relations_shop_point2")
+	moudle:Get("PointNum").Text = Csv.Text("relations_addnum",{num = data.allshopPoint})
+
+	moudle:Get("BSX").SpriteName = Csv.Personnel[data.mstaffinfo.staffid].asset
 
 	moudle:Get("BtnText").Text = Csv.Text("relations_kua")
 	local TextTalk = moudle:Get("StaffText")

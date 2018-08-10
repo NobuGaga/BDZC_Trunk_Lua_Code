@@ -124,12 +124,12 @@ function _P.RefreshFunc(self, moudle)
 end
 
 function _P.NeedMoveToPos(self, btn)
-	local mapX = self.Map.SizeDelta.x -- * self.Map.LocalScale.x
+	local mapX = self.Map.SizeDelta.x * self.Map.LocalScale.x
 	local widthHalf = mapX / 2 - CS.JGui.JGuiManager.GuiRoot.Width / 2 - 2
 
 	local ret = Vector2.zero
 	local btnPos = btn.LocalPosition
-	-- btnPos.x = btnPos.x * self.Scale
+	btnPos.x = btnPos.x * self.Scale
 	ret.x = -btnPos.x
 	if ret.x > 0 then
 		if ret.x > widthHalf then
@@ -220,10 +220,10 @@ function _M:OnCreate()
 	local map = moudle:Get('content')
 	map.LocalPosition = InitVec
 	self.Map = map
-	-- map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
-	-- local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
-	-- self.Scale = scale
-	-- map.LocalScale = Vector3(scale, scale, 1)
+	map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+	local scale = CS.JGui.JGuiManager.GuiRoot.Height / MAP_HEIGHT
+	self.Scale = scale
+	map.LocalScale = Vector3(scale, scale, 1)
 	self.Btns = {}
 	self.BtnTweens = {}
 	self.Actors = {}
@@ -452,7 +452,7 @@ function _R.SetCompanyIcon(self)
 	local pointCar = MCar.CarRedPoint
 	local pointPatrol = MCompany.PatrolRedPoint
 	local pointMarry = MGirl.isNewCoupleRed
-	local pointAircraft = not MAircraft.IsStuding or MAircraft.IsAircraftHaveUnActivative()
+	local pointAircraft = MAircraft.IsHaveCompleted or (not MAircraft.IsStuding and MAircraft.StudyLeftTimes > 0) or MAircraft.IsAircraftHaveUnActivative()
 	if GameSetting.IsiOSCommit then
 		pointAircraft = false
 	end

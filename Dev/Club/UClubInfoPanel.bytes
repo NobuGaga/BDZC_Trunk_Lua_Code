@@ -5,24 +5,10 @@ local MClub = JRequire "Dev.Club.MClub"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local ScrollVertical = JRequire "Dev.Common.ScrollVertical"
 
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-
---按钮图片
-local _DefaultImg = "yth_023_2"
-local _LightImg = "yth_023"
-
---按钮图片大小
-local _DefaultImgSize = Vector2(178,57)
-local _LightImgSize = Vector2(178,70)
-
---字大小
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-
---字颜色
-local _DefaultFontColor = Color(1,1,1,1)
-local _LightFontColor = Color(135/255,135/255,168/255,1)
+local BLACKCOLOR = Color(0, 0, 0, 1)
+local WHITECOLOR = Color(1, 1, 1, 1)
+local YELLOWCOLOR = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local BLUECOLOR = Color(2 / 255, 194 / 255, 1, 1)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -248,15 +234,10 @@ end
 
 function _P.OnSetPageText(self)
 	local isMine =(self.curSelectPage == MClub.InfoEnum.Mine)
-	self.mineText.Color = ((isMine and _LightFontColor) or _DefaultFontColor)
-	self.enemyText.Color = ((not isMine and _LightFontColor) or _DefaultFontColor)
-	self.mineText.FontSize = ((isMine and _LightFontSize) or _DefaultFontSize)
-	self.enemyText.FontSize = ((not isMine and _LightFontSize) or _DefaultFontSize)
-
-	self.mineSelectImg.SpriteName = ((isMine and _LightImg) or _DefaultImg)
-	self.enemySelectImg.SpriteName = ((not isMine and _LightImg) or _DefaultImg)
-	self.mineSelectImg.SizeDelta = ((isMine and _LightImgSize) or _DefaultImgSize)
-	self.enemySelectImg.SizeDelta = ((not isMine and _LightImgSize) or _DefaultImgSize)
+	self.mineSelectImg.Color = ((isMine and YELLOWCOLOR) or BLUECOLOR)
+	self.enemySelectImg.Color = ((not isMine and YELLOWCOLOR) or BLUECOLOR)
+	self.mineText.Color = ((isMine and BLACKCOLOR) or WHITECOLOR)
+	self.enemyText.Color = ((not isMine and BLACKCOLOR) or WHITECOLOR)
 end
 
 

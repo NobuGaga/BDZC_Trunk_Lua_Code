@@ -12,7 +12,6 @@ local levelUpActorId = 10010
 local NUM_TWEEN = "T_Club_NumSacle"
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
-local MAXBOOKSTAR = Csv.Const(Define.Const.StaffMax)[5]
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -112,9 +111,6 @@ function _M:OnCreate(staffid,bookid,bookstar)
 	local TextUp2 = moudle:Get("C_text_0")
 	TextUp2.Text = Csv.Text("staff_up")
 
-	local TextUp3 = moudle:Get("C_text_1")
-	TextUp3.Text = Csv.Text("staff_up")
-
 	local TextName = moudle:Get("Name")
 	TextName.Text = book.name
 
@@ -154,11 +150,6 @@ function _M:OnCreate(staffid,bookid,bookstar)
 			SoundMgr.Play(10001)
 			WindowMgr.Create("UBagDetailPop",itemid)
 		end,nil,0.9)
-	end
-
-	for i=1,MAXBOOKSTAR do
-		local star = moudle:Get("star"..i)
-		star.gameObject:SetActive(false)
 	end
 
 	for i=1,bookstar do
@@ -248,35 +239,29 @@ function _P.OnCreateData(self,moudle,staffid,bookid,bookstar,booklevel,isShowEff
 	end
 	
 	local TextCost1 = moudle:Get("Cost1")
-	if MBag.GetItemNum(book.lvUpItem) >= booklv.itemNum then
-		TextCost1.Text = Csv.Text("staff_bookC",{name = Csv.Item[book.lvUpItem].name,num = MBag.GetItemNum(book.lvUpItem),max = booklv.itemNum})
-	else
-		TextCost1.Text = Csv.Text("staff_bookC2",{name = Csv.Item[book.lvUpItem].name,num = MBag.GetItemNum(book.lvUpItem),max = booklv.itemNum})
-	end
+	TextCost1.Text = Csv.Text("staff_bookC",{name = Csv.Item[book.lvUpItem].name,num = MBag.GetItemNum(book.lvUpItem),max = booklv.itemNum})
 
 	local TextCost2 = moudle:Get("Cost2")
-	if data.bookexp >= booklv.expNum then
-		TextCost2.Text = Csv.Text("staff_bookC",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
-	else
-		TextCost2.Text = Csv.Text("staff_bookC2",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
-	end
+	TextCost2.Text = Csv.Text("staff_bookC",{name = Csv.Text("staff_bookexp"),num = data.bookexp,max = booklv.expNum})
 
 	local part3 = moudle:Get("BG5")
-	local bg = moudle:Get("BG1")
+	local bg1 = moudle:Get("BG1")
+	local bg2 = moudle:Get("BG")
+	local bg3 = moudle:Get("BG50")
 	if booklv.upLevelCost ~= nil then
 		part3.Activity = true
-		bg.SizeDelta = Vector2(714,858)
+		bg1.SizeDelta = Vector2(714,784)
+		bg2.SizeDelta = Vector2(680,680)
+		bg3.SizeDelta = Vector2(660,470)
 		local TextCost3 = moudle:Get("Cost3")
 		local costItemId = booklv.upLevelCost[1]
 		local costItemNum = booklv.upLevelCost[2]
-		if MBag.GetItemNum(costItemId) >= booklv.upLevelCost[2] then
-			TextCost3.Text = Csv.Text("staff_bookC",{name = Csv.Item[costItemId].name,num = MBag.GetItemNum(costItemId),max = costItemNum})
-		else
-			TextCost3.Text = Csv.Text("staff_bookC2",{name = Csv.Item[costItemId].name,num = MBag.GetItemNum(costItemId),max = costItemNum})
-		end
+		TextCost3.Text = Csv.Text("staff_bookC",{name = Csv.Item[costItemId].name,num = MBag.GetItemNum(costItemId),max = costItemNum})
 		moudle:Get("UpChance3").Text = Csv.Text("staff_chance",{num = booklv.upLevelPer/100})
 	else
-		bg.SizeDelta = Vector2(714,678)
+		bg1.SizeDelta = Vector2(714,595)
+		bg2.SizeDelta = Vector2(680,508)
+		bg3.SizeDelta = Vector2(660,300)
 		part3.Activity = false
 	end
 

@@ -1,4 +1,4 @@
--- 奇遇结算界面
+-- 奇遇人物表现界面
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local CCommon = JRequire "Dev.Common.CCommon"
@@ -88,7 +88,7 @@ function _P.OnInitAnim(self,start,target)
 			_P.OnCharterAnim(self,false,islast)
 			self.curStage = self.curStage + 1
 		else
-			_P.OnCharterAnim(self,false,islast)			
+			_P.OnCharterAnim(self,false,islast)
 		end
 	end)
 end
@@ -156,29 +156,11 @@ end
 -- 修改，暂时全部改成最大值，by:pyh
 function _P.GetSecondContent(self,randv)
 	return self.talkRandGroup1[1].key
-	-- if randv <= self.talkRandGroup1[#self.talkRandGroup1].value then
-	-- 	return self.talkRandGroup1[#self.talkRandGroup1].key
-	-- end
-	-- for index=1,#self.talkRandGroup1 do
-	-- 	if randv > self.talkRandGroup1[index].value then
-	-- 		local findIndex = math.max(1, index-1)
-	-- 		return self.talkRandGroup1[findIndex].key
-	-- 	end
-	-- end
 end
 
 -- 修改，暂时全部改成最大值，by:pyh
 function _P.GetthirdContent(self,randv)
 	return self.talkRandGroup2[1].key
-	-- if randv <= self.talkRandGroup2[#self.talkRandGroup2].value then
-	-- 	return self.talkRandGroup2[#self.talkRandGroup2].key
-	-- end
-	-- for index=1,#self.talkRandGroup2 do
-	-- 	if randv > self.talkRandGroup2[index].value then
-	-- 		local findIndex = math.max(1, index-1)
-	-- 		return self.talkRandGroup2[findIndex].key
-	-- 	end
-	-- end
 end
 
 function _P.GetNextTarget(self)
@@ -200,10 +182,10 @@ function _P.GetNextTarget(self)
 end
 
 --点击继续
-function _P.OnContinue(self)
+function _P.OnContinue(self, addExp)
 	if _P.JudegeIsEnd(self) then
 		--直接结算
-		WindowMgr.Create("UAdventureReward",self.mData,function( ... )
+		WindowMgr.Create("UAdventureReward",self.mData,addExp,function( ... )
 			self:Destroy()
 		end)
 	else
@@ -214,13 +196,13 @@ function _P.OnContinue(self)
 end
 
 --界面构造
-function _M:OnCreate(data,OnClose)
+function _M:OnCreate(data, isDown, taskId, OnClose)
 	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Handleing")
 	self.mModule = module
 
 	self.OnCloseCall = OnClose
 	self.adventureCsv = Csv.Adventure[data.actId]
-	self.advEventCsv = Csv.AdventureMainEvent[data.eventId]
+	self.advEventCsv = Csv.AdventureMainEvent[taskId]
 	self.mData = data
 	self.fillData = data.compatibility
 
@@ -299,7 +281,8 @@ function _M:OnCreate(data,OnClose)
 	self.curStage = 1
 	self.continueBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		_P.OnContinue(self)
+		local addExp = (isDown and 0) or self.advEventCsv.addExp
+		_P.OnContinue(self, addExp)
 	end, nil, 1.2)
 
 	_P.OnInitAnim(self,self.startVal,self.target)

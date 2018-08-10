@@ -2,7 +2,6 @@ local JGuiManager = CS.JGui.JGuiManager
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MRank = JRequire "Dev.Rank.MRank"
 local CPlayer = JRequire "Dev.Player.CPlayer"
-local MPlayer = JRequire "Dev.Player.MPlayer"
 local RankVertical = JRequire "Dev.Common.RankVertical"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class()
@@ -10,11 +9,11 @@ local _P = {}
 
 local RANKID = Define.RankType.Intimacy
 
-local itemWidth = 735
-local itemHeight = 130
-local space = -18
-local pageNum = 8
-local pageHeight = 800
+local itemWidth = 724
+local itemHeight = 56
+local space = 10
+local pageNum = 15
+local pageHeight = 710
 
 --界面构建
 function _M:ctor(parent)
@@ -54,29 +53,6 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		end
 		moudle:Get("name").Text = value.name
 		moudle:Get("value").Text = value.value
-
-		local vip = value.vip
-		local imgKuang = moudle:Get("VipBox")
-		local imgNum = moudle:Get("VipNum")
-		if vip ~= nil then
-			local csvVip = Csv.Vip[vip]
-			if vip <= 0 then
-				imgKuang.Activity = false
-				imgNum.Activity = false
-			else
-				imgKuang.Activity = true
-				imgNum.Activity = true
-				imgKuang.SpriteName = csvVip.imgBord
-				imgNum.SpriteName = csvVip.icon
-			end
-		else
-			imgKuang.Activity = false
-			imgNum.Activity = false
-		end
-
-		if value.sex ~= nil and value.headid ~= nil then
-			moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(value.headid,value.sex)
-		end
 
 		moudle.SelfRect:AddOnButton(function(...)
 			SoundMgr.Play(10001)

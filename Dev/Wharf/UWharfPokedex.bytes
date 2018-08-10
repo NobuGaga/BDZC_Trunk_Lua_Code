@@ -45,23 +45,11 @@ function _P.ChooseGirl(self, girlId)
 	end
 	local csvLine = Csv.Girl[girlId]
 	local body = moudle:Get("Bsx")
-	local bg = moudle:Get("Bg")
 	if self.girl_prefab ~= nil then
 		self.girl_prefab:Destroy()
-		self.girl_prefab = nil
 	end
-
-	local girlInfo = nowChoose.girlInfo
-
 	if csvLine.prefab ~= nil and csvLine.prefab > 0 then
-		self.girl_prefab = CCommon.CreateActor(body, csvLine.prefab, CCommon.ActorFieldMap.girl_show, function(actor)
-			self.girl_prefab = actor
-			if girlInfo == nil then
-				actor.SkeletonColor = BLACK_COLOR
-			else
-				actor.SkeletonColor = Color.white
-			end
-		end)
+		self.girl_prefab = CCommon.CreateActor(body, csvLine.prefab, CCommon.ActorFieldMap.girl_show)
 		body.SpriteName = ""
 	else
 		body.SpriteName = csvLine.homeicon
@@ -70,9 +58,9 @@ function _P.ChooseGirl(self, girlId)
 	self.mAlreadyImg.Activity = false
 	self.mActivationBtn.Activity = false
 
+	local girlInfo = nowChoose.girlInfo
 	if girlInfo == nil then
 		body.Color = BLACK_COLOR
-		bg.Color = BLACK_COLOR
 		moudle:Get("getWay").Text = Csv.Text("Wharf_pokedex2")
 		moudle:Get("getWayText").Text = csvLine.getwayStr[1]
 
@@ -85,12 +73,10 @@ function _P.ChooseGirl(self, girlId)
 		if MWharf.IsGirlActivated(girlId) then
 			self.mAlreadyImg.Activity = true
 			body.Color = Color.white
-			bg.Color = Color.white
 			moudle:Get("getWay").Text = ""
 			moudle:Get("getWayText").Text = ""
 		else
 			body.Color = BLACK_COLOR
-			bg.Color = BLACK_COLOR
 			self.mActivationBtn.Activity = true
 			self.mActivationBtn.RaycastTarget = true
 			self.mActivationBtn.IsGray = false
@@ -104,6 +90,7 @@ function _P.ChooseGirl(self, girlId)
 		moudle:Get("Effect2").Text = Csv.Text("Wharf_addStaff")
 		moudle:Get("Effect2_0").Text = _P.GetEffectStaffName(girlId)
 		moudle:Get("Effect").Text = Csv.Text("Wharf_pokedex1")
+		moudle:Get("Effect2_1").Text = Csv.Text("Wharf_allstaff")
 		if #effectInfo >= 4 then
 			local effect = effectInfo[1]
 			if effect[1] == 1 then
@@ -234,13 +221,13 @@ function _P.RefreshGirl(self)
 
 		local head = oneMoudle:Get("head")
 		oneMoudle:Get("PKtext").Text = csvLine.name	
-		oneMoudle:Get("BG").SpriteName = csvLine.colorBg
+		oneMoudle.SelfRect.SpriteName = csvLine.colorBg
 		oneMoudle.SelfRect:AddOnButton(function ( ... )
 			_P.ChooseGirl(self, csvLine.id)
 		end)	
 		--未拥有	
 		if girlInfo == nil then
-			head.SpriteName = csvLine.xieicon
+			head.SpriteName = csvLine.icon
 			head.Color = BLACK_COLOR
 			oneMoudle:Get("Question").Activity = true
 			oneMoudle:Get("queText").Text = Csv.Text("Wharf_pokedex8")
@@ -248,7 +235,7 @@ function _P.RefreshGirl(self)
 			--已拥有
 			if MWharf.IsGirlActivated(csvLine.id) then
 				getCount = getCount + 1
-				head.SpriteName = csvLine.xieicon
+				head.SpriteName = csvLine.lockicon
 	
 				if csvLine.pictorialEffect ~= nil then
 					for _,v in pairs(csvLine.pictorialEffect) do
@@ -270,7 +257,7 @@ function _P.RefreshGirl(self)
 					end
 				end
 			else
-				head.SpriteName = csvLine.xieicon
+				head.SpriteName = csvLine.icon
 				head.Color = BLACK_COLOR
 				oneMoudle:Get("Question").Activity = false
 				oneMoudle:Get("red").Activity = true

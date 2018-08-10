@@ -58,10 +58,6 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle:delete()
 		self.ChooseMoudle = nil
 	end
-	local funcData = Csv.Func[funcId]
-	if funcData and funcData.name then
-		self.mMoudle:Get("title").Text = funcData.name
-	end
 	if funcId == Define.SysId.RechargeReward_Day then
 		self.ChooseMoudle = URechargeAwardDay.new(self.PageNode)
 	elseif funcId == Define.SysId.RechargeReward_Total then
@@ -144,16 +140,18 @@ function _M:OnCreate(openFunc)
 	self.btnWidth = moudle:Get("btn1").SizeDelta.x
 	self.btnSpace = moudle:Get("layout"):AddHorizontalLayoutGroup().spacing
 	if count > 0 then
+		local WhiteColor = Color(1, 1, 1, 1)
 		--Table标签控制
 		self.tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "HXbian_001_23", "HXbian_001_23", nil, Color(1, 1, 1, 1))
+		end, "fl_007", "fl_008", nil, WhiteColor, nil, nil, nil, nil, WhiteColor)
 	
 		local index = 0
 		self.pageIDCache = {}
 		local openFuncIsHave = false
 		for k,v in pairs(funcs) do
 			index = index + 1
+			moudle:Get("C_text_" .. index .. index).Text = v.name
 			self.pageIDCache[index] = v.id
 			self.tabHandle:Add(v.id, moudle:Get("Label"..index), moudle:Get("C_text_"..index), v.name, moudle:Get("select_" .. index))
 			if not openFuncIsHave and openFunc == v.id then
@@ -178,8 +176,8 @@ function _M:OnCreate(openFunc)
 			self.tabHandle:Choose(openFunc)
 		else
 			self.tabHandle:Choose(funcs[self.selectIndex].id)
-		end		
-	end
+		end	
+	end	
 	if count < 5 then
 		for i=count + 1,5 do
 			moudle:Get("btn"..i).Activity = false

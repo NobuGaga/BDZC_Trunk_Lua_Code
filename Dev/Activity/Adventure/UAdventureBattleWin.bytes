@@ -1,0 +1,89 @@
+-- 奇遇战斗胜利界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local winActorId = 10019
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(addExp, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Success1")
+	self.mModule = module
+	if module == nil then return end
+
+	self.OnCloseCall = onClose
+
+	-- 播放战斗胜利特效
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(module:Get("ActorPanel"), winActorId)
+
+	-- 点击任意点关闭
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	local data = MActivity.AdventureBattleRewards
+	if data ~= nil then
+		local rewards = MActivity.AdventureRewardSplit(data)
+		local pointText = module:Get("PointText")
+		local pointNumText = module:Get("PointNum")
+		local orderText = module:Get("OrderText")
+		local orderNumText = module:Get("OrderNum")
+		local expText = module:Get("ExpText")
+		local expNumText = module:Get("ExpNum")
+
+		if rewards.point ~= 0 then
+			pointText.Text = Csv.Text("adventure_main_point", {num = ''})
+			pointNumText.Text = '+' .. rewards.point
+			pointText.Activity = rewards.point ~= 0
+			pointNumText.Activity = rewards.point ~= 0
+		elseif rewards.exp ~= 0 then
+			pointText.Text = Csv.Text("adventure_enemy_exp")
+			pointNumText.Text = '+' .. rewards.exp
+			pointText.Activity = rewards.exp ~= 0
+			pointNumText.Activity = rewards.exp ~= 0
+		end
+
+		orderText.Text = Csv.Text("adventure_main_currency", {num = ''})
+		orderNumText.Text = '+' .. rewards.currency
+		orderText.Activity = rewards.currency ~= 0
+		orderNumText.Activity = rewards.currency ~= 0
+
+		expText.Text = Csv.Text("adventure_main_expTip", {num = ''})
+		expNumText.Text = '+' .. addExp
+		expNumText.Activity = addExp ~= 0
+		expText.Activity = addExp ~= 0
+
+		-- _P.OnCreateList(self, rewards.items)
+	end
+end
+
+
+function _P.OnCreateList(self, listData)
+	if listData == nil or next(listData) == nil then return end
+
+	local itemRoot = self.mModule:Get("Items")
+	for _,v in pairs(listData) do
+		CCommon.CreateItem(itemRoot, v.id, nil, {num = v.count})
+	end
+end
+
+return _M

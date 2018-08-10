@@ -246,18 +246,11 @@ function _M:EndDestroy( ... )
 	end
 end
 
-function _M:BeforeDestroy()
-	MMain.BoobLayer = "Message"
-	WindowMgr.Call("UMessage","SetBoobLayer")
-end
-
 function _M:OnCreate(id, doneCall)
 	self.IsMyDestroy = false
 	self.DoneCall = doneCall
 	self:UnBlack()
 	_P.doCreate(self, id)
-	MMain.BoobLayer = "Main"
-	WindowMgr.Call("UMessage","SetBoobLayer")
 end
 
 return _M

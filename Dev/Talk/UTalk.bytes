@@ -7,7 +7,7 @@ local MTalk = JRequire "Dev.Talk.MTalk"
 local CTalk = JRequire "Dev.Talk.CTalk"
 --@RefType [xluaApi.bytes#CS.JGui.JGuiRect]
 local MMain = JRequire "Dev.Main.MMain"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local CCommon = JRequire"Dev.Common.CCommon"
 local luaUtil = JRequire"Libs.LuaUtil"
@@ -21,7 +21,7 @@ local MFriend = JRequire "Dev.Friend.MFriend"
 local CFriend = JRequire "Dev.Friend.CFriend"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MBag = JRequire "Dev.Bag.MBag"
-local UPlayerMenuPop = JRequire "Dev.Friend.UPlayerMenuPop"
+local UPlayerMenuPop = JRequire"Dev.Friend.UPlayerMenuPop"
 
 ----------------------CS类引用--------------------------
 local VoiceChat = CS.Speaker.VoiceChat
@@ -35,6 +35,9 @@ local Redpacket_Light = Color(1, 1, 1, 1)
 local Redpacket_Got = Color(1, 1, 1, 150/255)
 local Redpacket_Pass = Color(1, 1, 1, 150/255)
 local SCROLL_HIGHT = 1055
+
+--0:消耗道具ID,1:每次消耗道具数量,2:聊天等级限制,3:跨服小喇叭道具ID,4:聊天Vip等级限制,5:喇叭消耗砖石数量,6:小喇叭消耗钻石数量
+local CossItemData = Csv.Const(100)
 
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -122,6 +125,16 @@ function _R.RefreshSysMsg(self,_data)
 	end
 end
 
+function _R.RefreshCrossChoose(self)
+	local crossId = MTalk.CrossChooseID
+	local itemData = Csv.Item[crossId]
+
+	if itemData ~= nil then
+		self.CrossHorn.SpriteName = itemData.icon
+		self.hornNum.Text = LuaUtil.NumberFormat(MBag.GetItemNum(crossId))
+	end
+end
+
 function _M:OnPopCreate( ... )
 	self:OnCreate(...)
 end
@@ -162,13 +175,21 @@ function _M:OnCreate(chooseFuncId)
 	cancel.Activity = false 
 
 	self.mMoudle = moudle
+	self.mCrossHornBox = moudle:Get("hornBox")
 	self.CrossHorn = moudle:Get("horn")
 	self.hornNum = moudle:Get("hornNum")
+	self.hornFlyRect = moudle:Get("hornFly")
 	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
 		if self.hornNum ~= nil and itemId == Define.AssetsType.Horn then
 			_P.RefreshHorn(self)
 		end
+		if self.hornNum ~= nil and itemId == Define.AssetsType.SHorn then
+			_P.RefreshHorn2(self)
+		end
 	end)
+	self.CrossHorn:AddOnButton(function()
+		WindowMgr.Create("UTalkCross")
+	end,nil,1.2)
 
 	CCommon.CreateEffect(loading, 2, Vector2.zero)
 
@@ -317,6 +338,7 @@ function _M:OnCreate(chooseFuncId)
 	MTalk.selectToggle = -1
 	local funcs = MMain.GetOpenedFuncs(Define.SysId.Talk, true)
 	local countToggle = #funcs
+	local index = 0
 	if countToggle > 0 then
 		local lastChoose = chooseFuncId or MTalk.selectToggle
 		local isHave = false
@@ -326,7 +348,6 @@ function _M:OnCreate(chooseFuncId)
 			_P.OnChoose(self, funcId)
 		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
-		local index = 0
 		for k,v in pairs(funcs) do
 			if v.id == 10705 then
 				if MPlayer.IsCross() then
@@ -349,6 +370,12 @@ function _M:OnCreate(chooseFuncId)
 		end
 		tabHandle:Choose(lastChoose)
 		self.mTabHandle = tabHandle
+	end
+
+	if index < 4 then
+		for i=index + 1,4 do
+			moudle:Get("Toggle"..i).Activity = false
+		end
 	end
 
 -----------新消息----------------------------------	
@@ -383,13 +410,14 @@ function _P.RefreshTalkType(self)
 		self.SendBtn.Activity = false
 	end
 
-	self.CrossHorn.Activity = false
+	self.mCrossHornBox.Activity = false
 	local _channel = MTalk.GetChannelbyTogID(MTalk.selectToggle)
 	if _channel == MTalk.Channel.CrossMsg then
-		self.CrossHorn.Activity = true
+		self.mCrossHornBox.Activity = true
 		self.Img1.Activity = false
 		self.Img2.Activity = false
 		_P.RefreshHorn(self)
+		_R.RefreshCrossChoose(self) --初始化默认选择道具
 		
 		self.Img1.Activity = false
 		self.Img2.Activity = false
@@ -467,6 +495,9 @@ end
 
 function _P.RefreshHorn(self)
 	self.hornNum.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Horn))
+end
+function _P.RefreshHorn2(self)
+	self.hornNum.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.SHorn))
 end
 
 function _P.CreatTalkItem(self,_data,_isShowTime)
@@ -884,9 +915,60 @@ function _P.SendMessage(self,GText)
 				CCommon.ShowError(Csv.Text("talk_noCommerce"))
 			end
 		elseif channel == MTalk.Channel.CrossMsg then
-			CTalk.SendNewTalk(channel,str)
+			--检测有无跨服喇叭，是否默认消耗钻石
+			if _P.CheckCanSendInCross(self) then
+				CTalk.SendNewTalk(channel,str)
+			end
 		end
 	end
+end
+
+function _P.CheckCanSendInCross(self)
+	local rect = self.hornFlyRect
+
+	local itemID = MTalk.CrossChooseID
+	local isUseDamond = MTalk.IsCostDiamond
+	local itemData = Csv.Item[itemID]
+	local itemNum = MBag.GetItemNum(itemID)
+	local diamondNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	local costData = Csv.Item[Define.AssetsType.Gold]
+	local costNum = 0
+	if itemID == Define.AssetsType.Horn then
+		costNum = CossItemData[6]
+	else
+		costNum = CossItemData[7]
+	end
+
+	if isUseDamond then
+		--默认使用钻石
+		if itemNum <= 0 then
+			--无喇叭用钻石
+			if diamondNum < costNum then
+				--无钻石
+				CCommon.ShowError(Csv.Text("common_cont_enough",{name = costData.name}))
+				return false
+			else
+				--展示钻石消耗
+				local level = CossItemData[3]
+				local viplevel = CossItemData[5]
+				if MPlayer.GetLevel() < level and MPlayer.GetVip() < viplevel then
+					CCommon.ShowError(Csv.Text("err_cross_talk_lv"))
+					return false
+				else
+					CCommon.ShowFlyText(rect,costData.name.."-"..costNum,nil,nil,nil,nil,nil,28)
+					return true
+				end
+			end
+		end
+	else
+		if itemNum <= 0 then
+			--无喇叭，不使用钻石
+			CCommon.ShowError(Csv.Text("common_cont_enough",{name = itemData.name}))
+			return false
+		end
+	end
+
+	return true
 end
 
 function _P.IsShowLoading(self,isShow)

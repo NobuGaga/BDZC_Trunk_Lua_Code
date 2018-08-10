@@ -1,0 +1,58 @@
+-- 商店积分兑换界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Lobby_GodList")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local content = module:Get("List")
+
+	local data = Csv.RelationShop
+
+	if data ~= nil then
+		for k,v in pairs(data)do
+			if v.isShow ~= nil and v.isShow ~= 0 then
+				local itemData = Csv.Item[v.itemid] 
+				if itemData ~= nil then
+					itemMoudle = JGuiManager.GetMoudle(content, "M_Lobby_GodList_Item")
+					local boxImg = itemMoudle:Get("Box")
+					local icon = itemMoudle:Get("iCON")
+					local name = itemMoudle:Get("NAME")
+					local desc = itemMoudle:Get("miaosu")
+
+					boxImg.SpriteName = itemData.colorIcon
+					icon.SpriteName = itemData.icon
+
+					local strColor = Csv.ItemColor[itemData.color].str
+					name.Text = Csv.Text("common_color",{num = strColor, name = itemData.name})
+
+					desc.Text = itemData.tips
+				end
+			end
+		end
+	end
+end
+
+
+
+return _M

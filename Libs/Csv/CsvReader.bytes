@@ -5,6 +5,7 @@ local CCsv = CS.CsvUnserialize
 
 local _M = {}
 local _P = { CsvData = {} }
+local _SpidAlter = nil
 
 function _P.loaderCsv(loadName, lastName)
     local CsvData = _P.CsvData
@@ -17,6 +18,8 @@ function _P.loaderCsv(loadName, lastName)
                 if sid ~= nil then
                     t["_tmp_str_id"] = nil
                     CCsv.GetLine(loadName, sid, t)
+
+                    _P.doAlterCsv(loadName, t, sid)
 
                     field = rawget(t, k)
                 end
@@ -41,8 +44,79 @@ function _P.loaderCsv(loadName, lastName)
     end    
 end
 
+function _P.doAlterCsv(csvName, csvLine, sid)
+    local alterNameTab = _SpidAlter[csvName]
+    if alterNameTab ~= nil and alterNameTab[sid] ~= nil then
+        for k,v in pairs(alterNameTab[sid]) do
+            csvLine[k] = v
+        end
+    end
+end
+
+function _P.SpidAlterCsvLoader()
+    if _SpidAlter == nil then
+        _SpidAlter = {}
+
+        local makeAlterLine = function (cellLine)
+            if cellLine ~= nil and cellLine.csvName ~= nil then
+                for index,csvName in pairs(cellLine.csvName) do
+                    local nameTab = _SpidAlter[csvName]
+                    if nameTab == nil then
+                        nameTab = {}
+                        _SpidAlter[csvName] = nameTab
+                    end
+                    
+                    local fieldName = cellLine.csvField[index]
+                    if fieldName ~= nil then
+                        local ids = cellLine.csvIds[index]
+                        if ids ~= nil then
+                            for _,id in pairs(ids) do
+                                local idTab = nameTab[id]
+                                if idTab == nil then
+                                    idTab = {}
+                                    nameTab[id] = idTab
+                                end
+                                idTab[fieldName] = cellLine.cellValue
+                            end
+                        end
+                    end
+                end
+            else
+                error("SpidAlterCsvCell line is Empty, SpidAlterCsv::", spid, cellID)
+            end
+        end
+
+        _P.loaderCsv("SpidAlterCsv")
+        local CsvData = _P.CsvData
+        local alterCsv = CsvData["SpidAlterCsv"]
+        if alterCsv ~= nil then
+            local spid = string.upper(GameSetting.Spid)
+            local line = alterCsv[spid]
+            if line ~= nil then
+                _P.loaderCsv("SpidAlterCsvCell")
+                local cellCsv = CsvData["SpidAlterCsvCell"]
+                if cellCsv ~= nil then
+                    if line["alter"] ~= nil then
+                        for _,cellID in pairs(line["alter"]) do
+                            makeAlterLine(cellCsv[cellID])
+                        end
+                    elseif line["alterIn"] ~= nil then
+                        for i=line["alterIn"][1],line["alterIn"][2] do
+                            makeAlterLine(cellCsv[i])
+                        end
+                    end
+                else
+                    error("SpidAlterCsvCell is Empty, SpidAlterCsv::", spid)
+                end
+            end
+        end
+    end
+end
+
 function _P.Reader(csvname)
-	local CsvData = _P.CsvData
+    _P.SpidAlterCsvLoader()
+
+    local CsvData = _P.CsvData  
 	local data = CsvData[csvname]
     if data ~= nil then
         return data

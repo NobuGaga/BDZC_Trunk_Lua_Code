@@ -1,0 +1,75 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(call)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Jiban")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Text").Text = Csv.Text("lineup_14")
+	--moudle:Get("Tips").Text = Csv.Text("lineup_15")
+	moudle:Get("C_text").Text = Csv.Text("lineup_16")
+	moudle:Get("C_text_0").Text = Csv.Text("lineup_22")
+
+	local content = moudle:Get("Content")
+	local list = MLineUp.GetSortLineUpList()
+	for k,v in pairs(list) do
+		local itemMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Item")
+		itemMoudle:Get("Black").Activity = false
+		local csvStaff = Csv.Personnel[v.id]
+		local dataStaff = MStaff.StaffTable[v.id]
+		if csvStaff ~= nil then 
+			itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+		end
+		if dataStaff ~= nil then
+			itemMoudle.SelfRect.SpriteName = MStaff.Color2Image[dataStaff.color]
+		end
+		itemMoudle.SelfRect:AddOnButton(function()
+			
+		end,nil,1)
+	end
+
+	local seatNum = MLineUp.SeatNum
+	local upNum = #list
+	if seatNum > upNum then
+		for i = 1,seatNum - upNum do
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Item2")
+			itemMoudle:Get("BG1").Activity = false
+			itemMoudle:Get("BG2").Activity = true
+			itemMoudle:Get("BG3").Activity = false
+			itemMoudle:Get("Click"):AddOnButton(function()
+				WindowMgr.Create("ULineUp")
+			end,nil,1)
+		end
+	end
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+		if call ~= nil then
+			call()
+		end
+	end,nil,0.9)
+
+	moudle:Get("C_Btn_e"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		WindowMgr.Create("ULineUp")
+	end,nil,0.9)
+
+	moudle:Get("Back_Btn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	moudle:Get("ZDL").Text = Csv.Text("lineup_19",{num = MLineUp.GetLineAllPower()})
+	if MLineUp.GetLineStaffNum() >= MLineUp.SeatNum then
+		moudle:Get("NUM").Text = Csv.Text("lineup_20",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	else
+		moudle:Get("NUM").Text = Csv.Text("lineup_25",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	end
+end
+
+return _M

@@ -16,7 +16,7 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-local SCROLL_WIDTH = 720
+local SCROLL_WIDTH = 640
 local VIP_MAX = 18
 local ITEM_WIDTH = 129
 
@@ -139,9 +139,11 @@ function _M:OnCreate(chooseFuncId)
 		lastChoose = chooseFuncId
 		local isHave = false
 		local defaultColor = Color(247/255, 211/255, 169/255, 1)
+		local btnDefaultColor = Color(255/255, 255/255, 255/255, 1)
+		local btnLightColor = Color(255/255, 255/255, 255/255, 1)
 		local tabHandle = TabGroup.new(function (funcId)
 			_P.OnChoose(self, funcId)
-		end, "fl_007_1", "fl_008_1",nil,defaultColor,nil,nil,scrollView,content)
+		end, "fl_007_1", "fl_008_1",nil,defaultColor,nil,nil,scrollView,content,btnDefaultColor,btnLightColor)
 	
 		for k,v in pairs(_funcs) do
 			local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item2", WindowType.UI, 10)

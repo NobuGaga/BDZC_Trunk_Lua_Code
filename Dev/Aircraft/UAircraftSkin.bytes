@@ -145,7 +145,7 @@ function _P.CreateSkinItem(self, skinID)
 	skin.skinID = skinID
 
 	skin.moudle = JGuiManager.GetMoudle(self.content, ItemName)
-	skin.border = skin.moudle:Get("bg")
+	skin.border = skin.moudle.SelfRect
 	skin.border:AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickSkinItem(self, index)
@@ -170,7 +170,7 @@ function _P.CreateBaseSkinItem(self, itemID)
 	local index = #self.selectBorder + 1
 
 	local moudle = JGuiManager.GetMoudle(self.content, ItemName)
-	local border = moudle:Get("bg")
+	local border = moudle.SelfRect
 	border:AddOnButton(function()
 		SoundMgr.Play(10001)
 		_P.OnClickSkinItem(self, index)

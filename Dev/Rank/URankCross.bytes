@@ -32,7 +32,10 @@ function _M:OnCreate()
 	self.PageNode = moudle:Get("PageNode")
 	moudle:Get("C_text").Text = Csv.Text("cross_mobai")
 	moudle:Get("text").Text = Csv.Text("cross_mobai_tips")
+	moudle:Get("text1").Text = Csv.Text("cross_rank_name")
 	moudle:Get("text2").Text = Csv.Text("cross_rank_self")
+	moudle:Get("text3").Text = Csv.Text("cross_rank_power")
+	moudle:Get("text4").Text = Csv.Text("cross_rank_level")
 
 	--Table标签控制
 	local colorLight = Color(255/255,225/255,75/255,1)
@@ -98,46 +101,46 @@ function _R.ResetList(self, data)
 				self.Moudle:Get("text3_1").Text = MPlayer.GetPower()
 				self.Moudle:Get("text4_1").Text = Csv.Company[MPlayer.GetLevel()].name
 
-				local vip = data.vip
-				local imgKuang = self.Moudle:Get("VipBox")
-				local imgNum = self.Moudle:Get("VipNum")
-				if vip ~= nil then
-					local csvVip = Csv.Vip[vip]
-					if vip <= 0 then
-						imgKuang.Activity = false
-						imgNum.Activity = false
-					else
-						imgKuang.Activity = true
-						imgNum.Activity = true
-						imgKuang.SpriteName = csvVip.imgBord
-						imgNum.SpriteName = csvVip.icon
-					end
-				else
-					imgKuang.Activity = false
-					imgNum.Activity = false
-				end
+				-- local vip = data.vip
+				-- local imgKuang = self.Moudle:Get("VipBox")
+				-- local imgNum = self.Moudle:Get("VipNum")
+				-- if vip ~= nil then
+				-- 	local csvVip = Csv.Vip[vip]
+				-- 	if vip <= 0 then
+				-- 		imgKuang.Activity = false
+				-- 		imgNum.Activity = false
+				-- 	else
+				-- 		imgKuang.Activity = true
+				-- 		imgNum.Activity = true
+				-- 		imgKuang.SpriteName = csvVip.imgBord
+				-- 		imgNum.SpriteName = csvVip.icon
+				-- 	end
+				-- else
+				-- 	imgKuang.Activity = false
+				-- 	imgNum.Activity = false
+				-- end
 
-				self.Moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+				-- self.Moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
 
-				local vip = MPlayer.GetVip()
-				local csvVip = Csv.Vip[vip]
-				if csvVip ~= nil then
-					local imgBord = self.Moudle:Get("VipBox")
-					if csvVip.imgBord ~= nil then
-						imgBord.Activity = true
-						imgBord.SpriteName = csvVip.imgBord
-					else
-						imgBord.Activity = false
-					end
+				-- local vip = MPlayer.GetVip()
+				-- local csvVip = Csv.Vip[vip]
+				-- if csvVip ~= nil then
+				-- 	local imgBord = self.Moudle:Get("VipBox")
+				-- 	if csvVip.imgBord ~= nil then
+				-- 		imgBord.Activity = true
+				-- 		imgBord.SpriteName = csvVip.imgBord
+				-- 	else
+				-- 		imgBord.Activity = false
+				-- 	end
 
-					local imgNum = self.Moudle:Get("VipNum")
-					if csvVip.icon ~= nil then
-						imgNum.Activity = true
-						imgNum.SpriteName = csvVip.icon
-					else
-						imgNum.Activity = false
-					end
-				end
+				-- 	local imgNum = self.Moudle:Get("VipNum")
+				-- 	if csvVip.icon ~= nil then
+				-- 		imgNum.Activity = true
+				-- 		imgNum.SpriteName = csvVip.icon
+				-- 	else
+				-- 		imgNum.Activity = false
+				-- 	end
+				-- end
 			elseif self.SelectFuncID == 2 then
 				self.Moudle:Get("gangtext1").Text = Csv.Text("cross_rank_sh")
 				self.Moudle:Get("gangtext2").Text = Csv.Text("cross_rank_shpm")

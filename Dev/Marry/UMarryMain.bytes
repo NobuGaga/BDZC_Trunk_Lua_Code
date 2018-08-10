@@ -33,6 +33,7 @@ function _R.RefreshQingqiu(self)
 
 	tiqinQingqiuImg.Activity = false
 	tiqinNameBg.Activity = false
+	self.mPlayMask.Activity = false
 	
 	if self.mHeadPrefab ~= nil then
 		self.mHeadPrefab:Destroy()
@@ -51,6 +52,7 @@ function _R.RefreshQingqiu(self)
 		if #tiqinList > 0 then
 			tiqinQingqiuImg.Activity = true
 			tiqinNameBg.Activity = true
+			self.mPlayMask.Activity = true
 			tiqinQingqiuImg.SpriteName = ""
 			self.qingqiuNum.Text = Csv.Text("married_qingqiu_playerNum",{num = _P.GetQingqiuNum(self)})
 			tiqinQingqiuName.Text = _P.GetFirstTiqinName(self,tiqinList)
@@ -79,6 +81,7 @@ function _M:OnCreate(id)
 	local tiqinNameBg = moudle:Get("qingqiuName")
 	local tiqinQingqiuName = moudle:Get("Name")
 	self.qingqiuNum = moudle:Get("playerNum")
+	self.mPlayMask = moudle:Get("MASK")
 
 	self.mTiqinQingqiuImg = tiqinQingqiuImg
 	self.mTiqinNameBg = tiqinNameBg

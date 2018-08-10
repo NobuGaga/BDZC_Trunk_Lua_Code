@@ -13,7 +13,7 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MMain = JRequire "Dev.Main.MMain"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local MPlayer = JRequire "Dev.Player.MPlayer"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -50,22 +50,16 @@ function _P.RefreshList(self,funcId)
 			head.SpriteName = MPlayer.GetOtherHeadIcon(v.headid,MPlayer.GetSex())
 			headMoudle:Get("BottomBg").Activity = false
 			headMoudle:Get("M_Cosmetology_Item"):AddOnButton(function()
-				_P.MoveBody(self,v.headid)
+				_P.ChangeSelectHead(self,v.headid)
 			end)
 			if v.isHave ~= nil then
 				if v.isHave then
-					headMoudle.SelfRect.IsGray = false
-					headMoudle:Get("yyy").Activity = true
-					headMoudle:Get("lock").Activity = false
+					head.IsGray = false
 				else
-					headMoudle.SelfRect.IsGray = true
-					headMoudle:Get("yyy").Activity = false
-					headMoudle:Get("lock").Activity = true
+					head.IsGray = true
 				end
 			else
-				headMoudle.SelfRect.IsGray = false
-				headMoudle:Get("yyy").Activity = true
-				headMoudle:Get("lock").Activity = false
+				head.IsGray = false
 			end
 			self.HeadTable[v.headid] = headMoudle
 		end
@@ -83,9 +77,9 @@ function _P.RefreshList(self,funcId)
 				else
 					textActivity.Text = Csv.Text("player_change14",{time1 = LuaUtil.TransToYearMonthDay(actData.state.startTime),time2 = LuaUtil.TransToYearMonthDay(actData.state.endTime)})
 				end
-				imgActivity.Activity = true
 			end
 		end
+		imgActivity.Activity = true
 	else
 		textActivity.Text = ""
 		imgActivity.Activity = false
@@ -106,20 +100,8 @@ function _M:OnCreate()
 		_P.ClickItem(self)
 	end,nil,1.2)
 
-	local body = moudle:Get("Bsx")
-	local head = moudle:Get("head")
-	local bodyPrefab = MPlayer.GetBodyPrefabID()
-	local headPrefab = MPlayer.GetHeadPrefabID()
-	if bodyPrefab and headPrefab then
-		self.bodyPrefab = bodyPrefab
-		self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("body"), bodyPrefab, headPrefab, CCommon.ActorFieldMap.metology_body)
-		body.SpriteName = ""
-		head.SpriteName = ""
-	else
-		body.SpriteName = MPlayer.GetBodySp()
-		head.SpriteName = MPlayer.GetHeadSp()
-    end
-
+	moudle:Get("Bsx").SpriteName = MPlayer.GetBodySp()
+	moudle:Get("head").SpriteName = MPlayer.GetHeadSp()
 	moudle:Get("C_Text").Text = Csv.Text("player_change1")
 	moudle:Get("text1").Text = Csv.Text("player_change4")
 	moudle:Get("OverviewBtnText").Text = Csv.Text("player_change2")
@@ -383,42 +365,9 @@ function _P.ChangeSelectHead(self,headid)
 			self.ImgSelect.LocalPosition = Vector2(-2,2)
 			_P.SetAddAttr(self)
 			_P.SetCost(self)
-			if self.headSpine then
-				self.headSpine:Destroy()
-				self.headSpine = nil
-			end
-			if self.bodySpine then
-				self.bodySpine:Destroy()
-				self.bodySpine = nil
-			end
-			local body = moudle:Get("Bsx")
-			local head = moudle:Get("head")
-			local headPrefab = MPlayer.GetPrefabID(self.NowSelectId, MPlayer.GetSex())
-			if headPrefab then
-				self.bodySpine, self.headSpine = CCommon.CreateRole(moudle:Get("body"), self.bodyPrefab, headPrefab, CCommon.ActorFieldMap.metology_body)
-				body.SpriteName = ""
-				head.SpriteName = ""
-			else
-				body.SpriteName = MPlayer.GetBodySp()
-				head.SpriteName = MPlayer.GetOtherHeadAsset(self.NowSelectId, MPlayer.GetSex())
-			end
+			moudle:Get("head").SpriteName = MPlayer.GetOtherHeadAsset(self.NowSelectId,MPlayer.GetSex())
 		end
 	end
-end
-
-function _P.MoveBody(self,headid)
-	local BSX = self.Moudle:Get("Bsx")
-	local pos = BSX.LocalPosition
-	pos.x = 0
-	BSX.LocalPosition = pos
-	BSX:DOAnchorPosX(750, 0.2)
-	BSX:AddOnTime(function()
-						local pos = BSX.LocalPosition
-						pos.x = -750
-						BSX.LocalPosition = pos
-						_P.ChangeSelectHead(self,headid)
-						BSX:DOAnchorPosX(0, 0.2)
-					end, nil, 0.2)
 end
 
 function _P.SetAllAddAttr(self)
@@ -516,9 +465,7 @@ function _R.LiveHead(self,data)
 		local moudle = headTable[data.headid]
 		local value = valueTable[data.headid]
 		if moudle ~= nil and value ~= nil then
-			moudle.SelfRect.IsGray = false
-			moudle:Get("yyy").Activity = true
-			moudle:Get("lock").Activity = false
+			moudle:Get("Head").IsGray = false
 		end
 	end
 	_P.ChangeSelectHead(self,self.NowSelectId)

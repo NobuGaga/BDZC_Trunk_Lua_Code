@@ -31,6 +31,7 @@ local lastTime = 0
 local MaxAptiUpNum = Csv.Const(87)
 local DefaultPos = Vector2(274, -73)
 local AptiUpPos = Vector2(158, -19)
+local AtriUpNeedLevel = Csv.Const(20163)
 
 function _M:OnPopCreate( ... )
 	self:OnCreate(...)
@@ -59,7 +60,6 @@ end
 function _M:OnCreate(...)
 	local module = self:CreateMoudle(self._RootNode, "M_Car_Main")
 	self.mModule = module
-	module:Get("ZDLNumTips").Text = Csv.Text("car_tipsall")
 
 	SoundMgr.Play(10030)
 	local closeBtn = module:Get("C_Back_Btn")
@@ -236,7 +236,7 @@ function _P.UpdateParkingData(itemModule, data)
 			local carConf = Csv.Car[carData.carid]
 			if itemConf then
 				qualityImg.SpriteName = itemConf.colorIcon
-				qualityImg.SizeDelta = Vector2(140, 140)
+				qualityImg.SizeDelta = Vector2(120, 120)
 				itemModule:Get("CarIcon").SpriteName = carConf.icon
 				itemModule:Get("CarLv").Text = "Lv" .. carData.level
 				itemModule:Get("CarStarLv").Text = Csv.Text("car_main_jieji") .. carData.star
@@ -248,8 +248,8 @@ function _P.UpdateParkingData(itemModule, data)
 
 		isShowRed = MCar.CheckShowRed(data.state, carData)
 	else
-		qualityImg.SpriteName = "ty_018"
-		qualityImg.SizeDelta = Vector2(140, 140)
+		qualityImg.SpriteName = "zj_008"
+		qualityImg.SizeDelta = Vector2(138, 137)
 
 		isShowRed = MCar.CheckShowRed(data.state, nil)
 	end
@@ -340,7 +340,7 @@ function _P.OnPlayChangeAnim(self, data, isPlay)
 		end
 
 		self.curSelectSeat = curSelectItem.data
-		_P.SetCarData(self, self.curSelectSeat.carid, isPlay)
+		_P.SetCarData(self, self.curSelectSeat.carid, isPlay, true)
 	end, nil, 0.6)
 end
 
@@ -351,7 +351,7 @@ function _P.UpdateSelectState(self, index, isPlaySound)
 	_P.OnSelectParking(self, index, curSelectItem)
 
 	self.curSelectSeat = curSelectItem.data
-	_P.SetCarData(self, self.curSelectSeat.carid, isPlaySound)
+	_P.SetCarData(self, self.curSelectSeat.carid, isPlaySound, false)
 end
 
 
@@ -371,8 +371,8 @@ function _P.OnSelectParking(self, index, curSelectItem)
 end
 
 
--- 设置座驾数据
-function _P.SetCarData(self, id, isPlaySound)
+-- 设置座驾数据,isChange切换座驾
+function _P.SetCarData(self, id, isPlaySound, isChange)
 	local carData = MCar.GetCurCarData(id)
 	self.NoneText.Activity = not carData
 	self.CarTweenRect.Activity = carData
@@ -396,7 +396,7 @@ function _P.SetCarData(self, id, isPlaySound)
 	_P.SetCarAttrData(self, carData, carId)
 	_P.SetCarGraphData(self, carConf, carData)
 	_P.SetCarStaffData(self, carConf, _P.GetSortCarStaff(carData.staffs))
-	_P.SetCarUpData(self, carConf, carData)
+	_P.SetCarUpData(self, carConf, carData, isChange)
 
 	if isPlaySound and carConf.engineSound then
 		SoundMgr.Play(carConf.engineSound) -- 播放引擎声
@@ -499,7 +499,7 @@ function _P.OnCreateStaffItem(self, itemGrid, staffData, index)
 	local staffItem = {}
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Car_Main_Staff_Item", WindowType.UI, 0)
 	if itemModule ~= nil then
-		local iconBtn = itemModule:Get("BG")
+		local iconBtn = itemModule.SelfRect
 		iconBtn:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			_P.OnClickStaffItem(self, index)
@@ -535,7 +535,7 @@ function _P.UpdateOneStaffData(self, itemModule, staffData)
 	if staffData then
 		local staffConf = Csv.Personnel[staffData.value]
 		if staffConf then
-			iconImg.SpriteName = staffConf.asset3
+			iconImg.SpriteName = staffConf.asset
 			staffName.Text = staffConf.name
 		end
 	else
@@ -555,7 +555,7 @@ end
 
 
 -- 设置座驾升星、升级数据
-function _P.SetCarUpData(self, carConf, carData)
+function _P.SetCarUpData(self, carConf, carData, isChange)
 	self.TabImg1 = self.mModule:Get("Tab1")
 	self.TabImg2 = self.mModule:Get("Tab2")
 	self.TabImg3 = self.mModule:Get("Tab3")
@@ -587,7 +587,12 @@ function _P.SetCarUpData(self, carConf, carData)
 	elseif self.SelectPageId == Define.SysId.Car_StarUp then
 		_P.SetCarStarUpData(self)
 	elseif self.SelectPageId == Define.SysId.Car_AptiUp then
-		_P.SetAptiUpData(self)
+		-- 若等级不符合，默认打开升级
+		if isChange and carData.level < AtriUpNeedLevel then
+			self.tabHandle:Choose(Define.SysId.Car_LevelUp)
+		else
+			_P.SetAptiUpData(self)
+		end
 	end
 end
 
@@ -662,6 +667,16 @@ end
 function _P.OnChoose(self, funcId)
 	if self.SelectPageId == funcId then return end
 
+	-- 座驾需要达到指定等级才能进行资质强化
+	if funcId == Define.SysId.Car_AptiUp then
+		local carData = MCar.GetCurCarData(self.curSelectSeat.carid)
+		if carData and carData.level < AtriUpNeedLevel then
+			self.tabHandle:Choose(self.SelectPageId)
+			CCommon.ShowError(Csv.Text("car_main_upTips", {num = AtriUpNeedLevel}))
+			return
+		end
+	end
+
 	self.SelectPageId = funcId
 	self.upItemGrid:DestroyChildren()
 
@@ -721,7 +736,7 @@ function _P.SetCarLevelUpData(self)
 			nextAttrNum = MCar.GetCarAttrNum(carData.Attr.Meili, carData.level + 1)
 		end
 		
-		self.mModule:Get("CurAttr" .. i).Text = '+' .. ((curAttrNum == -1 and "MAX") or curAttrNum)
+		self.mModule:Get("CurAttr" .. i).Text = Csv.Text("car_main_attri" .. i) .. ':+' .. ((curAttrNum == -1 and "MAX") or curAttrNum)
 		self.mModule:Get("NextAttr" .. i).Text = '+' .. ((nextAttrNum == -1 and "MAX") or nextAttrNum)
 	end
 	self.levelUpRect.Activity = true
@@ -913,7 +928,7 @@ function _P.SetAptiUpAttrData(self, data, intensifyConf)
 	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, carId)
 	
 	for i=1, 4 do
-		--self.mModule:Get("AptiShow" .. i).Text = Csv.Text("car_main_attri" .. i) .. ':'
+		self.mModule:Get("AptiShow" .. i).Text = Csv.Text("car_main_attri" .. i) .. ':'
 		local numText = self.mModule:Get("AptiNum" .. i)
 		if i == 1 then
 			numText.Text = attrData.Wuli
@@ -1041,7 +1056,12 @@ function _R.ChangeCarBack(self, index, carData)
 		elseif self.SelectPageId == Define.SysId.Car_StarUp then
 			_P.SetCarStarUpData(self)
 		elseif self.SelectPageId == Define.SysId.Car_AptiUp then
-			_P.SetAptiUpData(self)
+			-- 若等级不符合，默认打开升级
+			if carData.level < AtriUpNeedLevel then
+				self.tabHandle:Choose(Define.SysId.Car_LevelUp)
+			else
+				_P.SetAptiUpData(self)
+			end
 		end
 
 		-- 更新总战力

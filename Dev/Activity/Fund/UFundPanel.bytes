@@ -1,0 +1,364 @@
+-- 基金投资
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local GTE_EFFECT_ID = 5
+local CanGetActorId = 10178
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.TabHandle ~= nil then
+		self.TabHandle:delete()
+		self.TabHandle = nil
+	end
+end 
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Fund_UMain")
+	self.mModule = module
+
+	module:Get("C_Text").Text = Csv.Text("InvesteFund_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local pageData = _P.GetListData()
+	_P.SetPageData(self, pageData)
+end
+
+
+function _P.SetPageData(self, pageData)
+	local count = pageData.listCount
+	local contentTransform = self.mModule:Get("PageContent")
+	contentTransform:DestroyChildren()
+
+	self.mData = pageData.listData
+	local pageModules = {}
+
+	for k,v in pairs(self.mData) do
+		pageModules[v.actId] = _P.CreatePageItem(self, contentTransform, k, v)
+	end
+	
+	if count > 0 then
+		local colorLight = Color(255/255, 225/255, 75/255, 1)
+		local colorDefault = Color(0/255, 195/255, 255/255, 1)
+		local tabHandle = TabGroup.new(function(funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023", nil, nil, nil, nil, nil, nil, colorDefault, colorLight)
+	
+		for k,v in pairs(self.mData) do
+			local fundConf = Csv.Fund[v.actId]
+			local onePageModule = pageModules[v.actId]
+			if fundConf and onePageModule then
+				tabHandle:Add(v.actId, onePageModule.imageWidget, onePageModule.textWidget, fundConf.title)
+			end
+		end
+
+		local fundBtnText = self.mModule:Get("C_text")
+		local fundBtn = self.mModule:Get("C_Btn_a")
+		fundBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickFundBtn(self)
+		end, nil, 0.95)
+		self.FundBtnText = fundBtnText
+		self.FundBtn = fundBtn
+
+		-- 取第一个数据
+		local curActId = next(self.mData)
+		local curData = self.mData[curActId]
+		if curData ~= nil then
+			tabHandle:Choose(curData.actId)
+		end
+
+		if self.TabHandle ~= nil then
+			self.TabHandle:delete()
+			self.TabHandle = nil
+		end
+		self.TabHandle = tabHandle
+	end
+end
+
+
+function _P.OnChoose(self, funcId)
+	local curData = _P.GetCurDataById(self, funcId)
+	if curData == nil then return end
+
+	local fundConf = Csv.Fund[funcId]
+	self.ActInfo = curData
+
+	self.mModule:Get("text1").Text = Csv.Text("InvesteFund_tip1")
+	self.mModule:Get("DayText").Text = Csv.Text("InvesteFund_back")
+	self.mModule:Get("Banner").SpriteName = fundConf.titleBg
+
+	local timeText = self.mModule:Get("text2")
+	local investEndTime = (self.ActInfo.investEndTime or self.ActInfo.state.endTime)
+	if self.ActInfo.state.state == MActivity.ActivityState.Doing then -- 投资截止前
+		timeText.Text = Csv.Text('InvesteFund_time', {startTime = os.date("%Y/%m/%d", self.ActInfo.state.startTime),endTime = os.date("%Y/%m/%d", investEndTime)})
+	else -- 投资截止后
+		timeText.Text = Csv.Text('InvesteFund_endTime', {startTime = os.date("%Y/%m/%d", investEndTime),endTime = os.date("%Y/%m/%d", self.ActInfo.state.endTime)})
+	end
+
+	_P.SetListData(self, funcId)
+end
+
+
+function _P.GetCurDataById(self, id)
+	for k,v in pairs(self.mData) do
+		if v.actId == id then
+			return v
+		end
+	end
+end
+
+
+function _P.GetListData()
+	local fundList = MActivity.GetListFromType(Define.ActivityType.Fund)
+	local listData = {}
+	local listCount = 0
+	if fundList ~= nil then
+		for k,v in pairs(fundList) do
+			listData[#listData + 1] = v
+			listCount = listCount + 1
+		end
+	end
+
+	table.sort(listData, function(a, b)
+		local fundConf1 = Csv.Fund[a.actId]
+		local fundConf2 = Csv.Fund[b.actId]
+
+		return fundConf1.sortId < fundConf2.sortId
+	end)
+
+	return {listData = listData, listCount = listCount}
+end
+
+
+function _P.CreatePageItem(self, itemGrid, index, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, 'M_Fund_Page_Item', WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	local nameText = itemModule:Get("name")
+	itemModule.name = 'Btn_c' .. index
+	nameText.name = "C_text" .. index
+	self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.Fund, data.actId)
+
+	return {imageWidget = itemModule.SelfRect, textWidget = nameText}
+end
+
+
+function _P.SetListData(self, actId)
+	self.mModule:Get("DayNum").Text = self.ActInfo.day
+
+	local itemContent = self.mModule:Get("Content")
+	itemContent:DestroyChildren()
+
+	self.ItemModules = {}
+	local fundConf = Csv.Fund[actId]
+	for k,v in pairs(self.ActInfo.rewardList) do
+		self.ItemModules[k] = _P.OnCreateItem(self, itemContent, v, fundConf)
+	end
+
+	_P.SetBtnState(self)
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, fundConf)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, 'M_Fund_UMain_Item', WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	local itemData = fundConf.award[data.id]
+	if itemData ~= nil and #itemData == 2 then
+		local itemConf = Csv.Item[itemData[1]]
+		local iconImg = itemModule:Get("Icon")
+		iconImg.SpriteName = itemConf.icon
+		iconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			if itemConf.id then
+				WindowMgr.Create("UBagDetailPop", itemConf.id)
+			end
+		end, nil, 1)
+
+		local qualityImg  = itemModule:Get("IconBox")
+		qualityImg.SpriteName = itemConf.colorIcon
+
+		itemModule:Get("IconNum").Text = itemData[2]
+	end
+
+	itemModule:Get("DayNum").Text = Csv.Text("InvesteFund_day" .. data.id)
+
+	local getImg = itemModule:Get("Black")
+	getImg.Activity = data.isGeted
+
+	local actorRect = self.mModule:Get("ActorPanel" .. data.id)
+	if not data.isGeted and data.id <= self.ActInfo.day then
+		if actorRect.CachedTran.childCount == 0 then
+			CCommon.CreateEffect(actorRect, CanGetActorId)
+		end
+	else
+		actorRect:DestroyChildren()
+	end
+
+	return itemModule
+end
+
+
+-- 设置按钮状态
+function _P.SetBtnState(self)
+	local hasInvestemt = self.ActInfo.day > 0
+	if hasInvestemt then
+		local hasCanGet = _P.GetCurRewardId(self)
+		if hasCanGet then
+			self.FundBtn.IsGray = false
+			self.FundBtn.RaycastTarget = true
+			self.FundBtnText.Text = Csv.Text("InvesteFund_get")
+		else -- 已领取
+			self.FundBtn.IsGray = true
+			self.FundBtn.RaycastTarget = false
+			self.FundBtnText.Text = Csv.Text("InvesteFund_geted")
+		end
+	else
+		self.FundBtn.IsGray = false
+		self.FundBtn.RaycastTarget = true
+		self.FundBtnText.Text = Csv.Text("InvesteFund_btn")
+	end
+end
+
+
+function _P.OnClickFundBtn(self)
+	local fundConf = Csv.Fund[self.ActInfo.actId]
+	local rechargeConf =  Csv.Recharge[fundConf.productId]
+	local hasInvestemt = self.ActInfo.day > 0
+	if hasInvestemt then
+		local hasCanGetId = _P.GetCurRewardId(self)
+		if hasCanGetId then
+			CActivity.GetRewardReq(self.ActInfo.actId, hasCanGetId)
+		end
+	else
+		SDKMgr.ReqPay(fundConf.productId, rechargeConf.sdkProductId, fundConf.amount, fundConf.totalGold, fundConf.productName, self.ActInfo.actId)
+	end
+end
+
+
+-- 获取当前奖励id
+function _P.GetCurRewardId(self)
+	if next(self.ActInfo.rewardList) == nil then
+		return nil
+	end
+
+	local maxNum = math.min(self.ActInfo.day, 7)
+	for i=1, maxNum do
+		if self.ActInfo.rewardList[i] ~= nil and (not self.ActInfo.rewardList[i].isGeted) then
+			return i
+		end
+	end
+end
+
+
+-- 领取奖励返回
+function _R.GetRewardBack(self, data)
+	self.ActInfo = MActivity.GetFromId(data.actId)
+	for k,v in pairs(self.mData) do
+		if v.actId == data.actId then
+			self.mData[k] = self.ActInfo
+			break
+		end
+	end
+
+	self:Lock()
+	local curGetModule = self.ItemModules[data.index]
+	local getedBgImg = curGetModule:Get("Black")
+	local getedImg = curGetModule:Get("Ylq")
+	getedBgImg.Activity = true
+	getedImg.Activity = false
+	
+	local actorRect = self.mModule:Get("ActorPanel" .. data.index)
+	actorRect:DestroyChildren()
+
+	_P.SetBtnState(self)
+	self.mModule.SelfRect:AddOnTime(function()
+		SoundMgr.Play(10004)
+		local effect = CCommon.CreateEffect(curGetModule:Get("Effect"), GTE_EFFECT_ID, getedBgImg.LocalPosition, function( ... )
+			if effect ~= nil then
+				effect:Destroy()
+			end
+
+			getedImg.Activity = data.isGeted
+			self:Unlock()
+		end, {M_Effect_Get = "JJ_Ylq"})
+		effect.SelfRect.SizeDelta = Vector2(112, 59)
+	end, nil, 0.2)
+end
+
+
+-- 投资成功返回
+function _R.UpdateViewData(self, data)
+	if self.ActInfo.actId == data.actId then
+		self.ActInfo = data
+		_P.SetListData(self, data.actId)
+	end
+
+	for k,v in pairs(self.mData) do
+		if v.actId == data.actId then
+			self.mData[k] = data
+			break
+		end
+	end
+end
+
+
+-- 活动状态发生变化
+function _R.OnUpdateViewState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		local pageData = _P.GetListData()
+		if pageData ~= nil and pageData.listCount > 0 then
+			_P.SetPageData(self, pageData)
+		else
+			CCommon.ShowError(Csv.Text("err_newofficer_end"))
+			self:Destroy()
+		end
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActInfo.actId)
+		for k,v in pairs(self.mData) do
+			if v.actId == self.ActInfo.actId then
+				self.mData[k] = self.ActInfo
+				break
+			end
+		end
+	end
+end
+
+
+return _M

@@ -40,8 +40,10 @@ function _M:OnCreate(...)
 		WindowMgr.Create("URuleTips",Define.SysId.Relations)
 	end, nil, 1.2)
 
+	moudle:Get("TextBox").Activity = false
+
 	local btn1 = moudle:Get("Icon1")
-	--btn1:AddOnPress(_P.OnPressFunc, nil)
+	btn1:AddOnPress(_P.OnPressFunc, nil)
 	btn1:AddOnButton(function(...)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URelationsRankTab")
@@ -49,7 +51,7 @@ function _M:OnCreate(...)
 	btn1.Activity = not GameSetting.IsiOSCommit
 
 	local btn2 = moudle:Get("Icon2")
-	--btn2:AddOnPress(_P.OnPressFunc, nil)
+	btn2:AddOnPress(_P.OnPressFunc, nil)
 	btn2:AddOnButton(function(...)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URelationsAdverTab")
@@ -57,61 +59,71 @@ function _M:OnCreate(...)
 
 	moudle:Get("C_TltleText").Text = Csv.Text("relations_title")
 
-	self.StaffPrefab = nil
-	self.LastStaffId = 0
-
-	moudle:Get("BSXRect").Activity = false
+	local ImgBody = moudle:Get("BSX")
+	ImgBody.Activity = false
 	_P.SetBlackMan(self)
 
 	moudle:Get("BSX"):AddOnButton(function()
 		SoundMgr.Play(10001)
+		
 		local data = MRelations.InitData
+		local hasStaffCanJoin = _P.CheckHasStaff()
 		if data ~= nil then
-			if data.state == 0 then
-				CRelations.CDaily()
-			elseif data.state == 1 then
-				CRelations.CFightRefreshMsg()
-				CRelations.CFightRefresh()
-			elseif data.state == 3 then
-				if not MBag.CheckItemEnough(COST,1) then
-					return
+			if hasStaffCanJoin then
+				if data.state == 0 then
+					--普通状态
+					--CRelations.CDaily()
+					--新，打开选择员工界面
+					WindowMgr.Create("URelationsSelectStaff",0)
+				elseif data.state == 1 then
+					--挑战中
+					CRelations.CFightRefreshMsg()
+					CRelations.CFightRefresh()
+				elseif data.state == 2 then
+					--无次数
+					CCommon.ShowError(Csv.Text("relations_nostaffs_tips"))
+				elseif data.state == 3 then
+					--免费次数用完
+					-- if not MBag.CheckItemEnough(COST,1) then
+					-- 	return
+					-- end
+					-- local costTable = {COST,1}
+					-- local isEnough,str = MBag.GetCostState(costTable,true)
+					-- local items = {}
+					-- items[COST] = MBag.GetItemNum(COST)
+					-- local params = {}
+					-- params.items = items
+					-- params.content = Csv.Text("relations_nofreetips")
+					-- if isEnough then
+					-- 	CCommon.CheckTips(function(isSure,Data)
+					-- 		if isSure then
+					-- 			CRelations.CDaily()
+					-- 		end
+					-- 	end,params,nil,"UItemCheckBox")
+					-- else
+					-- 	CCommon.ShowError(str)
+					-- end
+
+					-- 当前无60级员工或60级员工已都挑战完，修改者pyh（点击人物跳转到员工界面）
+					WindowMgr.Create("UStaff", Define.SysId.Staff)
 				end
-				local costTable = {COST,1}
-				local isEnough,str = MBag.GetCostState(costTable,true)
-				local items = {}
-				items[COST] = MBag.GetItemNum(COST)
-				local params = {}
-				params.items = items
-				params.content = Csv.Text("relations_nofreetips")
-				if isEnough then
-					CCommon.CheckTips(function(isSure,Data)
-						if isSure then
-							CRelations.CDaily()
-						end
-					end,params,nil,"UItemCheckBox")
-				else
-					CCommon.ShowError(str)
-				end
+			else
+				WindowMgr.Create("UStaff", Define.SysId.Staff)
 			end
 		end
 	end,nil,0.9)
 
 	moudle:Get("NameText_1").Text = Csv.Text("relations_T1")
 	moudle:Get("NameText_2").Text = Csv.Text("relations_T2")
-	moudle:Get("TipsText").Text = Csv.Text("relations_tip2")
 	moudle:Get("More").Text = Csv.Text("relations_tip3")
 	moudle:Get("More_0").Text = Csv.Text("relations_tip3")
 	moudle:Get("Tips_0").Text = Csv.Text("relations_tip4")
 	moudle:Get("Tips_1").Text = Csv.Text("relations_tip4")
+	moudle:Get("cishu").Text = Csv.Text("relations_cishu_title")
+	moudle:Get("Time").Text = Csv.Text("relations_refresh_time")
 	moudle:Get("Tips_1").Activity = false
 
-	-- local tween = moudle:Get("TipsBg"):DOFade(0.6,1)
-	-- tween:SetEase(CS.DG.Tweening.Ease.Linear)
-	-- tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
-
-	-- local tween1 = moudle:Get("TipsText"):DOFade(0.6,1)
-	-- tween1:SetEase(CS.DG.Tweening.Ease.Linear)
-	-- tween1:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+	-- _P.SetBobyTipText(self)
 
 	local tween2 = moudle:Get("Open"):DOAnchorPosY(5,1)
 	tween2:SetEase(CS.DG.Tweening.Ease.Linear)
@@ -121,8 +133,9 @@ function _M:OnCreate(...)
 	tween2:SetEase(CS.DG.Tweening.Ease.Linear)
 	tween2:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
 
-	moudle:Get("TextCost").Activity = false
-	moudle:Get("C_text").Text = Csv.Text("relations_refresh_cd")
+	--moudle:Get("TextCost").Activity = false
+	--moudle:Get("C_text").Text = Csv.Text("relations_refresh_cd")
+	--[[
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		local tipsTable
 		if MRelations.InitData.freenum == 0 and MRelations.InitData.exnum == 0 then
@@ -146,10 +159,8 @@ function _M:OnCreate(...)
 			CRelations.CRelationsClearCD()
 		end
 	end)
+	--]]
 
-	if MRelations.InitData ~= nil then
-		_P.RefreshView(self)
-	end
 	CRelations.CMainInit()
 	CRelations.CNews()
 	CRelations.CRelationsIn()
@@ -162,14 +173,28 @@ function _M:OnCreate(...)
 	moudle:Get("messageRoot"):AddOnButton(function()
 		moudle:Get("messageRoot").Activity = false
 	end,nil,1)
+
+	moudle:Get("ShopBtn"):AddOnButton(function()
+		WindowMgr.Create("URelationsShop")
+	end,nil,1)
+end
+
+function _P.SetBobyTipText(self)
+	local bobyTipText = self.mMoudle:Get("TipsText")
+	local hasStaffCanJoin = _P.CheckHasStaff()
+	if MRelations.InitData.state == 3 or (not hasStaffCanJoin) then
+		bobyTipText.Text = Csv.Text("relations_tip18")
+	else
+		bobyTipText.Text = Csv.Text("relations_tip2")
+	end
 end
 
 function _P.OnPressFunc(btn, funcId, data)
 	if data.isPress then
-		btn.Alpha = 1
+		btn.Color = Color(0.5,0.5,0.5,1)
 	else
-		btn.Alpha = 0
-	end	
+		btn.Color = Color(1,1,1,1)
+	end
 end
 
 function _P.SetNews(self)
@@ -186,7 +211,10 @@ function _P.SetNews(self)
 				SoundMgr.Play(10001)
 				MRelations.FightType = 3
 				MRelations.PlayerID = v.playerid
-				WindowMgr.Create("URelationsSelectStaff")
+				--WindowMgr.Create("URelationsSelectStaff")
+				--新版改为先选书再选人
+				WindowMgr.Create("URelationsCost")
+
 				moudle:Get("messageRoot").Activity = false
 			end,nil,0.9)
 			local news = Csv.RelationsNews[v.type].tips
@@ -221,41 +249,42 @@ function _P.RefreshView(self)
 	local TextTalk = moudle:Get("text")
 	local ImgBody = moudle:Get("BSX")
 	local ImgJy = moudle:Get("JY")
-	local TextCost = moudle:Get("TextCost")
+	--local TextCost = moudle:Get("TextCost")
+	local cishu = moudle:Get("cishuNum")
+	
 
+	if data.action ~= nil then
+		cishu.Text = data.action.ncur.."/"..data.action.nmax
+	end
+
+
+	ImgBody.Activity = true
+	ImgBody.SpriteName = "npc_10017"
+
+	local talkStr = _P.GetTalk(self,data.state)
+	TextTalk.Text = LuaUtil.Format(talkStr, {name = MRelations.InitData.name})--
+
+	--[[
 	local csvPersonnel
 	if data.staffid ~= nil then
-		moudle:Get("BSXRect").Activity = true
+		ImgBody.Activity = true
 		csvPersonnel = Csv.Personnel[data.staffid]
-
-		if self.LastStaffId ~= data.staffid then
-			if self.StaffPrefab ~= nil then
-				self.StaffPrefab:Destroy()
-				self.StaffPrefab = nil
-			end
-			self.LastStaffId = data.staffid
-			if csvPersonnel.prefab ~= nil and csvPersonnel.prefab > 0 then
-				self.StaffPrefab = CCommon.CreateActor(ImgBody, csvPersonnel.prefab, CCommon.ActorFieldMap.staff_lobby_main)
-				ImgBody.SpriteName = ""
-			else
-				ImgBody.SpriteName = csvPersonnel.asset
-			end
-		end
+		ImgBody.SpriteName = csvPersonnel.asset
 		ImgJy.Activity = false
 	else
-		moudle:Get("BSXRect").Activity = false
+		ImgBody.Activity = false
 		ImgJy.Activity = true
 	end
 	if data.state == 0 then
 		if csvPersonnel ~= nil then
 			TextTalk.Text = Csv.Text("relations_talk0",{name = MStaff.GetStaffName(csvPersonnel.id)})--csvPersonnel.name})
-			moudle:Get("BSXRect").Activity = true
+			ImgBody.Activity = true
 			ImgJy.Activity = false
 			TextCost.Activity = false
 		end
 	elseif data.state == 1 then
 		self.mEvent = LuaUtil.TextAddThreePoint(TextTalk, Csv.Text("relations_talk1"))
-		moudle:Get("BSXRect").Activity = true
+		ImgBody.Activity = true
 		ImgJy.Activity = false
 	elseif data.state == 2 then
 		_P.SetCDIconAndVipText(self)
@@ -267,44 +296,77 @@ function _P.RefreshView(self)
 				_P.OnUpdateTime(self)
 				end,nil,1)
 			end
-			moudle:Get("BSXRect").Activity = false
+			ImgBody.Activity = false
 			ImgJy.Activity = true
 		end
 	elseif data.state == 3 then
 		if data.exnum ~= nil and data.maxnum ~= nil then
 			TextTalk.Text = Csv.Text("relations_talk3",{num = data.exnum,max = data.maxnum})
 		end
-		moudle:Get("BSXRect").Activity = true
+		ImgBody.Activity = true
 		ImgJy.Activity = false
 		TextCost.Activity = false
 	elseif data.state == 4 then
 		TextTalk.Text = Csv.Text("relations_talk4")
-		moudle:Get("BSXRect").Activity = false
+		ImgBody.Activity = false
 		ImgJy.Activity = true
 	elseif data.state == 5 then
 		TextTalk.Text = Csv.Text("relations_talk5",{num = STAFFLEVEL})
-		moudle:Get("BSXRect").Activity = false
+		ImgBody.Activity = false
 		ImgJy.Activity = true
 	end
+	--]]
+	_P.SetBobyTipText(self)
 	local ImgTextBox = moudle:Get("TextBox")
-	ImgTextBox:AddOnTime(function()
+	moudle:Get("TipsText"):AddOnTime(function()
 		local vec = TextTalk.SizeDelta
 		moudle:Get("TextBox").SizeDelta = Vector2(vec.x + 80,vec.y + 46)
 		ImgTextBox.Activity = true
-	end,nil,0.1)
+	end,nil,0.001)
 	_P.SetBlackMan(self)
+
+	--刷新时间
+	local isMax = (data.action.ncur == data.action.nmax)
+	local time = moudle:Get("TimeNum")
+
+	if data.recoveTime ~= nil then
+		--倒计时
+		if data.recoveTime > 0 then
+			local leftTimeNum = data.recoveTime - HeartBeat.ServSecond()
+			if leftTimeNum > 0 then
+				time.Text = luaUtil.GetTimeHMS(leftTimeNum)
+			elseif isMax then
+				time.Text = Csv.Text("relations_refresh_full")
+			end
+
+			ImgTextBox:AddOnUpdate(function()
+				local leftTime = MRelations.InitData.recoveTime - HeartBeat.ServSecond()
+				if leftTime >= 0 then
+					time.Text = luaUtil.GetTimeHMS(leftTime)
+				else
+					if not isMax then
+						CRelations.CMainInit()
+					end
+				end
+			end,nil,1)
+		elseif isMax then
+			time.Text = Csv.Text("relations_refresh_full")
+		end
+	else
+		time.Text = Csv.Text("relations_refresh_full")
+	end
 end
 
 function _P.SetBlackMan(self)
-	local isShowBlack = self.mMoudle:Get("BSX").Activity
-	for i = 1, 10 do
-		local blackMan = self.mMoudle:Get("BlackMan" .. i)
-		if blackMan then
-			blackMan.Activity = isShowBlack
-		else
-			break
-		end
-	end
+	-- local isShowBlack = self.mMoudle:Get("BSX").Activity
+	-- for i = 1, 10 do
+	-- 	local blackMan = self.mMoudle:Get("BlackMan" .. i)
+	-- 	if blackMan then
+	-- 		blackMan.Activity = isShowBlack
+	-- 	else
+	-- 		break
+	-- 	end
+	-- end
 end
 
 function _P.GetCDCostText(time)
@@ -327,8 +389,9 @@ function _P.SetCDIconAndVipText(self)
 		return
 	end
 	local moudle = self.mMoudle
-	local TextCost = moudle:Get("TextCost")
-	local TextVipCost = moudle:Get("TextVipCost")
+	--local TextCost = moudle:Get("TextCost")
+	--local TextVipCost = moudle:Get("TextVipCost")
+	--[[
 	if self.mOriginTextVipCostPos == nil then
 		self.mOriginTextVipCostPos = TextVipCost.LocalPosition
 	end
@@ -336,14 +399,15 @@ function _P.SetCDIconAndVipText(self)
 		TextVipCost.LocalPosition = self.mOriginTextVipCostPos
 		TextVipCost.Text = Csv.Text("relations_refresh_free_tips")
 	elseif data.cdnum ~= nil and data.cdnum ~= 0 then
-		TextCost.Text = ""
+		--TextCost.Text = ""
 		TextVipCost.LocalPosition = Vector2(self.mOriginTextVipCostPos.x, 0)
 		TextVipCost.Text = Csv.Text("relations_refresh_free", {num = data.cdnum})
 	else
 		TextVipCost.Text = ""
 	end
+	--]]
 end
-
+--[[
 function _P.OnUpdateTime(self)
 	local moudle = self.mMoudle
 	local data = MRelations.InitData
@@ -367,6 +431,7 @@ function _P.OnUpdateTime(self)
 		end
 	end
 end
+--]]
 
 function _R.SetData(self)
 	_P.RefreshView(self)
@@ -375,7 +440,8 @@ end
 function _R.OnFightEnd(self)
 	local data = MRelations.ReportData
 	if data ~= nil then
-		self.mMoudle:Get("BSXRect").Activity = false
+		local BSX = self.mMoudle:Get("BSX")
+		BSX.Activity = false
 		_P.SetBlackMan(self)
 		self.mMoudle.SelfRect:AddOnTime(function()
 			_P.ShowFightEnd()
@@ -421,6 +487,45 @@ function _R.GetNewsPush(self)
 	else
 		moudle:Get("Tips_1").Activity = true
 	end
+end
+
+------------------------
+--秘书说话
+function _P.GetTalk(self, type)
+	-- 若无60级可以打的员工，默认将状态设置为3
+	if type ~= 3 and not _P.CheckHasStaff() then
+		type = 3
+	end
+
+	local talkData = Csv.RelationDesc
+	local allCurTypeData = {}
+	for k,v in pairs(talkData)do
+		if type == v.type then
+			allCurTypeData[#allCurTypeData + 1] = v
+		end
+	end
+
+	local listMaxNum = #allCurTypeData
+	if listMaxNum > 0 then
+		local randomNum = math.random(1, listMaxNum)
+		if allCurTypeData[randomNum] then
+			return allCurTypeData[randomNum].desc
+		end
+	end
+
+	return ''
+end
+
+-- 判定是否有60级员工且没派遣
+function _P.CheckHasStaff()
+	local isHas = false
+	for k,v in pairs(MStaff.StaffTable) do
+		if v.level >= STAFFLEVEL and MRelations.InitData.staffs[v.id] == nil then
+			isHas = true
+			break
+		end
+	end
+	return isHas
 end
 
 return _M

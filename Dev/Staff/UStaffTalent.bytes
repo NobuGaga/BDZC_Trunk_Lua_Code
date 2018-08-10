@@ -1,0 +1,114 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local _M = Class()
+local _P = {}
+
+local Color_Light = Color(255/255,223/255,96/255,1)
+local Color_Gray = Color(140/255,139/255,137/255,1)
+local Color_White = Color(1,1,1,1)
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Skill", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mStaffid = id
+	local contentTransform = moudle:Get("Content")
+	self.mTableItems = {}
+	local data = MStaff.GetStaffDataByID(id)
+	if data == nil then
+		data = Csv.Personnel[id]
+	end
+	local buffs = Csv.Personnel[id].buffs
+	if buffs ~= nil then
+		for _i, _sid in pairs(buffs) do
+			local csvBuff = Csv.Buff[_sid]
+			if csvBuff ~= nil then
+				local itemData = {}
+				local talentMoudle = JGuiManager.GetMoudle(contentTransform,"M_NewBossPK_Array_Item",WindowType.UI, 0)
+				talentMoudle:Get("yuandian").SpriteName = csvBuff.icon
+				local textTitle = talentMoudle:Get("text1")
+				local textDesc = talentMoudle:Get("text11")
+				textTitle.Text = csvBuff.title
+				textDesc.Text = csvBuff.desc
+				if data.level >= csvBuff.level then
+					textTitle.Color = Color_Light
+					textDesc.Color = Color_Light
+					itemData.isLight = true
+				else
+					textTitle.Color = Color_Gray
+					textDesc.Color = Color_Gray
+					talentMoudle:Get("JH").Text = Csv.Text("lineup_8",{num = csvBuff.level})
+					itemData.isLight = false
+				end
+				itemData.moudle = talentMoudle
+				itemData.level = csvBuff.level
+				self.mTableItems[_sid] = itemData
+			end
+		end
+	end
+
+	local csvStaff = Csv.Personnel[id]
+	local linkStaff = _P.GetSortLink(csvStaff.link)
+	for k,v in ipairs(linkStaff) do
+		local csvLink = Csv.Link[v]
+		if csvLink ~= nil then
+			local linkMoudle = JGuiManager.GetMoudle(contentTransform,"M_NewBossPK_Array_Item")
+			linkMoudle:Get("yuandian").SpriteName = csvLink.icon
+			local textTitle = linkMoudle:Get("text1")
+			local textDesc = linkMoudle:Get("text11")
+			textTitle.Text = csvLink.name
+			textDesc.Text = csvLink.tips
+			textTitle.Color = Color_White
+			textDesc.Color = Color_White
+		end
+	end
+end
+
+function _P.GetSortLink(link)
+	if link ~= nil then
+		local linkTable = link
+		table.sort(linkTable,function(a,b)
+			local csvLinkA = Csv.Link[a]
+			local csvLinkB = Csv.Link[b]
+			if csvLinkA ~= nil and csvLinkB ~= nil then
+				return csvLinkA.sort < csvLinkB.sort
+			else
+				return true
+			end
+		end)
+		return linkTable
+	else
+		return {}
+	end
+end
+
+function _M:StaffLevelUp(staffid)
+	if staffid == self.mStaffid then
+		local data = MStaff.GetStaffDataByID(staffid)
+		local tableItems = self.mTableItems
+		if tableItems ~= nil then
+			for k,v in pairs(tableItems) do
+				if data.level >= v.level and not v.isLight then
+					v.moudle:Get("text1").Color = Color_Light
+					v.moudle:Get("text11").Color = Color_Light
+					v.moudle:Get("JH").Text = ""
+					self.mTableItems[k].isLight = true
+				end
+			end
+		end
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

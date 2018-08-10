@@ -35,6 +35,8 @@ local _P = {}
 local _R = {}
 --常量定义
 local LEVEL_UP_EFFECT_ID = 10006
+local LEVEL_UP_EFFECT_ID_2 = 10177
+local ACTIVITY_ACTORID = 10039
 local TOP_BTN_COUNT = 18
 local BOTTOM_BTN_COUNT = 6
 local LEFT_BTN_COUNT = 3
@@ -44,9 +46,6 @@ local TOP_BTN_NOTICE_POS = Vector2(-45, -214)
 local ICON_EFFECTNAME = "M_Common_MainLeft_Light"
 local TWEEN_LEFTSCALE = "T_Target_Scale"
 local TWEEN_REDPACKET = "T_Redpacket_AngleZ"
-
-local BTN_CITY_IMG = "HXbian_001_16"
-local BTN_VILLA_IMG = "HXbian_001_17"
 local ASSET_LIST = 
 {
 	Define.AssetsType.Soldier,
@@ -85,7 +84,7 @@ function _R.SwitchCenterBtns(self, isShowCenterBtns)
 			moudle:Get('TaskBG').Activity = true
 		end		
 		local btn = moudle:Get("BtnBack")
-		btn.SpriteName = BTN_CITY_IMG
+		btn.SpriteName = "ty_096_2"
 		btn:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			WindowOpen.Open(Define.SysId.Home)
@@ -101,11 +100,14 @@ function _R.SwitchCenterBtns(self, isShowCenterBtns)
 		moudle:Get('RightBtns').Activity = false
 		moudle:Get('TaskBG').Activity = false
 		local btn = moudle:Get("BtnBack")
-		btn.SpriteName = BTN_VILLA_IMG
+		btn.SpriteName = "ty_096"
 		btn:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			WindowOpen.Open(Define.SysId.World)
 		end, nil, 1.2)
+	end
+	if GameSetting.IsiOSCommit then
+		moudle:Get('TaskBG').Activity = false
 	end
 end
 function _R.RefreshTopBtns(self)
@@ -221,28 +223,7 @@ function _P.RefreshPower(self, moudle)
 	moudle:Get("RolePower").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
 end
 function _P.RefreshAvatar(self, moudle)
-	moudle:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetSHeadIcon()
-end
-function _P.RefreshVip(self, moudle)
-	local vip = MPlayer.GetVip()
-	local csvVip = Csv.Vip[vip]
-	if csvVip ~= nil then
-		local imgBord = moudle:Get("VipBox")
-		if csvVip.imgBord ~= nil then
-			imgBord.Activity = true
-			imgBord.SpriteName = csvVip.imgBord
-		else
-			imgBord.Activity = false
-		end
-
-		local imgNum = moudle:Get("VipNum")
-		if csvVip.icon ~= nil then
-			imgNum.Activity = true
-			imgNum.SpriteName = csvVip.icon
-		else
-			imgNum.Activity = false
-		end
-	end
+	moudle:Get("RoleIcon").SpriteNameAutoScale = MPlayer.GetHeadIcon()
 end
 -----------------------私有函数------------------------
 
@@ -347,15 +328,6 @@ function _P.RefreshLeftBtns(self, moudle)
 		btn.SpriteName = v.icon
 		btn:AddOnButton(_P.OnPressFunc, v.id, 0.9)
 
-		---私聊气泡点点点---------
-		-- if v.id == Define.SysId.Friend then
-		-- 	local pointTab = {}
-		-- 	for i=1,3,1 do
-		-- 		pointTab[i] = moudle:Get("point" .. i)
-		-- 	end
-		-- 	LuaUtil.FriendThreePoint(btn,pointTab,spaceTime)
-		-- end
-
 		--注册小红点
 		self:RegistRedpoint(moudle:Get("leftRedpoint_" .. i), v.id)
 	end
@@ -376,7 +348,9 @@ function _P.RefreshRightBtns(self, moudle)
 			error(string.format("create main right btn error!!!string.format index:%d,funcId:%d ", i, v.id))
 			break
 		end
-		
+		if actor ~= nil then
+			actor:DestroyChildren()
+		end
 		index = i
 		btn.Activity = true
 		self.Btns[v.id] = btn
@@ -520,10 +494,10 @@ function _P.RefreshTask(self)
 		if mainTask.pro >= mainTask.maxval then
 			--已经完成表现
 			moudle:Get("TaskTween").SpriteName = "zjm_0005"
-			text.Color = Color(93/255,153/255,255/255)
+			text.Color = Color(11/255,245/255,132/255)
 		else
 			moudle:Get("TaskTween").SpriteName = "zjm_0005_1"
-			text.Color = Color(1,93/255,140/255)
+			text.Color = Color(1,35/255,35/255)
 		end
 		text.Text = csv.title
 	end
@@ -565,7 +539,6 @@ function _M:OnCreate()
 	_P.RefreshLevel(self, moudle)
 	_P.RefreshAvatar(self, moudle)
 	_P.RefreshPower(self, moudle)
-	_P.RefreshVip(self, moudle)
 
 	self:RegistCallEvent(Define.EventListenId.PlayerAvatarUpdate, function (eventHandle)
 		if self.Moudle ~= nil then
@@ -588,10 +561,6 @@ function _M:OnCreate()
 		end
 	end)
 	self:RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
-		if self.Moudle ~= nil then
-			_P.RefreshVip(self, self.Moudle)
-		end
-
 		CActivity.UpdateInvestmentRed()
 	end)
 	
@@ -600,21 +569,26 @@ function _M:OnCreate()
 	local tween = moudle:Get("TaskTween").CachedTran:GetJTweener("Main_Task")
 	tween:Play()
 	
-	local RoleLevelUp = moudle:Get("RoleLevelUp")
 	--注册小红点
-	self:RegistRedpoint(RoleLevelUp, Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp"), Define.SysId.Player)
+	self:RegistRedpoint(moudle:Get("RoleLevelUp2"), Define.SysId.Player, 1)
 	--可以升级特效
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), LEVEL_UP_EFFECT_ID)
+	CCommon.CreateEffect(moudle:Get("ActorPanel2"), LEVEL_UP_EFFECT_ID_2)
 	--点击头像
 	moudle:Get("RoleIconBg"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UPlayer")
 	end, nil, 0.9)
 
-	moudle:Get('TaskNode'):AddOnButton(function( ... )
-		SoundMgr.Play(10001)
-		WindowMgr.Create("UMainQuest")
-	end, nil, 0.9)
+	if GameSetting.IsiOSCommit then
+		moudle:Get('TaskBG').Activity = false
+	else
+		moudle:Get('TaskBG'):AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UMainQuest")
+		end, nil, 0.9)
+	end
 	moudle:Get('TaskIcon'):AddOnButton(function( ... )
 		SoundMgr.Play(10001)
 		WindowMgr.Create("UMainQuest")
@@ -622,7 +596,7 @@ function _M:OnCreate()
 
 	CCommon.CreateEffect(moudle:Get('TaskFxNode'), 10112)--主线任务特效
 
-	if MPlayer.GetLevel() < 2 then
+	if MPlayer.GetLevel() < 2 and not GameSetting.IsiOSCommit then
 		self.TaskGuideNode = CCommon.CreateEffect(moudle:Get('TaskBG'), 25)
 	end
 

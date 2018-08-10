@@ -99,23 +99,19 @@ end
 function _P.SetAureoleDataNil(self, halo,itemMoudle,k,isShowEffect)
 	itemMoudle:Get("Level").Text = Csv.Text("staff_lv",{num = 1})
 
-	local TextNow = itemMoudle:Get("NowLeft")
-	local TextNowNum = itemMoudle:Get("NowCenter")
-	local NowRight = itemMoudle:Get("NowRight")
-	local TextUp = itemMoudle:Get("UpLeft")
-	local TextUpNum = itemMoudle:Get("UpCenter")
-	local UpRight = itemMoudle:Get("UpRight")
+	local TextNow = itemMoudle:Get("Now")
+	local TextNowNum = itemMoudle:Get("NowNum")
+	local TextUp = itemMoudle:Get("Up")
+	local TextUpNum = itemMoudle:Get("UpNum")
 	local TextCost = itemMoudle:Get("Cost")
 	local BtnUp = itemMoudle:Get("BtnUp")
 
-	TextNow.Text = Csv.Text("staff_skicostN")
-	NowRight.Text = halo.effectDesc
+	TextNow.Text = Csv.Text("staff_skicostN") .. halo.effectDesc
 	TextNowNum.Text = halo.effectNumDesc
 	
 	local nextHalo = Csv.Aureole[k * 1000 + 2]
 	if nextHalo ~= nil then
-		TextUp.Text = Csv.Text("staff_hacondiN")
-		NowRight.Text = nextHalo.effectDesc
+		TextUp.Text = Csv.Text("staff_hacondiN") .. nextHalo.effectDesc
 		TextUpNum.Text = nextHalo.effectNumDesc
 		if halo.costitem ~= nil then
 			if MBag.GetItemNum(halo.costitem) >= halo.costcount then
@@ -131,8 +127,7 @@ function _P.SetAureoleDataNil(self, halo,itemMoudle,k,isShowEffect)
 			end
 		end
 	else
-		TextUp.Text = Csv.Text("staff_hacondiN")
-		UpRight.Text = halo.effectDesc
+		TextUp.Text = Csv.Text("staff_hacondiN") .. halo.effectDesc
 		TextUpNum.Text = halo.effectNumDesc
 		TextCost.Text = Csv.Text("staff_hacondi")
 	end
@@ -163,17 +158,14 @@ function _P.SetAureoleData(self, halo,itemMoudle,data,k,isShowEffect)
 	local TextLevel = itemMoudle:Get("Level")
 	TextLevel.Text = Csv.Text("staff_lv",{num = data.aureole[k].level})
 
-	local TextNow = itemMoudle:Get("NowLeft")
-	local TextNowNum = itemMoudle:Get("NowCenter")
-	local NowRight = itemMoudle:Get("NowRight")
-	local TextUp = itemMoudle:Get("UpLeft")
-	local TextUpNum = itemMoudle:Get("UpCenter")
-	local UpRight = itemMoudle:Get("UpRight")
+	local TextNow = itemMoudle:Get("Now")
+	local TextNowNum = itemMoudle:Get("NowNum")
+	local TextUp = itemMoudle:Get("Up")
+	local TextUpNum = itemMoudle:Get("UpNum")
 	local TextCost = itemMoudle:Get("Cost")
 	local BtnUp = itemMoudle:Get("BtnUp")
 
-	TextNow.Text = Csv.Text("staff_skicostN")
-	NowRight.Text = halo.effectDesc
+	TextNow.Text = Csv.Text("staff_skicostN") .. halo.effectDesc
 	TextNowNum.Text = halo.effectNumDesc
 	if data.aureole[k].level >= Csv.ColorUp[data.color].aureoleMaxLv then
 		TextUp.Text = Csv.Text("staff_eff5")
@@ -188,8 +180,7 @@ function _P.SetAureoleData(self, halo,itemMoudle,data,k,isShowEffect)
 		local nextHalo = Csv.Aureole[k * 1000 + data.aureole[k].level + 1]
 		
 		if nextHalo ~= nil then
-			TextUp.Text = Csv.Text("staff_hacondiN")
-			--NowRight.Text = nextHalo.effectDesc
+			TextUp.Text = Csv.Text("staff_hacondiN") .. nextHalo.effectDesc
 			TextUpNum.Text = nextHalo.effectNumDesc
 			if halo.costitem ~= nil then
 				if MBag.GetItemNum(halo.costitem) >= halo.costcount then
@@ -210,10 +201,8 @@ function _P.SetAureoleData(self, halo,itemMoudle,data,k,isShowEffect)
 					BtnUp.gameObject:SetActive(true)
 				end
 			end
-			UpRight.Text = nextHalo.effectDesc
 		else
-			TextUp.Text = Csv.Text("staff_hacondiN")
-			UpRight.Text = halo.effectDesc
+			TextUp.Text = Csv.Text("staff_hacondiN") .. halo.effectDesc
 			TextUpNum.Text = halo.effectNumDesc
 			TextCost.Text = Csv.Text("staff_hacondi")
 			BtnUp.gameObject:SetActive(false)

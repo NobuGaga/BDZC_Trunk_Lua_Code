@@ -1,0 +1,234 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+
+local _M = Class(WindowBase)
+
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(chooseFuncId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Bag_UMain")
+	self.mMoudle = moudle
+	moudle:Get("C_Text").Text = Csv.Text("bag_title")
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	--[[
+	local helpBtn = moudle:Get("helpBtn")
+	if helpBtn ~= nil then
+		helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+		end, nil,  1.2)
+	end
+	--]]
+
+	local node = moudle:Get("PageNode")
+	self.mImgSelect = moudle:Get("H")
+	self.PageNode = node
+
+	moudle:Get("explain"):AddOnButton(function()
+		--分解按钮打开分解界面
+
+	end,nil,1.2)
+
+	local btnUse = moudle:Get("BtnUse")
+	btnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse()
+	end, nil, 0.9)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if MBag.LastChoose == Define.SysId.Bag_Goods then
+			local csvItem = Csv.Item[itemid]
+			if csvItem.type == Define.BagType.Prop then
+				--self.ChooseMoudle:RefreshItemNum(itemid,itemcount,isAdd)
+			end
+		end
+	end)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("Content")
+	content:DestroyChildren()
+
+	local listData = _P.GetSortList(MEquipt.Equips)
+
+	self.mEquiptTableItems = {}
+	self.mEmptyTableItems = {}
+
+	for k,v in ipairs (listData) do
+		_P.OnCreateItem(self,v,false)
+	end
+
+	local length = #listData
+	local emptyNum = 0
+	if length < 30 then
+		emptyNum = 30 - length
+	else
+		if length%5 > 0 then
+			emptyNum = 5 - length%5
+		end
+	end
+	for i=1,emptyNum do
+		_P.OnCreateItem(self,nil,true)
+	end
+
+	self.mSortEquipt = listData
+	if MEquipt.LastChooseItem == nil then
+		_P.SetLastChooseItem(self)
+	end
+	_P.OnClickItem(self,MEquipt.LastChooseItem)
+end
+
+function _P.GetSortList(list)
+	local sortList = {}
+	for k,v in pairs(list) do
+		sortList[#sortList + 1] = v
+	end
+
+	table.sort(sortList, function (a, b)
+		return a.id < b.id
+	end)
+
+	return sortList
+end
+
+function _P.OnCreateItem(self,itemData,isEmpty)
+	local goods = {}
+	local contentTransform = self.mMoudle:Get("Content")
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Bag_GoodsItem", WindowType.UI, 0)
+
+	local ImgIcon = itemMoudle:Get("Icon")
+	local ImgColor = itemMoudle:Get("Color")
+	local TextNum = itemMoudle:Get("Num")
+
+	goods.moudle = itemMoudle
+	goods.data = itemData
+	if isEmpty then
+		ImgIcon.gameObject:SetActive(false)
+		ImgColor.gameObject:SetActive(true)
+		ImgColor.SpriteName = EMPTY_BACK
+		TextNum.Text = ""
+		
+		ImgColor:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(self,nil)
+		end, nil, 0.9)
+		table.insert(self.mEmptyTableItems,goods)
+	else
+		local csv = Csv.Item[itemData.itemid]
+		ImgIcon.SpriteName = csv.icon
+		ImgColor:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(self,itemData)
+			end, nil, 0.9)
+		ImgColor.SpriteName = csv.colorIcon
+		TextNum.Text = itemData.itemcount
+		goods.Destroy = function()
+			itemMoudle:Destroy()
+		end
+		self.mEquiptTableItems[itemData.itemid] = goods
+	end
+end
+
+function _P.SetLastChooseItem(self)
+	local sortEquipt = self.mSortEquipt
+	local equiptTableItems = self.mEquiptTableItems
+	local key = _P.GetTableFirstKey(equiptTableItems)
+	if key ~= nil then
+		MEquipt.LastChooseItem = equiptTableItems[key].data
+	end
+end
+
+function _P.GetTableFirstKey(sortEquipt)
+	for k,v in ipairs(sortEquipt) do
+		if v ~= nil then
+			return v.itemid
+		end
+	end
+	return nil
+end
+
+function _P.OnClickItem(self,data)
+	local moudle = self.mMoudle
+	local TextGoodsName = moudle:Get("GoodsName")
+	local TextGoodsNum = moudle:Get("GoodsNum")
+	local TextGoodsDescTitle = moudle:Get("GoodsDescTitle")
+	local TextGoodsDesc = moudle:Get("GoodsDesc")
+	local ImgIcon = moudle:Get("Icon")
+	local ImgColor = moudle:Get("IconColor")
+	local BtnUse = moudle:Get("BtnUse")
+	local TextNoneTips = moudle:Get("NoneTips")
+	ImgIcon.gameObject:SetActive(data ~= nil)
+	ImgColor.gameObject:SetActive(data ~= nil)
+	TextNoneTips.Activity = (data == nil)
+	if data ~= nil then
+		local csv = Csv.Item[data.itemid]
+		local colorStr = Csv.ItemColor[csv.color].str
+		TextGoodsName.Text = Csv.Text("common_color",{num=colorStr,name=csv.name})
+		TextGoodsNum.Text = Csv.Text("bag_num",{num = data.itemcount})
+		TextGoodsDesc.Text = csv.tips
+		TextGoodsDescTitle.Text = Csv.Text("bag_desc")
+		ImgIcon.SpriteName = csv.icon
+		ImgColor.SpriteName = csv.colorIcon
+
+		--[[
+			--展示装备/更换/卸下
+
+		--]]
+		if self.mImgSelect ~= nil then
+			local item = self.mEquiptTableItems[data.itemid]
+			if item ~= nil and item.moudle ~= nil then
+				local itemMoudle = item.moudle
+				self.mImgSelect.Activity = true
+				self.mImgSelect:SetParent(moudle.SelfRect.CachedTran)
+				self.mImgSelect.CachedTran:SetSiblingIndex(0)
+				self.mImgSelect.LocalPosition = Vector2(0,0)
+				self.mImgSelect:SetParent(itemMoudle.SelfRect.CachedTran)
+				self.mImgSelect.CachedTran:SetSiblingIndex(1)
+				self.mImgSelect.LocalPosition = Vector2(0,0)
+			end
+		end
+	else
+		TextGoodsName.Text = ""
+		TextGoodsNum.Text = ""
+		TextGoodsDesc.Text = ""
+		TextGoodsDescTitle.Text = ""
+		BtnUse.Activity = false
+		if self.mImgSelect ~= nil then
+			self.mImgSelect.Activity = false
+		end
+	end
+	MEquipt.LastChooseItem = data
+end
+
+--点击道具
+function _P.OnClickUse()
+	local itemData = MBag.LastChooseItem
+	if itemData ~= nil then
+		local csvItem = Csv.Item[itemData.itemid]
+
+		--装备/替换/卸下
+	end
+end
+
+
+return _M

@@ -9,6 +9,7 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local CCommon = JRequire "Dev.Common.CCommon"
 local luaUtil = JRequire"Libs.LuaUtil"
 local MBag = JRequire "Dev.Bag.MBag"
+local ColorSpriteNames = {'hq_box_01', 'hq_box_02', 'hq_box_03', 'hq_box_04', 'hq_box_05', 'hq_box_06', 'hq_box_06'}
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -203,7 +204,7 @@ function _P.SetOneCityData(self, data, travalLoopCount, isSetHeadPos)
 		if data.posId == MaxNum then
 			qualityImg.SpriteName = 'bide_2'
 		else
-			qualityImg.SpriteName = itemConf.colorIcon
+			qualityImg.SpriteName = ColorSpriteNames[itemConf.color]
 		end
 
 		local scaleNum = QualityScaleNumArr[(itemConf.color or 1)]

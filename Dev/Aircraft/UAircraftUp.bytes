@@ -25,6 +25,8 @@ local btnClose = "btnClose"
 local PowerCsv = "Girl_skill_type"
 --不存在最大等级飞机图片
 local NextNotExitAircraft = "Air_010"
+--最大等级显示等阶数
+local MaxLevelSprite = "xy_007_max"
 
 local COLOR_BLACK = Color(0, 0, 0, 1)
 
@@ -73,7 +75,7 @@ function _P.InitMoudleTopInfo(self)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end)
-	if nil ~= Csv.Rule[Define.SysId.Aircraft] then
+	if Csv.Rule[Define.SysId.Aircraft] then
 		local btnInfo = self.moudle:Get("btnInfo")
 		if btnInfo ~= nil then
 			btnInfo:AddOnButton(function ( ... )
@@ -90,8 +92,14 @@ function _P.InifAircraftInfo(self)
 	self.nameLevel = self.moudle:Get("nameLevel")
 	self.textPower = self.moudle:Get("textPower")
 	self.textPowerAdd = self.moudle:Get("textPowerAdd")
+	self.textAttrTips1 = self.moudle:Get("textAttrTips1")
+	self.textAttrTips2 = self.moudle:Get("textAttrTips2")
+	self.arrow1 = self.moudle:Get("arrow1")
+	self.arrow2 = self.moudle:Get("arrow2")
 	self.textAttr1 = self.moudle:Get("textAttr1")
 	self.textAttr2 = self.moudle:Get("textAttr2")
+	self.textSeatTips = self.moudle:Get("textSeatTips")
+	self.arrowSeat = self.moudle:Get("arrowSeat")
 	self.textSeat = self.moudle:Get("textSeat")
 end
 
@@ -115,7 +123,7 @@ function _P.InitAircraftList(self)
 		item.moudleRect = moudle.SelfRect
 		item.aircraft = moudle:Get("aircraft")
 		item.propeller = moudle:Get("propeller")
-		item.textLevel = moudle:Get("textLevel")
+		item.sptLevel = moudle:Get("sptLevel")
 		moudle:Get("textLock").Text = Csv.Text("Wharf_pokedex8")
 		item.unLockBg = moudle:Get("unLockBg")
 		item.textMax = moudle:Get("textMax")
@@ -123,7 +131,7 @@ function _P.InitAircraftList(self)
 		item.moudleRect.Activity = false
 		if nil == self.listMoveDis then
 			local layout = self.content:AddHorizontalLayoutGroup()
-			if nil ~= layout then
+			if layout then
 				self.listMoveDis = -(item.moudleRect.SizeDelta.x + layout.spacing)
 			end
 		end
@@ -143,8 +151,8 @@ end
 
 --初始化消耗道具
 function _P.InitCost(self)
+	self.costLayout = self.moudle:Get("costLayout")
 	self.textCostNum = self.moudle:Get("textCostNum")
-	self.moudle:Get("textCostName").Text = Csv.Text("welfare_monthCard_getday3")
 
 	self.btnUp = self.moudle:Get("btnUp")
 	self.btnUp:AddOnButton(function()
@@ -164,7 +172,7 @@ end
 --刷新飞机进化界面
 function _P.RefreshView(self)
 	local csvAircraft = Csv.Aircraft[MAircraft.AircraftID]
-	if nil ~= csvAircraft then
+	if csvAircraft then
 		_P.RefreshAircraftInfo(self, csvAircraft)
 		_P.RefreshAircraftDisplay(self, csvAircraft)
 	else 
@@ -177,7 +185,7 @@ end
 
 function _P.RefreshAircraftInfo(self, csvAircraft)
 	self.textName.Text = csvAircraft.name
-	if nil ~= csvAircraft.name_asset then
+	if csvAircraft.name_asset then
 		self.nameLevel.SpriteName = csvAircraft.name_asset
 	else
 		error("表 Aircraft 对应的ID " .. MAircraft.AircraftID .. " 没有 name_asset 字段")
@@ -193,44 +201,43 @@ function _P.RefreshAircraftInfo(self, csvAircraft)
 		self.textPowerAdd.Text = Csv.Text("aircraft_up_add_power", {num = nextLevelPower - originPower})
 	end
 
-	_P.RefreshAircraftPowerInfo(self, Csv.Aircraft[csvAircraft.next_id])
+	_P.RefreshAircraftPowerInfo(self, Csv.Aircraft[csvAircraft.next_id], csvAircraft)
 end
 
 --刷新底部数值面板
-function _P.RefreshAircraftPowerInfo(self, csvNextAircraft)
-	if nil ~= csvNextAircraft then
-		if nil ~= csvNextAircraft.attr and "table" == type(csvNextAircraft.attr) then
-			local index = 1
-			for _, value in pairs(csvNextAircraft.attr) do
-				local textTemp = self[("textAttr" .. index)]
-				if nil == textTemp or nil == value[1] or nil == value[2] then 
-					break
-				end
-				textTemp.Text = Csv.Text("aircraft_up_attr", {text = Csv.Text(PowerCsv .. value[1]), num = value[2]})
-				index = index + 1
-			end
-		end
-		if nil ~= csvNextAircraft.seat_num then
-			self.textSeat.Text = Csv.Text("aircraft_up_attr", {text = Csv.Text("aircraft_up_seat"), num = csvNextAircraft.seat_num})
-		end
-	else
-		csvNextAircraft = Csv.Aircraft[MAircraft.AircraftID]
+function _P.RefreshAircraftPowerInfo(self, csvNextAircraft, csvCurAircraft)
+	if csvNextAircraft == nil then
+		csvNextAircraft = csvCurAircraft
+	end
+	if csvNextAircraft.attr and "table" == type(csvNextAircraft.attr) then
 		local index = 1
-		for _, value in pairs(csvNextAircraft.attr) do
-			local textTemp = self[("textAttr" .. index)]
-			if nil == textTemp or nil == value[1] or nil == value[2] then 
+		for key, value in pairs(csvNextAircraft.attr) do
+			local textTips = self[("textAttrTips" .. index)]
+			local textNum = self[("textAttr" .. index)]
+			if nil == textTips or nil == textNum or nil == value[1] or nil == value[2] then 
 				break
 			end
-			textTemp.Text = Csv.Text("aircraft_up_attr", {text = Csv.Text(PowerCsv .. value[1]), num = Csv.Text("aircraft_up_max_attr")})
+			if csvCurAircraft.attr and csvCurAircraft.attr[key] and csvCurAircraft.attr[key][1] and csvCurAircraft.attr[key][2] then
+				textTips.Text = Csv.Text("aircraft_up_attr_tips", {text = Csv.Text(PowerCsv .. value[1]), num = csvCurAircraft.attr[key][2]})
+			end
+			if MAircraft.IsMaxLevel() then
+				textNum.Text = Csv.Text("aircraft_up_max_cost")
+				self.textSeat.Text = Csv.Text("aircraft_up_max_cost")
+			else
+				textNum.Text = value[2]
+				self.textSeat.Text = csvNextAircraft.seat_num
+			end
 			index = index + 1
 		end
-		self.textSeat.Text = Csv.Text("aircraft_up_attr", {text = Csv.Text("aircraft_up_seat"), num = Csv.Text("aircraft_up_max_attr")})
+	end
+	if csvNextAircraft.seat_num and csvCurAircraft.seat_num then
+		self.textSeatTips.Text = Csv.Text("aircraft_up_attr_tips", {text = Csv.Text("aircraft_up_seat"), num = csvCurAircraft.seat_num})
 	end
 end
 
 --刷新飞机显示
 function _P.RefreshAircraftDisplay(self, csvAircraft)
-	if nil ~= csvAircraft.asset then
+	if csvAircraft.asset then
 		self.airCraft.SpriteName = csvAircraft.asset
 		self.flyHighestPosY = (JGuiManager.GuiRoot.Height + self.airCraft.SizeDelta.y) / 2
 	else
@@ -245,7 +252,7 @@ function _P.RefreshAircraftDisplay(self, csvAircraft)
 
 	self.propeller.SpriteName = self.airCraftAnimCsv.prop_name
 	local pos = self.airCraftAnimCsv.prop_pos
-	if nil ~= pos then
+	if pos then
 		if nil == pos[1] or nil == pos[2] then
 			error("表 AircraftAnimation 对应的资源图片名 " .. self.airCraft.SpriteName or "nil" .. " prop_pos 字段配置错误")
 		end
@@ -260,19 +267,19 @@ function _P.RefreshAircraftList(self)
 	self.content.LocalPosition = Vector2(0, self.content.LocalPosition.y)
 	local aircraftID = MAircraft.AircraftID
 	for _, item in ipairs(self.aircraftList) do
-		if nil ~= aircraftID and 0 ~= aircraftID then
+		if aircraftID and 0 ~= aircraftID then
 			item.unLockBg.Activity = MAircraft.AircraftID ~= aircraftID
 
 			local csvAircraft = Csv.Aircraft[aircraftID]
-			if nil ~= csvAircraft.asset then
+			if csvAircraft.asset then
 				item.aircraft.SpriteName = csvAircraft.asset
 			else
 				error("表 Aircraft 对应的ID " .. aircraftID .. " 没有 asset 字段")
 				return
 			end
 
-			if nil ~= csvAircraft.level then
-				item.textLevel.Text = Csv.Text("aircraft_up_level", {level = csvAircraft.level})
+			if csvAircraft.level then
+				item.sptLevel.SpriteName = csvAircraft.name_asset
 			else
 				error("表 Aircraft 对应的ID " .. aircraftID .. " 没有 level 字段")
 				return
@@ -285,7 +292,7 @@ function _P.RefreshAircraftList(self)
 			item.aircraft.SpriteName = NextNotExitAircraft
 			item.aircraft.Color = COLOR_BLACK
 			item.propeller.Color = COLOR_BLACK
-			item.textLevel.Text = Csv.Text("aircraft_up_max_level")
+			item.sptLevel.SpriteName = MaxLevelSprite
 			item.textMax.Text = Csv.Text("aircraft_up_max_attr")
 			aircraftID = nil
 		end
@@ -305,9 +312,9 @@ end
 --设置螺旋桨位置
 function _P.SetPropellerPos(self, propeller, spriteName)
 	local csvAircraftAnimation = Csv.AircraftAnimation[spriteName]
-	if nil ~= csvAircraftAnimation then
+	if csvAircraftAnimation then
 		local pos = csvAircraftAnimation.prop_skin_pos
-		if nil ~= pos then
+		if pos then
 			if nil == pos[1] or nil == pos[2] then
 				error("表 AircraftAnimation 对应的资源图片名 " .. spriteName or "nil" .. " prop_skin_pos 字段配置错误")
 				return
@@ -329,12 +336,13 @@ function _P.RefreshCostItem(self)
 	if MAircraft.IsMaxLevel() then
 		self.btnUp.Activity = false
 		self.textMaxLevel.Text = Csv.Text("aircraft_up_max")
-		self.textCostNum.Text = Csv.Text("aircraft_up_cost_max", {need = Csv.Text("aircraft_up_max_cost"), own = itemNum})
+		self.costLayout.Activity = false
 	else
 		self.btnUp.Activity = true
 		self.textMaxLevel.Text = ""
 		local needNum = MAircraft.UpCost[CostItemID] or 0
 		local isEnough = itemNum >= needNum
+		self.costLayout.Activity = true
 		self.textCostNum.Text = Csv.Text(((isEnough and "aircraft_up_cost_enough") or "aircraft_up_cost_not_enough"), {need = needNum, own = itemNum})
 		self.btnUp.IsGray = not isEnough
 		self.btnUp.RaycastTarget = isEnough
@@ -358,9 +366,9 @@ end
 
 --获取飞机动画表对应的飞行特效ID
 function _P.GetCsvEffectIDByName(self, effectID)
-	if nil ~= self.airCraftAnimCsv.propEffect then
+	if self.airCraftAnimCsv.propEffect then
 		local csvValue = self.airCraftAnimCsv.propEffect[effectID]
-		if nil ~= csvValue then
+		if csvValue then
 			return csvValue
 		else
 			error("表 AircraftAnimation 对应的资源图片名 " .. self.airCraft.SpriteName or "nil" 
@@ -391,7 +399,7 @@ function _P.PlayFly(self, isUp)
 	local time = (csvEffect and csvEffect.dura) or 1
 	local temp = self.airCraft:DOAnchorPosY(distance, time)
 	local csvAircraft = Csv.Aircraft[MAircraft.AircraftID]
-	if nil ~= csvAircraft then
+	if csvAircraft then
 		if isUp then
 			self.airCraft:DOAnchorPosY(self.flyHighestPosY, time):OnComplete(function ()
 				self.flyEffectNode:DestroyChildren()

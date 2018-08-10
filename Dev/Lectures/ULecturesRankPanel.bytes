@@ -9,22 +9,8 @@ local RankVertical = JRequire "Dev.Common.RankVertical"
 
 local WeekRankId = Define.RankType.LectureWeekRank
 local MonthRankId = Define.RankType.LectureMonthRank
-
---按钮图片
-local _DefaultImg = "yth_023_2"
-local _LightImg = "yth_023"
-
---按钮图片大小
-local _DefaultImgSize = Vector2(178,57)
-local _LightImgSize = Vector2(178,70)
-
---字大小
-local _DefaultFontSize = 32
-local _LightFontSize = 34
-
---字颜色
-local _DefaultFontColor = Color(1,1,1,1)
-local _LightFontColor = Color(135/255,135/255,168/255,1)
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -70,10 +56,9 @@ function _M:OnCreate()
 	module:Get("Fraction").Text = Csv.Text("lectures_rank_level")
 	module:Get("JiFen").Text = Csv.Text("lectures_rank_zhimingdu")
 	module:Get("Tips").Text = Csv.Text("lectures_rank_tip")
-	module:Get("RankBgText").Text = Csv.Text("xinguan_rank_mine_title")
-	-- module:Get("OwnName").Text = Csv.Text("lectures_rank_curName")
-	-- module:Get("OwnRanking").Text = Csv.Text("lectures_rank_curNum")
-	-- module:Get("OwnFraction").Text = Csv.Text("lectures_rank_curDu")
+	module:Get("OwnName").Text = Csv.Text("lectures_rank_curName")
+	module:Get("OwnRanking").Text = Csv.Text("lectures_rank_curNum")
+	module:Get("OwnFraction").Text = Csv.Text("lectures_rank_curDu")
 
 	self.noneText = module:Get("none")
 	self.noneText.Text = Csv.Text("club_rank_none")
@@ -110,15 +95,10 @@ end
 
 function _P.OnSetPageText(self)
 	local isWeekRank = self.curSelectToggle == 1
-	self.personSelectImg.SpriteName = ((isWeekRank and _LightImg) or _DefaultImg)
-	self.gangSelectImg.SpriteName = ((not isWeekRank and _LightImg) or _DefaultImg)
-	self.personSelectImg.SizeDelta = ((isWeekRank and _LightImgSize) or _DefaultImgSize)
-	self.gangSelectImg.SizeDelta = ((not isWeekRank and _LightImgSize) or _DefaultImgSize)
-
-	self.weekBtnText.Color = ((isWeekRank and _LightFontColor) or _DefaultFontColor)
-	self.monthBtnText.Color = ((not isWeekRank and _LightFontColor) or _DefaultFontColor)
-	self.weekBtnText.FontSize = ((isWeekRank and _LightFontSize) or _DefaultFontSize)
-	self.monthBtnText.FontSize = ((not isWeekRank and _LightFontSize) or _DefaultFontSize)
+	self.personSelectImg.Color = ((isWeekRank and PAGECOLOR1) or PAGECOLOR2)
+	self.gangSelectImg.Color = ((not isWeekRank and PAGECOLOR1) or PAGECOLOR2)
+	self.weekBtnText.Color = ((isWeekRank and Color.black) or Color.white)
+	self.monthBtnText.Color = ((not isWeekRank and Color.black) or Color.white)
 
 	_P.SetOwnData(self)
 end
@@ -246,7 +226,7 @@ end
 -- 设置玩家数据
 function _P.SetOwnData(self, data)
 	local playerName = MPlayer.GetName()
-	local nameText = self.mModule:Get("NameText")
+	local nameText = self.mModule:Get("nameText")
 	local rankText = self.mModule:Get("RankingText")
 	local scoreText = self.mModule:Get("FractionText")
 

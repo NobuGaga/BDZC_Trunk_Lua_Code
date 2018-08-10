@@ -2,14 +2,10 @@ local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MWharf = JRequire "Dev.Wharf.MWharf"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
-local CCommon = JRequire"Dev.Common.CCommon"
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
-
---美女图片名或者动画ID
-local GirlAssetOrSpineID = Csv.Const(20154)
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -33,15 +29,6 @@ function _M:OnCreate(id)
 
 		WindowMgr.Call("UWharfGirlRelation","CheckGirlDone")
 	end)
-
-	local girlNode = moudle:Get("BSX")
-	local csvEffect = Csv.Effect[GirlAssetOrSpineID]
-	if csvEffect and csvEffect.prefab then
-		CCommon.CreateActor(girlNode, GirlAssetOrSpineID, CCommon.ActorFieldMap.wharf_pk_fail)
-		girlNode.SpriteName = ""
-	else
-		girlNode.SpriteName = GirlAssetOrSpineID
-	end
 end
 
 return _M

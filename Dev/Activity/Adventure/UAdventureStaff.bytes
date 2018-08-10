@@ -16,18 +16,16 @@ local BUTTOM_BEGIN = 300
 local BUTTOM_END = 1200
 local DEFAULT_ICON = "HeroList_Add"
 local POSY_ANIM = "T_Adventure_PosY"
-local QUALITY1 = Color(203/255,203/255,203/255,1)
-local QUALITY2 = Color(97/255,253/255,150/255,1)
-local QUALITY3 = Color(96/255,193/255,249/255,1)
-local QUALITY4 = Color(219/255,93/255,243/255,1)
-local QUALITY5 = Color(255/255,162/255,21/255,1)
-local QUALITY6 = Color(255/255,93/255,140/255,1)
+local MAX_SIGN_NUM = 6
 
 local PINK = Color(255/255,93/255,140/255)
 local BLUE = Color(93/255,153/255,255/255)
 local RedStr = 'ff5d8c'
 local GreenStr = '5d99ff'
 local AtriIconNames = {"ty_133", "ty_134", "ty_135", "ty_136"}
+local StaffRectPos = {Vector2(0, -332), Vector2(0, -460)}
+-- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
+-- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -42,7 +40,7 @@ function _M:Dispatch(funcName, ...)
 end
 
 function _R.OnCompleteEvent(self, data, callBack)
-	WindowMgr.Create("UAdventureResult", data, function()
+	WindowMgr.Create("UAdventureResult", data, self.mData.isDown, self.mData.taskId, function()
 		self:Destroy()
 		if callBack then
 			callBack()
@@ -209,15 +207,8 @@ function _P.CheckIsSuit(self,suitData, data)
 		checkSum = 99999999
 	elseif _P.IsContains(self,data.id) and checkSum > 0 then
 		return 3
-	--使用过没加班
-	elseif _P.IsUse(self,data.id) and not _P.IsOverTime(self,data.id) then
-		return 2
-	--使用过加班
-	elseif _P.IsUse(self,data.id) and _P.IsOverTime(self,data.id) then
-		return 1
 	end
-	-- print("checkSum",checkSum.."dataId:",data.id)
-	-- by:pyh 可选条件的加班要排在后面
+
 	return ((isChoose and checkSum == 1) and 4) or checkSum
 end
 
@@ -226,7 +217,7 @@ function _P.SetAskStaffList(self)
 	local contentTransform = self.mModule:Get("StaffContent")
 	contentTransform:DestroyChildren()
 
-	local reqstaffDatas = _P.GetReqStaffs(self)
+	local reqstaffDatas = self.mData.eventInfo
 	for index=1,#reqstaffDatas do
 		self.mReqTableItems[index] = _P.OnCreateAskItem(self,reqstaffDatas[index],contentTransform,index)
 	end
@@ -264,10 +255,10 @@ function _P.OnCreateAskItem(self,data,contentTransform,index)
 	itemMoudle:Get("Ing").Activity = false
 	_P.SetReqDetail(data.attrInfo,itemMoudle,nil)
 	icon:AddOnButton(function(...)
+		self.mModule:Get("StaffRect").LocalPosition = StaffRectPos[2]
 		self.Top:DOAnchorPosY(TOP_END, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
 		self.Buttom:DOAnchorPosY(BUTTOM_END, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
 		_P.SetSelect(self,index)
-		-- print("点击了格子ID",LuaUtil.DumpTable(self.mReqTableItems[index]))
 		_P.SetOwnStaffList(self,data.attrInfo,index)
 	end,nil,1.05)
 
@@ -280,12 +271,12 @@ function _P.SetReqDetail(data, module,staffData)
 	if staffData ~= nil then
 		module:Get("Name").Text = MStaff.GetStaffName(staffData.id)
 		module:Get("BG_2").Activity = true
-		module:Get("BG_3").Activity = true
-		module:Get("Level").Text = staffData.level
+		-- module:Get("BG_3").Activity = true
+		module:Get("Level").Text = 'Lv.' .. staffData.level
 		module:Get("BG_2").SpriteName = MStaff.Color2Image[staffData.color]
 	else
 		module:Get("BG_2").Activity = false
-		module:Get("BG_3").Activity = false
+		-- module:Get("BG_3").Activity = false
 		module:Get("Level").Text = ""
 		module:Get("Name").Text = ""
 	end
@@ -382,8 +373,6 @@ function _P.CheckTotalAtriIsShow(self)
 
 	if self.mData.otherEventRule == nil or self.mData.otherEventRule[1] == nil or self.mData.otherEventRule[1] == 0 then -- 不需要条件
 		tipRect.Activity = false
-		-- totalGouImg.Activity = true
-		-- conditionText.Text = Csv.Text("adventure_none")
 	else
 		tipRect.Activity = true
 		if self.selectDataList ~= nil and next(self.selectDataList) ~= nil then
@@ -403,45 +392,6 @@ function _P.CheckTotalAtriIsShow(self)
 	end
 
 	conditionText:AddContentSizeFitter():SetLayoutHorizontal()
-end
-
-function _P.GetOutColor(self, type)
-	local switch = {
-		--白
-		[1] = function()
-			return QUALITY1
-		end,
-		--绿
-		[2] = function()
-			return QUALITY2
-		end,
-		--蓝
-		[3] = function()
-			return QUALITY3
-		end,
-		--紫
-		[4] = function()
-			return QUALITY4
-		end,
-		--橙色
-		[5] = function()
-			return QUALITY5
-		end,
-		--红
-		[6] = function()
-			return QUALITY6
-		end,
-	}
-
-	local func = switch[type]
-	if func ~= nil then
-		return func()
-	end
-end
-
---获取需求员工数据
-function _P.GetReqStaffs(self)
-	return self.mData.eventInfo
 end
 
 function _P.SetOwnStaffList(self,suitData,index)
@@ -466,19 +416,20 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Adventure_Choose_Item", WindowType.UI, 0)
 
 	local csvPerson = Csv.Personnel[data.id]
-	local ImgIcon = itemMoudle:Get("head")
-	ImgIcon.SpriteName = csvPerson.asset3
+	local ImgIcon = itemMoudle:Get("Head")
+	ImgIcon.SpriteName = csvPerson.asset
+
+	itemMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[data.color]
 
 	local TextLevel = itemMoudle:Get("number1")
-	TextLevel.Text = data.level
+	TextLevel.Text = Csv.Text("club_info_company") .. data.level
 	local sendBtnText = itemMoudle:Get("C_Text")
 	local sendBtn = itemMoudle:Get("C_Btn_b")
 	sendBtn.SpriteName = "ty_024"
 	sendBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		if _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
-			CCommon.ShowError(Csv.Text("adventure_overtime"))
-		elseif _P.IsContains(self,data.id) then
+
+		if _P.IsContains(self,data.id) then
 			--召回
 			_P.OnCallBackStaff(self,data,suitData)
 			itemMoudle:Get("Tips").Activity = false
@@ -486,47 +437,28 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 			sendBtn.SpriteName = "ty_024"
 			_P.SetConfiromState(self)
 		else
-			--派遣（假如该格子有员工，旧员工应该下架，新员工上来，不应该弹提示，修改者：pyh）
-			if _P.IsUse(self,data.id) and not _P.IsOverTime(self,data.id) then -- 加班
-				--加班
-				local itemId = Csv.Const(20101)[11]
-				local haveNum = MBag.GetItemNum(itemId)
-				local itemCsv = Csv.Item[itemId]
-				local content = Csv.Text("battle_chooseCost", {name = itemCsv.name, num = 1, staff = MStaff.GetStaffName(data.id)})
-				CCommon.CheckTips(function(isSure)
-					if isSure then
-						if haveNum < 1 then
-							CCommon.ShowError(Csv.Text("adventure_cont_enough", {name = itemCsv.name}))
-						else
-							_P.OnStaffOverTime(self,data)
-							sendBtnText.Text = Csv.Text("adventure_staff_send")
-							sendBtn.SpriteName = "ty_024"
-						end
-					end
-				end,{items = {[itemId] = haveNum}, content = content},nil,"UItemCheckBox")
-			else -- 派遣
-				local oldData = _P.IsItemFull(self, index)
-				if oldData then
-					_P.OnCallBackStaff(self, oldData.data, oldData.suitData)
+			-- 派遣
+			local oldData = _P.IsItemFull(self, index)
+			if oldData then
+				_P.OnCallBackStaff(self, oldData.data, oldData.suitData)
 
-					local oldItemModule = self.mRawTableItems[oldData.data.id].module
-					if oldItemModule then
-						oldItemModule:Get("Tips").Activity = false
-						oldItemModule:Get("C_Text").Text = Csv.Text("adventure_staff_send")
-						oldItemModule:Get("C_Btn_b").SpriteName = "ty_024"
-					end
+				local oldItemModule = self.mRawTableItems[oldData.data.id].module
+				if oldItemModule then
+					oldItemModule:Get("Tips").Activity = false
+					oldItemModule:Get("C_Text").Text = Csv.Text("adventure_staff_send")
+					oldItemModule:Get("C_Btn_b").SpriteName = "ty_024"
 				end
-
-				_P.OnClickSendItem(self,data,suitData,index)
-				itemMoudle:Get("line1").Color = BLUE
-				itemMoudle:Get("line2").Color = BLUE
-				itemMoudle:Get("Tips").Color = BLUE
-				itemMoudle:Get("Tips").Activity = true
-				itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended")
-				sendBtnText.Text = Csv.Text("adventure_staff_callback")
-				_P.SetConfiromState(self)
-				sendBtn.SpriteName = "HX_ty_024_2"
 			end
+
+			_P.OnClickSendItem(self,data,suitData,index)
+			itemMoudle:Get("line1").Color = BLUE
+			itemMoudle:Get("line2").Color = BLUE
+			itemMoudle:Get("Tips").Color = BLUE
+			itemMoudle:Get("Tips").Activity = true
+			itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended")
+			sendBtnText.Text = Csv.Text("adventure_staff_callback")
+			_P.SetConfiromState(self)
+				sendBtn.SpriteName = "sh_032"
 		end
 		end, nil, 0.9)
 	local TextName = itemMoudle:Get("name")
@@ -553,34 +485,75 @@ function _P.OnCreateOwnItem(self,data,contentTransform,suitData,index)
 	allattrText.Text = MStaff.GetAllAttr(data.id)
 	itemMoudle:Get("combat").Text = Csv.Text("adventure_staff_allattr")
 
-	local isGray = _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id)
-	sendBtn.IsGray = isGray
-	sendBtn.RaycastTarget = not isGray
-	--派遣
-
 	if _P.IsContains(self,data.id) then
 		--召回
 		itemMoudle:Get("Tips").Activity = true
 		itemMoudle:Get("line1").Color = BLUE
 		itemMoudle:Get("line2").Color = BLUE
 		itemMoudle:Get("Tips").Color = BLUE
-		sendBtn.SpriteName = "HX_ty_024_2"
+		sendBtn.SpriteName = "sh_032"
 		itemMoudle:Get("Tips").Text =Csv.Text("adventure_sended") 
 		sendBtnText.Text = Csv.Text("adventure_staff_callback")
-	elseif _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
-		--一加班过
-		sendBtnText.Text = Csv.Text("adventure_over")
-	elseif not _P.IsOverTime(self,data.id) and _P.IsUse(self,data.id) then
-		--加班
-		sendBtnText.Text = Csv.Text("adventure_staff_overtime")
-		sendBtn.SpriteName = "HX_ty_024_1"
 	else
-		--可用
+		--派遣
 		sendBtnText.Text = Csv.Text("adventure_staff_send")
 	end
+
+	-- 设置标签数据
+	for i=1,MAX_SIGN_NUM do
+		local signImg = itemMoudle:Get("Tab" .. i)
+		signImg.Activity = false
+	end
+
+	local signList = csvPerson.labelImg
+	for k,v in pairs(signList) do
+		local signImg = itemMoudle:Get("Tab" .. k)
+		signImg.Activity = true
+		signImg.SpriteName = v
+	end
+	-- local signList = _P.SetSignLightState(csvPerson.judge, suitData, csvPerson.labelImg)
+	-- for i,v in ipairs(signList) do
+	-- 	local signImg = itemMoudle:Get("Tab" .. i)
+	-- 	if signImg then
+	-- 		signImg.Activity = true
+	-- 		signImg.SpriteName = v.imgName
+	-- 	end
+	-- end
+	itemMoudle:Get("TabRect").Activity = #signList ~= 0
 	
 	staff.module = itemMoudle
 	return staff
+end
+
+function _P.SetSignLightState(showData, suitData, imgData)
+	local hasData = _P.GetSuitData(suitData)
+	local listData = {}
+	for key,value in pairs(showData) do 
+		if hasData ~= nil and next(hasData) ~= nil then
+			local pictureName = imgData[key]
+			for hasKey,hasValue in pairs(hasData) do
+				if value == hasValue.val then
+					listData[#listData + 1] = {imgName = pictureName}
+					break
+				end
+			end
+		end
+	end
+
+	return listData
+end
+
+function _P.GetSuitData(suitData)
+	local listData = {}
+	for k,v in pairs(suitData) do
+		if v.type == 10 then
+			listData[#listData + 1] = v
+		elseif (v.type <= 4 and v.type >= 1) then
+			listData[#listData + 1] = {type = v.type, val = v.type + 12}
+		end
+	end
+
+	return listData
 end
 
 function _P.SetStaffItem(self,suitData,data,module)
@@ -595,24 +568,23 @@ function _P.SetStaffItem(self,suitData,data,module)
 	end
 	
 	if suitType > 0 then
-		module:Get("icon1").SpriteName = AtriIconNames[suitType]
-		module:Get("number2_0").Text = MStaff.GetAttrByType(data.id, suitType)
+		module:Get("number2_0").Text = Csv.Text("adventure_staff_attr" .. suitType, {num = MStaff.GetAttrByType(data.id, suitType)})
 	end
 
 	local suitIcon2 = module:Get("icon2")
 	local suitText2 = module:Get("number4")
-	local bgImg = module:Get("numberBG4")
+	-- local bgImg = module:Get("numberBG4")
 	if self.mData.otherEventRule ~= nil and self.mData.otherEventRule[1] ~= 0 and self.mData.otherEventRule[1] ~= suitType then
 		local tastType = self.mData.otherEventRule[1]
 		suitIcon2.Activity = true
 		suitText2.Activity = true
-		bgImg.Activity = true
+		-- bgImg.Activity = true
 		suitIcon2.SpriteName = AtriIconNames[tastType]
-		suitText2.Text = MStaff.GetAttrByType(data.id, tastType)
+		suitText2.Text = Csv.Text("adventure_staff_attr" .. suitType, {num = MStaff.GetAttrByType(data.id, tastType)})
 	else
 		suitIcon2.Activity = false
 		suitText2.Activity = false
-		bgImg.Activity = false
+		-- bgImg.Activity = false
 	end
 end
 
@@ -623,11 +595,6 @@ function _P.OnClickSendItem(self,data,suitData,index)
 	table.insert(self.selectDataList, {data = data, suitData = suitData})
 	_P.UpdateTips(self)
 	_P.CheckTotalAtriIsShow(self)
-end
-
---员工加班
-function _P.OnStaffOverTime(self,data)
-	CActivity.ReqAdvStaffOver(self.actId, data.id)
 end
 
 -- 更新格子数据
@@ -645,7 +612,7 @@ function _P.UpdateItem(self,suitData,data,index)
 		local itemMoudle = self.mReqTableItems[index].module
 		local csvPerson = Csv.Personnel[data.id]
 		_P.SetReqDetail(suitData,itemMoudle,data)
-		itemMoudle:Get("Icon").SpriteName = csvPerson.asset2
+		itemMoudle:Get("Icon").SpriteName = csvPerson.asset
 	end
 end
 
@@ -657,6 +624,7 @@ function _P.OnCallBackStaff(self,data,suitData)
 	_P.UpdateTips(self)
 	_P.CheckTotalAtriIsShow(self)
 end
+
 -- 移除员工
 function _P.Remove(self,data)
 	local index = 0
@@ -682,11 +650,29 @@ end
 function _P.SetConfiromState(self)
 	local light = #self.selectDataList == #self.mData.eventInfo
 	if light then
+		self.mModule:Get("StaffRect").LocalPosition = StaffRectPos[1]
 		self.Top:DOAnchorPosY(TOP_BEGIN, 0.6):SetEase(CS.DG.Tweening.Ease.Linear)
 		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
 	end
 	self.confirm.IsGray = not light
 	self.confirm.RaycastTarget = light
+
+	if light then
+		local staffIds = {}
+		table.sort(self.selectDataList, function(a, b)
+			local aSelectId = a.data.selectId
+			local bSelectId = b.data.selectId
+			return aSelectId < bSelectId
+		end)
+
+		for k,v in pairs(self.selectDataList) do
+			table.insert(staffIds, v.data.id)
+		end
+
+		CActivity.ReqAdvStaffOver(self.mData.taskIndex, staffIds, self.activityData.isSelectDown)
+	else
+		_P.SetProRewardData(self)
+	end
 end
 
 function _P.IsCurContains(self,id,index)
@@ -712,37 +698,13 @@ function _P.IsContains(self,id)
 	return isHasSend
 end
 
---判断是否不能加班，修改by:pyh
-function _P.IsOverTime(self,id)
-	local staffOverList = MActivity.GetAdvOverList(self.actId)
-	if staffOverList == nil then return false end
-	for k,v in pairs(staffOverList) do
-		if v.id == id and v.value >= MActivity.MaxOverTime then
-			return true
-		end
-	end
-	return false
-end
-
-function _P.IsUse(self,id)
-	local staffjoinList = MActivity.GetAdvUseList(self.actId)
-	if staffjoinList == nil then return false end
-	for k,v in pairs(staffjoinList) do
-		if v == id then
-			return true
-		end
-	end
-	return false
-end
-
 -- 更新选择员工提示
 function _P.UpdateTips(self)
-	-- print("count", #self.selectDataList)
 	self.selectTips.Activity = #self.selectDataList == 0
 end
 
 --界面构造
-function _M:OnCreate(eventData,activityData)
+function _M:OnCreate(eventData, activityData)
 	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Xzyg")
 	self.mModule = module
 
@@ -760,21 +722,20 @@ function _M:OnCreate(eventData,activityData)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URuleTips",Define.SysId.Adventure)
 	end, nil, 1.2)
+
 	self.activityData = activityData
 	self.actId = activityData.actId
-	-- LuaUtil.DumpTable(eventData)
-	self.eventId = self.mData.eventId
+	self.taskId = self.mData.taskId
 
-	local eventconf = Csv.AdventureMainEvent[self.mData.eventId]
-
+	local eventconf = Csv.AdventureMainEvent[self.mData.taskId]
 	module:Get("C_Text_0").Text = Csv.Text("adventure_title")
 	module:Get("Name").Text = eventconf.title
-	module:Get("Name_0").Text = eventconf.title
 	module:Get("Info").Text = eventconf.desc
-	module:Get("Icon").SpriteName = eventconf.icon
-	module:Get("C_text").Text = Csv.Text("adventure_staff_confirm")
+	module:Get("OpenText").Text = Csv.Text("adventure_staff_confirm")
 	module:Get("BtnText22").Text = Csv.Text("adventure_back")
 	module:Get("TjbtText").Text = Csv.Text("adventure_condition")
+	module:Get("Consume").Text = Csv.Text("adventure_main_costRefresh")
+	module:Get("gailv").Text = Csv.Text("adventure_box_proGet")
 
 	self.scroll = module:Get("scrollView")
 	self.DownRect = module:Get("BtnRect")
@@ -782,16 +743,15 @@ function _M:OnCreate(eventData,activityData)
 	self.DownBtn = module:Get("BtnColider")
 	self.Top = module:Get("Anim")
 	self.Buttom = module:Get("Anim2")
-	self.confirm = module:Get("C_Btn_a")
+	self.confirm = module:Get("OpenBtn")
 	self.confirm:AddOnButton(function(...)
 		--确认选择判断选择人数够了没
-	local lefttime = Csv.Const(20101)[3] - self.activityData.personalEventTimes
+		local lefttime = activityData.hotval - eventconf.costLucky
 		if #self.selectDataList < #self.mData.eventInfo then
 			CCommon.ShowError(Csv.Text("adventure_call_limit"))
-		elseif lefttime <= 0 then
+		elseif lefttime < 0 then
 			CCommon.ShowError(Csv.Text("adventure_main_limit"))
 		else
-			--TODO：完成事件
 			local staffIds = {}
 			table.sort(self.selectDataList, function(a,b)
 			local aSelectId = a.data.selectId
@@ -801,28 +761,63 @@ function _M:OnCreate(eventData,activityData)
 			for k,v in pairs(self.selectDataList) do
 				table.insert(staffIds, v.data.id)
 			end
-			-- print("send staff")
-			-- LuaUtil.DumpTable(staffIds)
-			CActivity.ReqAdvPersonEvent(self.actId,self.mData.eventsIndex,staffIds,self.eventId)
-			-- _R.OnCompleteEvent(self,nil)
+
+			CActivity.ReqAdvPersonTask(self.mData.taskIndex, staffIds, self.activityData.isSelectDown)
 		end
 	end,nil,1.2)
 	self.DownBtn.SpriteName = ""
 	self.DownBtn:AddOnButton(function(...)
+		self.mModule:Get("StaffRect").LocalPosition = StaffRectPos[1]
 		self.Top:DOAnchorPosY(TOP_BEGIN, 0.6):SetEase(CS.DG.Tweening.Ease.Linear)
 		self.Buttom:DOAnchorPosY(BUTTOM_BEGIN, 0.4):SetEase(CS.DG.Tweening.Ease.Linear)
 	end,nil,1)
 
-	
-	for i=1,eventconf.star do
-		module:Get("Star"..i).Activity = true
+	local expText = self.mModule:Get("ExpText")
+	local addExp = (eventData.isDown and 0) or eventconf.addExp
+	expText.Text = Csv.Text("adventure_main_expTip", {num = addExp})
+	-- local starBgImg = module:Get("StarBg")
+	-- starBgImg.SpriteName = StarBgIcons[eventconf.star]
+
+	for i=1,7 do
+		module:Get("Star"..i).Activity = i <= eventconf.star
 	end
 
-	self.OutBox = module:Get("OutBox")
-	self.OutBox.Color = _P.GetOutColor(self, eventconf.quality)
+	-- 设置类型图片
+	local typeImg = module:Get("TypeImg")
+	typeImg.SpriteName = MActivity.AdventureTaskNames[eventconf.taskType]
+
 	_P.SetAskStaffList(self)
 	_P.SetConfiromState(self)
 	_P.CheckTotalAtriIsShow(self)
+
+	local costStr = (eventconf.costLucky > activityData.hotval and 'adventure_person_red') or 'adventure_person_green'
+	module:Get("AptiNum").Text = Csv.Text(costStr, {num = eventconf.costLucky})
+	module:Get("AptiIcon").SpriteName = MActivity.AdventureConstData[12]
+	module:Get("Name2").Text = Csv.Text("adventure_main_canGet")
+end
+
+-- 设置员工获取奖励概率及展示
+function _P.SetProRewardData(self, data)
+	local pointText = self.mModule:Get("PointText")
+	local proText = self.mModule:Get("gailvNum")
+	local currencyText = self.mModule:Get("OrderText")
+	
+
+	if data == nil then
+		pointText.Text = Csv.Text("adventure_event_point", {num = 0})
+		currencyText.Text = Csv.Text("adventure_event_currency", {num = 0})
+		proText.Text = '0%'
+	else
+		local splitReward = MActivity.AdventureRewardSplit(data.reward)
+		pointText.Text = Csv.Text("adventure_event_point", {num = splitReward.point})
+		proText.Text = data.compatibility .. '%'
+		currencyText.Text = Csv.Text("adventure_event_currency", {num = splitReward.currency})
+	end
+end
+
+-- 员工都派遣后请求后端获取概率信息返回
+function _R.GetProDataBack(self, data)
+	_P.SetProRewardData(self, data)
 end
 
 return _M

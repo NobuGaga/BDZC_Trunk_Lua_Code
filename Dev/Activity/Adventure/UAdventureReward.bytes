@@ -29,14 +29,14 @@ function _M:EndDestroy( ... )
 end
 
 --界面构造
-function _M:OnCreate(data,OnClose)
+function _M:OnCreate(data, addExp, OnClose)
 	local module = self:CreateMoudle(self._RootNode, "M_Adventure_Result")
 	self.mModule = module
 
 	SoundMgr.DestroyMusic(BGMUSIC, true)
 	self.mData = data
-	-- LuaUtil.DumpTable(data)
-	-- 点击任意点关闭
+	self.AddExp = addExp
+
 	self._EventNode:AddOnClick(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
@@ -79,10 +79,15 @@ end
 function _P.OnCreateList(self, listData)
 	if listData == nil or next(listData) == nil then return end
 
-	local itemRoot = self.mModule:Get("content")
-	for _,v in pairs(listData) do
-		CCommon.CreateItem(itemRoot, v.id, CCommon.ShowItemTips, {num = v.count})
-	end
+	local splitReward = MActivity.AdventureRewardSplit(listData)
+	self.mModule:Get("PointText").Text = Csv.Text("adventure_event_point", {num = splitReward.point})
+	self.mModule:Get("OrderText").Text =  Csv.Text("adventure_event_currency", {num = splitReward.currency})
+	self.mModule:Get("ExpText").Text = Csv.Text("adventure_main_expTip", {num = self.AddExp or 0})
+
+	-- local itemRoot = self.mModule:Get("content")
+	-- for _,v in pairs(listData) do
+	-- 	CCommon.CreateItem(itemRoot, v.id, CCommon.ShowItemTips, {num = v.count})
+	-- end
 end
 
 return _M

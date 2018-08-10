@@ -1,0 +1,89 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MWharf = JRequire "Dev.Wharf.MWharf"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MTalk = JRequire "Dev.Talk.MTalk"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--0:消耗道具ID,1:每次消耗道具数量,2:聊天等级限制,3:跨服小喇叭道具ID,4:聊天Vip等级限制,5:喇叭消耗砖石数量,6:小喇叭消耗钻石数量
+local CossItemData = Csv.Const(100)
+local TipShowVip = Csv.Const(17003) --提示展示所需VIP等级
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(id,isEvent)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Cross_Choose")
+	local closeBtn = moudle:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+
+	moudle:Get("C_Text").Text = Csv.Text("talk_cross_title")
+
+	local tips = moudle:Get("Tips")
+	tips.Text = Csv.Text("talk_cross_noitem")
+	if MPlayer.GetVip() < TipShowVip then
+		tips.Activity = false
+	else 
+		tips.Activity = true
+	end
+	
+	local gouImg = moudle:Get("Gou")
+	local content = moudle:Get("Content")
+
+	local itemIDs = {CossItemData[1],CossItemData[4]}
+	local itemCosts = {CossItemData[6],CossItemData[7]}
+	for i = 1,2,1 do
+		local itemMoudle = JGuiManager.GetMoudle(content, "M_Cross_Choose_Item", WindowType.UI, 10)
+		local icon = itemMoudle:Get("Icon")
+		local iconBox = itemMoudle:Get("IconBox")
+		local name = itemMoudle:Get("Title")
+		local num = itemMoudle:Get("Num")
+		local desc = itemMoudle:Get("text1")
+		local costNum = itemMoudle:Get("ZuansNum")
+
+		local itemId = itemIDs[i]
+		local itemData = Csv.Item[itemId]
+		if itemData ~= nil then
+			icon.SpriteName = itemData.icon
+			iconBox.SpriteName = itemData.colorIcon
+			num.Text = MBag.GetItemNum(itemId)
+			desc.Text = itemData.tips
+			name.Text = itemData.name
+
+			if itemCosts[i] ~= nil then
+				costNum.Text = itemCosts[i]
+			end
+		end
+
+		itemMoudle:Get("C_text").Text = Csv.Text("talk_cross_choose")
+		itemMoudle:Get("C_Btn_a"):AddOnButton(function()
+			SoundMgr.Play(10002)
+			MTalk.CrossChooseID = itemId
+
+			WindowMgr.Call("UTalk","RefreshCrossChoose")
+			self:Destroy()
+		end,nil,1.2)
+	end
+
+	gouImg.Activity = MTalk.IsCostDiamond
+	moudle:Get("ChooseBox"):AddOnButton(function()
+		MTalk.IsCostDiamond = not MTalk.IsCostDiamond
+		gouImg.Activity = MTalk.IsCostDiamond
+	end)
+end
+
+return _M

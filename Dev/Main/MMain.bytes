@@ -1,5 +1,7 @@
 --@RefType [Dev.Activity.MActivity.bytes#_M]
 local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 local MWelfare = JRequire"Dev.Welfare.MWelfare"
 local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
 local MTarget = JRequire"Dev.Target.MTarget"
@@ -88,8 +90,10 @@ function _M.FuncIsOpen(funcId)
 
 		if csv ~= nil and csv.actType ~= nil then
 			local isHave = false
+			local isCrossAct = Define.CrossActivitySysID[funcId]
 			for _,actType in pairs(csv.actType) do
-				if MActivity.IsHaveActForType(actType) then
+				if (isCrossAct and MCrossActivity.IsHaveActivityDataForType(actType)) or
+								(not isCrossAct and MActivity.IsHaveActForType(actType)) then
 					isHave = true
 				end
 			end

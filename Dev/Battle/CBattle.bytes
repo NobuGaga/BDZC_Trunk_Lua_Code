@@ -21,6 +21,7 @@ local CMD_ID =
 	sUnlock = 3,
 	sSeckillBattle = 4,
 	sAcquisition = 5,
+	sBattleBossFight = 6,
 }
 
 function _M.ModuleClean()
@@ -42,6 +43,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sUnlock] = {	proto = "PBattle.SUnlock", 				handle = _P.OnUnlock},
 		[CMD_ID.sSeckillBattle] = {	proto = "PBattle.SSeckillBattle", 	handle = _P.OnSeckillResult},
 		[CMD_ID.sAcquisition] = {	proto = "PBattle.SAcquisition", 	handle = _P.OnAcquisitionResult},
+		[CMD_ID.sBattleBossFight] = {	proto = "SFight", 		handle = _P.OnBossResult},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Airport, send, recv, isReload)	
@@ -284,6 +286,32 @@ function _P.Sort(a,b)
 		end
 	end
 	return false
+end
+
+function _P.OnBossResult(data)
+	if data.result then
+		local csvBattle = Csv.Battle[MBattle.CurId]
+		if csvBattle ~= nil and csvBattle.next ~= nil then
+			MBattle.CurId = csvBattle.next
+		end
+		local csvBattleNext = Csv.Battle[MBattle.CurId]
+		if csvBattleNext ~= nil and csvBattleNext.gold ~= nil then
+			MBattle.CurBlood = csvBattleNext.gold
+		end
+	else
+		local csvBattle = Csv.Battle[MBattle.CurId]
+		if csvBattle ~= nil then
+			MBattle.CurBlood = csvBattle.gold
+		end
+	end
+
+	if WindowMgr.IsCreated("UBattleBossNew") then
+		WindowMgr.Call("UBattleBossNew","OnResult",data)
+	end
+
+	if WindowMgr.IsCreated("UBattle") then
+		WindowMgr.Call("UBattle", "OnResult", data)
+	end
 end
 
 return _M

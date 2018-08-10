@@ -72,7 +72,6 @@ end
 function _M:OnCreate(id,eventID)
 	local moudle = self:CreateMoudle(self._RootNode,"M_Inquiries_Relationship")
 	self.mMoudle = moudle
-	moudle:Get("SliderBg").Activity = false
 	local closeBtn = moudle:Get("back_Btn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -84,18 +83,6 @@ function _M:OnCreate(id,eventID)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
 	end, nil, 1.2)
-
-	self.isOpen = false
-	moudle:Get("Btn"):AddOnButton(function()
-		self.isOpen = not self.isOpen
-		if self.isOpen then
-			moudle:Get("StoryBg").Activity = true
-			moudle:Get("arrow").LocalScale = Vector3(-1,1,1)
-		else
-			moudle:Get("StoryBg").Activity = false
-			moudle:Get("arrow").LocalScale = Vector3(1,1,1)
-		end
-	end,nil,1)
 
 	self.isDone = false
 	self.selectGirl = 0
@@ -110,68 +97,73 @@ function _M:OnCreate(id,eventID)
 
 	--local wharfGirlData = Csv.WharfGirl[id]
 	moudle:Get("titleText").Text = Csv.Text("Wharf_Girllist_title")
-	--moudle:Get("Love").Text = Csv.Text("Wharf_love")
-	--moudle:Get("StoryText").Text = Csv.Text("Wharf_story")
+	moudle:Get("Love").Text = Csv.Text("Wharf_love")
+	moudle:Get("StoryText").Text = Csv.Text("Wharf_story")
 
-	moudle:Get("Name").Text = Csv.Text("Wharf_info_name")
-	moudle:Get("Edge").Text = Csv.Text("Wharf_info_age")
-	moudle:Get("Zhiye").Text = Csv.Text("Wharf_info_job")
-	moudle:Get("Aihao").Text = Csv.Text("Wharf_info_aihao")
-	moudle:Get("Chuanwen").Text = Csv.Text("Wharf_info_tiptitle")
-
-	-- self.mTopScroll = moudle:Get("scrollView")
-	-- self.mTopContent = moudle:Get("content")
+	self.mTopScroll = moudle:Get("scrollView")
+	self.mTopContent = moudle:Get("content")
 	self.mContent_1 = moudle:Get("content_1")
+	self.mContent_2 = moudle:Get("content_2")
+	self.mContent_3 = moudle:Get("content_3")
+	
+	local leftBtn = moudle:Get("LeftArrow")
+	local rightBtn = moudle:Get("RightArrow")
+
+	leftBtn:AddOnButton(function()
+		_P.TurnLeftTopGirl(self)
+	end)
+	rightBtn:AddOnButton(function()
+		_P.TurnRightTopGirl(self)
+	end)
 
 	local nameLab = moudle:Get("nameText")
 	local offer = moudle:Get("Offer")
 	local iconSp = moudle:Get("bsx")
 	local bg = moudle:Get("bg")
+	local arrow1 = moudle:Get("Arrow1")
+	local arrow2 = moudle:Get("Arrow2")
+	arrow1.Activity = false
+	arrow2.Activity = false
 
-	-- local descBtn = moudle:Get("StoryIcon")
-	-- descBtn:AddOnButton(function()
-	-- 	--展示美女详情
-	-- 	WindowMgr.Create("UWharfDesc",self.selectGirl,false)
-	-- end)
+	local descBtn = moudle:Get("StoryIcon")
+	descBtn:AddOnButton(function()
+		--展示美女详情
+		WindowMgr.Create("UWharfDesc",self.selectGirl,false)
+	end)
 
 	self.mIconSp = iconSp
 	self.mNameLab = nameLab
 	self.mOffer = offer
 	self.mBg = bg
+	self.mArrow1 = arrow1
+	self.mArrow2 = arrow2
 
 	-----
 	local sliderValue = moudle:Get("Slier")
+	local sliderPoint = moudle:Get("LoveIcon")
+	local sliderText = moudle:Get("SliderText")
 	self.mSliderValue = sliderValue
+	self.mSliderPoint = sliderPoint
+	self.mSliderText = sliderText
 
 	self.mActorPanel = moudle:Get("ActorPanel")
 
 	self.mSelectTopGirl = nil
 	_P.ShowTopGirlItems(self,id)
 	
-	moudle:Get("scrollView_1").OnValueChanged:AddListener(function(...) _P.OnScrollValueChange(self) end)
-
-	_P.SetNpcDesc(self,id)
-end
-
-function _P.OnScrollValueChange(self)
-	local moudle = self.mMoudle
-	local content = moudle:Get("content_1")
-	local pos = content.LocalPosition
-	local slider = moudle:Get("SliderBg")
-	slider.LocalPosition = Vector2(pos.x,pos.y + 10)
 end
 
 function _P.ShowTopGirlItems(self,selectid)
-	-- local content = self.mTopContent
+	local content = self.mTopContent
 	local topGirls = MWharf.WharfGirls
 
-	-- content:DestroyChildren()
+	content:DestroyChildren()
 
 	local lastID = -1
 	local topgirlTab = {}
 	for k,v in pairs(topGirls)do
-		-- local girlMoudle = _P.CreateTopGirl(self,content,v)
-		table.insert(topgirlTab,{id = v.id,peopleId = v.peopleId})
+		local girlMoudle = _P.CreateTopGirl(self,content,v)
+		table.insert(topgirlTab,{id = v.id,peopleId = v.peopleId,moudle = girlMoudle})
 	end
 
 	if #topgirlTab > 0 then
@@ -183,8 +175,8 @@ function _P.ShowTopGirlItems(self,selectid)
 	if lastGirlID ~= nil then
 		local girlData = Csv.WharfPeople[lastGirlID]
 		local data = {id = girlData.girlId,peopleId = lastGirlID,state = 0}
-		-- local girlMoudle = _P.CreateTopGirl(self,content,data)
-		table.insert(topgirlTab,{id = data.id,peopleId = lastGirlID})
+		local girlMoudle = _P.CreateTopGirl(self,content,data)
+		table.insert(topgirlTab,{id = data.id,peopleId = lastGirlID,moudle = girlMoudle})
 
 		if lastID < 0 then
 			lastID = lastGirlID
@@ -193,21 +185,21 @@ function _P.ShowTopGirlItems(self,selectid)
 
 	self.mTopGirlTab = topgirlTab
 
-	-- self.mMoudle.SelfRect:AddOnTime(function()
+	content:AddOnTime(function()
 		if selectid ~= nil then
 			_P.SelectGirl(self,selectid)
 		else
 			_P.SelectGirl(self,lastID)
 		end
-	-- end,nil,0.05)
+	end,nil,0.05)
 end
 
 function _P.CreateTopGirl(self,content,v)
 	local girlMoudle = JGuiManager.GetMoudle(content, "M_Inquiries_UMain_Item", WindowType.UI, 10)
 	local girlData = Csv.Girl[v.id]
-	girlMoudle:Get("head").SpriteName = girlData.xieicon
+	girlMoudle:Get("head").SpriteName = girlData.icon
 	girlMoudle:Get("PKtext").Text = girlData.name
-	girlMoudle:Get("BG").SpriteName = girlData.colorBg
+	girlMoudle.SelfRect.SpriteName = girlData.colorBg
 
 	_P.RefreshTopGirl(self,girlMoudle,v)
 	
@@ -219,19 +211,19 @@ function _P.RefreshTopGirl(self,girlMoudle,v)
 	local red = girlMoudle:Get("red")
 	local success = girlMoudle:Get("Success")
 	local question = girlMoudle:Get("Question")
-	local head = girlMoudle:Get("head")
+	local black = girlMoudle:Get("Black")
 
 	light.Activity = false
 	red.Activity = false
 	success.Activity = false
 	question.Activity = false
-	head.Color = Color(1,1,1,1)
+	black.Activity = false
 
 	if v.state == 0 then
-		head.Color = Color(0.5,0.5,0.5,1)
+		black.Activity = true
 	end
 
-	girlMoudle:Get("BG"):AddOnButton(function()
+	girlMoudle.SelfRect:AddOnButton(function()
 		_P.SelectGirl(self,v.peopleId)
 	end)
 end
@@ -246,30 +238,21 @@ function _P.SelectGirl(self,id)
 	
 	local girlData = Csv.Girl[wharfPeopleData.girlId]
 
-	if self.PrefabTable ~= nil then
-		self.PrefabTable:Destroy()
-		self.PrefabTable = nil
-	end
-	if girlData.prefab ~= nil and girlData.prefab > 0 then
-		self.mIconSp.SpriteName = ""
-		self.PrefabTable = CCommon.CreateActor(self.mIconSp, girlData.prefab, CCommon.ActorFieldMap.wharf)
-	else
-		self.mIconSp.SpriteName = girlData.homeicon
-	end
-	self.mNameLab.Text = girlData.colorname
+	self.mIconSp.SpriteName = girlData.homeicon
+	self.mNameLab.Text = girlData.name
 	self.mOffer.Text = girlData.job
 	self.mBg.SpriteName = girlData.homebg
 
-	-- local topGirls = self.mTopGirlTab
-	-- for k,v in pairs(topGirls)do
-	-- 	if v.id == wharfPeopleData.girlId then
-	-- 		v.moudle:Get("light").Activity = true
+	local topGirls = self.mTopGirlTab
+	for k,v in pairs(topGirls)do
+		if v.id == wharfPeopleData.girlId then
+			v.moudle:Get("light").Activity = true
 
-	-- 		--_P.RefreshContentPos(self,v.moudle)
-	-- 	else
-	-- 		v.moudle:Get("light").Activity = false
-	-- 	end
-	-- end
+			_P.RefreshContentPos(self,v.moudle)
+		else
+			v.moudle:Get("light").Activity = false
+		end
+	end
 
 end
 
@@ -291,29 +274,40 @@ function _P.RefreshContentPos(self,moudle)
 
 	local targartPos = scrollWidth - imgPosx - imgWidth/2 
 	
-	-- if targartPos <= 1 then
-	-- 	content:DOAnchorPosX(targartPos,0.2)
-	-- else
-	-- 	content:DOAnchorPosX(0,0.2)
-	-- end
+	if targartPos <= 1 then
+		content:DOAnchorPosX(targartPos,0.2)
+	else
+		content:DOAnchorPosX(0,0.2)
+	end
 end
 
 
 function _P.UpDateEvents(self,events)
+	self.mArrow1.Activity = false
+	self.mArrow2.Activity = false
 	local content1 = self.mContent_1
+	local content2 = self.mContent_2
+	local content3 = self.mContent_3
 	content1:DestroyChildren()
-
-	JGuiManager.GetMoudle(self.mContent_1, "M_Inquiries_Relationship_Heart", WindowType.UI, 10)
+	content2:DestroyChildren()
+	content3:DestroyChildren()
 
 	local eventTab = {}
 	--local events = wharfPeopleData.event
 	--id,state
 	local maxEvent = #events
 	local curEvent = 0
-	for i = #events,1,-1 do
-		local v = events[i]
+	for k,v in pairs(events)do
 		local eventData = Csv.WharfEvent[v.id]
-		eventItem = _P.CreatEventItem(self,self.mContent_1,v)
+		if eventData.layer == 1 then
+			eventItem = _P.CreatEventItem(self,self.mContent_1,v)
+		elseif eventData.layer == 2 then
+			self.mArrow1.Activity = true
+			eventItem = _P.CreatEventItem(self,self.mContent_2,v)
+		elseif eventData.layer == 3 then
+			self.mArrow2.Activity = true
+			eventItem = _P.CreatEventItem(self,self.mContent_3,v)
+		end
 		--table.insert(eventTab,{id = v.id,moudle = eventItem})
 		eventTab[v.id] = {moudle = eventItem,value = v}
 
@@ -332,15 +326,10 @@ function _P.UpDateEvents(self,events)
 	end
 
 	--
-	self.mMoudle:Get("SliderBg").Activity = true
 	local silderfill = curEvent/maxEvent
 	self.mSliderValue.FillAmount = silderfill
-	if curEvent >= 3 then
-		self.mMoudle:Get("content_1").LocalPosition = Vector2(0,-604)
-	else
-		self.mMoudle:Get("content_1").LocalPosition = Vector2(0,0)
-	end
-	_P.OnScrollValueChange(self)
+	self.mSliderPoint.LocalPosition = Vector2(silderfill * 586,self.mSliderPoint.LocalPosition.y)
+	self.mSliderText.Text = curEvent.."/"..maxEvent
 
 	if silderfill == 1 then
 		self.isDone = true
@@ -354,11 +343,11 @@ function _P.CreatEventItem(self,parent,value)
 	local name = eventMoudle:Get("PKtext")
 
 	local eventData = Csv.WharfEvent[value.id]
-	icon.SpriteName = eventData.xieicon
+	icon.SpriteName = eventData.icon
 	name.Text = eventData.name
 	--icon:SetNativeSize()
 
-	eventMoudle:Get("BG").SpriteName = eventData.colorBg
+	eventMoudle.SelfRect.SpriteName = eventData.colorBg
 
 	_P.UpdateEventState(self,eventMoudle,value)
 
@@ -369,16 +358,16 @@ function _P.UpdateEventState(self,moudle,value)
 	local red = moudle:Get("red")
 	local success = moudle:Get("Success")
 	local question = moudle:Get("Question")
-	local head = moudle:Get("head")
+	local black = moudle:Get("Black")
 
 	red.Activity = false
 	success.Activity = false
 	question.Activity = false
-	head.Color = Color(1,1,1,1)
+	black.Activity = false
 
 	
 	if value.state == -1 then
-		head.Color = Color(0.5,0.5,0.5,1)
+		black.Activity = true
 	elseif value.state == 0 then
 		red.Activity = true
 	elseif value.state == 1 then
@@ -387,7 +376,7 @@ function _P.UpdateEventState(self,moudle,value)
 		success.Activity = true
 	end
 
-	moudle:Get("BG"):AddOnButton(function()
+	moudle.SelfRect:AddOnButton(function()
 		_P.SelectEventItem(self,moudle,value)
 	end)
 end
@@ -421,18 +410,6 @@ function _P.SelectEventItem(self,moudle,value)
 	elseif value.state == 2 then
 		--未解锁展示
 		WindowMgr.Create("UWharfDesc",value.id,true)
-	end
-end
-
-function _P.SetNpcDesc(self,id)
-	local moudle = self.mMoudle
-	local data = Csv.WharfPeople[id]
-	if data ~= nil then
-		moudle:Get("NameText").Text = data.name
-		moudle:Get("EdgeText").Text = data.age
-		moudle:Get("ZhiyeText").Text = data.job
-		moudle:Get("AihaoText").Text = data.hobby
-		moudle:Get("Tips").Text = data.desc
 	end
 end
 
@@ -484,7 +461,11 @@ function _R.CheckGirlDone(self)
 		
 		self:Lock()
 
-		--self.mContent_1.Activity = false
+		self.mContent_1.Activity = false
+		self.mContent_2.Activity = false
+		self.mContent_3.Activity = false
+		self.mArrow1.Activity = false
+		self.mArrow2.Activity = false
 
 		local girlTween = self.mIconSp.CachedTran:GetJTweener(T_Wharf_GirlLight)
 
@@ -505,6 +486,10 @@ function _R.CheckGirlDone(self)
 					_P.ShowTopGirlItems(self)
 
 					self.mContent_1.Activity = true
+					self.mContent_2.Activity = true
+					self.mContent_3.Activity = true
+					self.mArrow1.Activity = true
+					self.mArrow2.Activity = true
 				end,nil,0.5)
 
 				self:Unlock()

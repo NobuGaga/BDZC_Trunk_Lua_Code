@@ -48,8 +48,6 @@ function _M:OnCreate(...)
 	
 	_P.CreateList(self)
 	CActivity.GetComRechargeMember()
-
-	moudle:Get("Time2").Text = Csv.Text("com_updatetime")
 end
 
 function _P.CreateList(self)
@@ -184,7 +182,7 @@ function _P.UpdateTime(self)
 		if second < 0 then
 			second = 0
 		end
-		self.mMoudle:Get("Time3").Text = LuaUtil.GetTimeHMS(second)
+		self.mMoudle:Get("Time2").Text = Csv.Text("com_updatetime",{time = LuaUtil.GetTimeHMS(second)})
 	end
 end
 

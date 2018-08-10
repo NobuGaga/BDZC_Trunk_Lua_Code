@@ -117,8 +117,10 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 	local itemMoudle = JGuiManager.GetMoudle(content, "M_Adventure_Choose_Item", WindowType.UI, 10)
 
 	local csvPerson = Csv.Personnel[data.id]
-	local ImgIcon = itemMoudle:Get("head")
-	ImgIcon.SpriteName = csvPerson.asset3
+	local ImgIcon = itemMoudle:Get("Head")
+	ImgIcon.SpriteName = csvPerson.asset
+
+	itemMoudle:Get("HeadBox").SpriteName = MStaff.Color2Image[data.color]
 
 	local TextLevel = itemMoudle:Get("number1")
 	TextLevel.Text = data.level
@@ -129,7 +131,7 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 		local vip = MPlayer.GetVip()
 		local extraTime = Csv.Vip[vip].adventureSubCount
 		local lefttime = Csv.Const(20101)[5] + extraTime - self.activityData.shopEventtimes
-		if lefttime <= 0 then
+		if lefttime < 0 then
 			CCommon.ShowError(Csv.Text("adventure_main_limit"))
 		else
 			_P.OnClickSendItem(self,data)
@@ -162,7 +164,7 @@ function _P.OnCreateOwnItem(self,data,content,suitdata)
 
 	itemMoudle:Get("icon2").Activity = false
 	itemMoudle:Get("number4").Activity = false
-	itemMoudle:Get("numberBG4").Activity = false
+	-- itemMoudle:Get("numberBG4").Activity = false
 end
 
 function _P.SetStaffItem(self,suitData,data,module)

@@ -1,0 +1,45 @@
+-- 奇遇战斗失败界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
+local FailActorId = 10022
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--界面构建
+function _M:OnCreate(onClose)
+	self.OnCloseCall = onClose
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	local module = self:CreateMoudle(self._RootNode, "M_Bidding_Fail")
+	module:Get("Text1").Text = Csv.Text("adventure_person_battleFailTip")
+
+	SoundMgr.Play(10047)
+	CCommon.CreateEffect(module:Get("ActorPanel"), FailActorId)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 1)
+
+	local tipsText = module:Get("Tips")
+	tipsText.Text = Csv.Text("common_clickanywayToclose")
+	
+	local tween = tipsText.CachedTran:GetJTweener(TEXT_ALP_TWEEN)
+	tween:Play()
+end
+
+
+return _M

@@ -37,14 +37,7 @@ function _M:ctor(parent, specialId)
 		local csvStaff = Csv.Personnel[v]
 		local bsx = moudle:Get("bsx"..k)
 		if bsx ~= nil then
-			if csvStaff.prefab then
-				CCommon.CreateActor(bsx, csvStaff.prefab, CCommon.ActorFieldMap.super_get, function(actor)
-					actor.SkeletonIsGray = MStaff.StaffTable[v] == nil
-				end)
-				bsx.SpriteName = ""
-			else
-				bsx.SpriteName = csvStaff.asset
-			end
+			bsx.SpriteName = csvStaff.asset
 			if MStaff.StaffTable[v] ~= nil then
 				staffNum = staffNum + 1
 			else

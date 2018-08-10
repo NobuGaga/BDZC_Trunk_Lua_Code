@@ -138,9 +138,9 @@ function _P.CreateStaffItem(self, itemGrid, data)
 		carConf = Csv.Car[carData.carid]
 		itemConf = Csv.Item[carData.carid]
 	end
-	itemModule:Get("HeadBox").SpriteName = MStaff.Color3Image[data.color]
+	itemModule:Get("HeadBox").SpriteName = MStaff.Color2Image[data.color]
 	if staffConf then
-		itemModule:Get("head").SpriteName = staffConf.asset3
+		itemModule:Get("head").SpriteName = staffConf.asset
 		itemModule:Get("name").Text = staffConf.name
 
 		for i = 1,4 do
@@ -158,11 +158,10 @@ function _P.CreateStaffItem(self, itemGrid, data)
 			end
 		end
 	end
-	--itemModule:Get("Grade").Text = Csv.Text("car_main_level")
+	itemModule:Get("Grade").Text = Csv.Text("car_main_level")
 	itemModule:Get("number1").Text = data.level
-	itemModule:Get("combat").Text = Csv.Text("staff_property")
+	itemModule:Get("combat").Text = Csv.Text("bag_attrAll", {num = ''})
 	itemModule:Get("number2").Text = MStaff.GetAllAttr(data.id)
-	itemModule:Get("new_text").Text = Csv.Text("palyer_levelup")
 
 	itemModule:Get("C_Text").Text = Csv.Text("car_selectStaff_ride")
 	local rideBtn = itemModule:Get("C_Btn_b")

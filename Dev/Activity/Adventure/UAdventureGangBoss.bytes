@@ -1,0 +1,153 @@
+-- 奇遇商会boss界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _R = {}
+local _P = {}
+
+local UnityTime = CS.UnityEngine.Time
+local lastTime = 0
+local GRAY = Color(0/255, 0/255, 0/255, 140/255)
+-- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
+-- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(eventData, hotval, isSelectDown)
+	local module = self:CreateMoudle(self._RootNode, "M_Adventure_BBox3")
+	self.mModule = module
+	self.Hotval = hotval
+	self.mData = eventData
+	self.IsSelectDown = isSelectDown
+
+	module:Get("C_Text_0").Text = Csv.Text("adventure_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local ruleBtn = module:Get("C_Full_Help_Btn")
+	ruleBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips", Define.SysId.Adventure)
+	end, nil, 1.2)
+
+	local battleBtn = module:Get("OpenBtn")
+	battleBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not _P.CheckBtnIsClick(1) then
+			return
+		end
+
+		_P.OnEnterBattle(self)
+	end, nil, 0.9)
+
+	local eventConf = Csv.AdventureMainEvent[eventData.taskId]
+	self.EventConf = eventConf
+	module:Get("OpenText").Text = Csv.Text("adventure_enemy_battle")
+	module:Get("Name2").Text = Csv.Text("adventure_event_mush")
+	module:Get("RewardTip").Text = Csv.Text("adventure_person_tip")
+	module:Get("Name").Text = eventConf.title
+	module:Get("Info").Text = eventConf.desc
+	module:Get("nameText").Text = eventConf.taskName
+	module:Get("TypeImg").SpriteName = MActivity.AdventureTaskNames[eventConf.taskType]
+	module:Get("bsx").SpriteName = eventConf.taskIcon
+	module:Get("BattleText").Text = Csv.Text("adventure_person_fighting", {num = eventData.totalBlood or 0})
+	--module:Get("Tips").Text = Csv.Text("adventure_person_attacktip")
+	module:Get("AptiIcon").SpriteName = MActivity.AdventureConstData[12]
+	-- module:Get("ditu").SpriteName = eventConf.talkBg
+	module:Get("Name2").Text = Csv.Text("adventure_event_mush")
+	module:Get("Consume").Text = Csv.Text("adventure_main_costRefresh")
+
+	local costStr = (eventConf.costLucky > hotval and 'adventure_person_red') or 'adventure_person_green'
+	module:Get("AptiNum").Text = Csv.Text(costStr, {num = eventConf.costLucky})
+	
+	local expText = module:Get("OrderText")
+	local addExp = (eventData.isDown and 0) or eventConf.addExp
+	expText.Text = Csv.Text("adventure_main_expTip", {num = addExp})
+
+	-- local starBgImg = module:Get("StarBg")
+	-- starBgImg.SpriteName = StarBgIcons[eventConf.star]
+
+	for i=1,7 do
+		module:Get("Star".. i).Activity = i <= eventConf.star
+	end
+
+	_P.SetRewardData(self, eventConf.killReward)
+end
+
+
+function _P.OnEnterBattle(self)
+	if self.Hotval < self.EventConf.costLucky then
+		CCommon.ShowError(Csv.Text("adventure_main_limit"))
+	else
+		local addExp = (self.mData.isDown and 0) or self.EventConf.addExp
+		MActivity.OpenBattleView(addExp, true, self.mData.totalBlood, self.mData.totalBlood, self.EventConf.taskIcon, self.EventConf.tableImg, self.EventConf.scene, function( ... )
+			CActivity.ReqAdvPersonTask(self.mData.taskIndex, nil, self.IsSelectDown)
+		end)
+	end
+end
+
+
+function _P.SetRewardData(self, itemGroudId)
+	local itemGround = Csv.ItemGroup[itemGroudId]
+	if itemGround == nil then return end
+
+	local rewardList = itemGround.rewards
+	local proList = itemGround.randReward
+
+	local showContent = self.mModule:Get("content")
+	local itemsNum = 0
+	if rewardList ~= nil then
+		local rewards = MActivity.AdventureRewardSplit(rewardList)
+		self.mModule:Get("PointText").Text = Csv.Text("adventure_event_point", {num = rewards.point})
+
+		if rewards ~= nil and rewards.items ~= nil then
+			for i=1,3 do
+				local itemData = rewards.items[i]
+				if itemData then
+					CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+					itemsNum = itemsNum + 1
+				end
+			end
+		end
+	end
+
+	if itemsNum < 3 and proList ~= nil then
+		local proRewards = MActivity.AdventureRewardSplit(proList)
+		if proRewards ~= nil and proRewards.items ~= nil then
+			for i=itemsNum + 1, 3 do
+				local itemData = proRewards.items[i]
+				if itemData then
+					CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+				end
+			end
+		end
+	end
+end
+
+
+function _P.CheckBtnIsClick(delayTime)
+	if (UnityTime.time - lastTime) < delayTime then
+		return false
+	end
+
+	lastTime = UnityTime.time
+	return true
+end
+
+
+return _M

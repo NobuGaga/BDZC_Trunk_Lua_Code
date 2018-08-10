@@ -1,0 +1,341 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local CLineUp = JRequire "Dev.LineUp.CLineUp"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MAX_TAG = 6
+
+local Color_Light = Color(255/255,223/255,96/255,1)
+local Color_Gray = Color(140/255,139/255,137/255,1)
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local moudle = self:CreateMoudle(self._RootNode, "M_NewBossPK_Array")
+	self.mMoudle = moudle
+	self.NowSelectIndex = nil
+	self.ImgSelect = moudle:Get("H")
+
+	moudle:Get("StaffLv").Text = Csv.Text("lineup_5")
+	moudle:Get("StaffGjl").Text = Csv.Text("lineup_6")
+	moudle:Get("C_Text").Text = Csv.Text("lineup_7")
+	moudle:Get("C_text").Text = Csv.Text("lineup_12")
+	moudle:Get("C_text2").Text = Csv.Text("common_sure")
+	
+	_P.SetList(self)
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		_P.OnClickChange(self)
+	end,nil,0.9)
+
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+
+	local tipsFunc = function( ... )
+		CCommon.ShowError(Csv.Text("lineup_24"))
+	end
+	--装备空点击处理
+	moudle:Get("IconBox1"):AddOnButton(tipsFunc)
+	moudle:Get("IconBox2"):AddOnButton(tipsFunc)
+end
+
+function _P.OnClickChange(self)
+	if self.NowSelectIndex ~= nil then
+		WindowMgr.Create("ULineUpSelect",self.NowSelectIndex,MLineUp.LineUpList[self.NowSelectIndex])
+	end
+end
+
+function _P.SetList(self)
+	local moudle = self.mMoudle
+	self.ItemList = {}
+	local content = moudle:Get("Content")
+	self.ImgSelect:SetParent(moudle.SelfRect.CachedTran)
+	self.ImgSelect.Activity = false
+	content:DestroyChildren()
+	self:UnRegistRedpoint()
+	local seatNum = MLineUp.SeatNum
+	local list = MLineUp.LineUpList
+	if seatNum ~= nil and list ~= nil then
+		for i = 1,MLineUp.SeatNum do
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Item2")
+			local BG1 = itemMoudle:Get("BG1")
+			local BG2 = itemMoudle:Get("BG2")
+			local BG3 = itemMoudle:Get("BG3")
+			if list[i] ~= nil then
+				BG1.Activity = true
+				BG2.Activity = false
+				BG3.Activity = false
+				local csvStaff = Csv.Personnel[list[i]]
+				local dataStaff = MStaff.StaffTable[list[i]]
+				if csvStaff ~= nil then 
+					itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+				end
+				if dataStaff ~= nil then
+					BG1.SpriteName = MStaff.Color2Image[dataStaff.color]
+				end
+			else
+				BG1.Activity = false
+				BG2.Activity = true
+				BG3.Activity = false
+			end
+			itemMoudle:Get("Click"):AddOnButton(function()
+				_P.OnClickSeat(self,i)
+			end,nil,1)
+
+			self:RegistRedpoint(itemMoudle:Get("redPoint"), Define.SysId.LineUp, i)
+
+			self.ItemList[i] = itemMoudle
+		end
+
+		if self.NowSelectIndex ~= nil then
+			_P.RefreshSelect(self,self.NowSelectIndex)
+			_P.RefreshBottom(self,list[self.NowSelectIndex])
+		else
+			for i = 1,MLineUp.SeatNum do
+				if list[i] ~= nil then
+					self.NowSelectIndex = i
+					_P.RefreshSelect(self,i)
+					_P.RefreshBottom(self,list[i])
+					break
+				end
+			end
+		end
+
+		local maxNum = _P.GetLineUpMaxNum()
+		if seatNum < maxNum then
+			local lockItemMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Item2")
+			lockItemMoudle:Get("BG1").Activity = false
+			lockItemMoudle:Get("BG2").Activity = false
+			lockItemMoudle:Get("BG3").Activity = true
+			lockItemMoudle:Get("redPoint").Activity = false
+			local csvLineUp = Csv.LineUpGrid[seatNum + 1]
+			lockItemMoudle:Get("Click"):AddOnButton(function()
+				local itemId = Define.AssetsType.Gold
+				local itemCsv = Csv.Item[itemId]
+				local haveNum = MBag.GetItemNum(itemId)
+				if csvLineUp ~= nil and csvLineUp.cost ~= nil then
+					local content = Csv.Text("lineup_1", {name = itemCsv.name,num = csvLineUp.cost})
+					if haveNum >= csvLineUp.cost then
+						content = Csv.Text("lineup_2", {name = itemCsv.name,num = csvLineUp.cost})
+					end
+					CCommon.CheckTips(function(isSure)
+						if isSure then
+							if haveNum >= csvLineUp.cost then
+								CLineUp.LineUpOpen()
+							else
+								CCommon.CheckTips(function(isSure, arg)
+									if isSure then
+										WindowOpen.Open(Define.SysId.Recharge)
+									end
+								end, {content = Csv.Text("common_recharge")})
+							end
+						end
+					end,{items = {[itemId] = haveNum}, content = content})
+				end
+			end,nil,1)
+			if csvLineUp ~= nil and (csvLineUp.level ~= nil or csvLineUp.cost ~= nil) then
+				if csvLineUp.level ~= nil then
+					lockItemMoudle:Get("text").Text = Csv.Text("lineup_3",{num = csvLineUp.level})
+				elseif csvLineUp.cost ~= nil then
+					lockItemMoudle:Get("text").Text = Csv.Text("lineup_4",{num = csvLineUp.cost})
+				end
+			else
+				lockItemMoudle:Destroy()
+			end
+		end
+	end
+
+	moudle:Get("zhanli").Text = Csv.Text("lineup_19",{num = MLineUp.GetLineAllPower()})
+	if MLineUp.GetLineStaffNum() >= MLineUp.SeatNum then
+		moudle:Get("chuzhanyuangong").Text = Csv.Text("lineup_20",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	else
+		moudle:Get("chuzhanyuangong").Text = Csv.Text("lineup_25",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	end
+end
+
+function _P.GetLineUpMaxNum()
+	local csvLines = Csv.LineUpGrid
+	local num = 0
+	if csvLines ~= nil then
+		for k,v in pairs(csvLines) do
+			if v.level ~= nil or v.cost ~= nil then
+				num = num + 1
+			end
+		end
+	end
+	return num
+end
+
+function _P.OnClickSeat(self,index)
+	if index == self.NowSelectIndex then
+		return
+	end
+	local list = MLineUp.LineUpList
+	if list ~= nil then
+		if list[index] ~= nil then
+			_P.RefreshBottom(self,list[index])
+			self.NowSelectIndex = index
+			_P.RefreshSelect(self,index)
+		else
+			WindowMgr.Create("ULineUpSelect",index,list[index])
+		end
+	end
+end
+
+function _P.RefreshSelect(self,index)
+	local img = self.ImgSelect
+	local content = self.mMoudle:Get("Content")
+	local itemList = self.ItemList
+	if img ~= nil and itemList ~= nil and itemList[index] ~= nil then
+		img.Activity = false
+		img:SetParent(content.CachedTran)
+		img:SetParent(itemList[index].SelfRect.CachedTran)
+		img.LocalPosition = Vector2(0,0)
+		img.CachedTran:SetSiblingIndex(3)
+		img.Activity = true
+	end
+end
+
+function _P.RefreshBottom(self,staffid)
+	local moudle = self.mMoudle
+	local csvStaff = Csv.Personnel[staffid]
+	local dataStaff = MStaff.StaffTable[staffid]
+	if csvStaff ~= nil and dataStaff ~= nil then
+		moudle:Get("Staff").SpriteName = csvStaff.asset
+		moudle:Get("StaffName").Text = csvStaff.name
+		moudle:Get("LvNum").Text = dataStaff.level
+		moudle:Get("GjlNum").Text = dataStaff.power
+
+		for i = 1,7 do
+			moudle:Get("Star"..i).Activity = csvStaff.star >= i
+		end
+
+		for i = 1,MAX_TAG do
+			moudle:Get("Tab"..i).Activity = false
+		end
+
+		if csvStaff.labelImg ~= nil then
+			for k,v in ipairs(csvStaff.labelImg) do
+				moudle:Get("Tab"..k).Activity = true
+				moudle:Get("Tab"..k).SpriteName = v
+			end
+		end
+
+		_P.RefreshTianfu(self,staffid)
+	end
+end
+
+function _P.RefreshTianfu(self,staffid)
+	local moudle = self.mMoudle
+	local csvStaff = Csv.Personnel[staffid]
+	local dataStaff = MStaff.StaffTable[staffid]
+	local content = moudle:Get("content2")
+	content:DestroyChildren()
+	if csvStaff.buffs ~= nil then
+		for k,v in ipairs(csvStaff.buffs) do
+			local csvBuff = Csv.Buff[v]
+			if csvBuff ~= nil then
+				local talentMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Array_Item")
+				talentMoudle:Get("yuandian").SpriteName = csvBuff.icon
+				local textTitle = talentMoudle:Get("text1")
+				local textDesc = talentMoudle:Get("text11")
+				textTitle.Text = csvBuff.title
+				textDesc.Text = csvBuff.desc
+				if dataStaff.level >= csvBuff.level then
+					textTitle.Color = Color_Light
+					textDesc.Color = Color_Light
+				else
+					textTitle.Color = Color_Gray
+					textDesc.Color = Color_Gray
+					talentMoudle:Get("JH").Text = Csv.Text("lineup_8",{num = csvBuff.level})
+				end
+			end
+		end
+	end
+
+	local linkTable = {}
+	local link = _P.GetSortLink(dataStaff.link)
+	for k,v in ipairs(link) do
+		local csvLink = Csv.Link[v]
+		if csvLink ~= nil then
+			linkTable[v] = true
+			local linkMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Array_Item")
+			linkMoudle:Get("yuandian").SpriteName = csvLink.icon
+			local textTitle = linkMoudle:Get("text1")
+			local textDesc = linkMoudle:Get("text11")
+			textTitle.Text = csvLink.name
+			textDesc.Text = csvLink.tips
+			textTitle.Color = Color_Light
+			textDesc.Color = Color_Light
+		end
+	end
+
+	local linkStaff = _P.GetSortLink(csvStaff.link)
+	for k,v in ipairs(linkStaff) do
+		if not linkTable[v] then
+			local csvLink = Csv.Link[v]
+			if csvLink ~= nil then
+				local linkMoudle = JGuiManager.GetMoudle(content,"M_NewBossPK_Array_Item")
+				linkMoudle:Get("yuandian").SpriteName = csvLink.icon
+				local textTitle = linkMoudle:Get("text1")
+				local textDesc = linkMoudle:Get("text11")
+				textTitle.Text = csvLink.name
+				textDesc.Text = csvLink.tips
+				textTitle.Color = Color_Gray
+				textDesc.Color = Color_Gray
+				linkMoudle:Get("JH").Text = Csv.Text("lineup_17")
+			end
+		end
+	end
+end
+
+function _P.GetSortLink(link)
+	if link ~= nil then
+		local linkTable = link
+		table.sort(linkTable,function(a,b)
+			local csvLinkA = Csv.Link[a]
+			local csvLinkB = Csv.Link[b]
+			if csvLinkA ~= nil and csvLinkB ~= nil then
+				return csvLinkA.sort < csvLinkB.sort
+			else
+				return true
+			end
+		end)
+		return linkTable
+	else
+		return {}
+	end
+end
+
+function _R.SetList(self)
+	_P.SetList(self)
+end
+
+function _R.OnLineUpOpen(self)
+	_P.SetList(self)
+end
+
+function _R.SetNowSelect(self,index)
+	self.NowSelectIndex = index
+end
+
+function _R.SetNoSelect(self)
+	self.NowSelectIndex = nil
+end
+
+return _M

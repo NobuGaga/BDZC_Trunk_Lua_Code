@@ -79,7 +79,7 @@ function  _P.SetGiftItem(id,parent,girl)
 	local iconSp = moudle:Get("gift")
 	local itembg = moudle:Get("icon")
     local name = moudle:Get("name_text")
-    local num = moudle:Get("quantity_textnum")
+    local num = moudle:Get("quantity_text")
 	local desc = moudle:Get("describe_text")
 
 	moudle:Get("quantity_text").Text = Csv.Text("bag_numX")
@@ -91,7 +91,7 @@ function  _P.SetGiftItem(id,parent,girl)
 		itembg.SpriteName = data.colorIcon
 		name.Text = data.name
 		desc.Text = Csv.Text("Girl_gift_desc",{value = data.tips}) 
-		num.Text = itemNum --"数量："..0 --读取后端数据
+		num.Text = Csv.Text("Girl_num",{num = itemNum})--itemNum --"数量："..0 --读取后端数据
 	end
 
     local useBtnText = moudle:Get("C_text")
@@ -112,9 +112,9 @@ function  _P.SetGiftItem(id,parent,girl)
 end
 
 function _P.SetNum(moudle,id)
-	local num = moudle:Get("quantity_textnum")
+	local num = moudle:Get("quantity_text")
 	local itemNum = MBag.GetItemNum(id)
-	num.Text = itemNum --"数量："..0 --读取后端数据
+	num.Text = Csv.Text("Girl_num",{num = itemNum})--itemNum --"数量："..0 --读取后端数据
 end
 
 function _R.RefreshIntimacy(self,_intimacy,_intimacyChange)

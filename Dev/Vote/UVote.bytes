@@ -1,5 +1,5 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
-local TabGroup = JRequire "Dev.Common.TabGroup2"
+local TabGroup = JRequire "Dev.Common.TabGroup"
 local MVote = JRequire "Dev.Vote.MVote"
 local CVote = JRequire "Dev.Vote.CVote"
 local UVoteTown = JRequire "Dev.Vote.UVoteTown"
@@ -49,14 +49,14 @@ function _P.OnChoose(self, funcId)
 				self:RegistRedpoint(node, point)
 			end
 		end)
-		moudle:Get("Bg_0").SpriteName = BG1
+		moudle:Get("Bg").SpriteName = BG1
 	elseif funcId == Define.SysId.Vote_Member then
 		self.ChooseMoudle = UVoteMember.new(self.PageNode, function(node, point)
 			if self.mMoudle ~= nil then
 				self:RegistRedpoint(node, point)
 			end
 		end)
-		moudle:Get("Bg_0").SpriteName = BG2
+		moudle:Get("Bg").SpriteName = BG2
 	end
 end
 
@@ -108,7 +108,6 @@ function _M:OnCreate()
 	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
 
 	moudle:Get("C_Text").Text = Csv.Text("vote_0")
-	moudle:Get("new_text").Text = Csv.Text("relations_tip3")
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()

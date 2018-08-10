@@ -14,6 +14,10 @@ local ISDKManager = CS.Utility.ISDKManager
 
 local _M = Class(BaseSDK)
 
+-- ATTENTION : 是否使用SDK登陆（还是游戏登陆）
+function _M:UseSdkLogin()
+	return true
+end
 ------------------------------请求接口------------------------------
 function _M.ReqLogin()
 	local data = {func = SDKFuncName.SDKLogin}
@@ -39,19 +43,6 @@ end
 function _M.ReqCollectData(type, serverID, serverName, roleID, roleName, roleLevel)
 	local data = {func = SDKFuncName.SDKCollectData, type = type, serverID = serverID, 
 				  serverName = serverName, roleID = roleID, roleName = roleName, roleLevel = roleLevel}
-	local dataString =  rapidjson.encode(data)
-	ISDKManager.Call(dataString)
-end
-
-function _M.ReqPay(productID, price, gold, productName, num, roleID, roleName, serverID, sbID, param)
-	local tempParam = roleID .. "|" .. roleName .. "|" .. productID .. "|" .. sbID .. "|" .. gold
-	if nil == param then
-		param = tempParam
-	else
-		param = tempParam .. "|" .. param
-	end
-	local data = {func = SDKFuncName.SDKPay, price = price, productName = productName, 
-				  num = num, roleID = roleID, serverID = serverID, param = param}
 	local dataString =  rapidjson.encode(data)
 	ISDKManager.Call(dataString)
 end

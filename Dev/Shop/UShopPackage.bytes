@@ -11,14 +11,14 @@ local CActivity = JRequire "Dev.Activity.CActivity"
 local _M = Class()
 local _P = {}
 
-local ITEM_WIDTH = 650
-local ITEM_HEIGHT = 370
-local BG_WIDTH = 705
+local ITEM_WIDTH = 693
+local ITEM_HEIGHT = 324
+local BG_WIDTH = 630
 local BG_HEIGHT = 144
 local LINENUM = 4
-local ICONWIDTH = 620
-local ICONHEGHT = 140
-local SPACE = 10
+local ICONWIDTH = 560
+local ICONHEGHT = 120
+local SPACE = 14
 local SPACEWIDTH = 44
 local TIMESCALE = 0.2
 local EFFECT_ID = 12
@@ -49,22 +49,21 @@ function _P.OnCreateList(self)
 			local shopMoudle = JGuiManager.GetMoudle(content,"M_Shop_Preferential_ele1",WindowType.UI, 0)
 			local csvShop = Csv.GiftShop[v.actId]
 			
-			local TextLimit = shopMoudle:Get("limit1_number")
+			local TextLimit = shopMoudle:Get("limit1")
 			if csvShop.limit == nil or csvShop.limit <= 0 then
 				TextLimit.Text = ""
 			else
 				if csvShop.limit - v.times < 0 then
-					TextLimit.Text = Csv.Text("shop_xiangou3",{num = 0})
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = 0})
 				else
-					TextLimit.Text = Csv.Text("shop_xiangou3",{num = csvShop.limit - v.times})
+					TextLimit.Text = Csv.Text("shop_xiangou",{num = csvShop.limit - v.times})
 				end
 			end
-			shopMoudle:Get("limit1").Text = Csv.Text("shop_xiangou2")
 			shopMoudle:Get("TitleText1").Text = csvShop.name
 			shopMoudle:Get("PriceText").Text = csvShop.price
 			shopMoudle:Get("Diamonds1").SpriteName = Csv.Item[csvShop.buytype].miniIcon
 			shopMoudle:Get("C_text").Text = Csv.Text("shop_buy")
-			--shopMoudle:Get("tj").Text = Csv.Text("shop_jiage1")
+			shopMoudle:Get("tj").Text = Csv.Text("shop_jiage1")
 			shopMoudle:Get("C_Btn_b"):AddOnButton(function(...)
 				SoundMgr.Play(10001)
 				if MPlayer.GetLevel() < csvShop.level then
@@ -156,15 +155,7 @@ function _P.GetSortShop(rawTable)
 		for k,v in pairs(rawTable) do
 			table.insert(sortTable,v)
 		end
-		table.sort(sortTable,function(a,b)
-			local csvA = Csv.GiftShop[a.actId]
-			local csvB = Csv.GiftShop[b.actId]
-			if csvA ~= nil and csvA.sort ~= nil and csvB ~= nil and csvB.sort ~= nil then
-				return csvA.sort < csvB.sort
-			else
-				return false
-			end
-		end)
+		table.sort(sortTable,function(a,b) return a.actId < b.actId end)
 	end
 	return sortTable
 end
@@ -183,7 +174,7 @@ function _M:ShopBuy(data)
 			if limit ~= nil and limit > 0 then
 				local shopData = MActivity.ActList[data.actId]
 				if shopData ~= nil then
-					moudle:Get("limit1_number").Text = Csv.Text("shop_xiangou3",{num = limit - shopData.times})
+					moudle:Get("limit1").Text = Csv.Text("shop_xiangou",{num = limit - shopData.times})
 				end
 			end
 
@@ -191,8 +182,7 @@ function _M:ShopBuy(data)
 				local csvItem = Csv.Item[v[1]]
 				local spMap = {back = csvItem.colorIcon,icon = csvItem.icon}
 				local textMap = {num = v[2]}
-				local rootCanvasPos = shop.itemMoudles[k]:Get("back").RootCanvasPos
-				local effectMoudle = CCommon.CreateEffect(self.mMoudle:Get("effectNode"),EFFECT_ID,Vector2(rootCanvasPos.x - 30,rootCanvasPos.y + 120),nil,spMap,textMap)
+				local effectMoudle = CCommon.CreateEffect(self.mMoudle:Get("effectNode"),EFFECT_ID,shop.itemMoudles[k]:Get("back").RootCanvasPos,nil,spMap,textMap)
 				effectMoudle.SelfRect.Name = tostring(k)
 			end
 			SoundMgr.Play(11000)

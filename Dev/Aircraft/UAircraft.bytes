@@ -75,7 +75,7 @@ function _P.InitMoudleTopInfo(self)
 		self:Destroy()
 		WindowMgr.Call("UHomeMap", "RefreshAircraftRedPoint")
 	end)
-	if nil ~= Csv.Rule[Define.SysId.Aircraft] then
+	if Csv.Rule[Define.SysId.Aircraft] then
 		local btnInfo = self.moudle:Get("btnInfo")
 		if btnInfo ~= nil then
 			btnInfo:AddOnButton(function ( ... )
@@ -188,16 +188,16 @@ end
 
 --销毁倒计时
 function _P.DestroyUpdateTime(self)
-	if nil ~= self.tween then
+	if self.tween then
 		self.tween:Destroy()
 	end
 end
 
 --初始化飞机飞行结束动画初始值
 function _P.InitOriginFlyEndAnimTime(self)
-	if nil ~= self.airCraft then
+	if self.airCraft then
 		self.airCraftTween = self.airCraft.CachedTran:GetJTweener(TweenFlyEnd)
-		if nil ~= self.airCraftTween then
+		if self.airCraftTween then
 			local maxTime = 0
 			local maxTweenFlyNum = self.airCraftTween.Tweeners.Length
 			for index = 0, maxTweenFlyNum - 1 do
@@ -219,11 +219,11 @@ end
 --刷新飞机飞行结束动画时间
 function _P.RefreshFlyEndAnimTime(self)
 	local FlyEndAnimTime = self.OriginFlyEndAnimTime
-	if nil ~= self.airCraftAnimCsv and nil ~= self.airCraftAnimCsv.fly_time then
+	if self.airCraftAnimCsv and self.airCraftAnimCsv.fly_time then
 		FlyEndAnimTime = FlyEndAnimTime + self.airCraftAnimCsv.fly_time
 	end
 	local effectID = _P.GetCsvEffectIDByName(self, FlyingStopEffect)
-	if nil ~= effectID then
+	if effectID then
 		local csvEffect = Csv.Effect[effectID]
 		local time = (csvEffect and csvEffect.dura) or 1
 		FlyEndAnimTime = FlyEndAnimTime + time 
@@ -261,7 +261,7 @@ function _R.RefreshEffect(self)
 		if not isAlreadyStart then
 			self.propeller.SpriteName = self.airCraftAnimCsv.prop_name
 			local pos = self.airCraftAnimCsv.prop_pos
-			if nil ~= pos then
+			if pos then
 				if nil == pos[1] or nil == pos[2] then
 					error("表 AircraftAnimation 对应的资源图片名 " .. self.airCraft.SpriteName or "nil" .. " prop_pos 字段配置错误")
 				end
@@ -288,7 +288,7 @@ end
 --获取判断是否播放飞行降落动画
 function _P.GetStartFlyEndState(self)
 	local lessTime = 0
-	if nil ~= MAircraft.SchoolTime and 0 ~= MAircraft.SchoolTime then
+	if MAircraft.SchoolTime and 0 ~= MAircraft.SchoolTime then
 		lessTime = MAircraft.SchoolTime - HeartBeat.ServSecond()
 	end
 	if MAircraft.IsStuding and MAircraft.FlyEndAnimTime - 1 >= lessTime then
@@ -332,7 +332,7 @@ end
 function _P.PlayAircraftTween(self, TweenName, OnComplete)
 	_P.DestroyAirCraftTween(self)
 	self.airCraftTween = self.airCraft.CachedTran:GetJTweener(TweenName)
-	if nil ~= OnComplete then
+	if OnComplete then
 		self.airCraftTween:SetOnComplete(OnComplete)
 	end
 	self.airCraftTween:Play()
@@ -340,7 +340,7 @@ end
 
 --销毁飞机Tween动画
 function _P.DestroyAirCraftTween(self)
-	if nil ~= self.airCraftTween then
+	if self.airCraftTween then
 		self.airCraftTween:DOKill()
 		self.airCraftTween = nil
 	end
@@ -348,9 +348,9 @@ end
 
 --获取飞机动画表对应的飞行特效ID
 function _P.GetCsvEffectIDByName(self, effectID)
-	if nil ~= self.airCraftAnimCsv.propEffect then
+	if self.airCraftAnimCsv.propEffect then
 		local csvValue = self.airCraftAnimCsv.propEffect[effectID]
-		if nil ~= csvValue then
+		if csvValue then
 			return csvValue
 		else
 			error("表 AircraftAnimation 对应的资源图片名 " .. self.airCraft.SpriteName or "nil" 
@@ -471,8 +471,8 @@ function _R.RefreshAircraftInfo(self)
 	local csvAircraft = Csv.Aircraft[MAircraft.AircraftID]
 	local csvAircraftSkin = Csv.AircraftSkin[MAircraft.SkinID]
 
-	if nil ~= csvAircraft then
-		if nil ~= csvAircraft.name_asset then
+	if csvAircraft then
+		if csvAircraft.name_asset then
 			self.nameLevel.SpriteName = csvAircraft.name_asset
 		else
 			error("表 Aircraft 对应的ID " .. MAircraft.AircraftID .. " 没有 name_asset 字段")
@@ -487,13 +487,13 @@ function _R.RefreshAircraftInfo(self)
 
 	if nil == MAircraft.SkinID or 0 == MAircraft.SkinID or nil == csvAircraftSkin then
 		if nil == MAircraft.SkinID then
-			if nil ~= csvAircraft.name then
+			if csvAircraft.name then
 				self.textName.Text = csvAircraft.name
 			else
 				error("表 Aircraft 对应的ID " .. MAircraft.AircraftID .. " 没有 name 字段")
 				return
 			end
-			if nil ~= csvAircraft.asset then
+			if csvAircraft.asset then
 				self.airCraft.SpriteName = csvAircraft.asset
 			else
 				error("表 Aircraft 对应的ID " .. MAircraft.AircraftID .. " 没有 asset 字段")
@@ -501,14 +501,14 @@ function _R.RefreshAircraftInfo(self)
 			end
 		else
 			csvAircraft = Csv.Aircraft[MAircraft.SkinID]
-			if nil ~= csvAircraft then
-				if nil ~= csvAircraft.name then
+			if csvAircraft then
+				if csvAircraft.name then
 					self.textName.Text = csvAircraft.name
 				else
 					error("表 Aircraft 对应的ID " .. MAircraft.SkinID .. " 没有 name 字段")
 					return
 				end
-				if nil ~= csvAircraft.asset then
+				if csvAircraft.asset then
 					self.airCraft.SpriteName = csvAircraft.asset
 				else
 					error("表 Aircraft 对应的ID " .. MAircraft.SkinID .. " 没有 asset 字段")
@@ -520,13 +520,13 @@ function _R.RefreshAircraftInfo(self)
 			end
 		end
 	else
-		if nil ~= csvAircraftSkin.name then
+		if csvAircraftSkin.name then
 			self.textName.Text = csvAircraftSkin.name
 		else
 			error("表 AircraftSkin 对应的ID " .. MAircraft.SkinID .. " 没有 name 字段")
 			return
 		end
-		if nil ~= csvAircraftSkin.asset then
+		if csvAircraftSkin.asset then
 			self.airCraft.SpriteName = csvAircraftSkin.asset
 		else
 			error("表 AircraftSkin 对应的ID " .. MAircraft.SkinID .. " 没有 asset 字段")
@@ -541,7 +541,7 @@ function _R.RefreshAircraftInfo(self)
 	end
 
 	local pos = self.airCraftAnimCsv.pos
-	if nil ~= pos then
+	if pos then
 		if nil == pos[1] or nil == pos[2] then
 			error("表 AircraftAnimation 对应的资源图片名 " .. self.airCraft.SpriteName or "nil" .. " pos 字段配置错误")
 		end
@@ -565,7 +565,7 @@ end
 --刷新飞机红点
 function _R.RefreshAircraftRedPoint(self)
 	_P.RefreshTimeState(self)
-	self.redpoint.Activity = not MAircraft.IsStuding
+	self.redpoint.Activity = MAircraft.IsHaveCompleted or (not MAircraft.IsStuding and MAircraft.StudyLeftTimes > 0)
 	self.redpointSkin.Activity = MAircraft.IsAircraftHaveUnActivative()
 end
 

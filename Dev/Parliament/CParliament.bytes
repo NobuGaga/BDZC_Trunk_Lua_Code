@@ -41,6 +41,7 @@ local CMD_ID =
 	sParliamentGiftList = 6,	--已赠送礼物玩家列表下发 Parliament:SGivenList
 	sParliamentGetGifts = 7,	--已赠送礼物玩家下发 Parliament:SGetGift
 	sParliamentUpdate = 8,		--殿堂称号广播 Parliament:SParliamentAdd
+	sParliamentSexUpdate = 9,	--殿堂人物性别更新 Parliament:SParliamentSex
 }
 
 function _M.ModuleClean()
@@ -71,6 +72,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sParliamentGiftList] = { proto = "PParliament.SGivenList", 	    handle = _P.OnSetGiftList},
 		[CMD_ID.sParliamentGetGifts] = { proto = "PParliament.SGetGift",  		handle = _P.OnSetGift},
 		[CMD_ID.sParliamentUpdate]   = { proto = "PParliament.SParliamentAdd",  handle = _P.OnAddParliamentTitle},
+		[CMD_ID.sParliamentSexUpdate]= { proto = "PParliament.SParliamentSex",  handle = _P.OnParliamentUpdateSex},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Parliament, func_send, func_recv, isReload)	
@@ -241,6 +243,11 @@ function _P.OnAddParliamentTitle(data)
 		MParliament.SetShowOneData(data.parliament)
 		WindowMgr.Call("UParliament", "RefreshViewData", {list = MParliament.list, isGet = MParliament.isGet})
 	end
+end
+
+function _P.OnParliamentUpdateSex(data)
+	MParliament.SetTitlePlayerSex(data)
+	WindowMgr.Call("UParliament", "RefreshViewData", {list = MParliament.list, isGet = MParliament.isGet})
 end
 
 -----------------------------   Data Concrol   -----------------------------

@@ -19,6 +19,8 @@ local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
 --@RefType [Dev.Welfare.MWelfare.bytes#_M]
 local MWelfare = JRequire"Dev.Welfare.MWelfare"
 local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
 
 local TimeDelay = CS.Utility.TimeDelay
 
@@ -477,7 +479,7 @@ function _M.ExecEvent(csvLine, isGM)
 				_M.OverGuideId = csvLine.isGuideStage
 			end
 			if csvLine.event ~= nil then
-				CS.Utility.LogPoint.LogPost(14, csvLine.id)
+				CS.Utility.LogPoint.LogPost(14, csvLine.id, luaUtil.TransToYearMonthDayHMS(os.time()))
 				local eventFunc = _M.EventFunc[csvLine.event]
 				if eventFunc ~= nil then
 					eventFunc(csvLine)

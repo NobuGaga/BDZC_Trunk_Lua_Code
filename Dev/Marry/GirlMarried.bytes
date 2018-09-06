@@ -644,14 +644,16 @@ function _R.RefreshQingqiu(self)
 	local itemList =  self.mUnMarriedItems
 	local qingqiuList = MGirl.MarriedQingqiu
 
-	for k,v in pairs(itemList)do
-		local itemRed = v:Get("red")
+	if itemList ~= nil then
+		for k,v in pairs(itemList)do
+			local itemRed = v:Get("red")
 
-		itemRed.Activity = false
-		local tiqinList = MGirl.GetQingqiuById(k)
-		if tiqinList ~= nil then
-			if #tiqinList > 0 then
-				itemRed.Activity = true
+			itemRed.Activity = false
+			local tiqinList = MGirl.GetQingqiuById(k)
+			if tiqinList ~= nil then
+				if #tiqinList > 0 then
+					itemRed.Activity = true
+				end
 			end
 		end
 	end

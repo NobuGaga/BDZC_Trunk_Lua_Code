@@ -41,6 +41,8 @@ function _R.OnUpdateItem(self, id, num)
 					objInfo.btn.IsGray = true
 					objInfo.btn.RaycastTarget = false
 					objInfo.red.Activity = false
+				else
+					objInfo.red.Activity = canExCount > 1
 				end
 			else
 				objInfo.red.Activity = false
@@ -118,8 +120,9 @@ function _R.RefreshItems(self)
 			oneMoudle:Get("GoodName").Text = itemCsv.name
 			oneMoudle:Get("Score").Text = Csv.Text("commerce_exchange2", {cost = csv.cost})
 			oneMoudle:Get("C_text").Text = Csv.Text("commerce_exchange4")
+			oneMoudle:Get("ItemNum").Text = 'x1'
 			local btn = oneMoudle:Get("C_Btn_b")
-			local numText = oneMoudle:Get("ItemNum")	
+			local numText = oneMoudle:Get("LeftNum")	
 			local red = oneMoudle:Get("Red")
 			local canExCount = 0		
 			if csv.locked > level then
@@ -153,6 +156,8 @@ function _R.RefreshItems(self)
 						btn.IsGray = true
 						btn.RaycastTarget = false
 						red.Activity = false
+					else
+						red.Activity = canExCount > 1
 					end
 				else
 					red.Activity = false

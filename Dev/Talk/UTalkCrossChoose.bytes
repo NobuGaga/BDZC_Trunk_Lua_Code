@@ -54,6 +54,7 @@ function _M:OnCreate(id,isEvent)
 		local num = itemMoudle:Get("Num")
 		local desc = itemMoudle:Get("text1")
 		local costNum = itemMoudle:Get("ZuansNum")
+		local costImg = itemMoudle:Get("Zuans")
 
 		local itemId = itemIDs[i]
 		local itemData = Csv.Item[itemId]
@@ -67,6 +68,12 @@ function _M:OnCreate(id,isEvent)
 			if itemCosts[i] ~= nil then
 				costNum.Text = itemCosts[i]
 			end
+		end
+
+		if MPlayer.GetVip() < TipShowVip then
+			costImg.Activity = false
+		else 
+			costImg.Activity = true
 		end
 
 		itemMoudle:Get("C_text").Text = Csv.Text("talk_cross_choose")

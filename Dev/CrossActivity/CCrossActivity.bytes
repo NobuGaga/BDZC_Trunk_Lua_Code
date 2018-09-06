@@ -1,3 +1,5 @@
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
 --@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
 local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 --@RefType [Dev.CrossActivity.CrossRankReward.CCrossRankReward.bytes#_M]
@@ -14,7 +16,7 @@ local _P = {}
 
 ------------------------------------活动类型方法----------------------------------
 local DataNameToType = {
-	rankReward = Define.ActivityType.CrossRankReward,
+	rankReward = Define.CrossActivityType.CrossRankReward,
 }
 
 local DataNameToSysID = {
@@ -22,7 +24,7 @@ local DataNameToSysID = {
 }
 
 local ActTypeToModule = {
-	[Define.ActivityType.CrossRankReward] = "Dev.CrossActivity.CrossRankReward.CCrossRankReward",
+	[Define.CrossActivityType.CrossRankReward] = "Dev.CrossActivity.CrossRankReward.CCrossRankReward",
 }
 
 local ActivityTypeModule = {}
@@ -82,14 +84,14 @@ function _M.ModuleInit(isReload)
 	--发送消息协议注册
 	local func_send = 
 	{
-		[CMD_ID.cCURankRewardGet] = "PActivity.CGet",
+		[CMD_ID.cCURankRewardGet] = "PCrossRankReward.CCURankRewardGet",
 	}
 	--接收消息协议注册
 	local func_recv = 
 	{
-		[CMD_ID.sCURankRewardGet]  = {proto = "PActivity.SActivity", 	  handle = _P.OnInit	  },
-		[CMD_ID.sCUActivityInit]   = {proto = "PActivity.SActivity", 	  handle = _P.OnUpdate	  },
-		[CMD_ID.sCUActivityUpdate] = {proto = "PActivity.SActivityGeted", handle = _P.OnGetReward},
+		[CMD_ID.sCURankRewardGet]  = {proto = "PCrossRankReward.SCURankRewardGet",	handle = _P.OnGetReward },
+		[CMD_ID.sCUActivityInit]   = {proto = "PCrossRankReward.SCURankReward", 	handle = _P.OnInit	    },
+		[CMD_ID.sCUActivityUpdate] = {proto = "PCrossRankReward.SUpdateState", 		handle = _P.OnUpdate	},
 	}
 
 	func_send, func_recv = _P.SetRegist(func_send, func_recv)
@@ -104,23 +106,32 @@ end, true)
 
 ------------------Client -- Server----------------
 --领奖请求
-function _M.GetReward(actId, index)
-	_M.Send(CMD_ID.cCURankRewardGet, {actId = actId})
+function _M.GetReward(actId)
+	_M.Send(CMD_ID.cCURankRewardGet, {actid = actId})
 end
 
 ------------------Server -- Client----------------
 function _P.OnInit(data)
+	if not MPlayer.IsCross() then
+		return
+	end
 	MCrossActivity.Clean()
 	_P.RefreshData(data, true)
 end
 
 function _P.OnUpdate(data)
+	if not MPlayer.IsCross() then
+		return
+	end
 	_P.RefreshData(data, false)
 	_P.RefreshMainBtn()
 end
 
 --领取奖励成功返回
 function _P.OnGetReward(data)
+	if not MPlayer.IsCross() then
+		return
+	end
 	local actId = data.actId
 	local info = MCrossActivity.GetFromId(actId)
 	if info ~= nil then
@@ -135,16 +146,13 @@ function _P.RefreshData(data, isInit)
 	for key, value in pairs(data) do
 		local actType = DataNameToType[key]
 		if actType then
-			if not isInit then
-				MCrossActivity.ClearForType(actType)
-				local sysID = DataNameToSysID[key]
-				if sysID then
-					CMain.UpdateRedpoint(false, sysID)
-				end
-			end
 			local typeModule = _P.GetActivityModuleForType(actType)
 			if typeModule then
-				typeModule.RefreshData(actType, value)
+				if isInit then
+					typeModule.RefreshData(actType, value)
+				else
+					typeModule.RefreshOneActData(actType, value, true)
+				end
 			end
 		end
 	end

@@ -104,6 +104,8 @@ _M.IsTravalAutoBuy = false -- 环球旅行自动购买标记
 _M.AdventureTaskNames = Csv.Const(20161) -- 奇遇任务四大类型图片
 _M.AdventureConstData = Csv.Const(20162) -- 奇遇系统全局配置表数据
 _M.AdventureBattleRewards = {}			 -- 奇遇系统战斗奖励
+_M.IsShowsOneRecharge = true
+_M.AdventureUpdateTmp = nil
 
 function _M.Clean()
 	_M.ActList = {}
@@ -126,6 +128,8 @@ function _M.Clean()
 	_M.GloalTravalRed = false
 	_M.IsTravalAutoBuy = false
 	_M.AdventureBattleRewards = {}
+	_M.IsShowsOneRecharge = true
+	_M.AdventureUpdateTmp = nil
 end
 
 function _M.ClearForType(actType)
@@ -271,6 +275,9 @@ function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
 				actData.rankPro = selfValue
 			end
 		end
+		return true
+	else
+		return false
 	end
 end
 
@@ -358,7 +365,7 @@ function _M.GetNewOneTask(data)
 		bossTriTime = data.bossTriTime or 0,
 		taskState = data.state or 0,
 		joinInfo = data.joinInfo or {},
-		isDown = data.isDown
+		isDown = data.isDown or false
 	}
 	return one
 end
@@ -419,10 +426,24 @@ function _M.OpenBattleView(addExp, isBossBattle, blood, bossFullBlood, bossImg, 
 			if not isBossBattle and (data.result == nil or data.result == false) then
 				WindowMgr.Create("UAdventureBattleFail", function( ... )
 					WindowMgr.Destroy("UBattleBossNew")
+
+					if _M.AdventureUpdateTmp ~= nil then
+						if WindowMgr.IsCreated("UAdventureMain") then
+							WindowMgr.Call("UAdventureMain", "UpdateOwnData", _M.AdventureUpdateTmp, false)
+						end
+						_M.AdventureUpdateTmp = nil
+					end
 				end)
 			else
 				WindowMgr.Create("UAdventureBattleWin", addExp, function( ... )
 					WindowMgr.Destroy("UBattleBossNew")
+
+					if _M.AdventureUpdateTmp ~= nil then
+						if WindowMgr.IsCreated("UAdventureMain") then
+							WindowMgr.Call("UAdventureMain", "UpdateOwnData", _M.AdventureUpdateTmp, false)
+						end
+						_M.AdventureUpdateTmp = nil
+					end
 				end)
 			end
 		end

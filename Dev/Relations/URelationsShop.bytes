@@ -44,7 +44,8 @@ function _M:OnCreate()
 			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
 			CCommon.CheckTips(function(isSure, arg)
 				_P.OnClickRefresh(self, isSure, arg)
-			end, {items = {[1] = GoldCount} ,content = Csv.Text("club_exchange_tip",{num = self.needCost})})
+			end, {items = {[1] = GoldCount} ,content = Csv.Text("club_exchange_tip",{num = self.needCost})},
+			Define.NoTipsAgainType.RelationShop)
 		else
 			CCommon.ShowError(Csv.Text("club_exchange_refreshError"))
 		end
@@ -57,6 +58,7 @@ function _M:OnCreate()
 	module:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")
 	module:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")
 	module:Get("C_text_8_0").Text = Csv.Text("relations_show_show")
+	module:Get("costText").Text = Csv.Text("club_shop_cost")
 
 	module:Get("C_Btn_b_9"):AddOnButton(function()
 		SoundMgr.Play(10002)
@@ -64,6 +66,7 @@ function _M:OnCreate()
 	end,nil,1.2)
 
 	self.timeText = module:Get("CXNum")
+	self.costValue = module:Get("costValue")
 	_P.SetData(self, self.exchangeData)
 
 	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
@@ -94,6 +97,7 @@ end
 
 function _P.SetData(self, data)
 	self.mModule:Get("integralNum").Text = (data.point < 0 and 0) or data.point
+	self.costValue.Text = self.needCost
 	--self.mModule:Get("CSNum").Text = (maxRefreshNum - data.todayRefreshCount) .. '/' .. maxRefreshNum
 	
 	_P.OnUpdateTime(self)
@@ -153,7 +157,12 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 		local strColor = Csv.ItemColor[itemConf.color].str
 		ItemNameText.Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
 
-		itemModule:Get("ItemNum").Text = goodConf.itemcount
+		local redNumText = itemModule:Get("ItemNum")
+		redNumText.Text = goodConf.maxBuy - data.buyCount
+
+		local numText = itemModule:Get("GetNum")
+		numText.Text = 'x' .. goodConf.itemcount
+		numText.Activity = true
 
 		local IconImg = itemModule:Get("Icon")
 		IconImg.SpriteName = itemConf.icon
@@ -208,10 +217,11 @@ end
 -- 设置item是否为灰
 function _P.SetItemGray(itemModule, data, shopConf)
 	local isMax = data.buyCount >= shopConf.maxBuy
-	
+	local leftNum = shopConf.maxBuy - data.buyCount
+
 	itemModule:Get("Icon").IsGray = isMax
 	itemModule:Get("IconBox").IsGray = isMax
-	itemModule:Get("Red").Activity = not isMax
+	itemModule:Get("Red").Activity = (not isMax and leftNum > 1)
 	itemModule:Get("Corner").IsGray = isMax
 
 	-- 判断该商品兑换次数是否达到上限，若达到上限置灰，不可点击
@@ -268,10 +278,13 @@ function _R.OnExchangeCallBack(self, data)
 	local ScoreTween = scoreText.CachedTran:GetJTweener(NUM_TWEEN)
 	ScoreTween:Play()
 
+	local redNumText = itemModule:Get("ItemNum")
+	redNumText.Text = goodConf.maxBuy - data.buyCount
+
 	local effectRect = itemModule:Get("Score")
 	if effectRect == nil then return end
 
-	CCommon.ShowFlyItem(effectRect, goodConf.itemid, data.buyCount)
+	CCommon.ShowFlyItem(effectRect, goodConf.itemid, goodConf.itemcount)
 end
 
 

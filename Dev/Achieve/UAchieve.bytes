@@ -80,6 +80,8 @@ function _P.CreateItem(self,moudle,data)
 			text = CS.Utility.Utils.GetStringFont(text,5).."..."
 		end
 		TextNum.Text = text
+	elseif csvAchieve.type ~= nil and csvAchieve.type == 2 then
+		TextNum.Text = Csv.Text("company_arena",{num = data.val,max = maxVal})
 	else
 		TextNum.Text = Csv.Text("company_exp",{num = data.val,max = maxVal})
 	end
@@ -87,10 +89,20 @@ function _P.CreateItem(self,moudle,data)
 	if data.pro <= 0 or isLast then
 		ImgRed.Activity = false
 	else
-		if data.val >= maxVal then
-			ImgRed.Activity = true
-		else
+		--判断正反序
+		if csvAchieve.desc == 1 then
 			ImgRed.Activity = false
+			if data.val > 0 then
+				if data.val <= maxVal then
+					ImgRed.Activity = true
+				end
+			end
+		else
+			if data.val >= maxVal then
+				ImgRed.Activity = true
+			else
+				ImgRed.Activity = false
+			end
 		end
 	end
 
@@ -99,12 +111,21 @@ function _P.CreateItem(self,moudle,data)
 	for k,v in ipairs(csvAchieve.levelNum) do
 		if k < #csvAchieve.levelNum then
 			local cost = Csv.AchieveLevel[v].value
-			if data.val >= cost then
-				sliderValue = sliderValue + 1
+			--倒叙
+			if csvAchieve.desc == 1 then 
+				if data.val > 0 and  data.val <= cost then
+					sliderValue = sliderValue + 1
+				end
+			else
+				if data.val >= cost then
+					sliderValue = sliderValue + 1
+				end
 			end
+			
 			sliderMax = sliderMax + 1
 		end
 	end
+
 	moudle:Get("slider").FillAmount = sliderValue/sliderMax
 
 	if GameSetting.IsiOSCommit then

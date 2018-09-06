@@ -24,14 +24,17 @@ local GRAY = Color(0/255, 0/255, 0/255, 140/255)
 local OutBack = CS.DG.Tweening.Ease.OutBack
 local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
 local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
-local STAGE_UP_TWEEN = "T_Effect_Adventure_StageTween"
+local LEVEL_UP_TWEEN = "T_Adventure_UpTween"
 local StarUpActorId = 10080
-local LevelUpActorId = 10081
+local LevelUpActorId = 10113
 local GetActorId = 10006
+local TouYin = 10183
 local FightStateIcons = {"shijiantu_1","shijiantu_2"}
-local FirstLevelId = 101
--- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
--- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
+local FirstLevelId = 1
+local IconBoxBgIcons = {"qy_020_1", "qy_020_2", "qy_020_3"
+					,"qy_020_4", "qy_020_5", "qy_020_6","qy_020_7"}
+local StarBoxBgIcons = {"qy_020_1_2", "qy_020_2_2", "qy_020_3_2"
+					,"qy_020_4_2", "qy_020_5_2", "qy_020_6_2","qy_020_7_2"}
 
 
 function _M:Dispatch(funcName, ...)
@@ -43,20 +46,26 @@ end
 
 
 function _P.SetView(self)
-	_P.SetListData(self)
+	_P.SetListData(self, true)
 	_P.SetCompanyData(self)
+	
+	for k,v in pairs(self.mRawTableItems) do
+		local itemRect = v.module
+		if itemRect ~= nil then
+			local tween = itemRect.SelfRect.CachedTran:GetJTweener(MOUDLE_FADEIN)
+			tween:Play()
+		end
+	end
 end
 
 --设置公司数据（阶级、等级、进度条）
 function _P.SetCompanyData(self) 
-	local curStarNum = math.floor(self.mData.companyLevel % 100)
-	local curStageNum = math.floor(self.mData.companyLevel / 100)
-	local curStageMax = _P.GetCurStageTotalStar(self, curStageNum)
 	local curLevelConf = Csv.AdventureLevel[self.mData.companyLevel]
-	local isMax = curStageNum >= 7
+	local isMax = self.mData.companyLevel >= #Csv.AdventureLevel
 
 	if curLevelConf ~= nil then
 		self.mModule:Get("Icon").SpriteName = curLevelConf.icon
+		self.mModule:Get("LevelText").Text = curLevelConf.id
 
 		if self.IsPlayBloodAnim then
 			self.slider:DOKill()
@@ -84,27 +93,16 @@ function _P.SetCompanyData(self)
 	local todayNumText = self.mModule:Get("ExpNum2")
 	todayNumText.Text = self.mData.todayLucky .. '/' .. MAX_TODAYGET
 	todayNumText.Color = (self.mData.todayLucky >= MAX_TODAYGET and Color.red) or Color.white
-
-	local maxStar = self.mModule:Get("StarBg").CachedTran.childCount
-	for i=1,maxStar do
-		local curStarImg = self.mModule:Get("Star" .. i)
-		if i <= curStarNum then
-			curStarImg.Color = Color.white
-		else
-			curStarImg.Color = GRAY
-		end
-		curStarImg.Activity = i<= curStageMax
-	end
 end
 
 --刷新中间事件格子
-function _P.SetListData(self)
+function _P.SetListData(self, isSetAlpha)
 	local contentTransform = self.mModule:Get("Content")
 	contentTransform:DestroyChildren()
 
 	self.eventTableDatas = _P.GetSortList(self)
 	for k,v in pairs(self.eventTableDatas) do
-		self.mRawTableItems[v.taskIndex] = _P.OnCreateItem(self, v, contentTransform)
+		self.mRawTableItems[v.taskIndex] = _P.OnCreateItem(self, v, contentTransform, isSetAlpha)
 	end
 end
 
@@ -138,9 +136,23 @@ function _R.UpdateOwnData(self, data, isShowAnim)
 		_P.PlayLevelUpAnim(self, data, function( ... )
 			_P.UpdateData(self, isShowAnim)
 			self:Unlock()
+
+			-- 弹框提示，是否需要刷新界面
+			local isDown = _P.GetIsDownState(self, data.personalTasklist)
+			if data.personalTasklist == nil or isDown then
+				CCommon.CheckTips(function(isSure, rg)
+					if isSure == true then
+						CActivity.ReqRefreshTask(self.mData.isSelectDown, true)
+					end
+				end, {content = Csv.Text("adventure_main_levelUpShow")})
+			end
 		end)
 	else
 		_P.UpdateData(self, isShowAnim)
+		if data.personalTasklist ~= nil then
+			_P.SetGirlTalkText(self, data.personalTasklist)
+		end
+		_P.SetCompanyLevelData(self)
 	end
 end
 
@@ -153,6 +165,7 @@ function _P.UpdateData(self, isShowAnim, isNotSetData)
 
 	if isShowAnim then
 		self:Lock()
+		self.RefreshBtn.RaycastTarget = false
 		for k,v in pairs(self.mRawTableItems) do
 			local itemRect = v.module
 			if itemRect ~= nil then
@@ -163,6 +176,7 @@ function _P.UpdateData(self, isShowAnim, isNotSetData)
 	
 		self.mModule.SelfRect:AddOnTime(function()
 			_P.SetListData(self)
+
 			for k,v in pairs(self.mRawTableItems) do
 				local itemRect = v.module
 				if itemRect ~= nil then
@@ -174,6 +188,7 @@ function _P.UpdateData(self, isShowAnim, isNotSetData)
 
 		self.mModule:Get("Content"):AddOnTime(function()
 			self:Unlock()
+			self.RefreshBtn.RaycastTarget = true
 		end, nil, 1.5)
 	else
 		_P.SetListData(self)
@@ -185,35 +200,34 @@ function _R.UpdateRed(self)
 	self.RankRedPoint.Activity = MActivity.AdventureRankRed
 	self.BossRedPoint.Activity = MActivity.AdventureShopRed and MCommerce.IsJoinCommerce()
 	self.AchieveRedPoint.Activity = MActivity.AdventureAchieveRed
+	_P.SetGirlBossTalkText(self)
 end
 
 --创建格子
-function _P.OnCreateItem(self,data,contentTransform)
+function _P.OnCreateItem(self,data,contentTransform,isSetAlpha)
 	local event = {}
 	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Adventure_MainItem", WindowType.UI, 0)
 	--正常格子
 	if data.taskId > 0 then
 		local csvEvent = Csv.AdventureMainEvent[data.taskId]
-		local star = csvEvent.star
-		local starBgImg = itemMoudle:Get("StarBg")
-		local maxStar = starBgImg.CachedTran.childCount
-		-- starBgImg.SpriteName = StarBgIcons[csvEvent.star]
-		for i=1,maxStar do
-			itemMoudle:Get("Star"..i).Activity = i <= star
-		end
-
 		itemMoudle:Get("Img").SpriteName = MActivity.AdventureTaskNames[csvEvent.taskType]
 
 		local ImgIcon = itemMoudle:Get("iCON")
+		local qualityIcon = itemMoudle:Get("OutBox")
 		local BlackRect =  itemMoudle:Get("Black")
 		local TapImg = itemMoudle:Get("Tab")
 		ImgIcon:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			_P.OnClickItem(self, data, self.mData, csvEvent.taskType)
 		end, nil, 0.9)
+		qualityIcon.SpriteName = IconBoxBgIcons[csvEvent.star]
 
-		itemMoudle:Get("Tips").Text = csvEvent.title
-		itemMoudle:Get("JiaoBiaoText").Text = Csv.Text("adventure_main_jiangji")
+		itemMoudle:Get("Star").SpriteName = StarBoxBgIcons[csvEvent.star]
+
+		local nameText = itemMoudle:Get("Tips")
+		nameText.Text = csvEvent.title
+
+		itemMoudle:Get("Jiangjitext").Text = Csv.Text("adventure_main_jiangji")
 		ImgIcon.SpriteName = csvEvent.icon
 		-- 0:未挑战,1:挑战中,2:已完成
 		if data.taskState == 0 then
@@ -232,8 +246,12 @@ function _P.OnCreateItem(self,data,contentTransform)
 			TapImg.SpriteName = FightStateIcons[2]
 		end
 
-		local lowRect = itemMoudle:Get("Btn_Bg")
+		local lowRect = itemMoudle:Get("Jiangji")
 		lowRect.Activity = (data.isDown or false)
+
+		if isSetAlpha then
+			itemMoudle.SelfRect:AddCanvasGroup().alpha = 0
+		end
 	end
 
 	event.module = itemMoudle
@@ -273,7 +291,7 @@ function _M:OnCreate(...)
 		SoundMgr.Play(10002)
 
 		if self.FirstSelect ~= self.mData.isSelectDown then
-			CActivity.ReqSubLevel(self.mData.isSelectDown)
+			CActivity.ReqSubLevel(self.mData.isSelectDown, false)
 		end
 
 		self:Destroy()
@@ -307,7 +325,7 @@ function _M:OnCreate(...)
 	self.mRawTableItems = {}
 	self.mSliderText = module:Get("SliderText")
 	module:Get("C_Text_0").Text = adventureConf.title
-	module:Get("C_text_0").Text = Csv.Text("adventure_score_shop")
+	-- module:Get("C_text_0").Text = Csv.Text("adventure_score_shop")
 	module:Get("None").Text = Csv.Text("err_charity_settle_time")
 	module:Get("LuckText").Text = Csv.Text("adventure_main_compangLv")
 	module:Get("ExpText2").Text = Csv.Text("adventure_main_todayGet")
@@ -329,6 +347,8 @@ function _M:OnCreate(...)
 	self.AchieveRedPoint.Activity = false
 	self.FreeText = module:Get("FreeText")
 	self.FreeText.Text = Csv.Text("adventure_main_free")
+	self.BlankBgImg = module:Get("BlankBg")
+	self.BlankBgImg.Activity = false
 	CCommon.CreateEffect(self.AchieveRedPoint, GetActorId)
 
 	self.rankBtn:AddOnButton(function(...)
@@ -365,40 +385,126 @@ function _M:OnCreate(...)
 		WindowMgr.Create("UAdventureAchievementPanel", self.mData)
 	end, nil, 0.9)
 
+	local refreshBtn = module:Get("RefreshBtn")
+	refreshBtn:AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		_P.OnRefreshTask(self)
+	end, nil, 0.9)
+	self.RefreshBtn = refreshBtn
+
 	_P.SetView(self)
 	--红点初始化
 	_R.UpdateRed(self)
 	_P.SetNoneText(self)
 
 	-- 设置下方数据
-	local refreshBtn = module:Get("RefreshBtn")
-	refreshBtn:AddOnButton(function( ... )
-		SoundMgr.Play(10001)
-		_P.OnRefreshTask(self)
-	end, nil, 0.9)
-	module:Get("C_text_0").Text = Csv.Text("adventure_main_refreshBtn")
+
+	local actorPanel = self.mModule:Get("StarUpActorPanel")
+	CCommon.CreateEffect(actorPanel, TouYin)
 
 	self.FirstSelect = self.mData.isSelectDown
-	self.AutoGouImg = module:Get("Gou")
-	self.AutoGouImg.Activity = self.mData.isSelectDown
-	local subBtn = module:Get("chooseBox")
-	subBtn:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
 
+	--筛选
+	local selectOrderText = module:Get("OrderIngText")
+	local orderAword = module:Get("Aword")
+	local orderRect = module:Get("OrderBG")
+	self.OrderRect = orderRect
+	self.mSelectOrdderText = selectOrderText
+	self.OrderAword = orderAword
+
+	_P.SetCompanyLevelData(self)
+
+	module:Get("OrderIng"):AddOnButton(function()
 		if self.mData.companyLevel == FirstLevelId then
 			CCommon.ShowError(Csv.Text("adventure_main_cannotLow"))
 			return
 		end
 
-		self.mData.isSelectDown = not self.mData.isSelectDown
-		self.AutoGouImg.Activity = self.mData.isSelectDown
+		if orderRect.Activity then
+			orderRect.Activity = false
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 180, 1)
+		else
+			orderRect.Activity = true
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 0, 1)
+		end
 	end, nil, 0.9)
+
+	for i = 1,2 do
+		local orderBtn  = module:Get("order" .. i)
+		local orderText = module:Get("ordertext" .. i)
+		orderText.Text = Csv.Text("staff_ji", {num = self.mData.companyLevel - 2 + i})
+
+		orderBtn:AddOnButton(function()
+			orderRect.Activity = false
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 180, 1)
+
+			self.mData.isSelectDown = (i == 1 and true) or false
+			_P.SetCompanyLevelData(self)
+			_P.SetGirlTalkText(self, self.eventTableDatas)
+			_P.SetGirlBossTalkText(self)
+		end, nil, 1.2)
+	end
 	
-	module:Get("Tips").Text = Csv.Text("adventure_main_subRefresh")
 	module:Get("Tips2").Text = Csv.Text("adventure_main_costRefresh")
 	module:Get("Tips4").Text = Csv.Text("adventure_main_refreshTip")
 
 	_P.SetRefereshCost(self)
+	_P.SetGirlTalkText(self, self.eventTableDatas)
+end
+
+
+function _P.SetGirlTalkText(self, listData)
+	local module = self.mModule
+	local talkText1 = module:Get("DHKText1")
+	local isDown = self.mData.isSelectDown == true
+	local isSelectDown = _P.GetIsDownState(self, listData)
+
+	if isSelectDown then
+		talkText1.Text = Csv.Text("adventure_main_refreshDown")
+	elseif isDown then
+		talkText1.Text = Csv.Text("adventure_main_down")
+	else
+		talkText1.Text = Csv.Text("adventure_main_welcome")
+	end
+end
+
+
+function _P.SetGirlBossTalkText(self)
+	local module = self.mModule
+	local talkRect2 = module:Get("DHK2")
+	local talkText2 = module:Get("DHKText2")
+	local isHasBoss = self.BossRedPoint.Activity
+	if isHasBoss then
+		talkText2.Text = Csv.Text("adventure_main_hasBoss")
+		talkRect2.Activity = true
+	else
+		talkRect2.Activity = false
+	end
+end
+
+
+function _P.GetIsDownState(self, listData)
+	local isDown = false
+	if listData ~= nil and next(listData) ~= nil then
+		for k,v in pairs(listData) do
+			if v.isDown then
+				isDown = true
+				break
+			end
+		end
+	end
+
+	return isDown
+end
+
+
+function _P.SetCompanyLevelData(self)
+	local isFirst = self.mData.companyLevel == FirstLevelId
+	if not isFirst and self.mData.isSelectDown then
+		self.mSelectOrdderText.Text = Csv.Text("staff_ji", {num = self.mData.companyLevel - 1})
+	else
+		self.mSelectOrdderText.Text = Csv.Text("staff_ji", {num = self.mData.companyLevel})
+	end
 end
 
 
@@ -448,7 +554,7 @@ function _P.OnRefreshTask(self)
 		local costNum = _P.GetNeedCostNum(self, MAX_TODAYFREE + vipData.adventureFreeRefresh)
 		local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
 		if isFree or hasNum >= costNum then
-			CActivity.ReqRefreshTask(self.mData.isSelectDown)
+			CActivity.ReqRefreshTask(self.mData.isSelectDown, false)
 		else
 			CCommon.ShowError(Csv.Text("err_shop_buytype"))
 		end
@@ -457,10 +563,16 @@ end
 
 
 -- 刷新任务返回
-function _R.OnRefreshCallBack(self)
+function _R.OnRefreshCallBack(self, data)
 	CCommon.ShowError(Csv.Text("adventure_main_refreshSuccess"))
 	self.mData = MActivity.GetFromId(self.ActId)
 	_P.UpdateData(self, true, true)
+
+	-- 更新提示框
+	_P.SetGirlTalkText(self, data.personalTasklist)
+	if data.isLevelUpRefresh then
+		_P.SetCompanyLevelData(self)
+	end
 
 	-- 刷新下方数据
 	_P.SetRefereshCost(self)
@@ -491,69 +603,63 @@ end
 
 -- 升级、升阶动画
 function _P.PlayLevelUpAnim(self, data, callBack)
-	local oldStage = math.floor(data.oldCompanyLevel / 100)
-	local oldLevel = math.floor(data.oldCompanyLevel % 100)
-	local newStage = math.floor(self.mData.companyLevel / 100)
-	local newLevel = math.floor(self.mData.companyLevel % 100)
-
-	self:Lock()
-	CCommon.CreateEffect(self.mModule:Get("LevelUpActorPanel"), LevelUpActorId, nil, function( ... )
-		if oldStage ~= newStage then		-- 阶级发生变化
-			self.IsPlayBloodAnim = true
-			local upTween = self.mModule:Get("Icon").CachedTran:GetJTweener(STAGE_UP_TWEEN)
-			upTween:SetOnComplete(function()
-				if oldLevel ~= newLevel then
-					for i=1,newLevel do
-						_P.PlayOneStarAnim(self, newLevel, function( ... )
-							if i == newLevel then
-								if callBack then
-									callBack()
-								else
-									self:Unlock()
-								end
-							end
-						end)
-					end
-				else
-					if callBack then
-						callBack()
-					else
-						self:Unlock()
-					end
-				end
-			end)
-			upTween:Play()
-		elseif oldLevel ~= newLevel then	-- 星级发生变化
-			_P.PlayOneStarAnim(self, newLevel, callBack)
-		end
-	end)
-end
-
-
-function _P.PlayOneStarAnim(self, newLevel, callBack)
-	local animStar = self.mModule:Get("Star" .. newLevel)
-	local actorPanel = self.mModule:Get("StarUpActorPanel")
-	local actorPos = animStar.RootCanvasPos
-	actorPanel.LocalPosition = Vector2(actorPos.x, actorPos.y)
+	local module = self.mModule
 	
-	CCommon.CreateEffect(actorPanel, StarUpActorId, nil, function( ... )
-		animStar.Color = Color.white
-		if callBack then
-			callBack()
+	self:Lock()
+	self.BlankBgImg.Activity = true
+	local levelPanel = module:Get("LevelUpActorPanel")
+	CCommon.CreateEffect(levelPanel, LevelUpActorId)
+
+	self.BlankBgImg:AddOnTime(function()
+		-- 播放中间往上飘动画，更改等级文本
+		local animRect = module:Get("AnimIcon")
+		local animLevelText = module:Get("AnimLevelText")
+		local levelConf = Csv.AdventureLevel[self.mData.companyLevel]
+		animRect.SpriteName = levelConf.icon
+		animLevelText.Text = levelConf.id
+
+		self.IsPlayBloodAnim = true
+		if self.UpTween == nil then
+			local upTween = animRect.CachedTran:GetJTweener(LEVEL_UP_TWEEN)
+			self.UpTween = upTween
 		end
-	end)
-end
 
+		-- 重新设置筛选按钮数据
+		for i = 1,2 do
+			local orderBtn  = module:Get("order" .. i)
+			local orderText = module:Get("ordertext" .. i)
+			orderText.Text = Csv.Text("staff_ji", {num = self.mData.companyLevel - 2 + i})
 
-function _P.GetCurStageTotalStar(self, stageId)
-	local totalNum = 0
-	for k,v in pairs(Csv.AdventureLevel) do
-		if v.stage == math.floor(stageId) then
-			totalNum = totalNum + 1
+			orderBtn:AddOnButton(function()
+				self.OrderRect.Activity = false
+				self.OrderAword.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 180, 1)
+
+				self.mData.isSelectDown = (i == 1 and true) or false
+				_P.SetCompanyLevelData(self)
+				_P.SetGirlTalkText(self, self.eventTableDatas)
+				_P.SetGirlBossTalkText(self)
+			end, nil, 1.2)
 		end
-	end
+		_P.SetCompanyLevelData(self)
+		_P.SetGirlTalkText(self, self.eventTableDatas)
+		_P.SetGirlBossTalkText(self)
 
-	return totalNum
+		self.UpTween:SetOnComplete(function()
+			self.BlankBgImg.Activity = false
+			if callBack then
+				callBack()
+			else
+				self:Unlock()
+			end
+
+			if self.UpTween ~= nil then
+				self.UpTween:Restore()
+			end
+		end)
+		
+		self.UpTween:Play()
+		levelPanel:DestroyChildren()
+	end, nil, 1.3)
 end
 
 

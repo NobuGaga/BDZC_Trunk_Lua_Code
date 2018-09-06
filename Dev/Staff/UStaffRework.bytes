@@ -1,0 +1,142 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+
+local _M = Class(WindowBase)
+local _R = {}
+
+
+local _AssetList = 
+{
+	[Define.AssetsType.Coin] = 1,
+	[Define.AssetsType.Wuli] = 2,
+	[Define.AssetsType.Zhili] = 3,
+	[Define.AssetsType.Zhengzhi] = 4,
+	[Define.AssetsType.Meili] = 5,
+}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+-- function _R.OnSuccessful(self)
+-- 	SoundMgr.PlayNonStopUI(10014)
+-- 	CCommon.CreateEffect(self.mMoudle:Get("FxNode"), 10182)
+-- end
+
+function _M:OnCreate(data)
+	local staffId = data.id 
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Staff_Rework")
+	self.mMoudle = moudle
+	moudle:Get("backBtn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local staffInfo = MStaff.GetStaffDataByID(staffId)
+	local csvStaff = Csv.Personnel[staffId]
+	local funcCsv = Csv.Func[self._SysId]
+	moudle:Get("title").Text = funcCsv.name
+	moudle:Get("C_text").Text = Csv.Text("staff_rework_1")
+	local btn = moudle:Get("C_Btn_a")
+	btn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommon.CheckTips(
+			function(isSure, arg)
+				if isSure then
+					CStaff.ReqStaffRework(staffId)
+					btn.RaycastTarget = false
+					btn.IsGray = true
+				end			
+			end, {content = Csv.Text("staff_rework_13",{name = csvStaff.name})})		
+	end)	
+
+	moudle:Get("Title1").Text = MStaff.GetStaffName(staffId)
+	moudle:Get("Staff1").SpriteName = csvStaff.asset
+	moudle:Get("StaffBG1").SpriteName = MStaff.Color2Image[staffInfo.color]
+	--等级:
+	moudle:Get("text1").Text = Csv.Text("staff_rework_3")
+	--职位:
+	moudle:Get("text2").Text = Csv.Text("staff_rework_4")
+	--资质:
+	moudle:Get("text3").Text = Csv.Text("staff_rework_5")
+	--总属性:
+	moudle:Get("text4").Text = Csv.Text("staff_rework_6")
+	--公关值:
+	moudle:Get("text5").Text = Csv.Text("staff_rework_7")
+	--行政值:
+	moudle:Get("text6").Text = Csv.Text("staff_rework_8")
+	--技术值:
+	moudle:Get("text7").Text = Csv.Text("staff_rework_9")
+	--营销值:
+	moudle:Get("text8").Text = Csv.Text("staff_rework_10")
+	moudle:Get("text11").Text = tostring(staffInfo.level)
+	moudle:Get("text22").Text = Csv.Text("staff_star"..staffInfo.color)
+	moudle:Get("text33").Text = MStaff.DoGetAllApitude(staffInfo)
+	moudle:Get("text44").Text = tostring(
+								staffInfo.allAttr.Wuli + 
+								staffInfo.allAttr.Zhili + 
+								staffInfo.allAttr.Zhengzhi + 
+								staffInfo.allAttr.Meili)
+	moudle:Get("text55").Text = tostring(staffInfo.allAttr.Wuli)
+	moudle:Get("text66").Text = tostring(staffInfo.allAttr.Zhili)
+	moudle:Get("text77").Text = tostring(staffInfo.allAttr.Zhengzhi)
+	moudle:Get("text88").Text = tostring(staffInfo.allAttr.Meili)
+
+	moudle:Get("Title2").Text = Csv.Text("staff_rework_2")
+	moudle:Get("Staff2").SpriteName = csvStaff.asset
+	moudle:Get("StaffBG2").SpriteName = MStaff.Color2Image[data.color]
+	moudle:Get("text_1").Text = Csv.Text("staff_rework_3")
+	moudle:Get("text_2").Text = Csv.Text("staff_rework_4")
+	moudle:Get("text_3").Text = Csv.Text("staff_rework_5")
+	moudle:Get("text_4").Text = Csv.Text("staff_rework_6")
+	moudle:Get("text_5").Text = Csv.Text("staff_rework_7")
+	moudle:Get("text_6").Text = Csv.Text("staff_rework_8")
+	moudle:Get("text_7").Text = Csv.Text("staff_rework_9")
+	moudle:Get("text_8").Text = Csv.Text("staff_rework_10")
+	moudle:Get("text_11").Text = tostring(data.level)
+	moudle:Get("text_22").Text = Csv.Text("staff_star"..data.color)
+	moudle:Get("text_33").Text = tostring(data.book)
+	moudle:Get("text_44").Text = tostring(data.allAttr)
+	moudle:Get("text_55").Text = tostring(data.attr.Wuli)
+	moudle:Get("text_66").Text = tostring(data.attr.Zhili)
+	moudle:Get("text_77").Text = tostring(data.attr.Zhengzhi)
+	moudle:Get("text_88").Text = tostring(data.attr.Meili)
+
+	moudle:Get("BottonTitle").Text = Csv.Text("staff_rework_11")	
+	if data.items ~= nil then
+		local content = moudle:Get("content")
+		for _,v in pairs(data.items) do 
+			local itemId = v.key
+			local itemNum = v.value
+			local assetIndex = _AssetList[itemId]
+			if assetIndex ~= nil then
+				local itemCsv = Csv.Item[itemId]
+				moudle:Get("Text"..assetIndex).Text = 
+					Csv.Text("staff_rework_12", {name = itemCsv.name, num = itemNum})
+			else
+				CCommon.CreateItem(content,itemId,function ( ... )
+					WindowMgr.Create("UBagDetailPop", itemId)
+				end, {num = itemNum})
+			end
+		end
+	end
+end
+
+return _M

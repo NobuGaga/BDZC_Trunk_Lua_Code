@@ -1,6 +1,9 @@
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CTrigger = JRequire "Dev.Main.CTrigger"
+local CActivity = JRequire "Dev.Activity.CActivity"
 local CMain = JRequire "Dev.Main.CMain"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CLineUp = JRequire "Dev.LineUp.CLineUp"
 
 local _M = {}
 local _P = {}
@@ -12,6 +15,7 @@ local ECmdId = {
 	cStaffSkillLvUp						=	5,--技能升级 PStaff.CSkillUp
 	cStaffAureoleLvUp					=	6,--光环升阶 PStaff.CAureoleUp
 	cStaffRename						= 	7,--员工改名 PStaff.CStaffRename
+	cStaffRework						= 	8,--员工重铸 PStaff.CStaffRework --真正的员工重铸, 需要重新刷新员工信息等
 	
 	sStaffInit							=	1,--初始化 PStaff.SInit
 	sStaffLevelUp						=	2,--升级 PStaff.SLevelUp
@@ -26,6 +30,8 @@ local ECmdId = {
 	sStaffUpdateSkillExp				=	11,--更新技能经验 PStaff.SUpdateSkillExp
 	sStaffUpdate						=	12,--更新员工属性 PStaff.SStaffChange
 	sStaffRename						=	13,--员工改名 PStaff.SStaffRename
+	sStaffReworkInfo					=	14,--员工重铸 PStaff.SStaffReworkInfo --当使用员工重铸按钮时返回
+	sStaffRestSuccessful				= 	15,--员工重铸成功
 }
 
 function _M.ModuleInit(isReload)
@@ -36,6 +42,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cStaffSkillLvUp] = "PStaff.CSkillUp",
 		[ECmdId.cStaffAureoleLvUp] = "PStaff.CAureoleUp",
 		[ECmdId.cStaffRename] = "PStaff.CStaffRename",
+		[ECmdId.cStaffRework] = "PStaff.CStaffRework",
 	}
 	local recv = {
 		[ECmdId.sStaffInit]				=		{proto = "PStaff.SInit",				handle = _P.OnGetStaffData},
@@ -51,6 +58,8 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sStaffUpdateSkillExp]	=		{proto = "PStaff.SUpdateSkillExp",		handle = _P.OnStaffUpdateSkillExp},
 		[ECmdId.sStaffUpdate]			=		{proto = "PStaff.SStaffChange",			handle = _P.OnStaffChange},
 		[ECmdId.sStaffRename]			=		{proto = "PStaff.SStaffRename",			handle = _P.OnStaffChangeName},
+		[ECmdId.sStaffReworkInfo]		=		{proto = "PStaff.SStaffReworkInfo",		handle = _P.OnStaffReworkInfo},
+		[ECmdId.sStaffRestSuccessful]	=		{proto = "PStaff.SStaffReworkSuccess",	handle = _P.OnStaffRestSuccessful},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Staff, send, recv, isReload)
 end
@@ -87,6 +96,11 @@ function _M.ReqStaffRename(id,_name,itemid)
 	_M.Send(ECmdId.cStaffRename,{staffid = id,name = _name,costItemId = itemid})
 end
 
+--请求重铸
+function _M.ReqStaffRework(staffid)
+	_M.Send(ECmdId.cStaffRework,{staffid = staffid})
+end
+
 --S
 function _P.OnGetStaffData(data)
 	MStaff.Clean()
@@ -95,6 +109,7 @@ function _P.OnGetStaffData(data)
 	if WindowMgr.IsCreated("UStaffDetails") then
 		WindowMgr.Call("UStaffDetails","ResetView")
 	end
+	CLineUp.CheckRedpoint()
 end
 
 function _P.OnStaffLevelUp(data)
@@ -146,6 +161,12 @@ function _P.OnStaffNew(data)
 	if WindowMgr.IsCreated("UBag") then
 		WindowMgr.Call("UBag","AddNewStaff",data.id)
 	end
+
+	-- 超级员工需要,及时更新数据
+	local staffConf = Csv.Personnel[data.id]
+	if staffConf and staffConf.special ~= nil then
+		CActivity.UpdateStaffData(data.id)
+	end
 end
 
 function _P.OnStaffUpdateBookExp(data)
@@ -165,6 +186,13 @@ end
 function _P.OnStaffChange(data)
 	MStaff.OnStaffNew(data.staff)
 	_M.CheckStaffRedPoint()
+
+	if WindowMgr.IsCreated("ULineUp") then
+		WindowMgr.Call("ULineUp","StaffChange")
+	end
+	if WindowMgr.IsCreated("UEquipMain") then
+		WindowMgr.Call("UEquipMain","StaffChange")
+	end
 end
 
 function _P.OnStaffChangeName(data)
@@ -172,6 +200,24 @@ function _P.OnStaffChangeName(data)
 	WindowMgr.Call("UStaffChaneName","CloseView")
 end
 
+--员工重铸
+function _P.OnStaffReworkInfo(data)
+	--LuaUtil.DumpTable(data, "-------OnStaffReworkInfo------>>>>")
+
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Create("UStaffRework", data)
+	end
+end
+
+function _P.OnStaffRestSuccessful(data)
+	--LuaUtil.DumpTable(data, "-------OnStaffRestSuccessful------>>>>")
+
+	if WindowMgr.IsCreated("UStaffRework") then
+		WindowMgr.Create("UStaffReworkSuccess", data.items)
+	else
+		CCommon.ShowRight(Csv.Text("staff_reset_successful"))
+	end
+end
 
 --红点处理
 function _M.CheckStaffRedPoint()

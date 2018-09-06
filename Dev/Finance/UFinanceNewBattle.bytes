@@ -492,13 +492,13 @@ function _P.GetBattleReport(reports)
 					local csvBuff = Csv.Buff[value.skillid]
 					if csvBuff ~= nil and csvBuff.show ~= nil and csvBuff.show > 0 then
 						local buff = {type = MBattle.BattleFightType.Buff,skillid = value.skillid,buffid = value.buffid,staffid = v.staffid,targetstaffs = value.staffid,index = v.index,
-									initblood = v.initblood,laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood}
+									initblood = v.initblood,laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,baseblood = v.baseblood}
 						table.insert(reportTable,buff)
 					end
 				end
 			end
 			local data = {type = MBattle.BattleFightType.Fight,index = v.index,result = v.result,staffid = v.staffid,initblood = v.initblood,
-			laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,rstaffid = v.rstaffid}
+			laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,rstaffid = v.rstaffid,baseblood = v.baseblood}
 			table.insert(reportTable,data)
 		end
 	end
@@ -897,6 +897,7 @@ function _P.InsertBuff(self,staffid,buffid)
 		buffTable[staffid] = buffForStaff
 	end
 end
+
 
 function _R.RefreshEffectAndNowSkillIcon(self)
 	_P.RefreshStaffEffect(self,false)

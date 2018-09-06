@@ -1,0 +1,189 @@
+-- 分解成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+local CEquipt = JRequire "Dev.Equipt.CEquipt"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.SelctStarCost(self,itemlist)
+	self.mSelectItems = itemlist
+	self.mIsSelectCost = true
+	local costItemId = 0
+	local costItemNum = 0
+	local hasNum = 0
+	local csvCostItem = nil
+
+	if itemlist ~= nil then
+		costItemId = self.mCostEquipId
+		costItemNum = self.mCostEquipNum
+		csvCostItem = Csv.Equip[costItemId]
+		hasNum = #MEquipt.GetEquipsByID(costItemId)
+	else
+		costItemId = self.mCostItemId
+		costItemNum = self.mCostItemNum
+		csvCostItem = Csv.Item[costItemId]
+		hasNum = MBag.GetItemNum(costItemId)
+	end
+	
+	if csvCostItem ~= nil then
+		self.mCostIcon.SpriteName = csvCostItem.icon
+		self.mCostIconBg.SpriteName = csvCostItem.colorIcon
+
+		if costItemNum <= hasNum then
+			self.mCostIconNum.Text = Csv.Text("equip_staffinfo_exp1",{num = costItemNum,max = LuaUtil.NumberFormat(hasNum)})
+		else
+			self.mCostIconNum.Text = Csv.Text("equip_staffinfo_exp2",{num = costItemNum,max = LuaUtil.NumberFormat(hasNum)})
+		end
+	end
+
+	self.mCostBlack.Activity = false
+end
+
+--界面构建
+function _M:OnCreate(equipInfo,staffid)
+	local module = self:CreateMoudle(self._RootNode, "M_Staff_Equipment_Up")
+	self.mModule = module
+	self.OnCloseCall = onClose
+	self.mEquipInfo = equipInfo
+
+	module:Get("BtnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	self.mSelectItems = nil
+
+	module:Get("Title").Text = Csv.Text("equip_starup_title")
+	module:Get("attrTitle").Text = Csv.Text("equip_staff_equipattr")
+	module:Get("NeedText").Text = Csv.Text("equip_starup_need")
+	module:Get("C_text_0").Text = Csv.Text("equip_starup_sure")
+	module:Get("C_text").Text = Csv.Text("equip_starup_cancel")
+
+	local icon = module:Get("Icon")
+	local iconBg = module:Get("IconColor")
+	local level = module:Get("Lv1")
+	local starLv = module:Get("Lv2")
+	local name = module:Get("name")
+	local nextLv = module:Get("startUp")
+	local attrs = module:Get("attrValue")
+	local staffs = module:Get("staffs")
+
+	local csvEquip = Csv.Equip[equipInfo.equipId]
+	local nextEquipInfo = {
+		id = equipInfo.id,
+		equipId = equipInfo.equipId,
+		level = equipInfo.level,
+		star = equipInfo.star +1,
+	}
+
+	name.Text = csvEquip.name
+	icon.SpriteName = csvEquip.icon
+	iconBg.SpriteName = csvEquip.colorIcon
+	level.Text = Csv.Text("equip_item_lv",{num = equipInfo.level})
+	starLv.Text = Csv.Text("equip_item_star",{num = equipInfo.star})
+	nextLv.Text = Csv.Text("equip_item_star_next",{now = equipInfo.star,next = equipInfo.star+1})
+	
+	local power = MEquipt.GetAttrPower(equipInfo)
+	local powerRate = MEquipt.GetAttrPowerRate(equipInfo)
+	local nextpower = MEquipt.GetAttrPower(nextEquipInfo)
+	local nextpowerRate = MEquipt.GetAttrPowerRate(nextEquipInfo)
+	local str1 = ""
+	if nextpower > 0 then
+		str1 = Csv.Text("equip_staff_attr_3",{num = power,next = nextpower})
+	end
+	if nextpowerRate > 0 then
+		str1 = str1 .. "\n"..Csv.Text("equip_staff_attr_4",{num = string.format("%.1f",powerRate/100),next = string.format("%.1f",nextpowerRate/100)})
+	end
+
+	attrs.Text = str1
+	staffs.Text = Csv.Text("equip_staff_equipStaff",{name = MEquipt.GetStaffs(equipInfo)}) 
+
+	--进阶
+	self.mIsSelectCost = false
+
+	local csvEquipStar = Csv.EquipStar[equipInfo.equipId * 1000 + equipInfo.star + 1]
+	local costItemId = 0
+	local costItemNum = 0
+	local costEquipId = 0
+	local costEquipNum = 0
+
+	if csvEquipStar.needEquip ~= nil then
+		costEquipId = csvEquipStar.needEquip[1]
+		costEquipNum = csvEquipStar.needEquip[2]
+		
+		self.mCostEquipId = costEquipId
+		self.mCostEquipNum = costEquipNum
+	end
+	if csvEquipStar.costItem ~= nil then
+		costItemId = csvEquipStar.costItem[1][1]
+		costItemNum = csvEquipStar.costItem[1][2]
+
+		self.mCostItemId = costItemId
+		self.mCostItemNum = costItemNum
+	end
+	
+	local costIcon = module:Get("costIcon") 
+	local costIconBg = module:Get("costIconBg") 
+	local costIconNum = module:Get("costNum") 
+	local costBlack = module:Get("black")
+
+	self.mCostIcon = costIcon
+	self.mCostIconBg = costIconBg
+	self.mCostIconNum = costIconNum
+	self.mCostBlack = costBlack
+	self.mCostBlack.Activity = true
+
+	if csvEquipStar.needEquip ~= nil then
+		local csvCostEquip = Csv.Equip[costEquipId]
+		if csvCostEquip ~= nil then
+			costIcon.SpriteName = csvCostEquip.icon
+			costIconBg.SpriteName = csvCostEquip.colorIcon
+			costIconNum.Text = costEquipNum
+		end
+	else
+		local csvCostItem = Csv.Item[costItemId]
+		if csvCostItem ~= nil then
+			costIcon.SpriteName = csvCostItem.icon
+			costIconBg.SpriteName = csvCostItem.colorIcon
+			costIconNum.Text = costItemNum
+		end
+	end
+
+	costIconBg:AddOnButton(function()
+		self.mSelectItems = nil
+		WindowMgr.Create("USelectCost",equipInfo)
+	end)
+
+	module:Get("C_Btn_b"):AddOnButton(function()
+		--确定
+		SoundMgr.Play(10002)
+		if self.mIsSelectCost then
+			CEquipt.ReqEquipStarUp(equipInfo.id,staffid,self.mSelectItems)
+			self:Destroy()
+		else
+			CCommon.ShowError(Csv.Text("equip_noselect_type"))
+		end
+	end)
+
+	module:Get("C_Btn_a"):AddOnButton(function()
+		--取消
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+
+return _M

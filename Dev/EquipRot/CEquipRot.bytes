@@ -1,0 +1,322 @@
+local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cEquipRobBattleRecord = 1,	 -- 战斗记录
+	cEquipRobEnterChipRob = 2,	 -- 进入碎片抢夺 PEquipRob.CEnterChipRob
+	cEquipRobChipRob = 3,		 -- 碎片抢夺		PEquipRob.CChipRob
+	cEquipRobBuyRobTime = 4,	 -- 购买抢夺次数
+	cEquipRobRefreshEnemy = 5,	 -- 刷新抢夺目标	PEquipRob.CRefreshEnemy
+	cEquipRobBuyProtect = 6,	 -- 购买保护时间
+	cEquipRobCompound = 7,		 -- 装备合成		PEquipRob.PEquipData
+	cEquipRobGetRobTime = 8,	 -- 获取抢夺次数（恢复时间为0时）
+
+	sEquipRobInit = 1,			 -- 初始化 		PEquipRob.SInit
+	sEquipRobBattleRecord = 2,	 -- 战斗记录		PEquipRob.SBattleRecord
+	sEquipRobEnterChipRob = 3,	 -- 进入碎片抢夺	PEquipRob.SEnterChipRob
+	sEquipRobChipRob = 4,		 -- 碎片抢夺		PEquipRob.SChipRob
+	sEquipRobBuyRobTime = 5,	 -- 购买抢夺次数	PEquipRob.SRobTime
+	sEquipRobGetRobTime = 6,	 -- 抢夺次数推送(恢复时间为0时推送)	PEquipRob.SRobTime
+	sEquipRobRefreshEnemy = 7,	 -- 刷新抢夺目标 PEquipRob.SRefreshEnemy
+	sEquipRobBuyProtect = 8,	 -- 购买保护时间	PEquipRob.SBuyProtect
+	sEquipRobCompound = 9,		 -- 装备合成		PEquipRob.PEquipData
+	sEquipRobProtectPush = 10,	 -- 保护时间推送 PEquipRob.SBuyProtect
+	sEquipRobActiveListPush = 11,-- 激活装备id推送 PEquipRob.PEquipData
+}
+
+
+function _M.ModuleClean()
+	MEquipRot.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cEquipRobBattleRecord] = "",
+		[ECmdId.cEquipRobEnterChipRob] = "PEquipRob.CEnterChipRob",
+		[ECmdId.cEquipRobChipRob] = "PEquipRob.CChipRob",
+		[ECmdId.cEquipRobBuyRobTime] = "",
+		[ECmdId.cEquipRobRefreshEnemy] = "PEquipRob.CRefreshEnemy",
+		[ECmdId.cEquipRobBuyProtect] = "",
+		[ECmdId.cEquipRobCompound] = "PEquipRob.PEquipData",
+		[ECmdId.cEquipRobGetRobTime] = "",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sEquipRobInit]           = { proto = "PEquipRob.SInit",			handle = _P.OnInitData},
+		[ECmdId.sEquipRobBattleRecord]   = { proto = "PEquipRob.SBattleRecord",	handle = _P.OnBattleRecordBack},
+		[ECmdId.sEquipRobEnterChipRob]   = { proto = "PEquipRob.SEnterChipRob",	handle = _P.OnEnterChipRobBack},
+		[ECmdId.sEquipRobChipRob]        = { proto = "PEquipRob.SChipRob",		handle = _P.OnChipRobBack},
+		[ECmdId.sEquipRobBuyRobTime]     = { proto = "PEquipRob.SRobTime",		handle = _P.OnBuyRobTimeBack},
+		[ECmdId.sEquipRobGetRobTime]    = { proto = "PEquipRob.SRobTime",		handle = _P.OnRobTimePush},
+		[ECmdId.sEquipRobRefreshEnemy]   = { proto = "PEquipRob.SRefreshEnemy",	handle = _P.OnRefreshEnemyBack},
+		[ECmdId.sEquipRobBuyProtect]     = { proto = "PEquipRob.SBuyProtect",	handle = _P.OnBuyProtectBack},
+		[ECmdId.sEquipRobCompound]       = { proto = "PEquipRob.PEquipData",	handle = _P.OnCompoundBack},
+		[ECmdId.sEquipRobProtectPush]    = { proto = "PEquipRob.SBuyProtect",	handle = _P.OnProtectPush},
+		[ECmdId.sEquipRobActiveListPush] = { proto = "PEquipRob.PEquipData",	handle = _P.OnUpdateActiveList},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.EquipRot, func_send, func_recv, isReload)
+end
+
+
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, function(eventHandle)
+	local backInfo = _P.Update()
+	if backInfo.refRecovery then
+		_M.GetRobTimeReq()
+	end
+end, true)
+
+
+function _P.Update()
+	local ret = {}
+	if MEquipRot.EquipRotTable ~= nil and MEquipRot.EquipRotTable.leftRobCount ~= nil 
+									  and MEquipRot.EquipRotTable.leftRobCount < MEquipRot.EquitRotMaxNum 
+									  and MEquipRot.EquipRotTable.recoveryTime ~= nil and MEquipRot.EquipRotTable.recoveryTime > 0 then
+		local time = MEquipRot.EquipRotTable.recoveryTime - HeartBeat.ServSecond()
+		if time < 0 then
+			ret.refRecovery = true
+		end
+	end
+
+	return ret
+end
+
+
+-- C2S
+-- 战斗记录
+function _M.GetBattleRecordReq()
+	_M.Send(ECmdId.cEquipRobBattleRecord)
+end
+
+
+-- 进入碎片抢夺
+function _M.EnterRobReq(chipId)
+	_M.Send(ECmdId.cEquipRobEnterChipRob, {chipId = chipId})
+end
+
+
+-- 碎片抢夺
+function _M.RobChipReq(chipId, index, playerid)
+	_M.Send(ECmdId.cEquipRobChipRob, {chipId = chipId, index = index, playerid = playerid})
+end
+
+
+-- 购买抢夺次数
+function _M.BuyRotTimeReq()
+	_M.Send(ECmdId.cEquipRobBuyRobTime)
+end
+
+
+-- 刷新抢夺目标
+function _M.RefreshRobGoalReq(isBuy, chipId)
+	_M.Send(ECmdId.cEquipRobRefreshEnemy, {isBuy = isBuy, chipId = chipId})
+end
+
+
+-- 购买保护时间
+function _M.BuyProtectTimeReq()
+	_M.Send(ECmdId.cEquipRobBuyProtect)
+end
+
+
+-- 装备合成
+function _M.EquipComposeReq(itemId)
+	_M.Send(ECmdId.cEquipRobCompound, {itemId = itemId})
+end
+
+
+-- 获取抢夺次数（恢复时间为0时请求）
+function _M.GetRobTimeReq()
+	_M.Send(ECmdId.cEquipRobGetRobTime)
+end
+
+
+-- S2C
+function _P.OnInitData(data)
+	if data.recoveryTime ~= nil then
+		data.recoveryTime = data.recoveryTime + HeartBeat.ServSecond()
+	end
+
+	if data.protectTime ~= nil then
+		data.protectTime = data.protectTime + HeartBeat.ServSecond()
+	end
+	MEquipRot.OnInitData(data)
+	_M.CheckEquipRotRedPoint()
+
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnClosePanel")
+	end
+end
+
+
+function _P.OnBattleRecordBack(data)
+	if WindowMgr.IsCreated("UEquipRotBattleReport") then
+		WindowMgr.Call("UEquipRotBattleReport", "GetBattleRecordBack", data.recordList)
+	end
+end
+
+
+function _P.OnEnterChipRobBack(data)
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnEnterRobViewBack", data)
+	end
+end
+
+
+function _P.OnChipRobBack(data)
+	if data.protectTime ~= nil then
+		MEquipRot.EquipRotTable.protectTime = data.protectTime + HeartBeat.ServSecond()
+	end
+	MEquipRot.EquipRotTable.leftRobCount = data.leftRobCount
+
+	if data.recoveryTime ~= nil then
+		MEquipRot.EquipRotTable.recoveryTime = data.recoveryTime + HeartBeat.ServSecond()
+	end
+
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnRobCallBack", data)
+	end
+
+	if WindowMgr.IsCreated("UEquipRotMainPanel") then
+		WindowMgr.Call("UEquipRotMainPanel", "UpdateProtectData", data)
+	end
+
+	_M.CheckEquipRotRedPoint()
+end
+
+
+function _P.OnBuyRobTimeBack(data)
+	MEquipRot.EquipRotTable.leftRobCount = data.leftRobCount
+
+	if data.recoveryTime ~= nil then
+		MEquipRot.EquipRotTable.recoveryTime = data.recoveryTime + HeartBeat.ServSecond()
+	end
+
+	if data.buyRobCount ~= nil then
+		MEquipRot.EquipRotTable.buyRobCount = data.buyRobCount
+	end
+
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnBuyRotTimeBack", data)
+	end
+end
+
+
+function _P.OnRobTimePush(data)
+	MEquipRot.EquipRotTable.leftRobCount = data.leftRobCount
+
+	if data.recoveryTime ~= nil then
+		MEquipRot.EquipRotTable.recoveryTime = data.recoveryTime + HeartBeat.ServSecond()
+	end
+
+	if data.buyRobCount ~= nil then
+		MEquipRot.EquipRotTable.buyRobCount = data.buyRobCount
+	end
+
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnRobTimePush", data)
+	end
+end
+
+
+function _P.OnRefreshEnemyBack(data)
+	MEquipRot.EquipRotTable.leftRefreshCount = data.leftRefreshCount
+	MEquipRot.EquipRotTable.buyRefereshCount = data.buyRefereshCount
+	if WindowMgr.IsCreated("UEquipRotRotPanel") then
+		WindowMgr.Call("UEquipRotRotPanel", "OnRefreshBack", data)
+	end
+end
+
+
+function _P.OnBuyProtectBack(data)
+	if data.protectTime ~= nil then
+		MEquipRot.EquipRotTable.protectTime = data.protectTime + HeartBeat.ServSecond()
+	end
+
+	if data.buyProtectCount ~= nil then
+		MEquipRot.EquipRotTable.buyProtectCount = data.buyProtectCount
+	end
+	
+	if WindowMgr.IsCreated("UEquipRotMainPanel") then
+		WindowMgr.Call("UEquipRotMainPanel", "OnBuyProtectTimeBack", data)
+	end
+end
+
+
+function _P.OnCompoundBack(data)
+	if WindowMgr.IsCreated("UEquipRotMainPanel") then
+		WindowMgr.Call("UEquipRotMainPanel", "OnComposeBack", data)
+	end
+
+	_M.CheckEquipRotRedPoint()
+end
+
+
+function _P.OnProtectPush(data)
+	_P.OnBuyProtectBack(data)
+end
+
+
+-- 新的激活激活装备id数组
+function _P.OnUpdateActiveList(data)
+	if MEquipRot.EquipRotTable ~= nil then
+		if MEquipRot.EquipRotTable.activeLists == nil then
+			MEquipRot.EquipRotTable.activeLists = {}
+		end
+
+		MEquipRot.EquipRotTable.activeLists[#MEquipRot.EquipRotTable.activeLists + 1] = data.itemId
+	end
+
+	if WindowMgr.IsCreated("UEquipRotMainPanel") then
+		WindowMgr.Call("UEquipRotMainPanel", "AddOneEquipData", data.itemId)
+	end
+
+	_M.CheckEquipRotRedPoint()
+end
+
+
+-- 设置红点
+function _M.CheckEquipRotRedPoint()
+	local isShowRed = false
+
+	if MMain.FuncIsOpen(Define.SysId.EquipRot) and MEquipRot.EquipRotTable.activeLists ~= nil and next(MEquipRot.EquipRotTable.activeLists) ~= nil then
+		for itemKey,itemValue in pairs(MEquipRot.EquipRotTable.activeLists) do
+			local equipConf = Csv.EquipRobItem[itemValue]
+			local satisfyCount = 0 -- 符合要求的个数
+			if equipConf.needItems ~= nil and next(equipConf.needItems) ~= nil then
+				for needKey,needValue in pairs(equipConf.needItems) do
+					local itemId = needValue[1]
+					local itemNum = MBag.GetItemNum(itemId)
+					if itemNum > 0 then
+						if itemNum >= needValue[2] then
+							satisfyCount = satisfyCount + 1
+						end
+					end
+				end
+			end
+
+			if satisfyCount > 0 and satisfyCount == #equipConf.needItems then
+				isShowRed = true
+				break
+			end
+		end
+	end
+
+	MEquipRot.EquipRotRedPoint = isShowRed
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.EquipRot)
+end
+
+
+return _M

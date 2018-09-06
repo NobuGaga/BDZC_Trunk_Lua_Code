@@ -137,7 +137,7 @@ function _M:OnCreate()
 	local state = self.ActInfo.state
 	self.DiceNameArrs = travalConf.diceIcon
 	module:Get("date").Text = Csv.Text("global_date", {startTime = _P.TransToYMD(state.startTime),
-														endTime = _P.TransToYMD(state.startTime + travalConf.settleTime)})
+														endTime = _P.TransToYMD(state.endTime)})
 	module:Get("time").Text = Csv.Text("gloabl_duan")
 
 	module:Get("Head").SpriteName = MPlayer.GetHeadIcon()
@@ -410,6 +410,9 @@ end
 
 -- 界面变暗，刷新整个城市数据
 function _P.UpdateMapData(self, cityList, passPosList, travalLoopCount, callBack)
+	self:Lock()
+	self.ExchangeBtn.RaycastTarget = false
+
 	local cityMap = self.mModule:Get("Map")
 	self.ActInfo.posReward = cityList
 	self.ActInfo.passPosList = passPosList
@@ -431,6 +434,7 @@ function _P.UpdateMapData(self, cityList, passPosList, travalLoopCount, callBack
 		_P.SetCityActive(self, true)
 		if callBack then
 			callBack()
+			self.ExchangeBtn.RaycastTarget = true
 		end
 	end, nil, 1)
 end

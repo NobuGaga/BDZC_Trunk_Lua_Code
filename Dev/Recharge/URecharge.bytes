@@ -237,7 +237,14 @@ function _P.InitChargeView(self)
 			csvRechargeCopy[csvValue.cost] = csvValue
 		end
 	end
+	local productList = {}
 	for _, csvValue in pairs(csvRechargeCopy) do
+		productList[#productList + 1] = csvValue
+	end
+	table.sort(productList, function(left, right)
+		return left.id < right.id
+	end)
+	for _, csvValue in ipairs(productList) do
 		if GameSetting.IsiOSCommit or (csvValue.type == nil or csvValue.type == 0) then
 			_P.CreateChargeItem(self, csvValue)
 		end

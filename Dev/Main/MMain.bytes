@@ -11,6 +11,8 @@ local MGirl = JRequire"Dev.Girl.MGirl"
 local MVote = JRequire "Dev.Vote.MVote"
 local MShop = JRequire "Dev.Shop.MShop"
 local MSiege = JRequire "Dev.SiegeWall.MSiege"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
 
 local _M = {}
 
@@ -43,6 +45,27 @@ end
 _M.WaitStorys = {}
 _M.WaitTriggerStorys = {}
 _M.BoobLayer = "Message"
+
+local _Alter_Func = {}
+local function alterFuncCsv()
+	local csvLine = Csv.SpidAlter[3]
+	if csvLine ~= nil and csvLine.alter ~= nil and #csvLine.alter > 0 then
+		local spid = GameSetting.Spid
+		for _,info in pairs(csvLine.alter) do
+			_Alter_Func[info.funcId] = false
+			if info.spidList ~= nil then
+				for _,s in pairs(info.spidList) do
+					if spid == s then
+						_Alter_Func[info.funcId] = true
+						break
+					end
+				end
+			end
+		end
+	end
+end
+alterFuncCsv()
+
 
 function _M.Clean( ... )
 	_M.Funcs = {}
@@ -77,6 +100,10 @@ function _M.DequeueWaitStory()
 end
 
 function _M.FuncIsOpen(funcId)
+	if _Alter_Func[funcId] == false then
+		return false
+	end
+
 	if _M.Funcs[funcId] == true then
 		local csv = Csv.Func[funcId]
 		if csv ~= nil and csv.fid ~= nil and csv.fid > 0 then
@@ -86,6 +113,11 @@ function _M.FuncIsOpen(funcId)
 				--如果父节点没有开启, 则直接为不开启
 				return false
 			end
+		end
+
+		-- 一元礼包活动领取完所有像关闭
+		if funcId == Define.SysId.OneRecharge then
+			return MActivity.IsShowsOneRecharge
 		end
 
 		if csv ~= nil and csv.actType ~= nil then
@@ -156,6 +188,14 @@ function _M.FuncIsOpen(funcId)
 			end
 		elseif funcId == Define.SysId.SiegeWall then
 			return MSiege.ActivityState
+		-- elseif funcId == Define.SysId.EquipRot then
+		-- 	local nowLevel = MPlayer.GetLevel()
+		-- 	if nowLevel >= csv.openParam then
+		-- 		local isActive = (MEquipRot.EquipRotTable ~= nil and MEquipRot.EquipRotTable.activeLists ~= nil)
+		-- 		return isActive
+		-- 	end
+
+		-- 	return nowLevel >= csv.openParam
 		end
 		-------------------------
 		return true

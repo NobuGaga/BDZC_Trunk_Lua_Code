@@ -374,4 +374,18 @@ function _M.AddPatrolAward(itemid,itemcount)
 	end
 end
 
+function _M.GetScaleTime()
+	local manageTable = _M.ManageTable
+	if manageTable ~= nil then
+		local time = 0
+		for k,v in pairs(manageTable) do
+			if v.recovery ~= nil and v.recovery > time then
+				time = v.recovery
+			end
+		end
+		return time
+	end
+	return 0
+end
+
 return _M

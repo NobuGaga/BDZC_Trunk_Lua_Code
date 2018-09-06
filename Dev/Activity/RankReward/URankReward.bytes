@@ -3,8 +3,11 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 --@RefType [Dev.Activity.MActivity.bytes#_M]
 local MActivity= JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 -- @RefType [Dev.Player.HeartBeat.bytes#_M]
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+-- @RefType [Libs.Sound.SoundMgr.bytes#_M]
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 
 ----------------------CS类引用--------------------------
@@ -31,12 +34,14 @@ function _M:Dispatch(funcName, ...)
 end
 
 --界面构建
-function _M:OnCreate()
+function _M:OnCreate(sysID)
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	self.moudle:Get(BtnClose):AddOnButton(function()
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end)
+	self.sysID = sysID
+	self.isCross = sysID == Define.SysId.CrossRankReward
 
 	_P.InitActivityList(self)
 end
@@ -51,8 +56,19 @@ end
 
 --刷新所有活动列表数据
 function _P.RefreshActivityList(self)
-	local listData = MActivity.GetListFromType(Define.ActivityType.RankReward)
-	if nil ~= listData then
+	local listData
+	local titleSprite
+	if self.sysID == Define.SysId.RankReward then
+		titleSprite = "cb_001"
+		listData = MActivity.GetListFromType(Define.ActivityType.RankReward)
+	elseif self.sysID == Define.SysId.CrossRankReward then
+		titleSprite = "cb_013_13"
+		listData = MCrossActivity.GetListFromType(Define.CrossActivityType.CrossRankReward)
+	end
+	if titleSprite then
+		self.moudle:Get("Title").SpriteName = titleSprite
+	end
+	if listData then
 		local tempList = {}
 		for index, data in pairs(listData) do
 			table.insert(tempList, data)
@@ -64,7 +80,7 @@ function _P.RefreshActivityList(self)
 				_P.CreateItem(self, index, data)
 			end
 		end
-		if nil ~= self.countList then
+		if self.countList then
 			self.contentTimer = self.content:AddOnUpdate(function() _P.RefreshAllItemTime(self) end, nil, 1)
 		end
 	else
@@ -120,25 +136,31 @@ function _P.InitItem(self, index, data)
 	itemMoudle:Get("textBtnOpen").Text = Csv.Text("timelimit_open_tips")
 	itemMoudle:Get("btnOpen"):AddOnButton(function()
 		SoundMgr.Play(10001)
-		WindowMgr.Create("URankRewardAct", item.actId, item.rankType)
+		WindowMgr.Create("URankRewardAct", item.actId, item.rankType, self.sysID)
 	end)
-	self:RegistRedpoint(itemMoudle:Get("redpoint"), Define.SysId.RankReward, data.actId)
+	local sysID
+	if self.isCross then
+		sysID = Define.SysId.CrossRankReward
+	else
+		sysID = Define.SysId.RankReward
+	end
+	self:RegistRedpoint(itemMoudle:Get("redpoint"), sysID, data.actId)
 
 	self.listCache[index] = item
 end
 
 --倒计时刷新所有子项时间
 function _P.RefreshAllItemTime(self)
-	if nil ~= self.listCache then
+	if self.listCache then
 		for index, item in pairs(self.listCache) do
 			local isNotCount = _P.RefreshItemTime(item)
-			if isNotCount and nil ~= self.countList then
+			if isNotCount and self.countList then
 				self.countList[index] = nil
 			end
 		end
 	end
 	if nil == self.countList or 0 == #self.countList then
-		if nil ~= self.contentTimer then
+		if self.contentTimer then
 			self.contentTimer:Destroy()
 		end
 	end
@@ -159,8 +181,8 @@ end
 
 --重置缓存数据
 function _P.ResetCacheList(self)
-	if nil ~= self.countList then
-		if nil ~= self.contentTimer then
+	if self.countList then
+		if self.contentTimer then
 			self.contentTimer:Destroy()
 		end
 		for index in pairs(self.countList) do
@@ -168,16 +190,19 @@ function _P.ResetCacheList(self)
 		end
 		self.countList = nil
 	end
-	if nil ~= self.listCache then
+	if self.listCache then
 		for index, item in pairs(self.listCache) do
-			if nil ~= item.item then
+			if item.item then
 				item.item.Activity = false
 			end
 		end
 	end
 end
 
-function _R.OnRefreshView(self)
+function _R.OnRefreshView(self, sysID)
+	if self.sysID ~= sysID then
+		return
+	end
 	_P.ResetCacheList(self)
 	_P.RefreshActivityList(self)
 end

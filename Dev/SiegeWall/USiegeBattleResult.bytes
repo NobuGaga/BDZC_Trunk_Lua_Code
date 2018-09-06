@@ -14,13 +14,12 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-local resultActorId = 10046
+local failEffect = 10022
 
 function _M:OnCreate(data,isVote)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
 		self:Destroy()
-		--WindowMgr.Call("USiegeBattle","RefreshFight")
 		WindowMgr.Call("USiegeBattle","CloseView")
 	end)
 
@@ -34,7 +33,6 @@ function _M:OnCreate(data,isVote)
 	local text5 = moudle:Get("text5")
 	local text6 = moudle:Get("text6")
 
-	--text1.Text = Csv.Text("finance_resultTitle_fb2",{num = data.hurt})--"对【索罗斯】抵御了"
 	text2.Text = ""
 	text3.Text = Csv.Text("siege_battle_getgongxian",{num = data.jifen})--"副本分数："
 	text4.Text = ""
@@ -42,22 +40,6 @@ function _M:OnCreate(data,isVote)
 	text6.Text = ""
 
 	SoundMgr.Play(10014)
-	CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
-	--[[
-	-- 播放战斗失败特效
-	local _isWin
-	if isVote then
-		_isWin = MVote.BossPower.ncur <= data.hurt
-	else
-		_isWin = MSiege.BossPower.ncur <= data.hurt
-	end
-	if _isWin then
-		SoundMgr.Play(10014)
-		CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
-	else
-		SoundMgr.Play(10014)
-		CCommon.CreateEffect(moudle:Get("ActorPanel"), resultActorId)
-	end
-	--]]
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), failEffect)
 end
 return _M

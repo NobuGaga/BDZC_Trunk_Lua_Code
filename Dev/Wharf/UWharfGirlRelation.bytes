@@ -171,12 +171,15 @@ function _P.ShowTopGirlItems(self,selectid)
 	end
 
 	--下一个美女
-	local lastGirlID = MWharf.GetLastPeople()
-	if lastGirlID ~= nil then
-		local girlData = Csv.WharfPeople[lastGirlID]
-		local data = {id = girlData.girlId,peopleId = lastGirlID,state = 0}
-		local girlMoudle = _P.CreateTopGirl(self,content,data)
-		table.insert(topgirlTab,{id = data.id,peopleId = lastGirlID,moudle = girlMoudle})
+	local lastGirlIDs = MWharf.GetLastPeople()
+	if lastGirlIDs ~= nil then
+		for k,v in pairs(lastGirlIDs)do
+			local girlData = Csv.WharfPeople[v]
+			local data = {id = girlData.girlId,peopleId = v,state = 0}
+			local girlMoudle = _P.CreateTopGirl(self,content,data)
+			table.insert(topgirlTab,{id = data.id,peopleId = v,moudle = girlMoudle})
+		end
+		
 
 		if lastID < 0 then
 			lastID = lastGirlID
@@ -230,7 +233,11 @@ end
 
 function _P.SelectGirl(self,id)
 	local wharfPeopleData = Csv.WharfPeople[id]
-	CWharf.ReqGirlEvent(wharfPeopleData.girlId)--请求美女事件状态
+	if wharfPeopleData ~= nil then
+		CWharf.ReqGirlEvent(wharfPeopleData.girlId)--请求美女事件状态
+	else
+		print("___找不到码头人物id___",id)
+	end
 
 	self.selectGirl = wharfPeopleData.girlId
 	self.selectPeople = id

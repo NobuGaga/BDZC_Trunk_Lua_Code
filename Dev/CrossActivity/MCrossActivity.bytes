@@ -109,8 +109,8 @@ end
 --更新带有榜单类型的活动自己排名数据
 function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
 	if _M.ActRankTypeToID == nil or _M.ActRankTypeToID[rankType] == nil or _M.ActList == nil or 
-					_M.ActList[_M.ActRankTypeToID[rankType]] == nil or _M.CommerceRank[rankType] then
-		return
+					_M.ActList[_M.ActRankTypeToID[rankType]] == nil then
+		return false
 	end
 	local actData = _M.ActList[_M.ActRankTypeToID[rankType]]
 	if actData.selfRank and selfRank then
@@ -119,6 +119,7 @@ function _M.UpdateActivitySelfRank(rankType, selfRank, selfValue)
 	if actData.rankPro and selfValue then
 		actData.rankPro = selfValue
 	end
+	return true
 end
 
 return _M

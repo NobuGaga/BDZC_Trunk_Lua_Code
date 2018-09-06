@@ -17,7 +17,7 @@ local btnClose = "btnClose"
 --属性表索引
 local PowerCsv = "Girl_skill_type"
 --皮肤加成buff每行文字高度
-local BuffTextRowHeight = 42
+local BuffTextRowHeight = 36
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -114,21 +114,21 @@ function _P.RefreshSubAttr(self)
 	if 0 < row then
 		local height = row * BuffTextRowHeight
 		for _, rect in pairs(self.allBackground) do
-			rect.SizeDelta = Vector2(rect.SizeDelta.x, rect.SizeDelta.y + height)
+			rect.SizeDelta = Vector2(rect.SizeDelta.x, rect.SizeDelta.y + height * 2)
 		end
-		self.textSubInfo.SizeDelta = Vector2(self.textSubInfo.SizeDelta.x, height)
+		self.textSubInfo.SizeDelta = Vector2(self.textSubInfo.SizeDelta.x, height * 2)
 		self.textSubInfo.Text = ""
 		local csvAircraftSkin = Csv.AircraftSkin
 		for skinID, _  in pairs(skinList) do
 			local csvValue = csvAircraftSkin[skinID]
 			if nil ~= csvValue then
 				if nil ~= csvValue.name then
+					local csvColor = Csv.ItemColor[csvValue.type]
 					if nil ~= csvValue.get then
 						for index, value in pairs(csvValue.get) do
 							if nil ~= value[1] and nil ~= value[2] then
 								if MAircraft.SchoolSysID == value[1] then
-									local csvColor = Csv.ItemColor[csvValue.type]
-									self.textSubInfo.Text = self.textSubInfo.Text .. Csv.Text("aircraft_skin_effect_sub", 
+									self.textSubInfo.Text = self.textSubInfo.Text .. Csv.Text("aircraft_skin_skill_sub", 
 																					 {color = csvColor.str, name = csvValue.name, 
 																					  num = math.modf(value[2] / 100)}) .. "\n"
 								end
@@ -136,6 +136,13 @@ function _P.RefreshSubAttr(self)
 								error("皮肤ID " .. skinID .. " 字段 get " .. index .. " 位置配置错误")
 							end
 						end
+					else
+						error("皮肤ID " .. skinID .. " 字段 get 错误")
+					end
+					if csvValue.bookExp then
+						self.textSubInfo.Text = self.textSubInfo.Text .. Csv.Text("aircraft_skin_exp_sub", 
+																					 {color = csvColor.str, name = csvValue.name, 
+																					  num = csvValue.bookExp}) .. "\n"
 					else
 						error("皮肤ID " .. skinID .. " 字段 get 错误")
 					end

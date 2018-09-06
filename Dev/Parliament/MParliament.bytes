@@ -80,6 +80,20 @@ function _M.CreateListData(copy, data)
 	copy.playerName = data.playerName
 	copy.msg = data.msg
 	copy.endTime = data.endTime
+	copy.serverid = data.serverid
+end
+
+--设置殿堂上的人物性别
+function _M.SetTitlePlayerSex(data)
+	if _M.list == nil or data == nil then
+		return
+	end
+	for _, titleData in ipairs(_M.list) do
+		if titleData.playerID == data.playerID then
+			titleData.sex = data.sex
+			return
+		end
+	end
 end
 
 --获取称号列表信息

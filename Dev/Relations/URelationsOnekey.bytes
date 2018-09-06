@@ -43,7 +43,6 @@ function _M:OnCreate()
 	self.mIsBottom = false
 	self.mKillNum = 0
 
-	--[[
 	local closeBtn = module:Get("btnClose")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -54,10 +53,9 @@ function _M:OnCreate()
 		else
 			_P.ClickItemAll(self)
 		end
-	end, nil, 1.2)
-	--]]
+	end, nil, 0.9)
 
-	module:Get("Tips").Text = Csv.Text("relations_click_close")
+	LuaUtil.TextAddThreePoint(module:Get("Tips"), Csv.Text("relations_click_close"))--Csv.Text("relations_click_close")
 	module:Get("C_Text").Text = Csv.Text("relations_onekey")
 	--local btnText = module:Get("C_text")
 	local content = module:Get("content")

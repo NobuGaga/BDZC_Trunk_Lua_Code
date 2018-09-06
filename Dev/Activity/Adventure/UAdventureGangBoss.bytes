@@ -13,6 +13,9 @@ local _P = {}
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
 local GRAY = Color(0/255, 0/255, 0/255, 140/255)
+local OutlineColors = {Color(1, 1, 1, 1), Color(102/255, 241/255, 64/255, 1),
+						Color(61/255, 233/255, 253/255, 1), Color(222/255, 129/255, 249/255, 1),
+						Color(255/255, 174/255, 87/255, 1), Color(241/255, 112/255, 112/255, 1), Color(255/255, 235/255, 67/255, 1)}
 -- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
 -- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
 
@@ -60,7 +63,10 @@ function _M:OnCreate(eventData, hotval, isSelectDown)
 	module:Get("OpenText").Text = Csv.Text("adventure_enemy_battle")
 	module:Get("Name2").Text = Csv.Text("adventure_event_mush")
 	module:Get("RewardTip").Text = Csv.Text("adventure_person_tip")
-	module:Get("Name").Text = eventConf.title
+	local nameText = module:Get("Name")
+	nameText.Text = eventConf.title
+	nameText.Color = OutlineColors[eventConf.star]
+
 	module:Get("Info").Text = eventConf.desc
 	module:Get("nameText").Text = eventConf.taskName
 	module:Get("TypeImg").SpriteName = MActivity.AdventureTaskNames[eventConf.taskType]
@@ -82,9 +88,9 @@ function _M:OnCreate(eventData, hotval, isSelectDown)
 	-- local starBgImg = module:Get("StarBg")
 	-- starBgImg.SpriteName = StarBgIcons[eventConf.star]
 
-	for i=1,7 do
-		module:Get("Star".. i).Activity = i <= eventConf.star
-	end
+	-- for i=1,7 do
+	-- 	module:Get("Star".. i).Activity = i <= eventConf.star
+	-- end
 
 	_P.SetRewardData(self, eventConf.killReward)
 end
@@ -107,7 +113,10 @@ function _P.SetRewardData(self, itemGroudId)
 	if itemGround == nil then return end
 
 	local rewardList = itemGround.rewards
-	local proList = itemGround.randReward
+	local proList = nil
+	if itemGround.randReward ~= nil then
+		proList = itemGround.randReward[1]
+	end
 
 	local showContent = self.mModule:Get("content")
 	local itemsNum = 0

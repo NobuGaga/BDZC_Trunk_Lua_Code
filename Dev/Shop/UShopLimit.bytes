@@ -152,7 +152,9 @@ function _P.GetSortShop(rawTable)
 		for k,v in pairs(rawTable) do
 			table.insert(sortTable,v)
 		end
-		table.sort(sortTable,function(a,b) return a.index < b.index end)
+		table.sort(sortTable,function(a,b) 
+			return Csv.ShopLimitBuy[a.index].sort < Csv.ShopLimitBuy[b.index].sort 
+		end)
 	end
 	return sortTable
 end

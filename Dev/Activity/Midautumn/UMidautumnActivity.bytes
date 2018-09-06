@@ -1,0 +1,215 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.TabGroup.bytes#_M]
+local TabGroup = JRequire "Dev.Common.TabGroup"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.Midautumn.UMidautumnLogin.bytes#_M]
+local UMidautumnLogin = JRequire "Dev.Activity.Midautumn.UMidautumnLogin"
+--@RefType [Dev.Activity.Midautumn.UMidautumnFireworks.bytes#_M]
+local UMidautumnFireworks = JRequire "Dev.Activity.Midautumn.UMidautumnFireworks"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+-- @RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Autumn_Main"
+local btnClose = "C_Back_Btn"
+local PageItemName = "M_Autumn_Main_Item"
+
+local RechargeIDForType = {}
+RechargeIDForType[Define.ActivityType.RechargeReward_Day] = Define.SysId.RechargeReward_Day
+RechargeIDForType[Define.ActivityType.RechargeReward_Total] = Define.SysId.RechargeReward_Total
+RechargeIDForType[Define.ActivityType.RechargeReward_TotalDay] = Define.SysId.RechargeReward_TotalDay
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:OnPopCreate(...)
+	self:OnCreate(...)
+end
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle then
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.tabGroup then
+		self.tabGroup:delete()
+		self.tabGroup = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(openFunc)
+	_P.InitMoudleTopInfo(self)
+	_P.InitPageView(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(btnClose):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		if self.ChooseMoudle then
+			self.ChooseMoudle:Destroy()
+		end
+		self:Destroy()
+	end, nil, 1.2)
+end	
+
+--初始化页签界面
+function _P.InitPageView(self)
+	_P.InitActivityTypeGroup(self)
+	self.tabGroup = TabGroup.new(function (actID) _P.OnClickPage(self, actID) end)
+	self.pageTabNode = self.moudle:Get("pageContent")
+	self.pageItemCache = {}
+	self.pageNode = self.moudle.SelfRect
+	self.actIDListCache = {}
+	self.pageIDCache = {}
+	self.selectIndex = 1
+end
+
+--初始化中秋活动类型
+function _P.InitActivityTypeGroup(self)
+	local csvFuncValue = Csv.Func[Define.SysId.MidAFestival]
+	if csvFuncValue == nil or csvFuncValue.actType == nil then
+		error("Csv Func SysID " .. Define.SysId.MidAFestival .. " is nil or actType is nil")
+		return
+	end
+	self.actTypeGroup = {}
+	for index, actType in ipairs(csvFuncValue.actType) do
+		self.actTypeGroup[index] = actType
+	end
+end
+
+function _P.RefreshPageView(self)
+	local actID = nil
+	for index, actType in ipairs(self.actTypeGroup) do
+		local actDataList = MActivity.GetListFromType(actType)
+		if actDataList then
+			for actID, actData in pairs(actDataList) do
+				local index = #self.actIDListCache + 1
+				if actID == nil then
+					actID = actData.id
+				end
+				self.actIDListCache[index] = actData
+				self.pageIDCache[actID] = index
+			end
+		end
+	end
+	for index, actData in ipairs(self.actIDListCache) do
+		local itemMoudle = JGuiManager.GetMoudle(self.pageTabNode, PageItemName)
+		self.tabGroup:Add(actData.id, itemMoudle.SelfRect, itemMoudle:Get("textTitle"), actData.title)
+		-- self:RegistRedpoint(itemMoudle:Get("redpoint"), Define.SysId.MidAFestival, actData.id)
+	end
+	if actID then
+		self.tabGroup:Choose(actID)
+	end
+end
+
+function _P.OnClickPage(self, actID)
+	if self.ChooseMoudle then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	local loginActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Login)
+	local fireworkActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Firework)
+	if loginActList[actID] then
+		self.ChooseMoudle = UMidautumnLogin.new(self.pageNode, actID)
+	elseif fireworkActList[actID] then
+		self.ChooseMoudle = UMidautumnFireworks.new(self.pageNode, actID)
+	end
+end
+
+--刷新页签
+function _P.RefreshPage(self, actType)
+	local isClosePage = _P.JudgeToRemovePage(self, RechargeIDForType[actType], actType)
+	if isClosePage and not self.isShowCloseTips then
+		self.isShowCloseTips = true
+		CCommon.ShowError(Csv.Text("err_lottery_activity_close"))
+		self.moudle.SelfRect:AddOnTime(function ()
+			self.isShowCloseTips = false
+		end, nil, 10)
+	end
+	if #self.pageIDCache == 0 then
+		self:Destroy()
+	end
+end
+
+--判断移除页签
+function _P.JudgeToRemovePage(self, sysID, actType)
+	local typeData = MActivity.GetListFromType(actType)
+	if nil == typeData then
+		self.tabGroup:Remove(sysID).image:Destroy()
+		local pageIDCache = {}
+		local removeIndex
+		for index, value in ipairs(self.pageIDCache) do
+			if value == sysID then
+				removeIndex = index
+			else
+				table.insert(pageIDCache, value)
+			end
+		end
+		if removeIndex then
+			self.moudle:Get("btn" .. removeIndex).Activity = false
+		end
+		self.pageIDCache = pageIDCache
+		if self.mFuncId == sysID and #self.pageIDCache ~= 0 then
+			self.tabGroup:Choose(self.pageIDCache[1])
+		end
+		return true
+	else
+		return false
+	end
+end
+
+function _R.RefreshItemState(self,data,actType)
+	if self.ChooseMoudle then
+		if (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift) then
+			self.ChooseMoudle:RefreshItemState(data)
+		end
+	end
+end
+
+function _R.RefreshItemGetState(self,data,actType)
+	if self.ChooseMoudle then
+		if actType == Define.ActivityType.RechargeReward_Day
+		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
+		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay) then
+			self.ChooseMoudle:RefreshItemGetState(data)
+		end
+	end
+end
+
+function _R.RefreshView(self, actType)
+	_P.RefreshPage(self, actType)
+	if self.ChooseMoudle then
+		if actType == Define.ActivityType.RechargeReward_Day
+		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
+		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay) then
+			self.ChooseMoudle:RefreshView()
+		end
+	end
+end
+
+return _M

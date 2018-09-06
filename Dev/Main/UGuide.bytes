@@ -8,6 +8,8 @@ local MMain = JRequire "Dev.Main.MMain"
 --@RefType [Dev.Main.CMain.bytes#_M]
 local CMain = JRequire "Dev.Main.CMain"
 local CTrigger = JRequire "Dev.Main.CTrigger"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -46,7 +48,7 @@ end
 
 function _P.doCreate(self, id)
 	self.GuideId = id
-	CS.Utility.LogPoint.LogPost(15, id)
+	CS.Utility.LogPoint.LogPost(15, id, luaUtil.TransToYearMonthDayHMS(os.time()))
 
 	local csvLine = Csv.Guide[id]	
 	--是不是强制

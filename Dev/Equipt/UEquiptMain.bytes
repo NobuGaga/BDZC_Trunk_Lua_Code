@@ -5,11 +5,32 @@ local TabGroup = JRequire "Dev.Common.TabGroup"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MEquipt = JRequire "Dev.Equipt.MEquipt"
+local CEquipt = JRequire "Dev.Equipt.CEquipt"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+local EMPTY_BACK = "ty_018"
+local EQUIP_EXP_ID = 34
 
 local _M = Class(WindowBase)
 
 local _P = {}
 local _R = {}
+
+ local Quality = {
+	all = 0,
+	white = 1,
+	green = 2,
+	blue = 3,
+	purple = 4,
+	yellow = 5,
+}
+local EquipType = {
+	all = 0,
+	yifu = 1,
+	kuzi = 2,
+}
+
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -19,63 +40,241 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.ShowDecomposeView(self,data)
+	WindowMgr.Create("UEquiptDecomposeSuccess",data)
+end
+
+function _R.ChangeEquip(self,data)
+	
+	_R.RefreshView(self)
+end
+
 --界面构建
-function _M:OnCreate(chooseFuncId)
-	local moudle = self:CreateMoudle(self._RootNode, "M_Bag_UMain")
+function _M:OnCreate(staffID,type,ShowType)
+	self.mSelectStaffID = staffID
+	self.mEquipType = EquipType.all
+	self.mSelectQuality = Quality.all
+	if type ~= nil then
+		self.mEquipType = type
+	end
+
+	self.mPower = 0
+	local staffData = MStaff.StaffTable[staffID]
+	if staffData ~= nil then
+		self.mPower =  staffData.power
+	end
+	
+	local moudle = self:CreateMoudle(self._RootNode, "M_Equipment_UMain")
 	self.mMoudle = moudle
-	moudle:Get("C_Text").Text = Csv.Text("bag_title")
+	moudle:Get("C_Text").Text = Csv.Text("equip_title")
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
 
-	--[[
-	local helpBtn = moudle:Get("helpBtn")
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
 	if helpBtn ~= nil then
 		helpBtn:AddOnButton(function ( ... )
 				SoundMgr.Play(10001)
-				WindowMgr.Create("URuleTips", self._SysId)
+				WindowMgr.Create("URuleTips",Define.SysId.Equipment )
 		end, nil,  1.2)
 	end
-	--]]
 
-	local node = moudle:Get("PageNode")
-	self.mImgSelect = moudle:Get("H")
+	--根据入口方式调整
+	--默认隐藏装备界面，1装备（隐藏批量分解，分解） 2替换（隐藏批量分解，分解）
+	local decomBtn = moudle:Get("BtnHc")
+	local useBtn = moudle:Get("BtnUse")
+	local changeBtn = moudle:Get("BtnChange")
+	local batchBtn = moudle:Get("BatchBtn")
+
+	decomBtn.Activity = true
+	useBtn.Activity = false
+	changeBtn.Activity = false
+	batchBtn.Activity = true
+	if ShowType ~= nil then
+		if ShowType == 1 then
+			decomBtn.Activity = false
+			useBtn.Activity = false
+			changeBtn.Activity = true
+			batchBtn.Activity = false
+		elseif ShowType == 2 then
+			decomBtn.Activity = false
+			useBtn.Activity = false
+			changeBtn.Activity = true
+			batchBtn.Activity = false
+		end
+	end
+
+	self.mImgSelect = nil
 	self.PageNode = node
+	
+	local noneTips = moudle:Get("NoneTips")
+	local allDecomposeRect = moudle:Get("BatchRect")
+	local infoRect = moudle:Get("InfoRect")
+	noneTips.Activity = false
+	noneTips.Text = Csv.Text("equip_none_tips")
 
-	moudle:Get("explain"):AddOnButton(function()
-		--分解按钮打开分解界面
+	--批量分解
+	self.mAllDecompose = false
 
+	self.mSelectAllItems = {}
+	local allDecomposeBtn = moudle:Get("BatchBtn")
+	local allDecomposeBackBtn = moudle:Get("BackBtn")
+	local selectDecomposeAll = moudle:Get("text2")
+	local cangetDecomposeAll = moudle:Get("text3")
+	self.mSelectDecomposeAll = selectDecomposeAll
+	self.mCangetDecomposeAll = cangetDecomposeAll
+	selectDecomposeAll.Text = Csv.Text("equip_all_select",{num = 0})
+	selectDecomposeAll.Text = Csv.Text("equip_all_canget",{num = 0,name = Csv.Item[EQUIP_EXP_ID].name})
+	moudle:Get("BackText").Text = Csv.Text("equip_all_decompose_back")
+	moudle:Get("BatchText").Text = Csv.Text("equip_all_decompose")
+	moudle:Get("Tip").Text = Csv.Text("equip_all_title")
+	moudle:Get("BatchBtn"):AddOnButton(function()
+		allDecomposeBtn.Activity = false
+		allDecomposeBackBtn.Activity = true
+
+		allDecomposeRect.Activity = true
+		infoRect.Activity = false
+		noneTips.Activity = false
+
+		if self.mImgSelect ~= nil then
+			self.mImgSelect.Activity = false
+		end
+		self.mAllDecompose = true
+		_P.CleanAllSelect(self)
 	end,nil,1.2)
 
-	local btnUse = moudle:Get("BtnUse")
-	btnUse:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		_P.OnClickUse()
-	end, nil, 0.9)
+	moudle:Get("BackBtn"):AddOnButton(function()
+		allDecomposeBtn.Activity = true
+		allDecomposeBackBtn.Activity = false
 
-	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
-		if MBag.LastChoose == Define.SysId.Bag_Goods then
-			local csvItem = Csv.Item[itemid]
-			if csvItem.type == Define.BagType.Prop then
-				--self.ChooseMoudle:RefreshItemNum(itemid,itemcount,isAdd)
+		allDecomposeRect.Activity = false
+		infoRect.Activity = true
+
+		self.mAllDecompose = false
+		_P.CleanAllSelect(self)
+		_P.OnClickItem(self,MEquipt.LastChooseItem)
+	end,nil,1.2)
+
+	moudle:Get("SellText").Text = Csv.Text("equip_all_decompose_ok")
+	moudle:Get("Sell"):AddOnButton(function()
+		
+		local allSelectItems = {}
+		if self.mSelectAllItems ~= nil then
+			for k,v in pairs(self.mSelectAllItems)do
+				table.insert(allSelectItems,v.id)
 			end
 		end
-	end)
+		
+		if #allSelectItems > 0 then
+			CCommon.CheckTips(function(isSure, rg)
+				if isSure == true then
+					CEquipt.ReqDecomposeOnekey(allSelectItems)
+				end
+			end, {content = Csv.Text("equip_alldecompose_isSure")})
+		else
+			CCommon.ShowError(Csv.Text("equip_noselect_alldecompose"))
+		end
+		
+		_P.CleanAllSelect(self)
+	end,nil,1.2)
+
+	--筛选
+	moudle:Get("Order").Text = Csv.Text("equip_rank")
+	local selectOrderText = moudle:Get("OrderIngText")
+	local orderAword = moudle:Get("Aword")
+	local orderRect = moudle:Get("OrderBG")
+	self.mSelectOrdderText = selectOrderText
+	self.mSelectOrdderText.Text = Csv.Text("equip_sort_0")
+	moudle:Get("OrderIng"):AddOnButton(function()
+		if orderRect.Activity then
+			orderRect.Activity = false
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0,0,180,1)
+		else
+			orderRect.Activity = true
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0,0,0,1)
+		end
+	end,nil,0.9)
+
+	for i = 0,6,1 do
+		local orderBtn  = moudle:Get("order"..i)
+		local orderText = moudle:Get("ordertext"..i)
+		orderText.Text = Csv.Text("equip_sort_"..i)
+
+		orderBtn:AddOnButton(function()
+			orderRect.Activity = false
+			orderAword.LocalRotation = CS.UnityEngine.Quaternion(0,0,180,1)
+
+			_P.ClickOrder(self,i)
+		end,nil,1.2)
+	end
+
+	--装备/更换/卸下
+	local btnUse = moudle:Get("BtnUse")
+	local btnUseText = moudle:Get("C_text")
+	btnUseText.Text = Csv.Text("equip_equipBtn")
+	btnUse:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse(self)
+
+		--SoundMgr.Play(10002)
+		--self:Destroy()
+	end, nil, 0.9)
+
+	local btnChange = moudle:Get("BtnChange")
+	local btnChangeText = moudle:Get("C_text_change")
+	self.mBtnChangeText = btnChangeText
+	btnChangeText.Text = Csv.Text("equip_staffinfo_change")
+	btnChange:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUse(self)
+
+		--SoundMgr.Play(10002)
+		--self:Destroy()
+	end, nil, 0.9)
+
+	local btnDecompose = moudle:Get("BtnHc")
+	local btnDecomposeText = moudle:Get("C_text_0")
+	btnDecomposeText.Text = Csv.Text("equip_decomposeBtn")
+	btnDecompose:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickDecompose()
+	end, nil, 0.9)
+
+	_R.RefreshView(self)
 end
 
-function _P.RefreshView(self)
+function _R.RefreshView(self)
 	local moudle = self.mMoudle
 	local content = moudle:Get("Content")
 	content:DestroyChildren()
+	self.mImgSelect = nil
+	MEquipt.LastChooseItem = nil
 
-	local listData = _P.GetSortList(MEquipt.Equips)
+	local equipType = self.mEquipType
+	local quality = self.mSelectQuality
+	local listData = _P.GetSortList(MEquipt.Equips,equipType,quality)
 
 	self.mEquiptTableItems = {}
 	self.mEmptyTableItems = {}
 
+	local firstData = nil
+
+	--已穿装备
+	local equipedData = MStaff.GetEquipedByType(self.mSelectStaffID,self.mEquipType)
+	if equipedData ~= nil then
+		_P.OnCreateItem(self,equipedData,false)
+		if firstData == nil then
+			firstData = equipedData
+		end
+	end
+
 	for k,v in ipairs (listData) do
 		_P.OnCreateItem(self,v,false)
+
+		if firstData == nil then
+			firstData = v
+		end
 	end
 
 	local length = #listData
@@ -92,20 +291,53 @@ function _P.RefreshView(self)
 	end
 
 	self.mSortEquipt = listData
-	if MEquipt.LastChooseItem == nil then
-		_P.SetLastChooseItem(self)
+
+	MEquipt.LastChooseItem = firstData
+	--_P.SetLastChooseItem(self)
+	if not self.mAllDecompose then
+		_P.OnClickItem(self,MEquipt.LastChooseItem)
 	end
-	_P.OnClickItem(self,MEquipt.LastChooseItem)
 end
 
-function _P.GetSortList(list)
+function _P.GetSortList(list,type,quality)
 	local sortList = {}
 	for k,v in pairs(list) do
-		sortList[#sortList + 1] = v
+		local csvEquip = Csv.Equip[v.equipId]
+		local isAdd = false
+		if type ~= EquipType.all then
+			if type == csvEquip.type then
+				isAdd = true
+			end
+		else
+			isAdd = true
+		end
+		if isAdd then
+			if quality ~= Quality.all then
+				if quality == csvEquip.quality then
+					sortList[#sortList + 1] = v
+				end
+			else
+				sortList[#sortList + 1] = v
+			end
+		end
 	end
 
 	table.sort(sortList, function (a, b)
-		return a.id < b.id
+		local aEquip = Csv.Equip[a.equipId]
+		local bEquip = Csv.Equip[b.equipId]
+		if aEquip.quality == bEquip.quality then
+			if aEquip.type == bEquip.type then
+				if a.level == b.level then
+					return a.equipId > b.equipId
+				else
+					return a.level > b.level
+				end
+			else
+				return aEquip.type < bEquip.type
+			end
+		else
+			return aEquip.quality > bEquip.quality
+		end
 	end)
 
 	return sortList
@@ -114,11 +346,23 @@ end
 function _P.OnCreateItem(self,itemData,isEmpty)
 	local goods = {}
 	local contentTransform = self.mMoudle:Get("Content")
-	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Bag_GoodsItem", WindowType.UI, 0)
+	local itemMoudle = JGuiManager.GetMoudle(contentTransform, "M_Equipment_Item", WindowType.UI, 0)
 
 	local ImgIcon = itemMoudle:Get("Icon")
-	local ImgColor = itemMoudle:Get("Color")
-	local TextNum = itemMoudle:Get("Num")
+	local ImgColor = itemMoudle.SelfRect
+	local lv = itemMoudle:Get("Lv1")
+	local star = itemMoudle:Get("Lv2")
+	local corner = itemMoudle:Get("Corner")
+
+	if not isEmpty then
+		local equipedData = MStaff.GetEquipedByType(self.mSelectStaffID,self.mEquipType)
+		corner.Activity = false
+		if equipedData ~= nil then
+			if equipedData.id == itemData.id then
+				corner.Activity = true
+			end
+		end
+	end
 
 	goods.moudle = itemMoudle
 	goods.data = itemData
@@ -126,26 +370,37 @@ function _P.OnCreateItem(self,itemData,isEmpty)
 		ImgIcon.gameObject:SetActive(false)
 		ImgColor.gameObject:SetActive(true)
 		ImgColor.SpriteName = EMPTY_BACK
-		TextNum.Text = ""
+		lv.Text = ""
+		star.Text = ""
 		
 		ImgColor:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
-			_P.OnClickItem(self,nil)
+			if not self.mAllDecompose then
+				_P.OnClickItem(self,nil)
+			end
 		end, nil, 0.9)
 		table.insert(self.mEmptyTableItems,goods)
 	else
-		local csv = Csv.Item[itemData.itemid]
+		ImgIcon.gameObject:SetActive(true)
+		ImgColor.gameObject:SetActive(true)
+
+		local csv = Csv.Equip[itemData.equipId]
 		ImgIcon.SpriteName = csv.icon
+		ImgColor.SpriteName = csv.colorIcon
+		lv.Text = Csv.Text("equip_item_lv",{num = itemData.level })
+		star.Text = Csv.Text("equip_item_star",{num = itemData.star })
 		ImgColor:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
-			_P.OnClickItem(self,itemData)
+			if not self.mAllDecompose then
+				_P.OnClickItem(self,itemData)
+			else
+				_P.OnClickAllItem(self,itemData)
+			end
 			end, nil, 0.9)
-		ImgColor.SpriteName = csv.colorIcon
-		TextNum.Text = itemData.itemcount
 		goods.Destroy = function()
 			itemMoudle:Destroy()
 		end
-		self.mEquiptTableItems[itemData.itemid] = goods
+		self.mEquiptTableItems[itemData.id] = goods
 	end
 end
 
@@ -159,9 +414,9 @@ function _P.SetLastChooseItem(self)
 end
 
 function _P.GetTableFirstKey(sortEquipt)
-	for k,v in ipairs(sortEquipt) do
+	for k,v in pairs(sortEquipt) do
 		if v ~= nil then
-			return v.itemid
+			return v.data.id
 		end
 	end
 	return nil
@@ -169,50 +424,91 @@ end
 
 function _P.OnClickItem(self,data)
 	local moudle = self.mMoudle
-	local TextGoodsName = moudle:Get("GoodsName")
-	local TextGoodsNum = moudle:Get("GoodsNum")
-	local TextGoodsDescTitle = moudle:Get("GoodsDescTitle")
-	local TextGoodsDesc = moudle:Get("GoodsDesc")
+
+	if self.mImgSelect ~= nil then
+		self.mImgSelect.Activity = false
+	end
+
+	local equipName = moudle:Get("GoodsName")
+	local equipStaff = moudle:Get("GoodsStaff")
 	local ImgIcon = moudle:Get("Icon")
 	local ImgColor = moudle:Get("IconColor")
-	local BtnUse = moudle:Get("BtnUse")
+	local lv = moudle:Get("CarLv1")
+	local star = moudle:Get("CarLv2")
+	local attrTitle = moudle:Get("GoodsDescTitle")
+	local attrValue = moudle:Get("PriceNum")
+	local smallIcon = moudle:Get("SmallIcon")
+
 	local TextNoneTips = moudle:Get("NoneTips")
+	local infoRect = moudle:Get("InfoRect")
 	ImgIcon.gameObject:SetActive(data ~= nil)
 	ImgColor.gameObject:SetActive(data ~= nil)
 	TextNoneTips.Activity = (data == nil)
+	infoRect.Activity = (data ~= nil)
+	smallIcon.Activity = (data ~= nil)
 	if data ~= nil then
-		local csv = Csv.Item[data.itemid]
-		local colorStr = Csv.ItemColor[csv.color].str
-		TextGoodsName.Text = Csv.Text("common_color",{num=colorStr,name=csv.name})
-		TextGoodsNum.Text = Csv.Text("bag_num",{num = data.itemcount})
-		TextGoodsDesc.Text = csv.tips
-		TextGoodsDescTitle.Text = Csv.Text("bag_desc")
-		ImgIcon.SpriteName = csv.icon
-		ImgColor.SpriteName = csv.colorIcon
+		local csvEquip = Csv.Equip[data.equipId]
+		local colorStr = Csv.ItemColor[csvEquip.quality].str
+		attrTitle.Text = Csv.Text("equip_staff_equipattr")
+		smallIcon.SpriteName = csvEquip.typeIcon
+
+		local power = MEquipt.GetAttrPower(data)
+		local powerRate = MEquipt.GetAttrPowerRate(data)
+		local str1 = ""
+		if power > 0 then
+			str1 = Csv.Text("equip_staff_attr_1",{num = power})
+		end
+		if powerRate > 0 then
+			if str1 ~= "" then
+				str1 = str1 .. "\n"
+			end
+			str1 = str1..Csv.Text("equip_staff_attr_2",{num =  string.format("%.1f",powerRate/100)})
+		end
+
+		attrValue.Text =  str1
+		equipName.Text = Csv.Text("common_color",{num=colorStr,name= csvEquip.name})
+		equipStaff.Text = Csv.Text("equip_staff_equipStaff",{name = MEquipt.GetStaffs(data)}) 
+		ImgIcon.SpriteName = csvEquip.icon
+		ImgColor.SpriteName = csvEquip.colorIcon
+		lv.Text = Csv.Text("equip_item_lv",{num = data.level })
+		star.Text = Csv.Text("equip_item_star",{num = data.star })
 
 		--[[
 			--展示装备/更换/卸下
 
 		--]]
-		if self.mImgSelect ~= nil then
-			local item = self.mEquiptTableItems[data.itemid]
-			if item ~= nil and item.moudle ~= nil then
-				local itemMoudle = item.moudle
-				self.mImgSelect.Activity = true
-				self.mImgSelect:SetParent(moudle.SelfRect.CachedTran)
-				self.mImgSelect.CachedTran:SetSiblingIndex(0)
-				self.mImgSelect.LocalPosition = Vector2(0,0)
-				self.mImgSelect:SetParent(itemMoudle.SelfRect.CachedTran)
-				self.mImgSelect.CachedTran:SetSiblingIndex(1)
-				self.mImgSelect.LocalPosition = Vector2(0,0)
+		local item = self.mEquiptTableItems[data.id]
+		if item ~= nil and item.moudle ~= nil then
+			local itemMoudle = item.moudle
+			self.mImgSelect = itemMoudle:Get("select")
+			self.mImgSelect.Activity = true
+		end
+
+		--self.mBtnChangeText
+		local equipedData = MStaff.GetEquipedByType(self.mSelectStaffID,self.mEquipType)
+		local isEquip = false
+		if equipedData ~= nil then
+			if equipedData.id == data.id then
+				isEquip = true
 			end
 		end
+
+		--卸下
+		if equipedData ~= nil then
+			if isEquip then
+				self.mBtnChangeText.Text = Csv.Text("equip_staffinfo_putdown")
+			else
+				--替换
+				self.mBtnChangeText.Text = Csv.Text("equip_staffinfo_change")
+			end
+		else
+			--装备
+			self.mBtnChangeText.Text = Csv.Text("equip_equipBtn")
+		end
 	else
-		TextGoodsName.Text = ""
-		TextGoodsNum.Text = ""
-		TextGoodsDesc.Text = ""
-		TextGoodsDescTitle.Text = ""
-		BtnUse.Activity = false
+		equipName.Text = ""
+		equipStaff.Text = ""
+		attrValue.Text = ""
 		if self.mImgSelect ~= nil then
 			self.mImgSelect.Activity = false
 		end
@@ -220,15 +516,133 @@ function _P.OnClickItem(self,data)
 	MEquipt.LastChooseItem = data
 end
 
---点击道具
-function _P.OnClickUse()
-	local itemData = MBag.LastChooseItem
-	if itemData ~= nil then
-		local csvItem = Csv.Item[itemData.itemid]
+--批量选择
 
-		--装备/替换/卸下
+function _P.OnClickAllItem(self,data)
+	local moudle = self.mMoudle
+	local selectAllItems = self.mSelectAllItems
+	local item = self.mEquiptTableItems[data.id]
+	if item ~= nil and item.moudle ~= nil then
+		local itemMoudle = item.moudle
+		local blackImg = itemMoudle:Get("Black")
+
+		if blackImg.Activity then
+			blackImg.Activity = false
+			if selectAllItems ~= nil then
+				for k,v in pairs(selectAllItems)do
+					if v.id == data.id then
+						table.remove(selectAllItems,k)
+					end
+				end
+			end
+		else
+			blackImg.Activity = true
+			table.insert(selectAllItems,data)
+		end
+	end
+
+	self.mSelectDecomposeAll.Text = Csv.Text("equip_all_select",{num = #selectAllItems})
+	self.mCangetDecomposeAll.Text = Csv.Text("equip_all_canget",{num = _P.GetRewardExp(selectAllItems),name = Csv.Item[EQUIP_EXP_ID].name})
+
+	self.mSelectAllItems = selectAllItems
+end
+
+function _P.GetRewardExp(selectItems)
+	local exp = 0
+
+	if selectItems ~= nil then
+		for k,v in pairs(selectItems)do
+			if v.totalCostExp ~= nil then
+				exp = exp + v.totalCostExp
+			end
+		end
+	end
+
+	return exp
+end
+
+function _P.CleanAllSelect(self)
+	local selectAllItems = self.mSelectAllItems
+	local equipItems = self.mEquiptTableItems
+
+	for k,v in pairs(selectAllItems)do
+		local item = equipItems[v.id]
+		if item ~= nil and item.moudle ~= nil then
+			local itemMoudle = item.moudle
+			local blackImg = itemMoudle:Get("Black")
+			blackImg.Activity = false
+		end
+	end
+
+	self.mSelectAllItems = {}
+	self.mSelectDecomposeAll.Text = Csv.Text("equip_all_select",{num = 0})
+	self.mCangetDecomposeAll.Text = Csv.Text("equip_all_canget",{num = 0,name = Csv.Item[EQUIP_EXP_ID].name})
+end
+
+--筛选
+function _P.ClickOrder(self,order)
+	self.mSelectQuality = order
+	self.mSelectOrdderText.Text = Csv.Text("equip_sort_"..order)
+	_P.CleanAllSelect(self)
+	_R.RefreshView(self)
+end
+
+
+--点击道具
+function _P.OnClickUse(self)
+	local itemData = MEquipt.LastChooseItem
+	if itemData ~= nil then
+		local csvItem = Csv.Equip[itemData.equipId]
+
+		local equipedData = MStaff.GetEquipedByType(self.mSelectStaffID,self.mEquipType)
+		local isEquip = false
+		if equipedData ~= nil then
+			if equipedData.id == itemData.id then
+				isEquip = true
+			end
+		end
+
+		--卸下
+		if equipedData ~= nil then
+			if isEquip then
+				CEquipt.ReqEquip(2,itemData.id,self.mSelectStaffID)
+			else
+				--替换
+				CEquipt.ReqEquip(1,itemData.id,self.mSelectStaffID)
+			end
+		else
+			--装备
+			CEquipt.ReqEquip(1,itemData.id,self.mSelectStaffID)
+		end
 	end
 end
 
+--分解
+function _P.OnClickDecompose()
+	local itemData = MEquipt.LastChooseItem
+	if itemData ~= nil then
+		--分解
+		CCommon.CheckTips(function(isSure, rg)
+			if isSure == true then
+				CEquipt.ReqDecompose(itemData.id)
+			end
+		end, {content = Csv.Text("equip_decompose_isSure")})
+	end
+end
+
+function _R.StaffChange(self)
+	local oldPower = self.mPower
+	local newPower = MStaff.StaffTable[self.mSelectStaffID].power
+	self.mPower = newPower
+
+	--检测战斗力变化
+	if newPower ~= oldPower then
+		if newPower > oldPower then
+			CCommon.ShowText(Define.ShowStrType.Combat,{newPower,newPower - oldPower,true})
+		else
+			CCommon.ShowText(Define.ShowStrType.Combat,{newPower,oldPower - newPower,false})
+		end
+	end
+end
 
 return _M

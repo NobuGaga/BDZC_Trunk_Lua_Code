@@ -1,0 +1,152 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class()
+local _P = {}
+
+local EFFECT_BOOM = 10167
+local SPACE = 120
+
+local IconPos = {
+	{0},
+	{-100,100},
+	{-150,0,150},
+	{-225,-75,75,225},
+	{-280,-140,0,140,280},
+	{-304,-183,-61,61,183,304}
+}
+
+--界面构建
+function _M:ctor(parent,data,doneCall,refreshIconCall,selfStaff,enemyStaff,staffid,rstaffid)
+	self._RootNode = parent
+	local moudleName = "M_BoosPk_SecondKill2"
+	local EFFECT = "T_Effect_Skill"
+	if not data.source then
+		moudleName = "M_BoosPk_SecondKill3"
+		EFFECT = "T_Effect_Skill2"
+	end
+	local moudle = JGuiManager.GetMoudle(self._RootNode, moudleName, WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local transBody = self.mMoudle.SelfRect.CachedTran
+	self.mTweenBody = transBody:GetJTweener(EFFECT)
+	self.mTweenBody:Play()
+
+	local content = moudle:Get("content")
+	local buffTable = {}
+	local num = 0
+	for k,v in pairs(data.buffs) do
+		if num < 6 then
+			local buffData = {staffid = v.staffid,buffid = v.buffid,color = _P.GetStaffColor(v.target,v.staffid,selfStaff,enemyStaff)}
+			table.insert(buffTable,buffData)
+			num = num + 1
+		end
+	end
+
+	self.BuffMoudleTable = {}
+	for k,v in ipairs(buffTable) do
+		local buffMoudleItem = {}
+		local csvBuff = Csv.Buff[v.buffid]
+		local csvStaff = Csv.Personnel[v.staffid]
+		local dataStaff = MStaff.StaffTable[v.staffid]
+		local buffMoudle = JGuiManager.GetMoudle(content, "M_BoosPk_SecondKill2_Item")
+		buffMoudle:Get("BSX").SpriteName = csvStaff.asset
+		if dataStaff ~= nil then
+			buffMoudle:Get("M_BoosPk_SecondKill2_Item").SpriteName = MStaff.Color2Image[dataStaff.color]
+		end
+		if not data.source then
+			buffMoudle.SelfRect.LocalPosition = Vector2(-500,0)
+		else
+			buffMoudle.SelfRect.LocalPosition = Vector2(500,0)
+		end
+		buffMoudle.SelfRect:AddOnTime(function()
+			if #buffTable > 6 then
+				buffMoudle.SelfRect:DOAnchorPosX(-(k - 1) * SPACE - 300,0.5)
+			else
+				local posX = IconPos[#buffTable][k]
+				if not data.source then
+					posX = -posX
+				end
+				buffMoudle.SelfRect:DOAnchorPosX(posX,0.5)
+			end
+		end,nil,0.8 + (0.1 * k))
+		buffMoudleItem.moudle = buffMoudle
+		buffMoudleItem.buffid = v.buffid
+		self.BuffMoudleTable[k] = buffMoudleItem
+	end
+
+	if #self.BuffMoudleTable > 0 then
+		content:AddOnTime(function()
+			for k,v in pairs(self.BuffMoudleTable) do
+				local csvBuff = Csv.Buff[v.buffid]
+				if csvBuff ~= nil and csvBuff.effect2 ~= nil then
+					local actor = v.moudle:Get("actor")
+					CCommon.CreateEffect(actor, csvBuff.effect2)
+				end
+			end
+			if refreshIconCall ~= nil then
+				refreshIconCall(data.buffs)
+			end
+		end,nil,(1.2 + #buffTable * 0.1))
+	end
+
+	if data.skillid ~= nil then
+		local csvBuff = Csv.Buff[data.skillid]
+		if csvBuff ~= nil then
+			moudle:Get("text1").Text = csvBuff.desc2
+			moudle:Get("text3").Text = csvBuff.title
+			moudle:Get("text4").Text = csvBuff.titleE
+		end
+	end
+
+	if staffid ~= nil and rstaffid ~= nil then
+		local csvStaff
+		if data.source then
+			csvStaff = Csv.Personnel[staffid]
+		else
+			csvStaff = Csv.Personnel[rstaffid]
+		end
+		if csvStaff ~= nil then
+			moudle:Get("BSX").SpriteName = csvStaff.asset
+		end
+	end
+
+	moudle.SelfRect:AddOnTime(function()
+		self:Destroy()
+		if doneCall ~= nil then
+			doneCall()
+		end
+	end,nil,2.2)
+
+	local Actor = moudle:Get("actor")
+	-- Actor:AddOnTime(function()
+		CCommon.CreateEffect(Actor,EFFECT_BOOM)
+	-- end,nil,0.1)
+end
+
+function _P.GetStaffColor(target,staffid,selfStaff,enemyStaff)
+	local staffTable
+	if target then
+		staffTable = selfStaff
+	else
+		staffTable = enemyStaff
+	end
+	for k,v in pairs(staffTable) do
+		if v.staffid == staffid then
+			return v.staffcolor
+		end
+	end
+	return 1
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

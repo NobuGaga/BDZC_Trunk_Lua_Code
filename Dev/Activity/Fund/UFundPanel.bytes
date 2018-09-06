@@ -3,6 +3,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local CActivity = JRequire "Dev.Activity.CActivity"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local TabGroup = JRequire "Dev.Common.TabGroup2"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
@@ -120,13 +121,21 @@ function _P.OnChoose(self, funcId)
 	self.ActInfo = curData
 
 	self.mModule:Get("text1").Text = Csv.Text("InvesteFund_tip1")
-	self.mModule:Get("DayText").Text = Csv.Text("InvesteFund_back")
+	self.mModule:Get("text3").Text = Csv.Text("InvesteFund_tip3")
 	self.mModule:Get("Banner").SpriteName = fundConf.titleBg
+
+	local nameImg = self.mModule:Get("Name")
+	if fundConf.nameBg ~= nil then
+		nameImg.SpriteName = fundConf.nameBg
+		nameImg.Activity = true
+	else
+		nameImg.Activity = false
+	end
 
 	local timeText = self.mModule:Get("text2")
 	local investEndTime = (self.ActInfo.investEndTime or self.ActInfo.state.endTime)
-	if self.ActInfo.state.state == MActivity.ActivityState.Doing then -- 投资截止前
-		timeText.Text = Csv.Text('InvesteFund_time', {startTime = os.date("%Y/%m/%d", self.ActInfo.state.startTime),endTime = os.date("%Y/%m/%d", investEndTime)})
+	if self.ActInfo.state.state == MActivity.ActivityState.Doing then -- 投资截止前(与后端约好，时间戳减1)
+		timeText.Text = Csv.Text('InvesteFund_time', {startTime = os.date("%Y/%m/%d", self.ActInfo.state.startTime),endTime = os.date("%Y/%m/%d", (investEndTime - 1))})
 	else -- 投资截止后
 		timeText.Text = Csv.Text('InvesteFund_endTime', {startTime = os.date("%Y/%m/%d", investEndTime),endTime = os.date("%Y/%m/%d", self.ActInfo.state.endTime)})
 	end
@@ -180,8 +189,6 @@ end
 
 
 function _P.SetListData(self, actId)
-	self.mModule:Get("DayNum").Text = self.ActInfo.day
-
 	local itemContent = self.mModule:Get("Content")
 	itemContent:DestroyChildren()
 
@@ -215,6 +222,9 @@ function _P.OnCreateItem(self, itemGrid, data, fundConf)
 		qualityImg.SpriteName = itemConf.colorIcon
 
 		itemModule:Get("IconNum").Text = itemData[2]
+		if not data.isGeted then
+			CCommon.CreateItemLight(iconImg, Define.SysId.Fund, itemConf.id)
+		end
 	end
 
 	itemModule:Get("DayNum").Text = Csv.Text("InvesteFund_day" .. data.id)
@@ -231,7 +241,7 @@ function _P.OnCreateItem(self, itemGrid, data, fundConf)
 		actorRect:DestroyChildren()
 	end
 
-	return itemModule
+	return {itemModule = itemModule, itemId = itemData[1], itemCount = itemData[2]}
 end
 
 
@@ -254,6 +264,8 @@ function _P.SetBtnState(self)
 		self.FundBtn.RaycastTarget = true
 		self.FundBtnText.Text = Csv.Text("InvesteFund_btn")
 	end
+
+	_P.SetTimeTextData(self)
 end
 
 
@@ -268,6 +280,20 @@ function _P.OnClickFundBtn(self)
 		end
 	else
 		SDKMgr.ReqPay(fundConf.productId, rechargeConf.sdkProductId, fundConf.amount, fundConf.totalGold, fundConf.productName, self.ActInfo.actId)
+	end
+end
+
+
+function _P.SetTimeTextData(self)
+	local dayShowText = self.mModule:Get("DayText")
+	local dayNumText = self.mModule:Get("DayNum")
+	if self.ActInfo.day > 0 then
+		dayShowText.Text = Csv.Text("InvesteFund_canGet")
+		dayNumText.Text = _P.GetHasCanGetDays(self)
+	else
+		local days = math.ceil((self.ActInfo.investEndTime - HeartBeat.ServSecond()) / 86400)
+		dayShowText.Text = Csv.Text("InvesteFund_leave")
+		dayNumText.Text = days
 	end
 end
 
@@ -287,8 +313,25 @@ function _P.GetCurRewardId(self)
 end
 
 
+function _P.GetHasCanGetDays(self)
+	if next(self.ActInfo.rewardList) == nil then
+		return 0
+	end
+
+	local days = 0
+	for i=1, 7 do
+		if self.ActInfo.rewardList[i] ~= nil and (not self.ActInfo.rewardList[i].isGeted) then
+			days = days + 1
+		end
+	end
+
+	return days
+end
+
+
 -- 领取奖励返回
 function _R.GetRewardBack(self, data)
+	self.IsGetReward = true
 	self.ActInfo = MActivity.GetFromId(data.actId)
 	for k,v in pairs(self.mData) do
 		if v.actId == data.actId then
@@ -298,25 +341,42 @@ function _R.GetRewardBack(self, data)
 	end
 
 	self:Lock()
-	local curGetModule = self.ItemModules[data.index]
+	local curData = self.ItemModules[data.index]
+	local curGetModule = curData.itemModule
 	local getedBgImg = curGetModule:Get("Black")
 	local getedImg = curGetModule:Get("Ylq")
+	local effectRect = curGetModule:Get("Effect")
 	getedBgImg.Activity = true
 	getedImg.Activity = false
 	
 	local actorRect = self.mModule:Get("ActorPanel" .. data.index)
 	actorRect:DestroyChildren()
 
+	local iconImg = curGetModule:Get("Icon")
+	iconImg:DestroyChildren()
+
 	_P.SetBtnState(self)
+	CCommon.ShowFlyItem(self.FundBtn, curData.itemId, curData.itemCount)
+
 	self.mModule.SelfRect:AddOnTime(function()
 		SoundMgr.Play(10004)
-		local effect = CCommon.CreateEffect(curGetModule:Get("Effect"), GTE_EFFECT_ID, getedBgImg.LocalPosition, function( ... )
+		local effect = CCommon.CreateEffect(effectRect, GTE_EFFECT_ID, getedBgImg.LocalPosition, function( ... )
 			if effect ~= nil then
 				effect:Destroy()
 			end
 
 			getedImg.Activity = data.isGeted
 			self:Unlock()
+
+			if self.OverPageData then
+				_P.SetPageData(self, self.OverPageData)
+				self.OverPageData = nil
+			elseif self.IsOver then
+				self.IsOver = nil
+				CCommon.ShowError(Csv.Text("err_newofficer_end"))
+				self:Destroy()
+			end
+			self.IsGetReward = nil
 		end, {M_Effect_Get = "JJ_Ylq"})
 		effect.SelfRect.SizeDelta = Vector2(112, 59)
 	end, nil, 0.2)
@@ -344,10 +404,18 @@ function _R.OnUpdateViewState(self, data)
 	if data.state.state == MActivity.ActivityState.Close then
 		local pageData = _P.GetListData()
 		if pageData ~= nil and pageData.listCount > 0 then
-			_P.SetPageData(self, pageData)
+			if self.IsGetReward then
+				self.OverPageData = pageData
+			else
+				_P.SetPageData(self, pageData)
+			end
 		else
-			CCommon.ShowError(Csv.Text("err_newofficer_end"))
-			self:Destroy()
+			if self.IsGetReward then
+				self.IsOver = true
+			else
+				CCommon.ShowError(Csv.Text("err_newofficer_end"))
+				self:Destroy()
+			end
 		end
 	else
 		self.ActInfo = MActivity.GetFromId(self.ActInfo.actId)

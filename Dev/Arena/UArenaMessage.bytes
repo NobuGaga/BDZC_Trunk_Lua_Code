@@ -1,0 +1,104 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MArena = JRequire "Dev.Arena.MArena"
+local CArena = JRequire "Dev.Arena.CArena"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.pressRevenge(self, id)
+	local fightTimes = MArena.GetFightTimes()
+	if fightTimes <= 0 then
+		local buyTimes,buyMax = MArena.GetFightBuyCount()
+		if buyTimes < buyMax then
+			local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+			local needCost = MArena.GetFightBuyCost()
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						if needCost > haveGode then
+							CCommon.ShowError(Csv.Text("err_club_no_gold"))
+						else
+							CArena.ReqFightBuy()
+						end
+					end
+				end, 
+				{
+					items = {[Define.AssetsType.Gold] = haveGode},
+					content = Csv.Text("Arena_19",{num = needCost})
+				}
+			)
+		else
+			CCommon.ShowError(Csv.Text("Arena_18"))
+		end		
+	else
+		WindowMgr.Create("ULineUpCheck",function()
+			CArena.ReqRevenge(id)
+		end)		
+	end
+end
+
+function _R.OnArenaMessage(self, msg)
+	local list = msg.list
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	if list ~= nil and #list > 0 then
+		moudle:Get("None").Activity = false
+
+		for _,messageInfo in pairs(list) do
+			local oneMoudle = self:CreateMoudle(content, "M_Gang_Record_Item")
+			oneMoudle:Get("ShName").Text = Csv.Text("Arena_3", {name = messageInfo.name, force = messageInfo.force})
+			oneMoudle:Get("build").Text = Csv.Text("Arena_4", {num = messageInfo.rank})
+			if messageInfo.attackerWin then
+				oneMoudle:Get("Info").Text = Csv.Text("Arena_5", {num = messageInfo.downNum or 0})
+			else
+				oneMoudle:Get("Info").Text = Csv.Text("Arena_6")
+			end
+			oneMoudle:Get("Time").Text = Csv.Text("Arena_7")
+			oneMoudle:Get("PeopleNum").Text = LuaUtil.TransToYearMonthDayHMS(messageInfo.time)
+			oneMoudle:Get("C_text").Text = Csv.Text("Arena_8")
+			local playerId = messageInfo.id
+			oneMoudle:Get("C_Btn_b"):AddOnButton(function ( ... )
+				_P.pressRevenge(self, playerId)
+			end)
+			oneMoudle:Get("head").SpriteName = MPlayer.GetOtherHeadIcon(messageInfo.head,messageInfo.sex)
+			if messageInfo.vip > 0 then
+				local csvVip = Csv.Vip[messageInfo.vip]
+				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
+				oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..messageInfo.vip
+			end
+		end
+	else
+		local noneNode = moudle:Get("None")
+		noneNode.Text = Csv.Text("Arena_2")
+		noneNode.Activity = true
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	CArena.ReqMessage()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Record")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_Text").Text = Csv.Text("Arena_1")	
+end
+
+return _M

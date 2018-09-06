@@ -1,0 +1,195 @@
+-- 分解成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CEquipt = JRequire "Dev.Equipt.CEquipt"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EQUIP_EXP_ID = 34
+
+local StarUpAtorId = 10185
+local LevelUpAtorId = 10184
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.UpdateData(self)
+	local staffData = MStaff.GetStaffDataByID(self.mStaffID)
+
+	local data = nil
+	if staffData ~= nil then
+		if staffData.equips ~= nil then
+			for k,v in pairs(staffData.equips) do
+				if v.id == self.mEquipInfo.id then
+					if v.level > self.mEquipInfo.level then
+						--升级
+						CCommon.CreateEffect(self.mActorCanvas, LevelUpAtorId)
+					end
+					if v.star > self.mEquipInfo.star then
+						--升阶
+						CCommon.CreateEffect(self.mActorCanvas, StarUpAtorId)
+					end
+					data = v
+				end
+			end
+		end
+	end
+	if data ~= nil then
+		_P.RefreshEquip(self,data)
+	end 
+end
+
+--界面构建
+function _M:OnCreate(equipInfo,staffid)
+	self.mStaffID = staffid
+	self.mEquipInfo = equipInfo
+	local module = self:CreateMoudle(self._RootNode, "M_Staff_Equipment_Info")
+	self.mModule = module
+	self.OnCloseCall = onClose
+
+	module:Get("BtnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	module:Get("Title").Text = Csv.Text("equip_staffinfo_title")
+	module:Get("C_text_0_0").Text = Csv.Text("equip_staffinfo_change")
+	--module:Get("C_text").Text = Csv.Text("equip_staffinfo_putdown")
+	self.mActorCanvas = module:Get("ActorPanel")
+
+	local csvEquip = Csv.Equip[equipInfo.equipId]
+	module:Get("C_Btn_c"):AddOnButton(function()
+		--更换
+		WindowMgr.Create("UEquipMain",staffid,csvEquip.type,2)
+	end)
+
+	module:Get("C_Btn_b"):AddOnButton(function()
+		--升级/升阶
+		if self.mIsLevelUp then
+			local hasExp = MBag.GetItemNum(EQUIP_EXP_ID)
+			local csvEquipLevelnext = Csv.EquipLevel[self.mEquipInfo.equipId * 1000 + self.mEquipInfo.level+1]
+
+			if csvEquipLevelnext.exp <= hasExp then
+				CEquipt.ReqEquipLevelUp(self.mEquipInfo.id,staffid)
+			else
+				CCommon.ShowError(Csv.Text("bag_errNoEnough",{name = Csv.Item[EQUIP_EXP_ID].name}))
+			end
+		else
+			WindowMgr.Create("UEquipStartUp",self.mEquipInfo,self.mStaffID)
+			self.mActorCanvas:DestroyChildren()
+		end
+	end)
+
+	--[[
+	module:Get("C_Btn_a"):AddOnButton(function()
+		--卸下
+		CEquipt.ReqEquip(2,self.mEquipInfo.id,staffid)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	--]]
+
+	_P.RefreshEquip(self,equipInfo)
+end
+
+function _P.RefreshEquip(self,data)
+	self.mEquipInfo = data
+	local module =  self.mModule
+
+	local levelUpText = module:Get("C_text_0")
+
+	local icon = module:Get("Icon")
+	local lv = module:Get("Lv1")
+	local star = module:Get("Lv2")
+	local iconBg = module:Get("IconColor")
+	local name = module:Get("name")
+	local desc = module:Get("desc")
+	local smallIcon = module:Get("SmallIcon")
+
+	local attrRect = module:Get("attrRect")
+	local staffs = module:Get("staffs")
+	local exp = module:Get("exp")
+	local expImg = module:Get("ExpIcon")
+	local attr1Text = module:Get("attr1")
+	local attr2Text = module:Get("attr2")
+
+	local csvEquip = Csv.Equip[data.equipId]
+	local hasExp = MBag.GetItemNum(EQUIP_EXP_ID)
+
+	local isLevelUp = true
+	local nowStar = 1
+	if data.level > 1 then
+		nowStar= Csv.EquipLevel[data.equipId * 1000 + data.level].star
+	end
+	local csvEquipLevelnext = Csv.EquipLevel[data.equipId * 1000 + data.level+1]
+	local levelUpBtn = module:Get("C_Btn_b")
+	levelUpBtn.IsGray = false
+	levelUpBtn.RaycastTarget = true
+
+	if csvEquipLevelnext ~= nil then
+		if csvEquipLevelnext.star == data.star then
+			levelUpText.Text = Csv.Text("equip_staffinfo_levelup")
+		else
+			levelUpText.Text = Csv.Text("equip_staffinfo_starup")
+			isLevelUp = false
+		end
+		if csvEquipLevelnext.exp <= hasExp then
+			exp.Text = Csv.Text("equip_staffinfo_exp1",{num = csvEquipLevelnext.exp,max = hasExp})
+		else
+			exp.Text = Csv.Text("equip_staffinfo_exp2",{num = csvEquipLevelnext.exp,max = hasExp})
+		end
+	else
+		--满级
+		levelUpText.Text = Csv.Text("equip_staffinfo_max")
+		levelUpBtn.IsGray = true
+		levelUpBtn.RaycastTarget = false
+		exp.Text = ""
+	end
+	expImg.LocalPosition = Vector2(-exp.PreferredWidth/2-20,0)
+	if isLevelUp then
+		exp.Activity = true
+	else
+		exp.Activity = false
+	end
+	self.mIsLevelUp = isLevelUp
+
+	name.Text = csvEquip.name
+	iconBg.SpriteName = csvEquip.colorIcon
+	icon.SpriteName = csvEquip.icon
+	lv.Text = Csv.Text("equip_item_lv",{num = data.level})
+	star.Text = Csv.Text("equip_item_star",{num = data.star})
+	desc.Text = csvEquip.desc
+	smallIcon.SpriteName = csvEquip.typeIcon
+
+	--属性数值
+	local power = MEquipt.GetAttrPower(data)
+	local powerRate = MEquipt.GetAttrPowerRate(data)
+	if power > 0 then
+		attr1Text.Text = Csv.Text("equip_staff_attr_1",{num = LuaUtil.NumberFormat(power)})
+	end
+	if powerRate > 0 then
+		if power > 0 then
+			attr2Text.Text =  Csv.Text("equip_staff_attr_2",{num = string.format("%.1f",powerRate/100)})
+		else
+			attr1Text.Text =  Csv.Text("equip_staff_attr_2",{num = string.format("%.1f",powerRate/100)})
+		end
+	end
+	
+	--员工
+	staffs.Text = Csv.Text("equip_staff_equipStaff",{name = MEquipt.GetStaffs(data)}) 
+
+end
+
+return _M

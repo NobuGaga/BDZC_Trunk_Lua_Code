@@ -1,0 +1,66 @@
+-- 装备抢夺合成成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local CompoundActorId = 10002
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(itemId, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Rob_Record")
+	self.OnCloseCall = onClose
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	CCommon.CreateEffect(module:Get("ActorPanel"), CompoundActorId)
+
+	local itemConf = Csv.Item[itemId]
+	local equipConf = Csv.Item[itemId]
+	if itemConf ~= nil and equipConf ~= nil then
+		local iconImg = module:Get("Icon")
+		iconImg.SpriteName = itemConf.icon
+		iconImg:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UBagDetailPop", itemId)
+		end, nil, 1)
+
+		module:Get("Name").Text = itemConf.name
+		module:Get("IconBox").SpriteName = itemConf.colorIcon
+		module:Get("Lv1").Text = 'Lv1'
+		module:Get("Lv2").Text = Csv.Text("car_main_jieji") .. '0'
+		module:Get("EAttr").Text = Csv.Text("equipRob_main_attrPower", {power = (equipConf.power or 0), powerPro = math.floor((equipConf.powerRate or 0) / 10000)})
+		module:Get("EDesc").Text = Csv.Text("equip_staff_equipStaff", {name = MEquipt.GetStaffs({equipId = itemId})})
+	end
+
+	LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))
+end
+
+
+return _M

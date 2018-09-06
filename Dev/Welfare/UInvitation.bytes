@@ -1,0 +1,79 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local CNotice = JRequire "Dev.Notice.CNotice"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_Invitation", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	local mineNum = 1111111111
+
+	moudle:Get("Title").Text = Csv.Text("welfare_invitation_title")
+	moudle:Get("Text1").Text = Csv.Text("welfare_invitation_title2")
+	moudle:Get("Text2").Text = Csv.Text("welfare_invitation_mine",{num = mineNum})
+	moudle:Get("C_text").Text = Csv.Text("welfare_invitation_copy")
+	local descBtn = moudle:Get("Text3")
+	descBtn.Text = Csv.Text("welfare_invitation_desc")
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--复制邀请码
+		SoundMgr.Play(10001)
+		SDKMgr.CopyText(mineNum)
+		CCommon.ShowError(Csv.Text("welfare_copySuccess"))--"复制成功！")
+	end)
+
+	descBtn:AddOnClick(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+	end)
+
+	local node = moudle:Get("content")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Welfare_Invitation, true)
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("tab"..index), moudle:Get("tabText"..index), v.name)
+
+			--注册小红点
+			--self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+	end
+end
+
+function _P.OnChoose(self, funcId)
+	print("___________",funcId)
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

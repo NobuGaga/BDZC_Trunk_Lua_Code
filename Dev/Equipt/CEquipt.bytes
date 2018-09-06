@@ -13,25 +13,118 @@ local _P = {}
 local _R = {}
 
 local ECmdId = {
-   
+		cEquip					=	1,	--装备/卸下 --PEquip.CEquip
+		cEquipLevelUp			=	2,	--升级 PEquip.CEquipLevelUp
+		cEquipStarUp			=	3,	--进阶
+		cDecompose				=	4,	--分解
+		cDecomposeOnekey		=	5,	--一键分解
 --------------------------------------------------------------------
-   
+		sEquipInit				=	1,	--初始化推送装备列表
+		sEquipUpdate			=	2,	--装备状态更新 （装备，卸下，升级，进阶）
+		sDecompose				=	3,	--分解返回
+		sDecomposeOnekey		=	4,	--一键分解返回
+		sEquipLevelUp			= 	5,	--升级
+		sEquipStarUp			=   6,	--升星
  }
 
 
 function _M.ModuleInit(isReload)
 	local send = {
-	
+		[ECmdId.cEquip] = "PEquip.CEquip",
+		[ECmdId.cEquipLevelUp] = "PEquip.CEquipLevelUp",
+		[ECmdId.cEquipStarUp] = "PEquip.CEquipStarUp",
+		[ECmdId.cDecompose] = "PEquip.CDecompose",
+		[ECmdId.cDecomposeOnekey] = "PEquip.CDecomposeOnekey",
 	}
 	local recv = {
-		
+		[ECmdId.sEquipInit] = 		{proto = "PEquip.SEquipInit",		handle = _P.RepInitEquip},
+		[ECmdId.sEquipUpdate] = 		{proto = "PEquip.SEquipUpdate",		handle = _P.RepEquipUpdate},
+		[ECmdId.sDecompose] = 		{proto = "PEquip.SDecompose",		handle = _P.RepDecompose},
+		[ECmdId.sDecomposeOnekey] = 		{proto = "PEquip.SDecomposeOnekey",		handle = _P.RepDecomposeOnekey},
+		[ECmdId.sEquipLevelUp] = 		{proto = "PEquip.SEquipLevelUp",		handle = _P.RepEquipLevelUp},
+		[ECmdId.sEquipStarUp] = 		{proto = "PEquip.SEquipStarUp",		handle = _P.RepEquipStarUp},
 	}
-	--_M.Send = SocketMgr.Regist(Define.SysId.Finance,send,recv,isReload)
+	_M.Send = SocketMgr.Regist(Define.SysId.Equipment,send,recv,isReload)
 end
 
 --清空模块
 function _M.ModuleClean()
 	MEquipt.Clean()
 end
+
+--C-S
+function _M.ReqEquip(_type,_indexId,_staffid)
+	_M.Send(ECmdId.cEquip,{operate = _type,id = _indexId,staffid = _staffid})
+end
+
+function _M.ReqEquipLevelUp(equipId,_staffid)
+	_M.Send(ECmdId.cEquipLevelUp,{id = equipId,staffid = _staffid})
+end
+function _M.ReqEquipStarUp(equipId,_staffid,_costEquips)
+	_M.Send(ECmdId.cEquipStarUp,{id = equipId,staffid = _staffid,costEquips = _costEquips})
+end
+function _M.ReqDecompose(equipId)
+	_M.Send(ECmdId.cDecompose,{id = equipId})
+end
+function _M.ReqDecomposeOnekey(equipIDs)
+	_M.Send(ECmdId.cDecomposeOnekey,{id = equipIDs})
+end
+
+--S-C
+function _P.RepInitEquip(data)
+	MEquipt.InitEquipList(data)
+end
+
+function _P.RepEquipUpdate(data)
+	MEquipt.EquipUpdate(data)
+	--更新员工装备，详情
+	--
+	if WindowMgr.IsCreated("UStaffDetails") then
+		WindowMgr.Call("UStaffDetails","RefreshEquip")
+	end
+	if WindowMgr.IsCreated("ULineUp") then
+		WindowMgr.Call("ULineUp","UpdateEquip")
+	end
+	
+	WindowMgr.Call("UEquipMain","ChangeEquip")
+end
+
+function _P.RepDecompose(data)
+	MEquipt.SetDecompose(data)
+
+	WindowMgr.Call("UEquipMain","RefreshView")
+	WindowMgr.Call("UEquipMain","ShowDecomposeView",data)
+end
+
+function _P.RepDecomposeOnekey(data)
+	MEquipt.SetDecomposeOnekey(data)
+
+	WindowMgr.Call("UEquipMain","RefreshView")
+	WindowMgr.Call("UEquipMain","ShowDecomposeView",data)
+end
+
+function _P.RepEquipLevelUp(data)
+
+	--更新装备详情、员工装备
+	WindowMgr.Call("UEquiptDetail","UpdateData")
+	WindowMgr.Call("UStaffDetails","RefreshEquip")
+	WindowMgr.Call("ULineUp","UpdateEquip")
+end
+
+function _P.RepEquipStarUp(data)
+	--更新装备详情、员工装备
+	local costEquips = {}
+	if data.costEquips ~= nil then
+		for k,v in pairs(data.costEquips)do
+			table.insert(costEquips,v)
+		end
+	end
+	MEquipt.RemoveEquips(costEquips)
+
+	WindowMgr.Call("UEquiptDetail","UpdateData")
+	WindowMgr.Call("UStaffDetails","RefreshEquip")
+	WindowMgr.Call("ULineUp","UpdateEquip")
+end
+
 
 return _M

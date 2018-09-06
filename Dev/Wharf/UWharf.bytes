@@ -341,13 +341,15 @@ function _P.ShowTopGirlItems(self)
 		table.insert(topgirlTab,{id = v.girlid,moudle = girlMoudle})
 	end
 
-	--下一个美女
-	local lastGirlID = MWharf.GetLastPeople()
-	if lastGirlID ~= nil then
-		local girlData = Csv.WharfPeople[lastGirlID]
-		local data = {id = girlData.girlId,peopleId = lastGirlID,state = 0}
-		local girlMoudle = _P.CreateTopGirl(self,content,data)
-		table.insert(topgirlTab,{id = data.id,moudle = girlMoudle})
+	--可展示美女（20180904改）
+	local lastGirlIDs = MWharf.GetLastPeople()
+	if lastGirlIDs ~= nil then
+		for k,v in pairs(lastGirlIDs)do
+			local girlData = Csv.WharfPeople[v]
+			local data = {id = girlData.girlId,peopleId = v,state = 0}
+			local girlMoudle = _P.CreateTopGirl(self,content,data)
+			table.insert(topgirlTab,{id = data.id,moudle = girlMoudle})
+		end
 	end
 
 	--默认选择一个美女

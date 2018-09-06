@@ -266,11 +266,17 @@ function _M:OnCreate()
 	local relation = moudle:Get("Iconbox2")
 	-- 排行版红点
 	local rankRed = moudle:Get("Iconbox4")
+	-- 商业抢夺红点
+	local equipRobRed = moudle:Get("Iconbox14")
+	-- 竞技场红点
+	local arenaRed = moudle:Get("Iconbox7_0")
 
 	self:RegistRedpoint(parliament, Define.SysId.Parliament)
 	self:RegistRedpoint(wharf, Define.SysId.Wharf)
 	self:RegistRedpoint(relation, Define.SysId.Relations)
 	self:RegistRedpoint(rankRed, Define.SysId.Rank)
+	self:RegistRedpoint(equipRobRed, Define.SysId.EquipRot)
+	self:RegistRedpoint(arenaRed, Define.SysId.Arena)
 
 	local tCompany = company.CachedTran:GetJTweener("T_Effect_Guodong")
 	tCompany:Play()
@@ -282,6 +288,10 @@ function _M:OnCreate()
 	tRelation:Play()
 	local tRank = rankRed.CachedTran:GetJTweener("T_Effect_Guodong")
 	tRank:Play()
+	local tEquipRob = equipRobRed.CachedTran:GetJTweener("T_Effect_Guodong")
+	tEquipRob:Play()
+	local tArenaRob = arenaRed.CachedTran:GetJTweener("T_Effect_Guodong")
+	tArenaRob:Play()
 
 	self.skyRect = moudle:Get("SkyRect")
 	self.medRect = moudle:Get("MediumRect")

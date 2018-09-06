@@ -12,10 +12,13 @@ end
 
 -- 初始化列表
 function _M.OnCreateList(listData)
+	_M.MailTable = {}
 	if listData == nil then return end
 
 	if listData.maillist ~= nil then
-		_M.MailTable = listData.maillist
+		for _,v in pairs(listData.maillist) do
+			_M.OnAddNewMail(v)
+		end
 	end
 end
 
@@ -40,9 +43,35 @@ end
 function _M.OnAddNewMail(data)
 	if data == nil then return end
 
-	local mailList = _M.MailTable
-	table.insert(mailList, data)
-	_M.MailTable = mailList
+	local mail = {
+		mailid = data.mailid,
+		sender = data.sender,
+		title = data.title,
+		content = data.content,
+		sendtime = data.sendtime,
+		awardList = data.awardList,
+		read = data.read,
+		gainAward = data.gainAward,
+	}
+
+	if data.csvId ~= nil and data.csvId > 0 then
+		local mailCsv = Csv.Mail[data.csvId]
+		if mailCsv ~= nil then
+			mail.sender = mailCsv.sender
+			if data.titleParams ~= nil and #data.titleParams > 0 then
+				mail.title = string.format(mailCsv.title, unpack(data.titleParams)) 
+			else
+				mail.title = mailCsv.title
+			end
+			if data.contentParams ~= nil and #data.contentParams > 0 then
+				mail.content = string.format(mailCsv.content, unpack(data.contentParams)) 
+			else
+				mail.content = mailCsv.content
+			end	
+		end
+	end
+
+	table.insert(_M.MailTable, mail)
 end
 
 function _M.OnRemoveMail(id)

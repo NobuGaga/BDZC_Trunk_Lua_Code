@@ -32,12 +32,17 @@ function _M.DoUpdate(actType, data)
 			info.icon = csvValue.icon
 			info.rankTitle = csvValue.rankTitle
 			info.text = csvValue.text
+			info.joinText = csvValue.text2
 			info.textNum = csvValue.textNum
 			info.selfRank = v.selfRank
 			info.rankName = csvValue.rankNameTitle
 			info.GetState = v.GetState
 			info.sort = csvValue.sort
 			info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+			local csvActivity = Csv.Activity[info.actId]
+			if csvActivity and csvActivity.rankShowTime then
+				info.rankShowTime = info.state.lefttime - csvActivity.rankShowTime
+			end
 
 			--设置奖励档位数据
 			local rewardTitles = csvValue.rewardTitle
@@ -72,8 +77,8 @@ function _M.DoUpdate(actType, data)
 		--检查小红点
 		_M.CheckRepoint()
 		--刷新界面
-		WindowMgr.Call("URankReward", "OnRefreshView")
-		WindowMgr.Call("URankRewardAct", "OnRefreshView")
+		WindowMgr.Call("URankReward", "OnRefreshView", Define.SysId.RankReward)
+		WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.RankReward)
 	end
 end
 
@@ -118,7 +123,7 @@ function _M.OnGetSuccess(getData, actData)
 		--检查小红点
 		_M.CheckRepoint()
 		--界面表现
-		WindowMgr.Call("URankRewardAct", "RefreshGetState", getData)
+		WindowMgr.Call("URankRewardAct", "RefreshGetState", getData, Define.SysId.RankReward)
 	end
 end
 
@@ -143,8 +148,8 @@ function _M.OnUpdateState(oldActData, actData)
 	--检查小红点
 	_M.CheckRepoint()
 	--界面刷新
-	WindowMgr.Call("URankReward", "OnRefreshView")
-	WindowMgr.Call("URankRewardAct", "OnRefreshView")
+	WindowMgr.Call("URankReward", "OnRefreshView", Define.SysId.RankReward)
+	WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.RankReward)
 end
 
 function _M.OnUpdatePro(actData, proData)
@@ -153,7 +158,7 @@ function _M.OnUpdatePro(actData, proData)
 	--检查小红点
 	_M.CheckRepoint()
 	--界面刷新
-	WindowMgr.Call("URankRewardAct", "OnRefreshSelfRank")
+	WindowMgr.Call("URankRewardAct", "OnRefreshSelfRank", Define.SysId.RankReward)
 end
 
 return _M

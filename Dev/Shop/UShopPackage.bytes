@@ -155,7 +155,9 @@ function _P.GetSortShop(rawTable)
 		for k,v in pairs(rawTable) do
 			table.insert(sortTable,v)
 		end
-		table.sort(sortTable,function(a,b) return a.actId < b.actId end)
+		table.sort(sortTable,function(a,b) 
+			return Csv.GiftShop[a.actId].sort < Csv.GiftShop[b.actId].sort 
+		end)
 	end
 	return sortTable
 end

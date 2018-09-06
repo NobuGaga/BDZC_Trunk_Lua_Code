@@ -50,6 +50,14 @@ function _M.OnLogin(jsonStr)
 			MLogin.Account = jsonTab.account
 			MLogin.Password = jsonTab.password
 			GameSetting.SetAreaID(jsonTab.areaid)
+			if jsonTab.openid == nil then
+				local accountPrefix = LuaUtil.StringSplit(MLogin.Account, "&")
+				if accountPrefix and accountPrefix[1] then
+					jsonTab.openid = accountPrefix[1]
+				else
+					jsonTab.openid = MLogin.Account
+				end
+			end
 			GameSetting.SetOpenid(jsonTab.openid)
 			GameSetting.SetSbid(jsonTab.sbid)
 		end

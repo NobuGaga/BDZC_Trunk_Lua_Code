@@ -19,11 +19,9 @@ end
 function _M:CreateSliderBtn(slider,btnAdd,btnMinus)
     self.mSlider = slider
     slider.OnValueChanged:RemoveAllListeners()
-    slider.OnValueChanged:AddListener(function(...)self:OnSliderValueChanged(...)end)
-    slider.MinValue = 0
+    slider.MinValue = self.mMin
     slider.MaxValue = self.mMax
-    slider.Value = self.mValue
-
+    slider.OnValueChanged:AddListener(function(...)self:OnSliderValueChanged(...)end)
     if btnAdd ~= nil then
         btnAdd:AddOnButton(function ( ... )
             SoundMgr.Play(10001)
@@ -37,7 +35,6 @@ function _M:CreateSliderBtn(slider,btnAdd,btnMinus)
             self:OnMinusValue()
             end, nil, 0.9)
     end
-    
     self.mSlider.Value = (self.mMax/self.mRealMax) * self.mValue
 end
 

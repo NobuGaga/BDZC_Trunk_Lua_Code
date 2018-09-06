@@ -1,0 +1,269 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MArena = JRequire "Dev.Arena.MArena"
+local CArena = JRequire "Dev.Arena.CArena"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateRank(self)
+	_P.refreshRank(self)
+end
+
+function _R.OnArenaFightCount(self)
+	_P.refreshFightCount(self)
+end
+
+function _R.OnArenaFight(self, msg, lastInfo)
+	_P.playFight(self, msg.fightInfo, function()
+		if self.mMoudle ~= nil then
+			WindowMgr.Create("UArenaResult", function()
+				WindowMgr.Destroy("UBattlePvp")
+				_P.refreshRank(self)
+				_P.refreshFightCount(self)
+				_P.refreshList(self, msg.UIInfo)
+			end, msg.isSuccess, msg.reward, lastInfo)
+		end
+	end)
+end
+
+function _R.OnArenaFightChanged(self, msg)
+	CCommon.CheckTips(
+		function(isSure, arg)
+			if self.mMoudle ~= nil then
+				_P.refreshRank(self)
+				_P.refreshFightCount(self)
+				_P.refreshList(self, msg)
+			end
+		end, 
+		{
+			isNoCancel = true,
+			content = Csv.Text("Arena_22")
+		}
+	)	
+end
+
+function _P.playFight(self, fightInfo, fightDoneCall)
+	WindowMgr.Create("UBattlePvp", fightInfo, fightDoneCall)
+end
+
+function _P.pressFight(self, id, rank)
+	local fightTimes = MArena.GetFightTimes()
+	if fightTimes <= 0 then
+		local buyTimes,buyMax = MArena.GetFightBuyCount()
+		if buyTimes < buyMax then
+			local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+			local needCost = MArena.GetFightBuyCost()
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						if needCost > haveGode then
+							CCommon.ShowError(Csv.Text("err_club_no_gold"))
+						else
+							CArena.ReqFightBuy()
+						end
+					end
+				end, 
+				{
+					items = {[Define.AssetsType.Gold] = haveGode},
+					content = Csv.Text("Arena_19",{num = needCost})
+				}
+			)
+		else
+			CCommon.ShowError(Csv.Text("Arena_18"))
+		end		
+	else
+		WindowMgr.Create("ULineUpCheck",function()
+			CArena.ReqFight(id, rank)
+		end)		
+	end	
+end
+
+local TMP_POS = Vector2.zero
+function _P.onScrollValueChange(self)
+	if self.BG ~= nil then
+		local y = self.Content.LocalPosition.y / 3.625
+		if y < 0 then
+			y = 0
+		end
+		if y > 800 then
+			y = 800
+		end
+		TMP_POS.y = y
+		self.BG.LocalPosition = TMP_POS
+	end
+end
+
+function _P.refreshList(self, data)
+	local list = {}
+	if data.list ~= nil then
+		for _,info in pairs(data.list) do
+			table.insert(list, {
+				id = info.id,
+				name = info.name,
+				rank = info.rank,
+				head = info.head,
+				body = info.body,
+				sex = info.sex,
+				force = info.force,
+				title = info.title,
+			})
+		end
+		table.sort(list, function(a, b)
+			return a.rank < b.rank
+		end)
+	end
+
+	local moudle = self.mMoudle
+	local count = math.min(9, #list)
+	if count > 0 then
+		for index = 1, count do
+			local info = list[index]
+		-- for index,info in pairs(list) do
+			moudle:Get("Body"..index).SpriteName = MPlayer.GetSpFromSex(info.body, info.sex)
+			moudle:Get("Head"..index).SpriteName = MPlayer.GetSpFromSex(info.head, info.sex)
+			moudle:Get("Name"..index).Text = info.name
+			if index <= 3 then
+				moudle:Get("Rank"..index).Text = Csv.Text("rank_rankT") .. "  "
+			else
+				moudle:Get("Rank"..index).Text = Csv.Text("rank_rankT") .. info.rank
+			end			
+			moudle:Get("ZdlNum"..index).Text = tostring(info.force)
+			for id,csvLine in pairs(Csv.ArenaMainBG) do
+				if csvLine.id <= info.rank and csvLine.toRank >= info.rank then
+					moudle:Get("room"..index).SpriteName = csvLine.bg
+					moudle:Get("Info"..index).SpriteName = csvLine.rim
+					break
+				end
+			end
+			if info.title ~= nil and info.title > 0 then
+				local titleCsv = Csv.Title[info.title]
+				if titleCsv.rankIcon ~= nil then
+					moudle:Get("Title"..index).SpriteName = titleCsv.rankIcon
+				else
+					moudle:Get("Title"..index).SpriteName = ""
+				end
+			else
+				moudle:Get("Title"..index).SpriteName = ""
+			end
+			local btn = moudle:Get("C_Btn_"..index)
+			if info.id == MPlayer.GetId() then
+				btn.Activity = false
+				moudle:Get("BoxBg"..index).SpriteName = "sports_0008"
+				if index > 2 then
+					if index < 9 then
+						self.Content.LocalPosition = Vector2(0, (index - 2) * 450 + 225)
+					else
+						self.Content.LocalPosition = Vector2(0, 6 * 450 + 225)
+					end
+				end
+			else
+				moudle:Get("BoxBg"..index).SpriteName = "sports_008"
+				if data.rank > 6 and info.rank <= 3 then
+					btn.Activity = false
+				else
+					btn.Activity = true
+					moudle:Get("C_text"..index).Text = Csv.Text("Wharf_battle_fight")
+					btn:AddOnButton(function()
+						_P.pressFight(self, info.id, info.rank)
+					end)
+				end
+			end
+			if data.rank > 6 and info.rank <= 3 then
+				btn.Activity = false
+			end
+		end
+	end
+
+	self.View.OnValueChanged:RemoveAllListeners()
+	self.View.OnValueChanged:AddListener(
+		function(...) 
+			_P.onScrollValueChange(self)
+		end
+	)
+	_P.onScrollValueChange(self)
+
+	if count < 9 then
+		error("---list count error---", count)
+	end
+end
+
+function _P.refreshRank(self)
+	if MArena.CurRank > 0 then
+		self.CurRankText.Text = Csv.Text("rankreward_self_rank", {rank = MArena.CurRank})
+	else
+		self.CurRankText.Text = Csv.Text("rankreward_self_rank", {rank = "10000+"})
+	end
+end
+
+function _P.refreshFightCount(self)
+	local fightTimes = MArena.GetFightTimes()
+	if fightTimes <= 0 or self.LastFightTimes ~= fightTimes then
+		self.LastFightTimes = fightTimes
+		if fightTimes <= 0 then
+			self.FightCountText.Text = Csv.Text("Arena_15", {time = LuaUtil.GetTimeHMS(MArena.GetRefreshTime())})
+		else
+			self.FightCountText.Text = Csv.Text("Arena_14", {cur = fightTimes, max = MArena.FightTotal})
+		end
+	end	
+end
+
+--界面构建
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Sports_Main")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local funcCsv = Csv.Func[self._SysId]
+	moudle:Get("C_Text").Text = funcCsv.name
+	moudle:Get("Icon1"):AddOnButton(function( ... )
+		WindowMgr.Create("UArenaMessage")
+	end)
+	self:RegistRedpoint(moudle:Get("RedPorint"), Define.SysId.Arena, MArena.REDPOINT_INDEX.DailyReward)
+	moudle:Get("Icon2"):AddOnButton(function( ... )
+		WindowMgr.Create("UArenaShop")
+	end)
+	moudle:Get("Icon3"):AddOnButton(function( ... )
+		WindowMgr.Create("UArenaRank")
+	end)
+
+	self.CurRankText = moudle:Get("Title")
+	self.FightCountText = moudle:Get("text2")
+	self.View = moudle:Get("scrollView")
+	self.BG = moudle:Get("Bg")
+	self.Content = moudle:Get("content")
+	moudle.SelfRect:AddOnUpdate(function()
+		_P.refreshFightCount(self)
+	end, nil, 1)
+	_P.refreshList(self, data)	
+	_P.refreshRank(self)
+	_P.refreshFightCount(self)
+end
+
+return _M

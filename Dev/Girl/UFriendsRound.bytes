@@ -151,6 +151,10 @@ function _M:CreatPosItem(id)
 	if PosData.pic_id ~= nil then
 		img.SpriteName = PosData.pic_id
 		itemHig = itemHig + 255
+
+		if PosData.pic_pos ~= nil then
+			img.LocalPosition = Vector2(PosData.pic_pos[1],PosData.pic_pos[2])
+		end
 	end
 
 	_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
@@ -255,6 +259,10 @@ function _P.SetFriendItem(data,parent,self,monentIndex)
 
 	if PosData.pic_id ~= nil then
 		img.SpriteName = PosData.pic_id
+		if PosData.pic_pos ~= nil then
+			img.LocalPosition = Vector2(PosData.pic_pos[1],PosData.pic_pos[2])
+		end
+		
 		imgRect.LocalPosition = Vector2(imgRect.LocalPosition.x,imgRect.LocalPosition.y - infoHig)
 		itemHig = itemHig + 255
 		messagePoxY = -420 - infoHig

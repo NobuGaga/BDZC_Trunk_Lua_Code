@@ -1,4 +1,5 @@
 local MPlayer = JRequire "Dev.Player.MPlayer"
+local CLineUp = JRequire "Dev.LineUp.CLineUp"
 
 local _M = {}
 
@@ -8,6 +9,272 @@ _M.LastChooseItem = nil
 function _M.Clean()
 	_M.Equips = {}
 	_M.LastChooseItem = nil
+end
+
+function _M.InitEquipList(data)
+	_M.Equips = {}
+	if data.equipList ~= nil then
+		for k,v in pairs(data.equipList)do
+			local equipInfo = {
+				id = v.id,
+				equipId = v.equipId,
+				level = v.level,
+				star = v.star,
+				totalCostExp = v.totalCostExp,
+			}
+			if v.totalCostExp == nil then
+				local exp = 0 
+				local csvEquipLevel = Csv.EquipLevel[v.equipId*1000 + v.level]
+				if csvEquipLevel ~= nil then
+					exp = csvEquipLevel.decomposeExp
+				else
+					local csvEquip = Csv.Equip[v.equipId]
+					if csvEquip ~= nil then
+						if csvEquip.decomposeExp ~= nil then
+							exp = csvEquip.decomposeExp
+						end
+					end
+				end
+				equipInfo.totalCostExp = exp
+			end
+			table.insert(_M.Equips,equipInfo)
+		end
+	end
+end
+
+function _M.EquipUpdate(data)
+	if data.updateType == 3 then
+		if _M.Equips ~= nil then
+			for k,v in pairs(_M.Equips)do
+				if v.id == data.id then
+					table.remove(_M.Equips,k)
+				end
+			end
+		end
+	else
+		if data.equip ~= nil then
+			if _M.Equips ~= nil then
+				for k,v in pairs(_M.Equips)do
+					if v.id == data.equip.id then
+						v.level = data.equip.level
+						v.star = data.equip.star
+	
+						--更新U层
+						return
+					end
+				end
+				--找不到已有装备
+				local equipInfo = {
+					id = data.equip.id,
+					equipId = data.equip.equipId,
+					level = data.equip.level,
+					star = data.equip.star,
+					totalCostExp = data.equip.totalCostExp,
+				}
+				if data.equip.totalCostExp == nil then
+					local exp = 0 
+					local csvEquipLevel = Csv.EquipLevel[data.equip.equipId*1000 + data.equip.level]
+					if csvEquipLevel ~= nil then
+						exp = csvEquipLevel.decomposeExp
+					else
+						local csvEquip = Csv.Equip[v.equipId]
+						if csvEquip ~= nil then
+							if csvEquip.decomposeExp ~= nil then
+								exp = csvEquip.decomposeExp
+							end
+						end
+					end
+					equipInfo.totalCostExp = exp
+				end
+				table.insert(_M.Equips,equipInfo)
+	
+				--更新
+			end
+		end
+	end
+	CLineUp.CheckRedpoint()
+end
+
+function _M.SetDecompose(data)
+	if data.id == nil then
+		print("没有分解装备ID！！！")
+		return
+	end
+
+	if _M.Equips ~= nil then
+		for k,v in pairs(_M.Equips)do
+			if v.id == data.id then
+				table.remove(_M.Equips,k)
+
+				--刷新界面
+			end
+		end
+	end
+	CLineUp.CheckRedpoint()
+end
+
+function _M.SetDecomposeOnekey(data)
+	if data.idList == nil then
+		print("没有分解装备ID！！！")
+		return
+	end
+
+	if _M.Equips ~= nil then
+		for k2,v2 in pairs(data.idList)do
+			for k,v in pairs(_M.Equips)do
+				if v2 == v.id then
+					table.remove(_M.Equips,k)
+					break
+				end
+			end
+		end
+	end
+
+	--刷新界面
+	CLineUp.CheckRedpoint()
+end
+
+--装备进阶吞噬装备
+function _M.RemoveEquips(list)
+	if list == nil then
+		print("没有分解装备ID！！！")
+		return
+	end
+
+	if _M.Equips ~= nil then
+		for k2,v2 in pairs(list)do
+			for k,v in pairs(_M.Equips)do
+				if v2 == v.id then
+					table.remove(_M.Equips,k)
+					break
+				end
+			end
+		end
+	end
+
+	--刷新界面
+	CLineUp.CheckRedpoint()
+end
+
+function _M.GetEquipData(id)
+	if _M.Equips ~= nil then
+		for k,v in pairs(_M.Equips)do
+			if v.id == id then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+--------------------
+function _M.GetEquipByStaff(staffID)
+	return nil
+end
+
+--工具
+function _M.GetStaffs(info)
+	local csvEquip = Csv.Equip[info.equipId]
+	local str = Csv.Text("equip_staff_equipStaff_no")
+	if csvEquip.linkStaff ~= nil then
+		local index = 0
+		for k,v in pairs(csvEquip.linkStaff)do
+			local staffData = Csv.Personnel[v]
+			if staffData ~= nil then
+				if index <= 0 then
+					str = staffData.name
+				else
+					str = str..","..staffData.name
+				end
+				index = index +1
+			end
+		end
+	end
+	return str
+end
+
+function _M.GetAttrPower(info)
+	local csvEquip = Csv.Equip[info.equipId]
+	local csvEquipLevel = Csv.EquipLevel[info.equipId*1000+info.level]
+	local csvEquipStar = Csv.EquipStar[info.equipId*1000+info.star]
+	local str = ""
+	local power = 0
+
+	--基础值
+	if csvEquip.power ~= nil then
+		power = power + csvEquip.power
+	end
+
+	--等级加成
+	if info.level >= 2 then
+		if csvEquipLevel.power ~= nil then
+			power = power + csvEquipLevel.power
+		end
+	end
+
+	--进阶加成
+	if info.star >= 2 then
+		if csvEquipStar.power ~= nil then
+			power = power + csvEquipStar.power
+		end
+	end
+	
+	return power
+end
+
+function _M.GetAttrPowerRate(info)
+	local csvEquip = Csv.Equip[info.equipId]
+	local csvEquipLevel = Csv.EquipLevel[info.equipId*1000+info.level]
+	local csvEquipStar = Csv.EquipStar[info.equipId*1000+info.star]
+	local powerRate = 0
+
+	--基础值
+	if csvEquip.powerRate ~= nil then
+		powerRate = powerRate + csvEquip.powerRate
+	end
+
+	--等级加成
+	if info.level >= 2 then
+		if csvEquipLevel.powerRate ~= nil then
+			powerRate = powerRate + csvEquipLevel.powerRate
+		end
+	end
+
+	--进阶加成
+	if info.star >= 2 then
+		if csvEquipStar.powerRate ~= nil then
+			powerRate = powerRate + csvEquipStar.powerRate
+		end
+	end
+	
+	return powerRate
+end
+
+--获取相同装备id的装备
+function _M.GetEquipsByID(id)
+	local list = {}
+	if _M.Equips ~= nil then
+		for k,v in pairs(_M.Equips)do
+			if v.equipId == id then
+				table.insert(list,v)
+			end
+		end
+	end
+	return list
+end
+
+--获取相同类型的装备
+function _M.GetEquipsByType(type)
+	local list = {}
+	if _M.Equips ~= nil then
+		for k,v in pairs(_M.Equips)do
+			local csvEquip = Csv.Equip[v.equipId]
+			if csvEquip.type == type then
+				table.insert(list,v)
+			end
+		end
+	end
+	return list
 end
 
 return _M

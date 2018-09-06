@@ -1,0 +1,220 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+
+local _M = {}
+--是不是在游戏中
+_M.IsInGame = false
+
+--Const表相关常量
+_M.SHOP_REFRESH_COST = 126	--竞技场商店刷新价格表
+_M.SHOP_REFRESH_TIME = 127	--竞技场商店刷新时间点
+
+--每日奖励领取状态
+_M.DailyRewardState = 
+{
+	NoFight = 0,	--未战斗
+	NoGet = 1,		--可领取
+	Geted = 2		--已领取
+}
+
+_M.REDPOINT_INDEX = 
+{
+	FightNum = 1,
+	DailyReward = 2,
+}
+
+local function init()
+	--当前排名
+	_M.CurRank = 0
+	--每日结算时的排名
+	_M.DailyRank = 0
+	--每日奖励领取状态
+	_M.DailyState = _M.DailyRewardState.NoFight
+	--可战斗的次数
+	_M.FightTimes = 0
+	--战斗的最大次数
+	_M.FightTotal = 0
+	--已经购买的战斗次数
+	_M.BuyTimes = 0
+	--下次刷新时间(时间戳)
+	_M.RefreshTime = 0
+	--积分
+	_M.Score = 0
+	--兑换商店物品列表
+	_M.ShopList = {}
+	--兑换商店今天手动刷新的次数
+	_M.ShopTimes = 0
+	--兑换商店自动刷新时间
+	_M.ShopRefreshTime = 0
+	--排行榜列表
+	_M.RankList = {}
+end
+init()
+
+function _M.Clean()
+	init()
+end
+
+function _M.OnInit(msg)
+	_M.IsInGame = true
+
+	_M.CurRank = msg.rank
+	_M.DailyRank = msg.dailyRank
+	_M.DailyState = msg.dailyState
+	_M.FightTimes = msg.fightTimes
+	_M.FightTotal = msg.fightTotal
+	_M.BuyTimes = msg.buyTimes
+	_M.RefreshTime = msg.refreshTime
+	_M.Score = msg.score
+	_M.OnRefreshShop(msg.shop)
+end
+
+function _M.Update()
+	local ret = {}
+	if _M.RefreshTime > 0 then
+		_M.RefreshTime = _M.RefreshTime - 1
+		if _M.RefreshTime == 0 then
+			ret.refFight = true
+		end
+	end
+	if _M.ShopRefreshTime > 0 then
+		_M.ShopRefreshTime = _M.ShopRefreshTime - 1
+		if _M.ShopRefreshTime == 0 then
+			ret.refShop = true
+		end
+	end
+	return ret
+end
+
+function _M.OnArenaOpenUI(msg)
+	_M.CurRank = msg.rank
+	_M.FightTimes = msg.fightTimes
+	_M.FightTotal = msg.fightTotal
+	_M.BuyTimes = msg.buyTimes
+	_M.RefreshTime = msg.refreshTime
+end
+
+function _M.OnArenaFight(msg)
+	_M.Score = msg.score
+	_M.DailyState = msg.dailyState
+	_M.OnArenaOpenUI(msg.UIInfo)
+end
+
+function _M.UpdateRank(curRank)
+	_M.CurRank = curRank
+end
+
+function _M.UpdateScore(score)
+	_M.Score = score
+end
+
+function _M.UpdateDailyState(dailyState)
+	_M.DailyState = dailyState
+end
+
+function _M.UpdateFightTimes(fightTimes, refreshTime)
+	_M.FightTimes = fightTimes
+	_M.RefreshTime = refreshTime
+end 
+
+function _M.UpdateShopItemNum(id, num)
+	_M.ShopList[id] = num
+end
+
+function _M.OnRefreshShop(shopInfo)
+	_M.ShopList = {}
+	_M.ShopTimes = 0
+	_M.ShopRefreshTime = 0
+	if shopInfo ~= nil then
+		_M.ShopTimes = shopInfo.shopTimes
+		_M.ShopRefreshTime = shopInfo.refreshTime
+		if shopInfo.shop ~= nil then
+			for _,v in pairs(shopInfo.shop) do
+				_M.ShopList[v.key] = v.value
+			end
+		end
+	end
+end
+
+function _M.OnArenaRank(msg)
+	_M.RankList = {}
+	if msg.rankList ~= nil then
+		for k,v in pairs(msg.rankList) do
+			table.insert(_M.RankList, {
+				id = v.id,
+				name = v.name, 
+				rank = v.rank, 
+				force = v.force
+			})
+		end
+		table.sort(_M.RankList, function(a, b)
+			return a.rank < b.rank
+		end)
+	end
+end
+
+function _M.GetShopRefreshCount()
+	local vip = MPlayer.GetVip()
+	local vipLine = Csv.Vip[vip]
+	return _M.ShopTimes, vipLine.arenaRefresh
+end
+
+function _M.GetFightBuyCount()
+	local vip = MPlayer.GetVip()
+	local vipLine = Csv.Vip[vip]
+	return _M.BuyTimes, vipLine.arenaBuy
+end
+
+function _M.GetFightTimes()
+	return _M.FightTimes
+end
+
+function _M.GetRefreshTime()
+	return _M.RefreshTime
+end
+
+function _M.GetShopRefreshTime()
+	return _M.ShopRefreshTime
+end
+
+function _M.GetShopRefreshCost()
+	local num = _M.ShopTimes + 1
+	local info = Csv.Const(126)
+
+	for index,v in pairs(info) do
+		if v[1] > num then
+			if index > 1 then
+				return info[index - 1][2]
+			else
+				return v[2]
+			end
+		end
+	end
+
+	if #info > 0 then
+		return info[#info][2]
+	end
+	return 0
+end
+
+function _M.GetFightBuyCost()
+	local num = _M.BuyTimes + 1
+	local info = Csv.Const(122)
+
+	for index,v in pairs(info) do
+		if v[1] > num then
+			if index > 1 then
+				return info[index - 1][2]
+			else
+				return v[2]
+			end
+		end
+	end
+
+	if #info > 0 then
+		return info[#info][2]
+	end
+	return 0
+end
+
+return _M

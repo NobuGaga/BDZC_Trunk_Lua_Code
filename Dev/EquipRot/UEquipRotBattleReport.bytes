@@ -1,0 +1,94 @@
+-- 战斗记录
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CEquipRot = JRequire "Dev.EquipRot.CEquipRot"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Rob_Record")
+	self.mModule = module
+
+	module:Get("C_Text").Text = Csv.Text("equipRob_br_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local noneTip = module:Get("None")
+	noneTip.Text = Csv.Text("club_info_none")
+	noneTip.Activity = true
+	self.NoneTip = noneTip
+
+	-- 请求获取战报信息
+	CEquipRot.GetBattleRecordReq()
+end
+
+
+function _P.SetInfoData(self, listData)
+	local content = self.mModule:Get("content")
+	content:DestroyChildren()
+
+	local index = 1
+	for k,v in pairs(listData) do
+		_P.CreateInfoItem(self, content, v, index)
+		index = index + 1
+	end
+end
+
+
+function _P.CreateInfoItem(self, itemGrid, data, index)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Equipment_Rob_Record_Item", WindowType.Tip1, 1)
+	if itemModule ~= nil then
+		itemModule:Get("ShName").Text = Csv.Text("equipRob_br_name", {num = index, name = data.name})
+		itemModule:Get("Info").Text = Csv.Text("equipRob_br_tip1")
+		itemModule:Get("Time").Text = Csv.Text("equipRob_br_time", {time = LuaUtil.TransToYearMonthDayHMS(data.time)})
+		itemModule:Get("SunShi").Text = Csv.Text("equipRob_br_loss")
+
+		local itemData = data.loseItem
+		local itemConf = Csv.Item[itemData.id]
+		if itemConf ~= nil then
+			itemModule:Get("IconNum").Text = itemData.count
+
+			local iconImg = itemModule:Get("Icon")
+			iconImg.SpriteName = itemConf.icon
+			iconImg:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				
+				if itemData.id ~= nil then
+					WindowMgr.Create("UBagDetailPop", itemData.id)
+				end
+			end, nil, 1)
+
+			local qualityImg  = itemModule:Get("IconBox")
+			qualityImg.SpriteName = itemConf.colorIcon
+		end
+	end
+end
+
+
+function _R.GetBattleRecordBack(self, listData)
+	if listData == nil or next(listData) == nil then
+		self.NoneTip.Activity = true
+	else
+		self.NoneTip.Activity = false
+		_P.SetInfoData(self, listData)
+	end
+end
+
+
+return _M

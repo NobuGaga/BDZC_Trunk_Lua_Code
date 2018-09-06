@@ -63,12 +63,15 @@ function _P.InitSeatInfo(self)
 	local moudle = self.moudle
 	self.textSeat = moudle:Get("textSeat")
 	self.textBuff = moudle:Get("textBuff")
+	self.textExplBuff = moudle:Get("textExplBuff")
 	_P.RefreshSeatInfo(self)
 
 	self.buffPopup = moudle:Get("buffPopup")
 	self.buffPopup.Activity = false
 	self.textAllBuff = moudle:Get("textAllBuff")
 	self.textSubBuff = self.moudle:Get("textSubBuff")
+	self.textAllExpBuff = moudle:Get("textAllExpBuff")
+	self.textSubExpBuff = self.moudle:Get("textSubExpBuff")
 	_P.RefreshBuffPopup(self)
 
 	local textBuffCloseBox = moudle:Get("textBuffCloseBox")
@@ -82,17 +85,23 @@ function _P.InitSeatInfo(self)
 		self.buffPopup.Activity = true
 		textBuffCloseBox.Activity = true
 	end)
+	self.textExplBuff:AddOnButton(function()
+		self.buffPopup.Activity = true
+		textBuffCloseBox.Activity = true
+	end)
 end
 
 --刷新座位信息
 function _P.RefreshSeatInfo(self)
 	self.textSeat.Text = Csv.Text("school_seatNum", {num = MAircraft.SeatNum, max = MAircraft.MaxSeatNum})
-	self.textBuff.Text = Csv.Text("school_buff", {num = MAircraft.SkinSchoolAllBuff})
+	self.textBuff.Text = Csv.Text("school_skill_buff", {num = MAircraft.SkinSchoolAllBuff})
+	self.textExplBuff.Text = Csv.Text("school_exp_buff", {num = MAircraft.SkinSchoolExpAllBuff})
 end
 
 --刷新皮肤加成信息
 function _P.RefreshBuffPopup(self)
-	self.textAllBuff.Text = Csv.Text("school_buffPop",  {num = MAircraft.SkinSchoolAllBuff})
+	self.textAllBuff.Text = Csv.Text("school_skill_buffPop",  {num = MAircraft.SkinSchoolAllBuff})
+	self.textAllExpBuff.Text = Csv.Text("school_exp_buffPop",  {num = MAircraft.SkinSchoolExpAllBuff})
 	local row = 0
 	local skinList = MAircraft.GetActivateSkinList()
 	if skinList and "table" == type(skinList) then
@@ -102,20 +111,22 @@ function _P.RefreshBuffPopup(self)
 	end
 	if 0 < row then
 		local height = row * BuffTextRowHeight
-		self.buffPopup.SizeDelta = Vector2(self.buffPopup.SizeDelta.x, self.buffPopup.SizeDelta.y + height)
+		self.buffPopup.SizeDelta = Vector2(self.buffPopup.SizeDelta.x, self.buffPopup.SizeDelta.y + height * 2)
 		self.textSubBuff.SizeDelta = Vector2(self.textSubBuff.SizeDelta.x, height)
 		self.textSubBuff.Text = ""
+		self.textSubExpBuff.SizeDelta = Vector2(self.textSubBuff.SizeDelta.x, height)
+		self.textSubExpBuff.Text = ""
 		local csvAircraftSkin = Csv.AircraftSkin
 		for skinID, _ in pairs(skinList) do
 			local csvValue = csvAircraftSkin[skinID]
 			if csvValue then
+				local csvColor = Csv.ItemColor[csvValue.type]
 				if csvValue.name then
 					if csvValue.get then
 						for index, value in pairs(csvValue.get) do
 							if value[1] and value[2] then
 								if MAircraft.SchoolSysID == value[1] then
-									local csvColor = Csv.ItemColor[csvValue.type]
-									self.textSubBuff.Text = self.textSubBuff.Text .. Csv.Text("aircraft_skin_effect_sub", 
+									self.textSubBuff.Text = self.textSubBuff.Text .. Csv.Text("aircraft_skin_skill_sub", 
 																					 {color = csvColor.str, name = csvValue.name, 
 																					  num = math.modf(value[2] / 100)}) .. "\n"
 								end
@@ -126,6 +137,13 @@ function _P.RefreshBuffPopup(self)
 					else
 						error("皮肤ID " .. skinID .. " 字段 get 错误")
 					end
+					if csvValue.bookExp then
+						self.textSubExpBuff.Text = self.textSubExpBuff.Text .. Csv.Text("aircraft_skin_exp_sub", 
+																					 {color = csvColor.str, name = csvValue.name, 
+																					  num = csvValue.bookExp}) .. "\n"
+					else
+						error("皮肤ID " .. skinID .. " 字段 get 错误")
+					end
 				else
 					error("皮肤ID " .. skinID .. " 字段 name 错误")
 				end
@@ -133,6 +151,9 @@ function _P.RefreshBuffPopup(self)
 				error("没有对应的皮肤ID " .. skinID)
 			end
 		end
+	else
+		self.textSubBuff.SizeDelta = Vector2(self.textSubBuff.SizeDelta.x, 0)
+		self.textSubExpBuff.SizeDelta = Vector2(self.textSubBuff.SizeDelta.x, 0)
 	end
 end
 

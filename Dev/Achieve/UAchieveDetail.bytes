@@ -84,6 +84,7 @@ function _P.ScrollCallBack(self,index,value,moudle)
 	TextNoFinish.Activity = false
 	ImgGeted.Activity = false
 	TextIng.Activity = false
+
 	if data.pro <= 0 then
 		ImgGeted.Activity = true
 		_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
@@ -91,12 +92,23 @@ function _P.ScrollCallBack(self,index,value,moudle)
 	else
 		if data.pro >= value.id then
 			if data.pro == value.id then
-				if data.val >= value.max then
-					ImgBtn.Activity = true
-					_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+				--判断正逆顺序
+				if csvAchievement.desc == 1 then 
+					if data.val > 0 and data.val <= value.max then
+						ImgBtn.Activity = true
+						_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+					else
+						TextIng.Activity = true
+						_P.SetTask(TextTask,2,value.index,csvAchievement.type,desc,data.val,value.max)
+					end
 				else
-					TextIng.Activity = true
-					_P.SetTask(TextTask,2,value.index,csvAchievement.type,desc,data.val,value.max)
+					if data.val >= value.max then
+						ImgBtn.Activity = true
+						_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+					else
+						TextIng.Activity = true
+						_P.SetTask(TextTask,2,value.index,csvAchievement.type,desc,data.val,value.max)
+					end
 				end
 				self.mNowPro = data.pro
 				ImgBack.SpriteName = IMG_SELECT
@@ -109,10 +121,20 @@ function _P.ScrollCallBack(self,index,value,moudle)
 			ImgBack.SpriteName = IMG_SELECT
 			--ImgBack.IsGray = true
 			TextNoFinish.Activity = true
-			if data.val >= value.max then
-				_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+
+			--判断正逆顺序
+			if csvAchievement.desc == 1 then 
+				if data.val > 0 and data.val <= value.max then
+					_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+				else
+					_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+				end
 			else
-				_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+				if data.val >= value.max then
+					_P.SetTask(TextTask,1,value.index,csvAchievement.type,desc,data.val,value.max)
+				else
+					_P.SetTask(TextTask,3,value.index,csvAchievement.type,desc,data.val,value.max)
+				end
 			end
 		end
 	end
@@ -221,11 +243,21 @@ function _R.GetAward(self,data)
 		if nowMoudle ~= nil then
 			nowMoudle:Get("Text").Activity = false
 			local need = Csv.AchieveLevel[data.pro].value
-			if data.val >= need then
-				nowMoudle:Get("C_Btn_b").Activity = true
+			local desc =  Csv.Achievement[self.mQuestID].desc
+			if desc == 1 then
+				if data.val > 0 and data.val <= need then
+					nowMoudle:Get("C_Btn_b").Activity = true
+				else
+					nowMoudle:Get("Btn_1").Activity = true
+				end
 			else
-				nowMoudle:Get("Btn_1").Activity = true
+				if data.val >= need then
+					nowMoudle:Get("C_Btn_b").Activity = true
+				else
+					nowMoudle:Get("Btn_1").Activity = true
+				end
 			end
+			
 			nowMoudle:Get("back").SpriteName = IMG_SELECT
 			--nowMoudle:Get("back").IsGray = false
 		end

@@ -1,0 +1,227 @@
+-- 中秋活动-全服祈福
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local ITEM_HEIGHT = 120
+local EFFECTID = 24
+local SPACE = 20
+local COLUMN = 4
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Autumn_Rank")
+	self.mModule = module
+
+	local closeBtn = module:Get("back_btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	-- CActivity.EnterSrvRewardReq()
+	_R.OnEnterSrvReward(self, {actId = 14015, state = {state = 2, startTime = 1536119951, endTime = 1537286399, lefttime = 100000},
+		srvPrayTimes = 10, rewardList = {{index = 1, state = 1},{index = 2, state = 0},{index = 3, state = 0},{index = 4, state = 0},{index = 5, state = 0}},
+		myPrayTimes = 5})
+end
+
+
+function _P.SetViewData(self, activityData)
+	if activityData == nil then return end
+	self.ActivityData = activityData
+
+	local prayConf = Csv.ActivityAllSerPray[activityData.actId]
+	if prayConf == nil then return end
+
+	local module = self.mModule
+	module:Get("title").SpriteName = prayConf.title
+	module:Get("titletext").Text = prayConf.tips
+	module:Get("timetext3").Text = Csv.Text(prayConf.numTips, {num = activityData.srvPrayTimes})
+	module:Get("text22").Text = Csv.Text(prayConf.ownTips, {num = activityData.myPrayTimes})
+	module:Get("timetext").Text = Csv.Text("chargeaward_T6", {day1 = LuaUtil.TransToMD(activityData.state.startTime), day2 = LuaUtil.TransToMD(activityData.state.endTime)})
+
+	local contentTransform = module:Get("content")
+	contentTransform:DestroyChildren()
+
+	self.PrayTable = {}
+	if activityData.rewardList ~= nil and next(activityData.rewardList) ~= nil then
+		for k,v in pairs(activityData.rewardList) do
+			self.PrayTable[v.index] = _P.OnCreatePrayItem(self, contentTransform, {index = v.index, needNum = prayConf.needNum[v.index], reward = prayConf.reward[v.index], state = v.state})
+		end
+	end
+
+	_P.OnStartTimer(self)
+end
+
+
+function _P.OnCreatePrayItem(self, itemGrid, data)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_DailyRecharge_Item1", WindowType.Tip1, 0)
+	if itemModule ~= nil then
+		local itemSize = itemModule.SelfRect.SizeDelta
+		local itemSizeY = itemSize.y
+		if data.reward ~= nil then
+			local itemContent = itemModule:Get("content")
+			for k,v in pairs(data.reward) do
+				CCommon.CreateItem(itemContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Activity)
+			end
+
+			if #data.reward > COLUMN then
+				local num = #data.reward - COLUMN
+				local num1,num2 = math.modf(num / COLUMN)
+				if num2 > 0 then
+					num1 = num1 + 1
+				end
+				local addY = (ITEM_HEIGHT + SPACE) * num1
+				itemModule.SelfRect.SizeDelta = Vector2(itemSize.x, itemSizeY + addY)
+			end
+		end
+		
+		itemModule:Get("slidertext").Text = Csv.Text("chargeaward_slider", {num = self.ActivityData.srvPrayTimes, max = data.needNum})
+		itemModule:Get("Fill").FillAmount = math.min(1, self.ActivityData.srvPrayTimes / data.needNum)
+
+		local getBtn = itemModule:Get("C_Btn_a")
+		local btnText = itemModule:Get("C_text")
+		local getImg = itemModule:Get("Geted")
+		getBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickBtn(self, data)
+		end, nil, 0.9)
+		
+		if data.state == 2 then  -- 已领取
+			getBtn.Activity = false
+			getImg.Activity = true
+		else
+			getBtn.Activity = true
+			getImg.Activity = false
+			if self.ActivityData.srvPrayTimes >= data.needNum and data.state == 1 then
+				btnText.Text = Csv.Text("chargeaward_get")
+			else
+				btnText.Text = Csv.Text("chargeaward_go")
+			end
+		end
+	end
+
+	item.module = itemModule
+	return item
+end
+
+
+function _P.OnClickBtn(self, data)
+	if data.state == 2 then
+		CCommon.ShowError(Csv.Text("err_reward_geted"))
+		return
+	end
+
+	if self.ActivityData.srvPrayTimes >= data.needNum and data.state == 1 then
+		-- CActivity.GetRewardReq(self.ActivityData.actId, data.index)
+		_R.GetRewardBack(self, {actId = 14015, index = 1, isGeted = true})
+	else
+		WindowOpen.Open(Define.SysId.Recharge)
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateTimer ~= nil then
+		self.UpdateTimer:Destroy()
+		self.UpdateTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	local leftTime = self.ActivityData.state.endTime - HeartBeat.ServSecond()
+	_P.OnClearTimer(self)
+	_P.UpdateTimeText(self, leftTime)
+	
+	if leftTime > 0 then
+		self.UpdateTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local time = self.ActivityData.state.endTime - HeartBeat.ServSecond()
+	if time <= 0 then
+		_P.OnClearTimer(self)
+	end
+
+	_P.UpdateTimeText(self, time)
+end
+
+
+function _P.UpdateTimeText(self, leftTime)
+	if leftTime == nil or leftTime < 0 then
+		leftTime = 0
+	end
+
+	for k,v in pairs(self.PrayTable) do
+		local itemmodule = v.module
+		itemmodule:Get("timetext").Text = Csv.Text("chargeaward_time", {time = LuaUtil.GetTimeHMS(leftTime)})
+	end
+end
+
+
+function _R.OnEnterSrvReward(self, data)
+	_P.SetViewData(self, data)
+end
+
+
+-- 领取奖励返回
+function _R.GetRewardBack(self, data)
+	if data ~= nil and data.index ~= nil then
+		for k,v in pairs(self.ActivityData.rewardList) do
+			if v.index == data.index then
+				v.state = 2
+				break
+			end
+		end
+
+		if data.isGeted then
+			
+			local itemModule = self.PrayTable[data.index].module
+			itemModule:Get("C_Btn_a").Activity = false
+
+			local effectNode = itemModule:Get("EffectNode")
+			local effectmodule = CCommon.CreateEffect(effectNode, EFFECTID, nil, function( ... )
+				itemModule:Get("Geted").Activity = true
+			end, {M_Effect_Achieve_Get = "fl_030"})
+			effectmodule.SelfRect.SizeDelta = Vector2(138, 138)
+			SoundMgr.PlaySystem(10004)
+
+			local prayConf = Csv.ActivityAllSerPray[data.actId]
+			local rewardList = prayConf.reward[data.index]
+			if rewardList ~= nil then
+				for k,v in pairs(rewardList) do
+					CCommon.ShowFlyItem(self._RootNode, v[1], v[2], k*0.3, effectNode.RootCanvasPos)
+				end
+			end
+		end
+	end
+end
+
+
+return _M

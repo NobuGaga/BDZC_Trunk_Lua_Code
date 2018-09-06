@@ -47,6 +47,11 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 	one.SelfRect.SpriteName = csvLine.colorIcon
 	one:Get("Icon").SpriteName = csvLine.icon
 
+	if one:Get("StaffIcon") ~= nil then
+		one:Get("StaffIcon").Activity = false
+	end
+	one:Get("Icon").Activity = true
+
 	if params ~= nil then
 		if params.num ~= nil then
 			one:Get("Num").Text = tostring(params.num)
@@ -82,10 +87,6 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 			onBtnCall(itemId, params)
 		end, nil, btnClickScale)
 	end
-	if one:Get("StaffIcon") ~= nil then
-		one:Get("StaffIcon").Activity = false
-	end
-	one:Get("Icon").Activity = true
 	
 	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color)
 	return one, effectMoudle
@@ -145,8 +146,10 @@ function _M.CheckTips(onChooseCall, params, noTipsAgainId, winName)
 		cancelText = params.cancelText or Csv.Text("common_cancel")
 	end
 	WindowMgr.Create(winName, title, content, sureText, function (isSure, isChooseNoAgain)
-		if isChooseNoAgain and isNeedShowNoAgainTips then
-			_NoTipsAgainMap[noTipsAgainId] = isSure
+		if isSure then
+			if isChooseNoAgain and isNeedShowNoAgainTips then
+				_NoTipsAgainMap[noTipsAgainId] = isSure
+			end
 		end
 		onChooseCall(isSure, params)
 	end, cancelText, params.items, isNeedShowNoAgainTips)

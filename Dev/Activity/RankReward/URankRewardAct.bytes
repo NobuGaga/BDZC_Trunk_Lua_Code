@@ -5,8 +5,14 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 --@RefType [Dev.Activity.MActivity.bytes#_M]
 local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 --@RefType [Dev.Activity.CActivity.bytes#_M]
 local CActivity = JRequire "Dev.Activity.CActivity"
+--@RefType [Dev.CrossActivity.CCrossActivity.bytes#_M]
+local CCrossActivity = JRequire "Dev.CrossActivity.CCrossActivity"
+--@RefType [Dev.Rank.CRank.bytes#_M]
+local CRank = JRequire "Dev.Rank.CRank"
 -- @RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
 -- @RefType [Dev.Player.HeartBeat.bytes#_M]
@@ -42,7 +48,7 @@ function _M:Dispatch(funcName, ...)
 end
 
 --界面构建
-function _M:OnCreate(actId, rankType)
+function _M:OnCreate(actId, rankType, sysID)
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	self.moudle:Get(BtnClose):AddOnButton(function()
 		SoundMgr.Play(10002)
@@ -50,8 +56,10 @@ function _M:OnCreate(actId, rankType)
 	end)
 
 	self.actId = actId
-	self.listData = MActivity.GetFromId(actId)
-	if nil == self.listData then
+	self.sysID = sysID
+	self.isCross = sysID == Define.SysId.CrossRankReward
+	_P.RefreshListData(self)
+	if self.listData == nil then
 		self:Destroy()
 	else
 		_P.InitTopInfo(self)
@@ -59,8 +67,19 @@ function _M:OnCreate(actId, rankType)
 		_P.InitBottomInfo(self)
 	end
 
-	if MActivity.CommerceRank[rankType] then
+	if MActivity.CommerceRank[rankType] and not self.isCross then
 		CActivity.GetInfoReq(actId)
+	elseif self.isCross then
+		CRank.GetRankList(rankType, false)
+	end
+end
+
+--刷新列表数据
+function _P.RefreshListData(self)
+	if self.sysID == Define.SysId.RankReward then
+		self.listData = MActivity.GetFromId(self.actId)
+	elseif self.sysID == Define.SysId.CrossRankReward then
+		self.listData = MCrossActivity.GetFromId(self.actId)
 	end
 end
 
@@ -80,6 +99,14 @@ function _P.InitTopInfo(self)
 		time = 0
 	end
 
+	local textJoin = self.moudle:Get("Jion")
+	if self.listData.joinText and self.listData.joinText ~= "" then
+		textJoin.Activity = true
+		textJoin.Text = self.listData.joinText
+	else
+		textJoin.Activity = false
+	end
+	
 	self.moudle:Get("textActiveTime").Text = Csv.Text("rankreward_last_time", {startTime = LuaUtil.TransToMD(state.startTime),
 																			   endTime = LuaUtil.TransToMD(state.startTime + self.listData.settleTime)})
 
@@ -88,7 +115,7 @@ function _P.InitTopInfo(self)
 	if time > 0 then
 		self.timer = self.textRestTime:AddOnUpdate(function() 
 			if _P.RefreshTime(self) then
-				if nil ~= self.timer then
+				if self.timer then
 					self.timer:Destroy()
 				end
 				_P.RefreshGetButton(self)
@@ -119,7 +146,7 @@ end
 
 --刷新档位奖励列表
 function _P.RefreshItemList(self)
-	if nil ~= self.listData and self.listData.list then
+	if self.listData and self.listData.list then
 		for index, data in pairs(self.listData.list) do
 			_P.CreateItem(self, index, data)
 		end
@@ -149,9 +176,9 @@ function _P.InitItem(self, index, data)
 	item.textTitle = itemMoudle:Get("textTitle")
 	item.content = itemMoudle:Get("GoodsItem")
 	if nil == self.rewardColumnCount then
-		if nil ~= item.content then
+		if item.content then
 			local layout = item.content:AddGridLayoutGroup()
-			if nil ~= layout then
+			if layout then
 				self.rewardColumnCount =  layout.constraintCount
 				self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
 			end
@@ -169,7 +196,7 @@ function _P.RefreshItem(self, index, item, data)
 
 	item.textTitle.Text = data.title
 	
-	if nil ~= data.rewards then
+	if data.rewards then
 		if nil == self.listRewardCache then
 			self.listRewardCache = {}
 		end
@@ -183,7 +210,7 @@ function _P.RefreshItem(self, index, item, data)
 		local num = 0
 		for k, reward in pairs(data.rewards) do
 			local rewardItem = CCommon.CreateItem(item.content, reward.key, CCommon.ShowItemTips, 
-												  {num = reward.value}, Define.SysId.RankReward)
+												  {num = reward.value}, self.sysID)
 			num = num + 1
 			self.listRewardCache[index][num] = rewardItem
 		end
@@ -203,8 +230,13 @@ function _P.InitBottomInfo(self)
 	self.textSelfRank = self.moudle:Get("textSelfRank")
 	self.moudle:Get("btnRank"):AddOnButton(function()
 		SoundMgr.Play(10001)
+		local isRankShowLimit = false
+		if self.listData.rankShowTime and HeartBeat:ServSecond() > self.listData.rankShowTime and 
+			HeartBeat:ServSecond() < self.listData.state.startTime + self.listData.settleTime then
+			isRankShowLimit = true
+		end
 		WindowMgr.Create("UTimeLimitActRank", self.listData.rankType, self.listData.rankTitle,
-						 Csv.Text("rankreward_rank_title"), self.listData.rankName)
+						 Csv.Text("rankreward_rank_title"), self.listData.rankName, nil, self.isCross, isRankShowLimit)
 	end)
 	self.moudle:Get("textBtnRank").Text = Csv.Text("rankreward_rank")
 
@@ -213,7 +245,11 @@ function _P.InitBottomInfo(self)
 	self.getPos = self.moudle:Get("GetPos")
 	self.btnGet:AddOnButton(function()
 		SoundMgr.Play(10001)
-		CActivity.GetRewardReq(self.actId, 1)
+		if self.isCross then
+			CCrossActivity.GetReward(self.actId)
+		else
+			CActivity.GetRewardReq(self.actId, 1)
+		end
 	end)
 	self.moudle:Get("textBtnGet").Text = Csv.Text("rankreward_get")
 
@@ -238,7 +274,7 @@ end
 
 --刷新底部信息
 function _P.RefreshBottomInfo(self)
-	if nil ~= self.listData then
+	if self.listData then
 		_P.RefreshSelfRank(self)
 		_P.RefreshGetButton(self)
 	end
@@ -252,7 +288,7 @@ function _P.RefreshSelfRank(self)
 	else
 		for pow = self.maxRankPow, Min_Rank_Pow, -1 do
 			if self.listData.selfRank >= 10 ^ pow then
-				rankNum =math.modf(10 ^ pow) .. "+"
+				rankNum = math.modf(10 ^ pow) .. "+"
 				break
 			end
 		end
@@ -282,7 +318,7 @@ function _P.RefreshGetButton(self)
 			csvTips = "rankreward_not_get_time"
 		end
 	end
-	if nil ~= csvTips then
+	if csvTips then
 		self.textGet.Text = Csv.Text(csvTips)
 	else
 		self.textGet.Text = ""
@@ -298,24 +334,30 @@ end
 
 --重置缓存数据
 function _P.ResetCacheList(self)
-	if nil ~= self.listCache then
+	if self.listCache then
 		for index, item in pairs(self.listCache) do
-			if nil ~= item.item then
+			if item.item then
 				item.item.Activity = false
 			end
 		end
 	end
 end
 
-function _R.OnRefreshView(self)
-	self.listData = MActivity.GetFromId(self.actId)
+function _R.OnRefreshView(self, sysID)
+	if self.sysID ~= sysID then
+		return
+	end
+	_P.RefreshListData(self)
 	_P.ResetCacheList(self)
 	_P.RefreshItemList(self)
 	_P.RefreshBottomInfo(self)
 end
 
 --刷新按钮状态
-function _R.RefreshGetState(self, data)
+function _R.RefreshGetState(self, data, sysID)
+	if self.sysID ~= sysID then
+		return
+	end
 	if self.actId == data.actId and data.isGeted then
 		self.btnGet.Activity = false
 		SoundMgr.Play(10004)
@@ -323,7 +365,7 @@ function _R.RefreshGetState(self, data)
 			self.getPos.Activity = true
 		end)
 		if data.index and self.listData.list[data.index] and self.listData.list[data.index].rewards then
-			WindowMgr.Create("URankRewardActGet", self.listData.selfRank, self.listData.list[data.index].rewards)
+			WindowMgr.Create("URankRewardActGet", self.listData.selfRank, self.listData.list[data.index].rewards, self.sysID)
 		else
 			error("冲榜活动返回奖励 index 为 " .. (data.index or "nil"))
 		end
@@ -331,7 +373,7 @@ function _R.RefreshGetState(self, data)
 end
 
 function _R.OnRefreshSelfRank(self)
-	self.listData = MActivity.GetFromId(self.actId)
+	_P.RefreshListData(self)
 	_P.RefreshSelfRank(self)
 end
 

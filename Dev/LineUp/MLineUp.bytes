@@ -7,11 +7,13 @@ local _P = {}
 _M.LineUpList = {}
 _M.SeatNum = 0
 _M.LastPower = 0
+_M.IsChange = false
 
 function _M.Clean( ... )
 	_M.LineUpList = {}
 	_M.SeatNum = 0
 	_M.LastPower = 0
+	_M.IsChange = false
 end
 
 function _M.InitLine(data)
@@ -22,7 +24,6 @@ function _M.InitLine(data)
 			_M.LineUpList[v.key] = v.value
 		end
 	end
-	
 end
 
 function _M.LineUpOpen(data)
@@ -60,12 +61,15 @@ function _M.GetLineAllPower()
 	end
 
 	--检测战斗力变化
-	if _M.LastPower >0 then
+	if _M.LastPower >0 and _M.IsChange then
+		_M.IsChange = false
 		local addNum = allPower - _M.LastPower
-		if allPower >= _M.LastPower then
-			CCommon.ShowText(Define.ShowStrType.Combat,{allPower,addNum,true})
-		else
-			CCommon.ShowText(Define.ShowStrType.Combat,{allPower,-addNum,false})
+		if addNum ~= 0 then
+			if allPower > _M.LastPower then
+				CCommon.ShowText(Define.ShowStrType.Combat,{allPower,addNum,true})
+			else
+				CCommon.ShowText(Define.ShowStrType.Combat,{allPower,-addNum,false})
+			end
 		end
 	end
 	
@@ -80,13 +84,6 @@ function _M.GetLineStaffNum()
 		staffNum = staffNum + 1
 	end
 	return staffNum
-end
-
-function _P.CheckAllPower()
-	local allPower = _M.GetLineAllPower()
-	print("_________",_M.LastPower)
-	
-	print("2___________",_M.LastPower)
 end
 
 return _M

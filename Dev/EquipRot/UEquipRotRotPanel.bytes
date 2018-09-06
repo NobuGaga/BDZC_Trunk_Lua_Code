@@ -1,0 +1,363 @@
+-- 抢夺界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CEquipRot = JRequire "Dev.EquipRot.CEquipRot"
+local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MBag = JRequire "Dev.Bag.MBag"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(chipId, equipRotConf)
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Rob")
+	self.mModule = module
+	self.EquipRotConf = equipRotConf
+
+	local itemConf = Csv.Item[chipId]
+	module:Get("C_Text").Text = Csv.Text("equipRob_qd_title", {name = itemConf.name})
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.mData = MEquipRot.EquipRotTable
+	if self.mData == nil or next(self.mData) == nil then
+		return
+	end
+
+	local vipLv = MPlayer.GetVip()
+	local vipData = Csv.Vip[vipLv]
+	self.ExtraBuyRobTime = vipData.equipRobBuyTimes
+	self.ExtraBuyRefreshTime = vipData.equipRobRefreshBuyTimes
+	self.ChipId = chipId
+
+	local recoverText = module:Get("Time")
+	recoverText.Text = Csv.Text("common_power", {num = MLineUp.GetLineAllPower()})
+
+	local addBtn = module:Get("AddBtn")
+	addBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.OnClickBuyRotCount(self)
+	end, nil, 0.9)
+
+	module:Get("C_text").Text = Csv.Text("equipRob_qd_refresh")
+	local refreshBtn = module:Get("C_Btn_a")
+	refreshBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.OnClickRefreshView(self)
+	end, nil, 0.9)
+	self.RefreshBtn = refreshBtn
+	
+	_P.SetRefreshShowText(self)
+
+	local robText = module:Get("cishu")
+	self.RobText = robText
+	_P.SetRotTextState(self, self.mData.leftRobCount)
+
+	CEquipRot.EnterRobReq(chipId)
+end
+
+
+-- 购买抢夺次数
+function _P.OnClickBuyRotCount(self)
+	if self.mData.leftRobCount >= self.EquipRotConf.rotFreeMax then
+		CCommon.ShowError(Csv.Text("equipRob_main_robMax"))
+		return
+	end
+
+	if self.mData.buyRobCount >= self.ExtraBuyRobTime then
+		CCommon.ShowError(Csv.Text("equipRob_qd_buyErr"))
+	else
+		local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyRotPrice, self.mData.buyRobCount + 1)
+		CCommon.CheckTips(function(isSure,rg)
+			if isSure == true then
+				local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
+				if hasGold < needPrice then
+					CCommon.ShowError(Csv.Text("err_shop_buytype"))
+				else
+					-- 购买抢夺次数
+					CEquipRot.BuyRotTimeReq()
+				end
+			end
+		end, {content = Csv.Text("equipRob_qd_buyTip", {need = needPrice, num = self.ExtraBuyRobTime - self.mData.buyRobCount})})
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.RecoverTimer ~= nil then
+		self.RecoverTimer:Destroy()
+		self.RecoverTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	local time = self.mData.recoveryTime - HeartBeat.ServSecond()
+	if time > 0 then
+		self.RecoverTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local time = self.mData.recoveryTime - HeartBeat.ServSecond()
+	if time ~= nil and time > 0 then
+		self.RobText.Text = Csv.Text("equipRob_qd_recover", {time = LuaUtil.GetTimeHMS(time)})
+	else
+		self.RobText.Text =Csv.Text("equipRob_qd_num", {num = self.mData.leftRobCount})
+	end
+end
+
+
+-- 得到购买价格
+function _P.GetBuyPrice(priceItems, buyCount)
+	if priceItems == nil or next(priceItems) == nil then return 0 end
+
+	for k,v in pairs(priceItems) do
+		if buyCount >= v[1] and buyCount <= v[2] then
+			return v[3]
+		end
+	end
+
+	return priceItems[#priceItems][3]
+end
+
+
+function _P.OnClickRefreshView(self)
+	if self.mData.leftRefreshCount > 0 and self.mData.leftRefreshCount <= self.EquipRotConf.refreshFreeCount then
+		-- 调用刷新接口
+		CEquipRot.RefreshRobGoalReq(false, self.ChipId)
+	elseif self.mData.buyRefereshCount < self.ExtraBuyRefreshTime then
+		local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyRefreshPrice, self.mData.buyRefereshCount + 1)
+		CCommon.CheckTips(function(isSure,rg)
+			if isSure == true then
+				local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
+				if hasGold < needPrice then
+					CCommon.ShowError(Csv.Text("err_shop_buytype"))
+				else
+					-- 购买刷新次数
+					CEquipRot.RefreshRobGoalReq(true, self.ChipId)
+				end
+			end
+		end, {content = Csv.Text("equipRob_qd_refreshtip", {need = needPrice})})
+	else
+		CCommon.ShowError(Csv.Text("equipRob_qd_buyMax"))
+	end
+end
+
+
+function _P.SetRefreshShowText(self)
+	local refreshText = self.mModule:Get("Tips")
+	
+	if self.mData.leftRefreshCount > 0 and self.mData.leftRefreshCount <= self.EquipRotConf.refreshFreeCount then	-- 今日有免费剩余次数
+		refreshText.Text = Csv.Text("equipRob_qd_free", {num = self.mData.leftRefreshCount})
+	elseif self.mData.buyRefereshCount < self.ExtraBuyRefreshTime then		-- 没有免费次数，购买没达上限
+		refreshText.Text = Csv.Text("equipRob_qd_buy", {num = (self.ExtraBuyRefreshTime - self.mData.buyRefereshCount)})
+	else																	-- 没有免费次数，购买已达上限
+		refreshText.Text = Csv.Text("equipRob_qd_buyMax")
+	end
+end
+
+
+function _P.CreateEnemyList(self, listData)
+	local module = self.mModule
+	local noneText = module:Get("None")
+	noneText.Text = Csv.Text("club_info_none")
+
+	local contentTransform = module:Get("content")
+	contentTransform:DestroyChildren()
+
+	self.mEnemyItems = {}
+	if listData == nil or next(listData) == nil then
+		noneText.Activity = true
+	else
+		for k,v in pairs(listData) do
+			self.mEnemyItems[v.index] = _P.OnCreateEnemyItem(self, contentTransform, v)
+		end
+		noneText.Activity = false
+	end
+end
+
+
+function _P.OnCreateEnemyItem(self, itemGrid, data)
+	local enemyItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Equipment_Rob_Item", WindowType.Tip1, 0)
+	if itemModule ~= nil then
+		local nameText = itemModule:Get("ShName")
+		local powerText = itemModule:Get("Num1")
+		local levelText = itemModule:Get("Num2")
+		local proText = itemModule:Get("GL")
+		local rotText = itemModule:Get("C_text")
+
+		local rotBtn = itemModule:Get("C_Btn_b")
+		rotBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickRob(self, data)
+		end, nil, 0.9)
+
+		nameText.Text = data.name
+		itemModule:Get("Power").Text = Csv.Text("lineup_11")
+		powerText.Text = data.power
+		itemModule:Get("Info").Text = Csv.Text("rank_modeT")
+		levelText.Text = data.level .. Csv.Text("parliament_tip21")
+		rotText.Text = Csv.Text("equipRob_qd_rot")
+		
+		local headImg = itemModule:Get("head")
+		if data.isRobot then
+			local robotConf = Csv.Robot[data.playerid]
+			if robotConf ~= nil then
+				headImg.SpriteName = MPlayer.HeadIconFromSex(robotConf.head, robotConf.sex, true)
+			end
+		else
+			headImg.SpriteName = MPlayer.HeadIconFromSex(data.headId, data.sex, true)
+		end
+
+		if data.isRobed then
+			proText.Text = Csv.Text("equipRob_qd_roted")
+		else
+			proText.Text = Csv.Text("equipRob_qd_proGet" .. data.getProType or 1)
+		end
+
+		local vipConf = Csv.Vip[data.vip]
+		if vipConf ~= nil and vipConf.imgBord ~= nil then
+			itemModule:Get("OutBox").SpriteName = vipConf.imgBord
+			itemModule:Get("VipImg").SpriteNameAutoScale = "friend_num_" .. data.vip
+		else
+			itemModule:Get("OutBox").Activity = false
+		end
+
+		rotBtn.IsGray = data.isRobed
+		rotBtn.RaycastTarget = not data.isRobed
+	end
+
+	enemyItem.itemModule = itemModule
+	return enemyItem
+end
+
+
+function _P.OnClickRob(self, data)
+	if data.isRobed then
+		CCommon.ShowError(Csv.Text("equipRob_qd_roted"))
+	else
+		if self.mData.leftRobCount <= 0 then
+			CCommon.ShowError(Csv.Text("equipRob_qd_err"))
+			return
+		end
+
+		local leftTime = self.mData.protectTime - HeartBeat.ServSecond()
+		if leftTime > 0 then -- 当前处于保护时间内，弹提示
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					CEquipRot.RobChipReq(self.ChipId, data.index, data.playerid)
+				end
+			end, {content = Csv.Text("equipRob_main_attackTip")})
+		else
+			CEquipRot.RobChipReq(self.ChipId, data.index, data.playerid)
+		end
+	end
+end
+
+
+-- 设置显示抢夺次数数据
+function _P.SetRotTextState(self, leftRobNum)
+	_P.OnClearTimer(self)
+	
+	if leftRobNum > 0 then
+		self.RobText.Text = Csv.Text("equipRob_qd_num", {num = leftRobNum})
+	else
+		_P.OnUpdateTime(self)
+		if self.mData.recoveryTime ~= nil and self.mData.recoveryTime > 0 then
+			_P.OnStartTimer(self)
+		end
+	end
+end
+
+
+function _R.OnEnterRobViewBack(self, data)
+	if data ~= nil and data.robList ~= nil then
+		_P.CreateEnemyList(self, data.robList)
+		self.RobTable = data.robList
+	end
+end
+
+
+function _R.OnRobCallBack(self, data)
+	if data.fightInfo ~= nil then
+		WindowMgr.Create("UBattlePvp", data.fightInfo, function( ... )
+			if self.mModule ~= nil then
+				WindowMgr.Create("UEquipRotResult", data.fightInfo.result, data.getList, function( ... )
+					WindowMgr.Destroy("UBattlePvp")
+				end)
+			end
+		end)
+	end
+
+	_P.SetRotTextState(self, data.leftRobCount)
+
+	if self.RobTable[data.index] ~= nil then
+		self.RobTable[data.index].isRobed = data.isRobed
+	end
+
+	local curItemModule = self.mEnemyItems[data.index].itemModule
+	if curItemModule ~= nil then
+		if data.isRobed then
+			curItemModule:Get("GL").Text = Csv.Text("equipRob_qd_roted")
+		end
+
+		local rotBtn = curItemModule:Get("C_Btn_b")
+		rotBtn.IsGray = data.isRobed
+		rotBtn.RaycastTarget = not data.isRobed
+	end
+end
+
+
+function _R.OnBuyRotTimeBack(self, data)
+	CCommon.ShowError(Csv.Text("lastgirl_exchange"))
+	_P.SetRotTextState(self, self.mData.leftRobCount)
+end
+
+
+function _R.OnRobTimePush(self, data)
+	_P.SetRotTextState(self, self.mData.leftRobCount)
+end
+
+
+-- 购买钻石更新，或者是免费刷新
+function _R.OnRefreshBack(self, data)
+	CCommon.ShowError(Csv.Text("club_exchange_refreshSuccess"))
+
+	_P.SetRefreshShowText(self)
+	_R.OnEnterRobViewBack(self, data)
+end
+
+
+function _R.OnClosePanel(self)
+	self:Destroy()
+	CCommon.ShowError(Csv.Text("equipRob_main_refreshTip"))
+end
+
+
+return _M

@@ -15,10 +15,13 @@ local rapidjson = require("rapidjson")
 local SDKMgr = JRequire "SDK.SDKMgr"
 --@RefType [SDK.SDKCollectType.bytes#_M]
 local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
 
 ----------------------CS类引用--------------------------
 local LuaConnect = CS.Net.LuaConnect
-
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
 ----------------------常量定义--------------------------
 local AccountSaveFilePath = "log/account_name.txt"
 local PasswordSaveFilePath = "log/account_password.txt"
@@ -112,7 +115,7 @@ end
 --私有函数, 验证消息回调函数
 function _P.OnLoginRet(data)
 	if data.errorCode == nil or data.errorCode == 0 then
-		CS.Utility.LogPoint.LogPost(7, 2)
+		CS.Utility.LogPoint.LogPost(7, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 		_M.Send(ECmdId.cQueryCharList)
 	else
 		local switch = {
@@ -145,20 +148,20 @@ function _P.OnCharList(data)
 		WindowMgr.Call('ULogin', 'Close')
 		WindowMgr.Create('ULoginEstablish')
 	else
-		CS.Utility.LogPoint.LogPost(7, 4)
+		CS.Utility.LogPoint.LogPost(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
 		_M.Send(ECmdId.cEnterGame, {playerid = data.charList[1].id, playername = data.charList[1].name,
 		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
-		sbid = GameSetting.Sbid, appid = GameSetting.AppID, cdnVersion = GameSetting.CdnVersion})
+		sbid = GameSetting.Sbid, appid = GameSetting.AppID, cdnVersion = GameSetting.CdnVersion, clientip = GameSetting.EncryptIP})
 	end
 end
 
 function _P.OnCreateCharRet(data)
 	if data.errorCode == 0 then
-		CS.Utility.LogPoint.LogPost(7, 4)
+		CS.Utility.LogPoint.LogPost(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
 		SDKMgr.ReqCollectData(SDKCollectType.CreateRole, data.chardesc.id, data.chardesc.name, data.chardesc.level)
 		_M.Send(ECmdId.cEnterGame, {playerid = data.chardesc.id, playername = data.chardesc.name, 
 		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
-		sbid = GameSetting.Sbid, appid = GameSetting.AppID})
+		sbid = GameSetting.Sbid, appid = GameSetting.AppID, clientip = GameSetting.EncryptIP})
 	else
 		local switch = {
 			[-1] = Csv.Text('login_err_invalid'),
@@ -186,7 +189,7 @@ function _P.OnCreateCharRet(data)
 end
 
 function _P.OnDeleteCharRet(data)
-	CS.Utility.LogPoint.LogPost(7, 6)
+	CS.Utility.LogPoint.LogPost(7, 6, luaUtil.TransToYearMonthDayHMS(os.time()))
 	print("delete char")
 end
 
@@ -223,8 +226,8 @@ end
 function _P.OnReadyForRun(data)
 	print("Clogin.OnReadyForRun", _M.isAutoReconnect)
 	GameSetting.IsOnGame = true
-	CS.Utility.LogPoint.LogPost(7, 7)
-	GameSetting.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "1", eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+	CS.Utility.LogPoint.LogPost(7, 7, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "1", ipAddress = GameSetting.PublicIP, eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 	GameSetting.isFirst = data.isFirst
 	GameSetting.isFirstCopy = data.isFirst
 	HeartBeat.Start()
@@ -303,6 +306,12 @@ function _P.OnServerReconnect()
 end
 
 function _P.SendLogin()
+	local isNeedPass, info = GameSetting.CheckSpidAlter(2)
+	if isNeedPass then
+		CCommon.ShowError(info.tips)
+		return
+	end
+
 	local account
 	if string.find(MLogin.Account, "&") then
 		account = MLogin.GetAccount()
@@ -311,11 +320,52 @@ function _P.SendLogin()
 		account = MLogin.GetAccount()
 	end
 
-	CS.Utility.LogPoint.LogPost(7, 1)
-	_M.Send(ECmdId.cRequestLogin, {account = account, password = MLogin.Password, serverid = MLogin.SelectServer.id, 
-								   clientVersion = GameSetting.ClientVersion, platform = GameSetting.Platform, 
-									sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID,
-									moblie = GameSetting.DeviceName, cdnVersion = GameSetting.CdnVersion})
+	CS.Utility.LogPoint.LogPost(7, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	
+	if GameSetting.IpUrl ~= nil and GameSetting.IpUrl ~= "" then
+		print(GameSetting.IpUrl)
+		local session = HttpSession(CS.Utility.HttpRequestType.Get, GameSetting.IpUrl)
+		session:SetCallBack(function (isOk, param1, param2)
+			local errorStr = nil
+			if isOk then
+				local jsonData = rapidjson.decode(param1)
+				if jsonData ~= nil then
+					if jsonData.errorno == nil or jsonData.errorno ~= 0 then
+						--errorStr = "login_getIp_error_3"
+						error("get ip info error::", GameSetting.IpUrl, jsonData.errorno, jsonData.errormsg)
+					else
+						print(jsonData.data.encryptIp, jsonData.data.ip)
+						GameSetting.EncryptIP = jsonData.data.encryptIp
+						GameSetting.PublicIP = jsonData.data.ip
+					end
+				else
+					--errorStr = "login_getIp_error_2"
+					error("get ip info json error::", GameSetting.IpUrl)
+				end
+			else
+				--errorStr = "login_getIp_error_1"
+				error("get ip info pass time::", GameSetting.IpUrl)
+			end
+			-- if errorStr ~= nil then
+			-- 	CCommon.ShowReloginBox(errorStr, Csv.Text("common_sure"), function (isSure)
+			-- 		GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)
+			-- 	end)
+			-- end
+			
+			_M.Send(ECmdId.cRequestLogin, {account = account, password = MLogin.Password, serverid = MLogin.SelectServer.id, 
+				clientVersion = GameSetting.ClientVersion, platform = GameSetting.Platform, 
+				sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID,
+				moblie = GameSetting.DeviceName, cdnVersion = GameSetting.CdnVersion, clientip = GameSetting.EncryptIP})
+		end)
+		HttpHelper.Request(session)
+	else
+		error("get ip url is nil!!!!!")
+
+		_M.Send(ECmdId.cRequestLogin, {account = account, password = MLogin.Password, serverid = MLogin.SelectServer.id, 
+				clientVersion = GameSetting.ClientVersion, platform = GameSetting.Platform, 
+				sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID,
+				moblie = GameSetting.DeviceName, cdnVersion = GameSetting.CdnVersion, clientip = GameSetting.EncryptIP})
+	end	
 end
 
 function _M.Init( ... )
@@ -389,12 +439,12 @@ function _M.DoLogin(account, password)
 end
 
 function _M.SendRandomName(gender)
-	CS.Utility.LogPoint.LogPost(7, 5)
+	CS.Utility.LogPoint.LogPost(7, 5, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.Send(ECmdId.cGetCharName, {gender=gender})
 end
 
 function _M.SendCreateChar(name, headid, genber)
-	CS.Utility.LogPoint.LogPost(7, 3)
+	CS.Utility.LogPoint.LogPost(7, 3, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.Send(ECmdId.cCreateChar, {playername = name, job = 1, genber = genber, headid = headid, 
 	sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName})
 end

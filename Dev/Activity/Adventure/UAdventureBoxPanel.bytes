@@ -17,6 +17,9 @@ local LuckyItemId = 34116 -- 奇遇点id
 local lastTime = 0
 local GRAY = Color(0/255, 0/255, 0/255, 140/255)
 local LockActorId = 10172
+local OutlineColors = {Color(1, 1, 1, 1), Color(102/255, 241/255, 64/255, 1),
+						Color(61/255, 233/255, 253/255, 1), Color(222/255, 129/255, 249/255, 1),
+						Color(255/255, 174/255, 87/255, 1), Color(241/255, 112/255, 112/255, 1), Color(255/255, 235/255, 67/255, 1)}
 -- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
 -- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
 
@@ -64,7 +67,10 @@ function _M:OnCreate(eventData, hotval, isSelectDown)
 	module:Get("OpenText").Text = Csv.Text("adventure_box_btn")
 	module:Get("RewardTip").Text = Csv.Text("adventure_box_pro")
 	module:Get("Name2").Text = Csv.Text("adventure_event_mush")
-	module:Get("Name").Text = eventConf.title
+	local nameText = module:Get("Name")
+	nameText.Text = eventConf.title
+	nameText.Color = OutlineColors[eventConf.star]
+	
 	module:Get("Info").Text = eventConf.desc
 	module:Get("BoxText").Text = eventConf.taskName
 	module:Get("TypeImg").SpriteName = MActivity.AdventureTaskNames[eventConf.taskType]
@@ -84,9 +90,9 @@ function _M:OnCreate(eventData, hotval, isSelectDown)
 
 	-- module:Get("ditu").SpriteName = eventConf.talkBg
 
-	for i=1,7 do
-		module:Get("Star".. i).Activity = i <= eventConf.star
-	end
+	-- for i=1,7 do
+	-- 	module:Get("Star".. i).Activity = i <= eventConf.star
+	-- end
 
 	_P.SetRewardData(self, eventConf.generalReward)
 end
@@ -122,13 +128,20 @@ function _P.SetRewardData(self, itemGroudId)
 	end
 
 	if itemsNum < 3 then
-		local proGetList = Csv.ItemGroup[itemGroudId].randReward
-		local proRewards = MActivity.AdventureRewardSplit(proGetList)
-		if proRewards ~= nil and proRewards.items ~= nil then
-			for i=itemsNum + 1, 3 do
-				local itemData = proRewards.items[i]
-				if itemData then
-					CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+		local proGetList = nil
+		local randRewards = Csv.ItemGroup[itemGroudId].randReward
+		if randRewards ~= nil  then
+			proGetList = randRewards[1]
+		end
+
+		if proGetList ~= nil then
+			local proRewards = MActivity.AdventureRewardSplit(proGetList)
+			if proRewards ~= nil and proRewards.items ~= nil then
+				for i=itemsNum + 1, 3 do
+					local itemData = proRewards.items[i]
+					if itemData then
+						CCommon.CreateItem(showContent, itemData[1], CCommon.ShowItemTips, {num = itemData[2], scale = 0.82, btnScale = 1})
+					end
 				end
 			end
 		end
@@ -155,7 +168,7 @@ function _R.OnCompleteEvent(self, data, callBack)
 
 	module.SelfRect:AddOnTime(function()
 		self:Unlock()
-		local addExp = (data.isDown and 0) or self.EventConf.addExp
+		local addExp = (self.mData.isDown and 0) or self.EventConf.addExp
 		WindowMgr.Create("UAdventureBoxResPanel", data, addExp, function( ... )
 			self:Destroy()
 			callBack()

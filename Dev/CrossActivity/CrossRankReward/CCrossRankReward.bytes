@@ -1,6 +1,10 @@
 ----------------------文件引用--------------------------
---@RefType [Dev.Activity.MCrossActivity.bytes#_M]
-local MCrossActivity = JRequire "Dev.Activity.MCrossActivity"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
+--@RefType [Dev.Rank.CRank.bytes#_M]
+local CRank = JRequire "Dev.Rank.CRank"
 --@RefType [Dev.Main.CMain.bytes#_M]
 local CMain = JRequire "Dev.Main.CMain"
 --@RefType [Dev.Player.HeartBeat.bytes#_M]
@@ -11,76 +15,104 @@ local _M = {}
 
 ------------------------------通用接口------------------------------
 function _M.RefreshData(actType, data)
-	if Csv.CrossActivityRank == nil then
-		return
-	end
-	local csvActivityRank = {}
-	for _, csvValue in pairs(Csv.CrossActivityRank) do
-		csvActivityRank[csvValue.id] = csvValue
-	end
 	for _, originActData in pairs(data) do
-		local actData = _M.InitActivityData(actType, originActData)
-		local csvValue = csvActivityRank[actData.actId]
-		if csvValue then
-			_M.RefreshActivityData(actData, originActData, csvValue)
-		end
+		_M.RefreshOneActData(actType, originActData)
 	end
 	--检查小红点
 	_M.CheckRepoint()
 	--刷新界面
-	WindowMgr.Call("URankReward", "OnRefreshView")
-	WindowMgr.Call("URankRewardAct", "OnRefreshView")
+	WindowMgr.Call("URankReward", "OnRefreshView", Define.SysId.CrossRankReward)
+	WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.CrossRankReward)
 end
 
-function _M.InitActivityData(actType, data)
-	if Csv.CrossActivity == nil or Csv.CrossActivity[data.actId] == nil then
+function _M.RefreshOneActData(actType, originData, isRefreshOne)
+	if originData.state == MActivity.ActivityState.Close then
+		--关闭入口
+		MCrossActivity.ClearForId(originData.actId)
+		CMain.UpdateRedpoint(false, Define.SysId.CrossRankReward, originData.actId)
+		if MCrossActivity.GetListFromType(actType) == nil then
+			WindowMgr.Call("UMain", "RefreshTopBtns")
+		end
+	else
+		local actData = MCrossActivity.GetFromId(originData.actId)
+		if actData then
+			_M.RefreshServerData(actData, originData)
+		else
+			actData = _M.InitActivityData(actType, originData)
+			local csvValue = Csv.CrossActivityRank[actData.actId]
+			if csvValue then
+				_M.RefreshActivityCsvData(actData, csvValue)
+				CRank.GetRankList(actData.rankType, false)
+			end
+		end
+	end
+	if isRefreshOne then
+		--检查小红点
+		_M.CheckRepoint()
+		--刷新界面
+		WindowMgr.Call("URankReward", "OnRefreshView", Define.SysId.CrossRankReward)
+		WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.CrossRankReward)
+	end
+end
+
+function _M.InitActivityData(actType, originData)
+	if Csv.CrossActivity == nil or Csv.CrossActivity[originData.actId] == nil then
 		return
 	end
-	local csvCrossActivity = Csv.CrossActivity[data.actId]
+	local csvCrossActivity = Csv.CrossActivity[originData.actId]
 	
 	local state = {}
-	state.state = data.state
+	state.state = originData.state
 	state.startTime = csvCrossActivity.beginTime
 	state.endTime = csvCrossActivity.closeTime
 	state.lefttime = csvCrossActivity.setTime
 	local actData = {}
-	actData.actId = data.actId
+	actData.actId = originData.actId
 	actData.actType = actType
 	actData.state = state
+	actData.settleTime = csvCrossActivity.setTime - csvCrossActivity.beginTime
+	actData.selfRank = 0
+	actData.GetState = originData.GetState
+	local csvActivity = Csv.CrossActivity[actData.actId]
+	if csvActivity and csvActivity.rankShowTime then
+		actData.rankShowTime = actData.state.lefttime - csvActivity.rankShowTime
+	end
 	return actData
 end
 
-function _M.RefreshActivityData(actData, originActData, csvValue)
-	actData.selfRank = originActData.selfRank
-	actData.GetState = originActData.GetState
+function _M.RefreshServerData(actData, originData)
+	actData.state.state = originData.state
+	actData.GetState = originData.GetState
+	return actData
+end
+
+function _M.RefreshActivityCsvData(actData, csvValue)
 	actData.sort = csvValue.sort
 	actData.icon = csvValue.icon
 	actData.text = csvValue.text
+	actData.joinText = csvValue.text2
 	actData.title1 = csvValue.title1
 	actData.title2 = csvValue.title2
 	actData.textNum = csvValue.textNum
 	actData.rankType = csvValue.rankType
 	actData.rankTitle = csvValue.rankTitle
-	actData.settleTime = csvValue.settleTime
 	actData.rankName = csvValue.rankNameTitle
-	actData.state.lefttime = HeartBeat.ServSecond() + actData.state.lefttime
+	_M.RefreshActivityRewardData(actData, csvValue)
+end
 
-	--设置奖励档位数据
-	local rewardTitles = csvValue.rewardTitle
-	local rewards = csvValue.reward
-	local tos = csvValue.to
-	if nil ~= rewardTitles and nil ~= rewards and nil ~= tos then
+function _M.RefreshActivityRewardData(actData, csvValue)
+	if csvValue.rewardTitle and csvValue.reward and csvValue.to then
 		actData.list = {}
-		for key, value in pairs(rewardTitles) do
+		for key, value in pairs(csvValue.rewardTitle) do
 			actData.list[key] = {}
 			actData.list[key].title = value
 			actData.maxRewardRank = 0
-			if tos[key] > actData.maxRewardRank then
-				actData.maxRewardRank = tos[key]
+			if csvValue.to[key] > actData.maxRewardRank then
+				actData.maxRewardRank = csvValue.to[key]
 			end
 			actData.list[key].rewards = {}
-			if nil ~= rewards[key] then
-				for rewardKey, rewardValue in pairs(rewards[key]) do
+			if csvValue.reward[key] then
+				for rewardKey, rewardValue in pairs(csvValue.reward[key]) do
 					local one = {
 						key = rewardValue[1],
 						value = rewardValue[2]
@@ -92,38 +124,41 @@ function _M.RefreshActivityData(actData, originActData, csvValue)
 			end
 		end
 		--更新数据层
-		MCrossActivity.UpdateActivityData(actData.actId, actType, actData)
+		MCrossActivity.UpdateActivityData(actData.actId, actData.actType, actData)
 	end
 end
 
 function _M.CheckRepoint()
-	local listData = MCrossActivity.GetListFromType(Define.ActivityType.RankReward)
-	if nil ~= listData then
-		for index, data in pairs(listData) do
-			if (MCrossActivity.ActivityState.Doing == data.state.state or
-				MCrossActivity.ActivityState.Finish == data.state.state) then
-				local isRedPoint = MCrossActivity.RewardGetState.CanGet == data.GetState
-				if MCrossActivity.UpdataActivityRedpoint(data.actId, 1, isRedPoint) then
-					CMain.UpdateRedpoint(isRedPoint, Define.SysId.RankReward, data.actId)
-				end
+	local listData = MCrossActivity.GetListFromType(Define.CrossActivityType.CrossRankReward)
+	if listData == nil then
+		return
+	end
+	for index, data in pairs(listData) do
+		if (MActivity.ActivityState.Doing == data.state.state or
+			MActivity.ActivityState.Finish == data.state.state) then
+			local isRedPoint = MActivity.RewardGetState.CanGet == data.GetState
+			if MCrossActivity.UpdataActivityRedpoint(data.actId, 1, isRedPoint) then
+				CMain.UpdateRedpoint(isRedPoint, Define.SysId.CrossRankReward, data.actId)
 			end
 		end
 	end
 end
 
 function _M.OnDayout()
-	local listData = MCrossActivity.GetListFromType(Define.ActivityType.RankReward)
+	local listData = MCrossActivity.GetListFromType(Define.CrossActivityType.CrossRankReward)
 	local isNeedRefresh = false
-	if listData then
-		for index, data in pairs(listData) do
-			if data.state.lefttime and data.state.lefttime - HeartBeat.ServSecond() <= 1 then
-				local isOutRank = data.selfRank > data.maxRewardRank or 0 == data.selfRank
-				if MCrossActivity.RewardGetState.Geted ~= data.GetState and not isOutRank then
-					data.GetState = MCrossActivity.RewardGetState.CanGet
-					isNeedRefresh = true
-				end
+	if listData == nil then
+		return
+	end
+	for index, data in pairs(listData) do
+		if data.state.lefttime and data.state.lefttime - HeartBeat.ServSecond() <= 1 then
+			local isOutRank = data.selfRank > data.maxRewardRank or 0 == data.selfRank
+			if MActivity.RewardGetState.Geted ~= data.GetState and not isOutRank then
+				data.GetState = MActivity.RewardGetState.CanGet
+				isNeedRefresh = true
 			end
 		end
+		CRank.GetRankList(data.rankType, false)
 	end
 	if isNeedRefresh then
 		_M.CheckRepoint()
@@ -133,46 +168,12 @@ end
 function _M.OnGetReward(getData, actData)
 	--冲榜活动领取奖励返回
 	if getData.isGeted then
-		actData.GetState = MCrossActivity.RewardGetState.Geted
+		actData.GetState = MActivity.RewardGetState.Geted
 		--检查小红点
 		_M.CheckRepoint()
 		--界面表现
-		WindowMgr.Call("URankRewardAct", "RefreshGetState", getData)
+		WindowMgr.Call("URankRewardAct", "RefreshGetState", getData, Define.SysId.CrossRankReward)
 	end
-end
-
-function _M.OnUpdateState(oldActData, actData)
-	if actData.state.state == MCrossActivity.ActivityState.Close then
-		--关闭入口
-		MCrossActivity.ClearForId(actData.actId)
-		CMain.UpdateRedpoint(false, Define.SysId.RankReward, actData.actId)
-		if nil == MCrossActivity.GetListFromType(oldActData.actType) then
-			WindowMgr.Call("UMain", "RefreshTopBtns")
-		end
-	else
-		local lastState = oldActData.state
-		local newState = actData.state
-		oldActData.state = {
-			state = newState.state,
-			startTime = newState.startTime,
-			endTime = newState.endTime,
-		}
-	end
-	
-	--检查小红点
-	_M.CheckRepoint()
-	--界面刷新
-	WindowMgr.Call("URankReward", "OnRefreshView")
-	WindowMgr.Call("URankRewardAct", "OnRefreshView")
-end
-
-function _M.OnUpdatePro(actData, proData)
-	--冲榜活动进度更新
-	actData.selfRank = proData.pro
-	--检查小红点
-	_M.CheckRepoint()
-	--界面刷新
-	WindowMgr.Call("URankRewardAct", "OnRefreshSelfRank")
 end
 
 return _M

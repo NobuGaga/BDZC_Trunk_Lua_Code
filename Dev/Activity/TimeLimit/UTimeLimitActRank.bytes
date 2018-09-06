@@ -3,8 +3,12 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 --@RefType [Libs.Sound.SoundMgr.bytes#_M]
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
 --@RefType [Dev.Activity.MActivity.bytes#_M]
 local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.CrossActivity.MCrossActivity.bytes#_M]
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 --@RefType [Dev.Player.MPlayer.bytes#_M]
 local MPlayer = JRequire "Dev.Player.MPlayer"
 --@RefType [Dev.Rank.MRank.bytes#_M]
@@ -13,13 +17,18 @@ local MRank = JRequire "Dev.Rank.MRank"
 local CPlayer = JRequire "Dev.Player.CPlayer"
 --@RefType [Dev.Rank.CRank.bytes#_M]
 local CRank = JRequire "Dev.Rank.CRank"
+--@RefType [Dev.Login.CLogin.bytes#_M]
+local CLogin = JRequire "Dev.Login.CLogin"
 --@RefType [Dev.Common.RankVertical.bytes#_M]
 local RankVertical = JRequire "Dev.Common.RankVertical"
 
 ----------------------CS类引用--------------------------
 
 ----------------------常量定义--------------------------
-local MoudleName = "M_Club_Ranking"
+local NormalMoudleName = "M_Club_Ranking"
+local CrossMoudleName = "M_Cross_List_Ranking"
+local NormalItemName = "M_Club_Rankpoint"
+local CrossItemName = "M_Cross_List_Rankpoint"
 local BtnClose = "C_Back_Btn"
 local Title = "C_Text"
 
@@ -56,24 +65,42 @@ function _M:Dispatch(funcName, ...)
 end
 
 --界面构建
-function _M:OnCreate(rankType, text, title, name, closeCallback)
+function _M:OnCreate(rankType, text, title, name, closeCallback, isCross, isShowLimit)
+	local MoudleName
+	if isCross then
+		MoudleName = CrossMoudleName
+	else
+		MoudleName = NormalMoudleName
+	end
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	self.moudle:Get(BtnClose):AddOnButton(function()
-		if nil ~= closeCallback and nil ~= self.selfRank and "function" == type(closeCallback) then
+		if closeCallback and self.selfRank and "function" == type(closeCallback) then
 			closeCallback(self.selfRank)
 		end
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
+	self.isCross = isCross or false
+	if isCross then
+		self.moudle:Get("District").Text = Csv.Text("rankreward_rank_server")
+		self.moudle:Get("textServerTips").Text = Csv.Text("rank_server")
+		if MLogin.SelectServer.id then
+			local serverData = CLogin.GetServerInfoByID(MLogin.SelectServer.id)
+			if serverData then
+				self.moudle:Get("textServerName").Text = serverData.name
+			end
+		end
+	end
+	self.isShowLimit = isShowLimit
 	self.isBattleRank = Csv.Const(BattleRank) == rankType
-	self.isCommerceRank = nil ~= MActivity.CommerceRank[rankType]
+	self.isCommerceRank = MActivity.CommerceRank[rankType] ~= nil or MCrossActivity.CommerceRank[rankType] ~= nil
 	_P.InitText(self, text, title, name)
 
 	local rankInfo = MRank.RankTable[rankType]
-	if nil ~= rankInfo then
+	if rankInfo then
 		_R.OnRefreshView(self, rankInfo)
 	end
-	CRank.GetRankList(rankType, true)
+	CRank.GetRankList(rankType, not self.isCross)
 end
 
 --初始化文本
@@ -86,7 +113,8 @@ function _P.InitText(self, text, title, name)
 	self.nameText = self.moudle:Get("NameText")
 	self.nameText.Text = MPlayer.GetName()
 	self.moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
-	self.moudle:Get("OwnFraction").Text = text
+	self.fractionTipsText = self.moudle:Get("OwnFraction")
+	self.fractionTipsText.Text = text .. "："
 
 	self.rankingText = self.moudle:Get("RankingText")
 	self.fractionText = self.moudle:Get("FractionText")
@@ -108,6 +136,8 @@ function _P.ScrollCallBack(self,index,value,moudle)
 														name = partCsv.name .. MRank.GetNumText(battleCsv.chapter % 10)})
 				end
 			end
+		elseif self.isShowLimit then
+			moudle:Get("value").Text = Csv.Text("rankreward_show_limit")
 		else
 			moudle:Get("value").Text = value.value
 		end	
@@ -115,8 +145,26 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		if not self.isCommerceRank then
 			moudle.SelfRect:AddOnButton(function(...)
 				SoundMgr.Play(10001)
-				CPlayer.LookPlayerReq(value.playerid)
+				if self.isCross then
+					CPlayer.LookPlayerByServerID(value.playerid, value.serverid)
+				else
+					CPlayer.LookPlayerReq(value.playerid)
+				end
 			end,nil,1)
+		end
+
+		local textDistrict = moudle:Get("District")
+		if textDistrict then
+			if self.isCross then
+				local serverInfo = CLogin.GetServerInfoByID(value.serverid)
+				if serverInfo and serverInfo.name then
+					textDistrict.Text = serverInfo.name
+				else
+					textDistrict.Text = ""
+				end
+			else
+				textDistrict.Text = ""
+			end
 		end
 
 		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
@@ -131,10 +179,14 @@ end
 
 --初始化排行榜列表
 function _R.OnRefreshView(self, data)
-	if nil ~= data then
-		self.rankingText.Text = data.selfrank
+	if data then
+		if self.isCross and data.selfrank == 0 then
+			self.rankingText.Text = Csv.Text("commerce_rank4")
+		else
+			self.rankingText.Text = data.selfrank
+		end
 		self.selfRank = data.selfrank
-		if self.isCommerceRank and nil ~= data.selfName then
+		if self.isCommerceRank and data.selfName then
 			self.nameText.Text = data.selfName
 		end
 		if self.isBattleRank then
@@ -145,7 +197,10 @@ function _R.OnRefreshView(self, data)
 					self.fractionText.Text = partCsv.name .. MRank.GetNumText(battleCsv.chapter % 10)
 				end
 			end
+		elseif self.isCross and data.selfvalue == 0 then
+			self.fractionTipsText.Activity = false
 		else
+			self.fractionTipsText.Activity = true
 			self.fractionText.Text = data.selfvalue
 		end		
 
@@ -158,7 +213,13 @@ function _R.OnRefreshView(self, data)
 				self.scrollController:delete()
 				self.scrollController = nil
 			end
-			self.scrollController = RankVertical.new(scroll,self.content,"M_Club_Rankpoint",function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
+			local ItemName
+			if self.isCross then
+				ItemName = CrossItemName
+			else
+				ItemName = NormalItemName
+			end
+			self.scrollController = RankVertical.new(scroll,self.content,ItemName,function(index,value,moudle)_P.ScrollCallBack(self,index,value,moudle)end)
 			self.scrollController:CreateScroll(pageNum,pageHeight,itemWidth,itemHeight,space,data.ranklist)
 		end
 	end

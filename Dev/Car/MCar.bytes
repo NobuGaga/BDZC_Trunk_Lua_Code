@@ -26,6 +26,7 @@ _M.CarMaxLevel = Csv.Const(Define.Const.CarMaxLevel)
 _M.CarMaxStarLevel = Csv.Const(Define.Const.CarMaxStarLevel)
 _M.CarShopListMax = Csv.Const(Define.Const.CarShopListMax)
 _M.CarAttrMax = Csv.Const(Define.Const.CarAttrMax)
+_M.CarAtriUpNeedLevel = Csv.Const(20163)
 
 _M.CarTable = {}
 _M.CarSeatList = {}
@@ -273,6 +274,7 @@ end
 
 function _M.CheckIsCanUpApti(carData)
 	if carData == nil then return false end
+	if carData.level < _M.CarAtriUpNeedLevel then return false end
 	
 	local upId = carData.carid * 1000 + carData.level
 	local upConf = Csv.CarUpQualification[upId]

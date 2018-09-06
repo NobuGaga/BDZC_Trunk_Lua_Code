@@ -17,7 +17,6 @@ function _M.CreateList(data)
 			_M.AchieveTable[v.questid] = v
 			table.insert(_M.AchieveList, v)
 		end
-
 		table.sort(_M.AchieveList, _M.SortAchieve)
 	end
 end
@@ -46,18 +45,40 @@ function _M.SortAchieve(a, b)
 			return true
 		end
 	end
+	local aDesc = Csv.Achievement[a.questid].desc
+	local bDesc = Csv.Achievement[b.questid].desc
 	local aLevelConf = Csv.AchieveLevel[a.pro]
 	local bLevelConf = Csv.AchieveLevel[b.pro]
 	local aneed = (aLevelConf ~= nil and aLevelConf.value) or 0
 	local bneed = (bLevelConf ~= nil and bLevelConf.value) or 0
-	if a.val >= aneed and b.val < bneed then
-		return true
-	elseif a.val >= aneed and b.val >= bneed then
-		return a.questid < b.questid
-	elseif a.val < aneed and b.val < bneed then
+
+	--达到目标顺序
+	local aRed = 0
+	local bRed = 0
+	if aDesc == 1 then
+		if a.val > 0 and a.val <= aneed then
+			aRed = 1
+		end
+	else
+		if a.val >= aneed then
+			aRed = 1
+		end
+	end
+
+	if bDesc == 1 then
+		if b.val > 0 and b.val <= bneed then
+			bRed = 1
+		end
+	else
+		if b.val >= bneed then
+			bRed = 1
+		end
+	end
+
+	if aRed == bRed then
 		return a.questid < b.questid
 	else
-		return false
+		return aRed > bRed
 	end
 end
 
@@ -65,8 +86,15 @@ function _M.GetRedPointState()
 	for k,v in pairs(_M.AchieveTable) do
 		if v.pro > 0 and not _M.GetIsLast(v.questid,v.pro) then
 			local need = Csv.AchieveLevel[v.pro].value
-			if v.val >= need then
-				return true
+			local desc = Csv.Achievement[v.questid].desc --排名顺序
+			if desc == 1 then
+				if v.val <= need then
+					return true
+				end
+			else
+				if v.val >= need then
+					return true
+				end
 			end
 		end
 	end

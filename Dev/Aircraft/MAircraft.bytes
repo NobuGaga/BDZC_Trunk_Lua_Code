@@ -29,6 +29,7 @@ _M.SeatNum = 0
 _M.MaxSeatNum = 0
 
 _M.SkinSchoolAllBuff = 0
+_M.SkinSchoolExpAllBuff = 0
 _M.PowerBaseBuff = nil		--table
 _M.PowerSkinAllBuff = nil	--table
 _M.PowerBuff = nil			--table
@@ -84,6 +85,7 @@ function _M.Clean()
 	_M.MaxSeatNum = 0
 
 	_M.SkinSchoolAllBuff = 0
+	_M.SkinSchoolExpAllBuff = 0
 	_M.PowerBaseBuff = nil
 	_M.PowerSkinAllBuff = nil
 	_M.PowerBuff = nil
@@ -430,6 +432,7 @@ end
 --刷新飞机皮肤加成
 function _P.RefreshSkinSchoolBuff()
 	_M.SkinSchoolAllBuff = 0
+	_M.SkinSchoolExpAllBuff = 0
 	_M.PowerSkinAllBuff = nil
 	if _M.SkinList then
 		local csvAircraftSkin = Csv.AircraftSkin
@@ -452,6 +455,13 @@ function _P.RefreshSkinSchoolBuff()
 						end
 					else
 						error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 get 错误")
+					end
+
+					local bookExp = csvValue.bookExp
+					if bookExp then
+						_M.SkinSchoolExpAllBuff = _M.SkinSchoolExpAllBuff + bookExp
+					else
+						error("表 AircraftSkin 对应的ID " .. skinID .. " 字段 bookExp 错误")
 					end
 
 					local attr = csvValue.attr

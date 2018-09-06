@@ -16,6 +16,8 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [SDK.SDKMgr.bytes#_M]
 local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
 
 ----------------------CS类引用--------------------------
 local HttpHelper = CS.Utility.HttpHelper
@@ -104,8 +106,6 @@ function _M.Init()
 	_M.isHasExitAccount = (sdkParam.isHasExitAccount or 1) ~= 0
 	_M.AppName = sdkParam.appName
 	_M.PackageName = sdkParam.packageName
-	_M.IP = sdkParam.ip
-
 	_M.ClientVersion = _M.GameParam.resVersion.ShowVersion
 	_M.CdnVersion = _M.GameParam.cdnVersion.ShowVersion
 
@@ -127,13 +127,17 @@ function _M.Init()
 	_M.PlayVoiceUrl = _M.GameParam.cdnVersion.voiceSave
 	--运营商推送日志url
 	_M.ChannelLog = _M.GameParam.cdnVersion.channelLog
+	--获取公网IP的URL
+	_M.IpUrl = _M.GameParam.cdnVersion.get_ip_url
+	--从URL中获得的IP
+	_M.PublicIP = sdkParam.ip or ""
+	--加了密的IP
+	_M.EncryptIP = ""
 
-	--区ID
-	_M.AreaId = "1,2,3,4,256"
-	if sdkParam.areaid ~= nil and sdkParam.areaid ~= "" then
+	--设置区ID
+	_M.AreaId = ""
+	if sdkParam.areaid and sdkParam.areaid ~= "" then
 		_M.SetAreaID(sdkParam.areaid)
-	else
-		_M.SetAreaID("1,2,3,4,256")
 	end
 
 	--是否审核阶段
@@ -142,6 +146,24 @@ function _M.Init()
 	_M.initServerIdList = _M.GameParam.cdnVersion.serverid
 	local isPrivacy = _M.GameParam.cdnVersion.isPrivacy
 	_M.IsShowPrivacy = (tonumber(isPrivacy) == 1)	
+end
+
+function _M.CheckSpidAlter(id)
+	local csvLine = Csv.SpidAlter[id]
+	if csvLine ~= nil and csvLine.alter ~= nil then
+		for _, value in pairs(csvLine.alter) do
+			local isHave = true
+			if value.spid ~= nil and value.spid ~= _M.Spid then
+				isHave = false
+			elseif value.clientV ~= nil and value.clientV ~= _M.ClientVersion then
+				isHave = false
+			end
+			if isHave then
+				return true, value
+			end
+		end 
+	end
+	return false
 end
 
 function _M.Start()
@@ -191,18 +213,18 @@ end
 function _M.SetAreaID(areaIdStr)
 	_M.AreaId = areaIdStr or ""
 	--error("last areaID:" .. _M.AreaId)
-	if not _M.IsEditor then
-		local areaArray = LuaUtil.StringSplit(_M.AreaId, ",")
-		if areaArray ~= nil then
-			local newTab = {}
-			for i=1,#areaArray do
-				if string.find(areaArray[i], '3') ~= 1 then
-					table.insert(newTab, areaArray[i])
-				end
-			end
-			_M.AreaId = table.concat(newTab, ",")
-		end
-	end
+	-- if not _M.IsEditor then
+	-- 	local areaArray = LuaUtil.StringSplit(_M.AreaId, ",")
+	-- 	if areaArray ~= nil then
+	-- 		local newTab = {}
+	-- 		for i=1,#areaArray do
+	-- 			if string.find(areaArray[i], '3') ~= 1 then
+	-- 				table.insert(newTab, areaArray[i])
+	-- 			end
+	-- 		end
+	-- 		_M.AreaId = table.concat(newTab, ",")
+	-- 	end
+	-- end
 	--error("new areaID:" .. _M.AreaId)
 end
 
@@ -275,7 +297,7 @@ function _M.OpenLoginInput()
 end
 
 function _M.HttpPostExitDataToPHP()
-	_M.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "2", 
+	_M.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "2", ipAddress = _M.PublicIP, 
 						 eTime = os.date("%Y-%m-%d %H:%M:%S", os.time())})
 end
 
@@ -322,7 +344,7 @@ function _M.ToReLogin(reloginType)
 
 	EventCenter.CallEventTrigger(Define.EventListenId.ToReLogin)
 	_M.IsOnGame = false
-	CS.Utility.LogPoint.LogPost(10, 1, tostring(reloginType))
+	CS.Utility.LogPoint.LogPost(10, 1, tostring(reloginType), luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.HttpPostExitDataToPHP()
 	if _M.OnReLoginCall ~= nil then
 		_M.OnReLoginCall()

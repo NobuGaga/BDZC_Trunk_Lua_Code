@@ -1,5 +1,6 @@
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
 
 local _M = {}
 local _P = {}
@@ -192,10 +193,14 @@ function _M.OnStaffNew(data)
 		if staffTable[data.id] == nil then
 			_M.StaffNum = _M.StaffNum + 1
 		end
+		
 		staffTable[data.id] = {id = data.id,level = data.level,levelexp = data.levelexp,color = data.color,skillexp = data.skillexp,
 								bookexp = data.bookexp,book = bookTable,skill = skillTable,aureole = aureoleTable,originAttr = data.originAttr,
 								itemAttr = data.itemAttr,girlAttr = data.girlAttr,aureoleAttr = data.aureoleAttr,allAttr = data.allAttr,power = data.power,
-								name = _P.SetStaffName(data.id,data.name),link = data.link}
+								name = _P.SetStaffName(data.id,data.name),link = data.link,
+								equips = data.equips}
+		
+		_M.StaffTable = staffTable
 	end
 end
 
@@ -492,6 +497,9 @@ function _M.StaffChangeByItem(data)
 				if v.bookexp ~= nil then
 					staff.bookexp = v.bookexp
 				end
+				if v.power ~= nil then
+					staff.power = v.power
+				end
 			end
 		end
 	end
@@ -579,6 +587,37 @@ function _M.SetLvlUp10(staffID, value)
 	end
 
 	_M.Lvl10[staffID] = value
+end
+
+--检测是否有装备
+function _M.CheckIsEquip(staffID,type)
+	local dataStaff = _M.StaffTable[staffID]
+	if dataStaff ~= nil then
+		if dataStaff.equips ~= nil then
+			for k,v in pairs(dataStaff.equips) do
+				local csvEquip = Csv.Equip[v.equipId]
+				if csvEquip.type == type then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+function _M.GetEquipedByType(staffID,type)
+	local dataStaff = _M.StaffTable[staffID]
+	if dataStaff ~= nil then
+		if dataStaff.equips ~= nil then
+			for k,v in pairs(dataStaff.equips) do
+				local csvEquip = Csv.Equip[v.equipId]
+				if csvEquip.type == type then
+					return v
+				end
+			end
+		end
+	end
+	return nil
 end
 
 return _M

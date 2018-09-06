@@ -8,6 +8,8 @@ local WIN_ROOT_MOUDLE = "M_UIRootNode"
 local SDKMgr = JRequire "SDK.SDKMgr"
 --@RefType [SDK.SDKCollectType.bytes#_M]
 local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
 
 local profiler = require("Libs.xlua.profiler")
 local memory = require("Libs.xlua.memory")
@@ -324,7 +326,7 @@ function _P.SendLogPoint(isOpen, winName)
 		local oepnKey = "open_logpoint_" .. winName
 		if not CS.UnityEngine.PlayerPrefs.HasKey(oepnKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(oepnKey, 1)
-			CS.Utility.LogPoint.LogPost(8, 1, winName)
+			CS.Utility.LogPoint.LogPost(8, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
 		end	
 		if GameSetting.IsiOSCommit then
 			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_0")
@@ -333,7 +335,7 @@ function _P.SendLogPoint(isOpen, winName)
 		local closeKey = "close_logpoint_" .. winName
 		if not CS.UnityEngine.PlayerPrefs.HasKey(closeKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(closeKey, 1)
-			CS.Utility.LogPoint.LogPost(9, 1, winName)
+			CS.Utility.LogPoint.LogPost(9, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
 		end		
 		if GameSetting.IsiOSCommit then
 			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_1")

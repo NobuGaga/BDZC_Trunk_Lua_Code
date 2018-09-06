@@ -22,6 +22,12 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
+local iOSImage = {
+	iOSBg = { 		name = "iOSBg",
+					width = 546, height = 903,
+			}, 
+}
+
 local MAXINPUTNUM = 12
 
 function _M:BeforeDestroy(...)
@@ -131,6 +137,20 @@ function _M:OnCreate()
     )
 
     moudle:Get("BtnCreateChar").SpriteName = "dl_027"
+
+    if GameSetting.IsiOSCommit then
+        CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iOSBg.name, "Login"),
+                                        iOSImage.iOSBg.width, iOSImage.iOSBg.height,
+                                        function (sp)
+                                            if moudle then
+                                                local node = moudle:Get(iOSImage.iOSBg.name)
+                                                if node and sp then
+                                                    node.Sprite = sp
+                                                    node.Activity = true
+                                                end
+                                            end
+                                        end)
+    end
 end
 
 function _M:BsxOut(isChangSex, headid)

@@ -1,0 +1,44 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(equipId)
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Success")
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	SoundMgr.PlayNonStopUI(10014)
+	CCommon.CreateEffect(module:Get("ActorPanel"), 10188)
+
+	if equipId ~= nil then
+		local content = module:Get("Items")
+		CCommon.CreateItem(content, equipId, nil, {num = 1})
+	end
+
+	LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))
+end
+
+
+return _M

@@ -48,7 +48,7 @@ function _P.SetListData(self, data)
 
 	self.mRawTableItems = {}
 	for k,v in ipairs(listData) do
-		self.mRawTableItems[v.stage] = _P.OnCreateItem(self, v, itemGrid, math.floor(data.companyLevel / 100), math.floor(data.companyLevel % 100))
+		self.mRawTableItems[v.id] = _P.OnCreateItem(self, v, itemGrid, data.companyLevel)
 	end
 end
 
@@ -56,8 +56,8 @@ end
 function _P.GetSortListData(self)
 	local listData = {}
 	for k,v in pairs(Csv.AdventureLevel) do
-		if v.star == 1 and v.stage > 1 then
-			local isGeted = _P.CheckThisRewardIsGet(self, v.stage)
+		if v.stageReward ~= nil and next(v.stageReward) ~= nil then
+			local isGeted = _P.CheckThisRewardIsGet(self, v.id)
 			v.isGeted = isGeted
 			listData[#listData + 1] = v
 		end
@@ -79,27 +79,13 @@ function _P.GetSortListData(self)
 end
 
 
-function _P.OnCreateItem(self, data, itemGrid, curStage, curLevel)
+function _P.OnCreateItem(self, data, itemGrid, curLevel)
 	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Adventure_Achievement_Item", WindowType.UI, 0)
 	if not itemModule then return end
 
 	itemModule:Get("Icon").SpriteName = data.icon
+	itemModule:Get("LevelText").Text = data.id
 	itemModule:Get("RewardTip").Text = Csv.Text("quest_reward")
-
-	local starMax = itemModule:Get("StarBg").CachedTran.childCount
-	local totalStar = _P.GetCurStageTotalStar(self, data.stage)
-	local curStar = 1
-	if curStage > data.stage then
-		curStar = totalStar
-	elseif curStage == data.stage then
-		curStar = curLevel
-	end
-	
-	for i=1,starMax do
-		local starImg = itemModule:Get("Star" .. i)
-		starImg.Color = (i<= curStar and Color.white) or GRAY
-		starImg.Activity = i <= totalStar
-	end
 
 	local itemGrid = itemModule:Get("rewardContent")
 	itemGrid:DestroyChildren()
@@ -121,17 +107,11 @@ function _P.OnCreateItem(self, data, itemGrid, curStage, curLevel)
 	local getImg = itemModule:Get("GetImg")
 	local noTouchText = itemModule:Get("NoText")
 	noTouchText.Text = Csv.Text("achieve_nofinish")
-	if curStage >= data.stage then
+	if curLevel >= data.id then
 		getBtn.Activity = not data.isGeted
 		getImg.Activity = data.isGeted
 		ingText.Activity = false
 		noTouchText.Activity = false
-	-- elseif curStage == data.stage then -- 进行
-	-- 	local isCanGet = totalStar == curLevel
-	-- 	getBtn.Activity = isCanGet and not data.isGeted
-	-- 	ingText.Activity = not isCanGet
-	-- 	getImg.Activity = data.isGeted
-	-- 	noTouchText.Activity = false
 	else -- 未达成
 		getBtn.Activity = false
 		ingText.Activity = false
@@ -143,23 +123,11 @@ function _P.OnCreateItem(self, data, itemGrid, curStage, curLevel)
 end
 
 
-function _P.GetCurStageTotalStar(self, stageId)
-	local totalNum = 0
-	for k,v in pairs(Csv.AdventureLevel) do
-		if v.stage == math.floor(stageId) then
-			totalNum = totalNum + 1
-		end
-	end
-
-	return totalNum
-end
-
-
-function _P.CheckThisRewardIsGet(self, stageId)
+function _P.CheckThisRewardIsGet(self, levelId)
 	local isGet = false
 	if self.mData ~= nil and self.mData.stageRewardGeted ~= nil then
 		for k,v in pairs(self.mData.stageRewardGeted) do
-			if v == stageId then
+			if v == levelId then
 				isGet = true
 				break
 			end
@@ -174,7 +142,7 @@ function _P.OnGetRewards(self, data)
 	if data.isGeted then
 		CCommon.ShowError(Csv.Text("err_reward_geted"))
 	else
-		CActivity.ReqAdvGetReward(data.stage)
+		CActivity.ReqAdvGetReward(data.id)
 	end
 end
 

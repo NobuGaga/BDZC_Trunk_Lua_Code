@@ -54,7 +54,8 @@ function _M:OnCreate(data)
 			local GoldCount = MBag.GetItemNum(Define.AssetsType.Gold)
 			CCommon.CheckTips(function(isSure, arg)
 				_P.OnClickRefresh(self, isSure, arg)
-			end, {items = {[1] = GoldCount} ,content = Csv.Text("adventure_exchange_tip",{num = self.needCost})})
+			end, {items = {[1] = GoldCount} ,content = Csv.Text("adventure_exchange_tip",{num = self.needCost})},
+			Define.NoTipsAgainType.AdventureShop)
 		else
 			CCommon.ShowError(Csv.Text("adventure_exchange_refreshError"))
 		end
@@ -65,6 +66,7 @@ function _M:OnCreate(data)
 	module:Get("zuanshiSX").Text = Csv.Text("adventure_exchange_money")
 	module:Get("timeSX").Text = Csv.Text("adventure_exchange_auto")
 	module:Get("C_text_8").Text = Csv.Text("adventure_exchange_refresh")
+	module:Get("costText").Text = Csv.Text("club_shop_cost")
 	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
 		if itemid == QIYUCOIN then
 			module:Get("integral").Text = Csv.Text("adventure_exchange_score",{num = MBag.GetItemNum(QIYUCOIN)})
@@ -93,7 +95,8 @@ end
 
 function _P.SetData(self, data)
 	self.mModule:Get("CSNum").Text = (MaxRefreshNum + self.extraTime - data.todayRefreshCount) .. '/' .. MaxRefreshNum + self.extraTime
-	
+	self.mModule:Get("costValue").Text = _P.GetCostNum(self)
+
 	_P.OnUpdateTime(self)
 	if data.nextRefreshLeftTime > 0 then
 		--倒计时开始
@@ -148,7 +151,11 @@ function _P.OnCreateShopItem(self, data, itemGrid)
 		--ItemNameText.Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
 		ItemNameText.Text = itemConf.name
 
-		itemModule:Get("ItemNum").Text = goodConf.itemcount
+		itemModule:Get("Red").Activity = false
+
+		local getNumText = itemModule:Get("GetNum")
+		getNumText.Activity = true
+		getNumText.Text = 'X' .. goodConf.itemcount
 
 		local IconImg = itemModule:Get("Icon")
 		IconImg.SpriteName = itemConf.icon
@@ -206,7 +213,7 @@ function _P.SetItemGray(itemModule, data, shopConf)
 	
 	itemModule:Get("Icon").IsGray = isMax
 	itemModule:Get("IconBox").IsGray = isMax
-	itemModule:Get("Red").Activity = not isMax
+	-- itemModule:Get("Red").Activity = not isMax
 	itemModule:Get("Corner").IsGray = isMax
 
 	-- 判断该商品兑换次数是否达到上限，若达到上限置灰，不可点击
@@ -258,6 +265,7 @@ function _P.GetCostNum(self)
 			return v[3]
 		end
 	end
+	return 0
 end
 
 -- 兑换道具回调
@@ -280,7 +288,7 @@ function _R.OnExchangeCallBack(self, data)
 	local effectRect = itemModule:Get("Score")
 	if effectRect == nil then return end
 
-	CCommon.ShowFlyItem(effectRect, goodConf.itemid, data.buyCount)
+	CCommon.ShowFlyItem(effectRect, goodConf.itemid, goodConf.itemcount)
 end
 
 function _R.OnUpdateRefreshCount(self)

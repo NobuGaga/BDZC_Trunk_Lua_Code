@@ -76,7 +76,7 @@ function _P.OnCreateShopItem(self, v, itemGrid)
 		local ItemNameText = itemModule:Get("GoodName")
 		local strColor = Csv.ItemColor[itemConf.color].str
 		ItemNameText.Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
-		itemModule:Get("ItemNum").Text = (v.itemCount > 1 and v.itemCount) or ""
+		itemModule:Get("ItemNum").Text = 'x' .. v.itemCount
 		itemModule:Get("LeftNum").Text = (v.maxBuy - v.buyCount)
 
 		local IconImg = itemModule:Get("Icon")
@@ -130,10 +130,11 @@ end
 function _P.SetItemGray(itemModule, data, maxBuy)
 	local goodConf = Csv.ActivityNewExchange[data.goodid]
 	local isMax = data.buyCount >= maxBuy
+	local leftNum = maxBuy - data.buyCount
 	
 	itemModule:Get("Icon").IsGray = isMax
 	itemModule:Get("IconBox").IsGray = isMax
-	itemModule:Get("Red").Activity = not isMax
+	itemModule:Get("Red").Activity = (not isMax and leftNum > 1)
 
 	-- 判断该商品兑换次数是否达到上限，若达到上限置灰，不可点击
 	local exchangeBtn = itemModule:Get("Exchange")

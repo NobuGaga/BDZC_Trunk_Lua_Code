@@ -25,13 +25,13 @@ function _M:OnCreate(data,isCompany,typeID)
 
 	local TextNum = moudle:Get("Num")
 	TextNum.Text = Csv.Text("bag_numX")
+	local max = math.min(data.itemcount,BAGUSE_MAX)
+	moudle:Get("NumText").Text = Csv.Text("bag_have",{num = max,max = max})	
 
-	moudle:Get("NumText").Text = Csv.Text("bag_have",{num = 1,max = math.min(self.mData.itemcount,BAGUSE_MAX)})
-
-	local SliderButton = SliderButton.new(1,math.min(data.itemcount,BAGUSE_MAX),1,function(value)_P.OnSliderValueChanged(self,value)end)
+	local SliderButton = SliderButton.new(1,max,max,function(value)_P.OnSliderValueChanged(self,value)end)
 	SliderButton:CreateSliderBtn(moudle:Get("Slider"),moudle:Get("BtnAdd"),moudle:Get("BtnMinus"))
 	self.SliderButton = SliderButton
-	self.mValue = 1
+	self.mValue = max
 
 	local BtnClose = moudle:Get("BtnClose")
 	BtnClose:AddOnButton(function ( ... )
@@ -62,7 +62,6 @@ function _M:OnCreate(data,isCompany,typeID)
 	ImgIcon.SpriteName = csv.icon
 
 	moudle:Get("Num2").Text = MBag.GetItemNum(data.itemid)
-	_P.OnSliderValueChanged(self,1)
 end
 
 function _P.OnSliderValueChanged(self,value)

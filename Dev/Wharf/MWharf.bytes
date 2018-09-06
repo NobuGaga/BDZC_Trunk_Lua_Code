@@ -5,6 +5,7 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local CMain = JRequire "Dev.Main.CMain"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local MGirl = JRequire"Dev.Girl.MGirl"
+local MBattle = JRequire "Dev.Battle.MBattle"
 
 local _M = {}
 local _P = {}
@@ -254,7 +255,6 @@ function _M.SetGirlList(data)
 			table.insert(_M.WharfGirls,data)
 		end
 	end
-	
 end
 
 function _M.SetEventList(data)
@@ -321,6 +321,7 @@ function _M.GetWharfGirl(id)
 end
 
 function _M.GetLastPeople()
+	local canShowGirl = {}
 	for k,v in pairs(WHARF_GIRL)do
 		local wharfPeople = Csv.WharfPeople[v]
 		local isGet = false
@@ -335,10 +336,14 @@ function _M.GetLastPeople()
 		end 
 
 		if not isGet then
-			return v
+			if wharfPeople.unlockBattle ~= nil then
+				if wharfPeople.unlockBattle < MBattle.CurId then
+					table.insert(canShowGirl,v)
+				end
+			end
 		end
 	end
-	return nil
+	return canShowGirl
 end
 
 --检测美女激活红点

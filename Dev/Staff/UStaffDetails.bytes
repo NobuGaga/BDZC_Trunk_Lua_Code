@@ -3,6 +3,7 @@ local UStaffAptitude = JRequire "Dev.Staff.UStaffAptitude"
 local UStaffSkill = JRequire "Dev.Staff.UStaffSkill"
 local UStaffHalo = JRequire "Dev.Staff.UStaffHalo"
 local UStaffTalent = JRequire "Dev.Staff.UStaffTalent"
+local UStaffEquip = JRequire "Dev.Staff.UStaffEquip"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local CStaff = JRequire "Dev.Staff.CStaff"
 local MMain = JRequire "Dev.Main.MMain"
@@ -45,6 +46,7 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle:delete()
 		self.ChooseMoudle = nil
 	end
+
 	if funcId == Define.SysId.Staff_Book then
 		self.ChooseMoudle = UStaffAptitude.new(self.PageNode,self.mID)
 	elseif funcId == Define.SysId.Staff_Skill then
@@ -53,6 +55,8 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = UStaffHalo.new(self.PageNode,self.mID)
 	elseif funcId == Define.SysId.Staff_Talent then
 		self.ChooseMoudle = UStaffTalent.new(self.PageNode,self.mID)
+	elseif funcId == Define.SysId.Staff_Equip then
+		self.ChooseMoudle = UStaffEquip.new(self.PageNode,self.mID)
 	end
 
 	MStaff.LastChoose = funcId
@@ -231,8 +235,8 @@ function _M:OnCreate(id,chooseFuncId)
 		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
 	end
-	if count < 4 then
-		for i=count + 1,4 do
+	if count < 5 then
+		for i=count + 1,5 do
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
@@ -545,6 +549,13 @@ end
 
 function _R.RefreshName(self)
 	self.mTextName.Text = MStaff.GetStaffName(self.mID)--person.name
+end
+
+---装备
+function _R.RefreshEquip(self)
+	if MStaff.LastChoose == Define.SysId.Staff_Equip then
+		self.ChooseMoudle:GetEquipData()
+	end
 end
 
 return _M

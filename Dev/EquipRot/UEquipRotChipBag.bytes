@@ -1,0 +1,228 @@
+-- 装备抢夺-碎片背包
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local TabGroup = JRequire "Dev.Common.TabGroup2"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local QualityIds = {0, 3, 4, 5, 6}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy()
+	if self.TabHandle ~= nil then
+		self.TabHandle:delete()
+		self.TabHandle = nil
+	end
+end 
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Synthesis")
+	self.mModule = module
+	self.ImgSelect = module:Get("Select")
+
+	module:Get("C_Text").Text = Csv.Text("equipRob_bag_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.HasRect = module:Get("InfoRect")
+	self.NoneRect = module:Get("NoneTips")
+	self.NoneRect.Text = Csv.Text("car_garage_none")
+
+	local listData = _P.GetListData()
+	if next(listData) ~= nil then
+		local colorLight = Color(255/255, 225/255, 75/255, 1)
+		local colorDefault = Color(0/255, 195/255, 255/255, 1)
+		local tabHandle = TabGroup.new(function(pageId)
+			_P.OnChoose(self, pageId)
+		end, "yth_023", "yth_023", nil, nil, nil, nil, nil, nil, colorDefault, colorLight)
+		self.TabHandle = tabHandle
+
+		for k,v in pairs(listData) do
+			tabHandle:Add(v.id, module:Get("Toggle".. v.id), module:Get("C_text_".. v.id), v.name)
+		end
+
+		self.TabHandle:Choose(listData[1].id)
+	end
+end
+
+
+function _P.GetListData()
+	local listData = {}
+	for i=1,5 do
+		listData[i] = {id = i, sort = i, name = Csv.Text("equipRob_bag_" .. i), ifOpen = 1}
+	end
+
+	return listData
+end
+
+
+function _P.OnChoose(self, pageId)
+	if self.SelectPageId == pageId then return end
+	self.SelectPageId = pageId
+
+	_P.SetListData(self, pageId)
+end
+
+
+function _P.SetListData(self, pageId)
+	self.ImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+	self.ImgSelect.Activity = false
+	self.PageId = pageId
+
+	local contentTransform = self.mModule:Get("Content")
+	contentTransform:DestroyChildren()
+
+	local sortGoods = _P.GetSortItems(MBag.Items[Define.BagType.EquipChip], pageId)
+	if sortGoods == nil then return end
+
+	self.mAllChipData = {}
+	for i,v in ipairs(sortGoods) do
+		self.mAllChipData[i] = _P.OnCreateItem(self, contentTransform, v, i)
+	end
+
+	local hasItemNum = #sortGoods
+	local emptyNum = 0
+	if hasItemNum < 30 then
+		emptyNum = 30 - hasItemNum
+	else
+		if hasItemNum % 5 > 0 then
+			emptyNum = 5 - hasItemNum % 5
+		end
+	end
+
+	for i=1, emptyNum do
+		_P.OnCreateItem(self, contentTransform, nil)
+	end
+
+	local curIndex = (self.CurSelectIndex and self.CurSelectIndex.index) or 1
+	if self.mAllChipData[curIndex] then
+		local curData = self.mAllChipData[curIndex].data
+		_P.OnSelectItemData(self, curData, true, curIndex)
+	else
+		local curData = (self.mAllChipData[1] and self.mAllChipData[1].data) or nil
+		_P.OnSelectItemData(self, curData, true, 1)
+	end
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, index)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Common_Item", WindowType.Tip1, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("Icon")
+		local qualityImg = itemModule.SelfRect
+		local numText = itemModule:Get("Num")
+		
+		iconImg.Activity = data
+		numText.Activity = data
+		if data then
+			local itemConf = Csv.Item[data.itemid]
+			local sellConf = Csv.CarSellReturn[data.itemid]
+			iconImg.SpriteName = itemConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+			numText.Text = data.itemcount
+
+			item.data = data
+		else
+			qualityImg.SpriteName = "ty_018"
+		end
+
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnSelectItemData(self, data, false, index)
+		end, nil, 0.9)
+		qualityImg.RaycastTarget = data
+	end
+
+	item.module = itemModule
+	return item
+end
+
+
+function _P.OnSelectItemData(self, data, isUpdate, index)
+	local item = self.mAllChipData[index]
+	if item ~= nil then
+		local itemModule = item.module
+		self.ImgSelect.Activity = true
+		self.ImgSelect:SetParent(self.mModule.SelfRect.CachedTran)
+		self.ImgSelect.LocalPosition = Vector2(0, 0)
+		self.ImgSelect.CachedTran:SetSiblingIndex(1)
+		self.ImgSelect:SetParent(itemModule.SelfRect.CachedTran)
+		self.ImgSelect.LocalPosition = Vector2(0, 0)
+		self.ImgSelect.CachedTran:SetSiblingIndex(1)
+	end
+
+	if self.CurSelectIndex ~= nil and self.CurSelectIndex.pageId == self.PageId and self.CurSelectIndex.index == index then 
+		return
+	end
+
+	self.CurSelectIndex = {index = index, pageId = self.PageId}
+	self.HasRect.Activity = data
+	self.NoneRect.Activity = not data
+
+	if data then
+		_P.SetItemData(self, data)
+	end
+end
+
+
+function _P.SetItemData(self, data)
+	local module = self.mModule
+	local itemConf = Csv.Item[data.itemid]
+	local strColor = Csv.ItemColor[itemConf.color].str
+	module:Get("GoodsName").Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+	module:Get("GoodsNum").Text = Csv.Text("car_garage_shuliang", {num = data.itemcount})
+	module:Get("GoodsDescTitle").Text = Csv.Text("bag_desc")
+	module:Get("GoodsDesc").Text = itemConf.tips
+	module:Get("IconColor").SpriteName = itemConf.colorIcon
+	module:Get("Icon").SpriteName = itemConf.icon
+end
+
+
+function _P.GetSortItems(items, pageId)
+	local sortItems = {}
+	if items ~= nil then
+		local itemQuality = QualityIds[pageId]
+		for k,v in pairs(items) do
+			local itemConf = Csv.Item[v.itemid]
+			if v.itemcount > 0 and (itemQuality == 0 or itemConf.color == itemQuality) then
+				sortItems[#sortItems + 1] = v
+			end
+		end
+		table.sort(sortItems, function(a,b) return _P.SortID(a,b) end)
+	end
+
+	return sortItems
+end
+
+
+function _P.SortID(a, b)
+	local itemConfA = Csv.Item[a.itemid]
+	local itemConfB = Csv.Item[b.itemid]
+	if itemConfA.sort == itemConfB.sort then
+		return a.itemid < b.itemid
+	end
+	return itemConfA.sort < itemConfB.sort
+end
+
+
+return _M

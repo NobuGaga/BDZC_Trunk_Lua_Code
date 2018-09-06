@@ -1,0 +1,216 @@
+-- 分解成功界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+local CEquipt = JRequire "Dev.Equipt.CEquipt"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(equipInfo)
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Devour")
+	self.mModule = module
+	self.OnCloseCall = onClose
+
+	module:Get("BackBtn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	module:Get("C_Btn_a"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
+
+	module:Get("title").Text = Csv.Text("equip_starUp_select_title")
+	module:Get("C_text_0").Text = Csv.Text("equip_starUp_select_btn3")
+	module:Get("C_text").Text = Csv.Text("equip_starUp_select_btn1")
+	module:Get("Tips").Text = Csv.Text("equip_starUp_tips")
+	module:Get("Title1").Text = Csv.Text("equip_starUp_select_title2")
+
+	self.mSelectBtn = module:Get("C_Btn_b")
+
+	local icon = module:Get("Icon")
+	local iconBg = module:Get("Box")
+	local iconNum = module:Get("IconNum")
+	local iconName = module:Get("textName")
+	local iconNeed = module:Get("combat")
+
+	local noequipTips = module:Get("text111")
+	noequipTips.Text = Csv.Text("equip_starUp_select_noitem2")
+	noequipTips.Activity = false
+	local equipNeed = module:Get("itemNeed")
+	self.mEquipNeed = equipNeed
+
+	local csvEquipStar = Csv.EquipStar[equipInfo.equipId * 1000 + equipInfo.star + 1]
+	local costItemId = 0
+	local costItemNum = 0
+
+	local costEquipId = 0
+	local costEquipNum = 0
+
+	if csvEquipStar.costItem ~= nil then
+		costItemId = csvEquipStar.costItem[1][1]
+		costItemNum = csvEquipStar.costItem[1][2]
+
+		local csvItem = Csv.Item[costItemId]
+		icon.SpriteName = csvItem.icon
+		iconBg.SpriteName = csvItem.colorIcon
+		iconNum.Text =  LuaUtil.NumberFormat(MBag.GetItemNum(costItemId))-- MBag.GetItemNum(costItemId)
+		iconName.Text = csvItem.name
+		iconNeed.Text = Csv.Text("equip_starUp_select_costNum",{num = costItemNum})
+	end
+
+	if csvEquipStar.needEquip ~= nil then
+		costEquipId = csvEquipStar.needEquip[1]
+		costEquipNum = csvEquipStar.needEquip[2]
+		self.mCostEquipNum = costEquipNum
+
+		local csvEquip = Csv.Equip[costEquipId]
+
+		if csvEquip ~= nil then
+			equipNeed.Text = Csv.Text("equip_starUp_select_itemNeed",{name = csvEquip.name,num = 0,max = costEquipNum})
+		else
+			print("找不到吞噬的装备id___________",costEquipId)
+		end
+
+		local content = module:Get("content")
+		local hasEquipList =  _P.GetSortList(MEquipt.Equips,costEquipId)
+
+		self.mSelectEquips = {}
+		if #hasEquipList > 0 then
+			for k,v in ipairs (hasEquipList) do
+				local itemMoudle = JGuiManager.GetMoudle(content, "M_Equipment_Devour_Item", WindowType.UI, 0)
+				local equipIcon = itemMoudle:Get("Icon")
+				local euqipIconBg = itemMoudle:Get("Box")
+				local equiplv = itemMoudle:Get("Lv1")
+				local equipStar = itemMoudle:Get("Lv2")
+				local equipName = itemMoudle:Get("textName")
+				local gou = itemMoudle:Get("gou")
+
+				local csvEquip = Csv.Equip[v.equipId]
+
+				equipIcon.SpriteName = csvEquip.icon
+				euqipIconBg.SpriteName = csvEquip.colorIcon
+				equiplv.Text = Csv.Text("equip_item_lv",{num = v.level})
+				equipStar.Text = Csv.Text("equip_item_star",{num = v.star})
+				equipName.Text = csvEquip.name
+
+				itemMoudle:Get("Kuang"):AddOnClick(function()
+					local selectEquips = self.mSelectEquips
+					if gou.Activity then
+						gou.Activity = false
+						if selectEquips ~= nil then
+							for k2,v2 in ipairs(selectEquips)do
+								if v2 == v.id then
+									table.remove(selectEquips,k2)
+									self.mSelectEquips = selectEquips
+									self.mEquipNeed.Text = Csv.Text("equip_starUp_select_itemNeed",{name = csvEquip.name,num = #selectEquips,max = self.mCostEquipNum})
+									_P.CheckSelectItemBtn(self)
+									return
+								end
+							end
+						end
+					else
+						if #selectEquips < self.mCostEquipNum then
+							gou.Activity = true
+
+							if selectEquips ~= nil then
+								for k2,v2 in ipairs(selectEquips)do
+									if v2 == v.id then
+										return
+									end
+								end
+							end
+							table.insert(selectEquips,v.id)
+						else
+							CCommon.ShowError(Csv.Text("equip_starUp_select_equipMore"))
+						end
+						self.mEquipNeed.Text = Csv.Text("equip_starUp_select_itemNeed",{name = csvEquip.name,num = #selectEquips,max = self.mCostEquipNum})
+					end
+					self.mSelectEquips = selectEquips
+					_P.CheckSelectItemBtn(self)
+				end)
+			end
+		else
+			noequipTips.Activity = true
+		end
+	else
+		equipNeed.Text = Csv.Text("equip_starUp_select_noitem")
+	end
+
+	module:Get("C_Btn_b"):AddOnButton(function()
+		WindowMgr.Call("UEquipStartUp","SelctStarCost",nil)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	module:Get("C_Btn_a"):AddOnButton(function()
+		if self.mSelectEquips ~= nil and #self.mSelectEquips < costEquipNum then
+			CCommon.ShowError(Csv.Text("equip_starUp_select_equipNoNeed"))
+		else
+			WindowMgr.Call("UEquipStartUp","SelctStarCost",self.mSelectEquips)
+			SoundMgr.Play(10002)
+			self:Destroy()
+		end
+	end)
+
+end
+
+function _P.CheckSelectItemBtn(self)
+	self.mSelectBtn.IsGray = false
+	self.mSelectBtn.RaycastTarget = true
+	if self.mSelectEquips ~= nil then
+		if #self.mSelectEquips > 0 then
+			self.mSelectBtn.IsGray = true
+			self.mSelectBtn.RaycastTarget = false
+		end
+	end
+end
+
+function _P.GetSortList(list,needId)
+	local sortList = {}
+	for k,v in pairs(list) do
+		if needId == v.equipId then
+			sortList[#sortList + 1] = v
+		end
+	end
+
+	if sortList ~= nil then
+		table.sort(sortList, function (a, b)
+			local aEquip = Csv.Equip[a.equipId]
+			local bEquip = Csv.Equip[b.equipId]
+			if aEquip.quality == bEquip.quality then
+				if aEquip.type == bEquip.type then
+					if a.level == b.level then
+						return a.equipId > b.equipId
+					else
+						return a.level > b.level
+					end
+				else
+					return aEquip.type < bEquip.type
+				end
+			else
+				return aEquip.quality > bEquip.quality
+			end
+		end)
+	end
+
+	return sortList
+end
+
+
+return _M

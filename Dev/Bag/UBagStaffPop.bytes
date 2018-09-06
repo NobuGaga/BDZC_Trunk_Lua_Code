@@ -65,7 +65,7 @@ function _M:OnCreate(itemid)
 		end,nil,0.9)
 
 		local btnPos = BtnUp.LocalPosition
-		if csvItem.useType == 6 then
+		if csvItem.useType == 6 or csvItem.useType == 35 then
 			staffMoudle:Get("combat").Text = Csv.Text("bag_attrAll",{num = MStaff.GetAllAttr(v.id)})
 			staffMoudle:Get("IconRect").Activity = true
 			for k,v in ipairs(csvStaff.specialtyIcon) do
@@ -90,6 +90,11 @@ end
 function _P.OnUseItem(self,itemid,staffid)
 	local itemData = MBag.Get(itemid)
 	if itemData ~= nil then
+		local itemCsv = Csv.Item[itemid]
+		if itemCsv.useType == 35 then
+			CBag.OnUseItem(itemData.itemid,1,{staffid})
+			return
+		end
 		local num = itemData.itemcount
 		if num > BAGUSE_PARAM then
 			WindowMgr.Create("UBagUsePop",itemData,true,staffid)

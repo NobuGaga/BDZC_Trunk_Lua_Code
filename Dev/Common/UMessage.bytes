@@ -68,7 +68,7 @@ _P.TextDispatcher =
 		return moudle
 	end,
 	[Define.ShowStrType.Combat] = function (self, showStr, ... )
-		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_ShowText_Power")
+		local moudle = self:CreateMoudle(self.ShowingStrBase, "M_ShowText_Fight")
 		local num1 = showStr[1]
 		local num2 = showStr[2]
 		local isUp = showStr[3]
@@ -96,9 +96,10 @@ _P.TextDispatcher =
 			local img = JGuiManager.CreateImage(rectUp,"")
 			img.SpriteNameAutoScale = strType..string.sub(tostring(num2),j,j)
 		end
-		imgShili.LocalPosition = Vector2(-(_P.GetWidth(leng1,26,5)/2 + 20),0)
-		rectUp.LocalPosition = Vector2(_P.GetWidth(leng1,26,5)/2 + _P.GetWidth(leng2,18,5)/2 + 10,0)
-		imgBG.SizeDelta = Vector2(_P.GetWidth(leng1,26,5) + _P.GetWidth(leng2,18,5) + 10 + 81 + 200,71)
+		rectPower.LocalPosition = Vector2(-40,0)
+		imgShili.LocalPosition = Vector2(-(_P.GetWidth(leng1,26,5)/2 + 60),0)
+		rectUp.LocalPosition = Vector2(_P.GetWidth(leng1,26,5)/2 + _P.GetWidth(leng2,18,5)/2 - 30,0)
+		imgBG.SizeDelta = Vector2(_P.GetWidth(leng1,26,5) + _P.GetWidth(leng2,18,5) -30 + 81 + 200,71)
 		return moudle
 	end,
 }

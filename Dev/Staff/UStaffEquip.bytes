@@ -1,0 +1,165 @@
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+
+local _M = Class()
+local _P = {}
+
+
+--界面构建
+function _M:ctor(parent,id)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Equipment", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mStaffid = id
+
+	moudle:Get("C_text").Text = Csv.Text("equip_staff_equip")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--进入装备界面
+		WindowMgr.Create("UEquipMain",id)
+	end,nil,1.2)
+
+	moudle:Get("equipTips1").Text = Csv.Text("equip_staff_equip_no")
+	moudle:Get("equipTips2").Text = Csv.Text("equip_staff_equip_no")
+	moudle:Get("equipattr1").Text = Csv.Text("equip_staff_equipattr")
+	moudle:Get("equipattr2").Text = Csv.Text("equip_staff_equipattr")
+	moudle:Get("SmallIcon1").SpriteName = "yifu"
+	moudle:Get("SmallIcon2").SpriteName = "xiagnzi"
+	local equipItem1 = {
+		infoRect = moudle:Get("equipInfo1"),
+		iconBg = moudle:Get("equipIconColor1"),
+		icon = moudle:Get("equipIcon1"),
+		tips = moudle:Get("equipTips1"),
+		name = moudle:Get("equipname1"),
+		staffs =  moudle:Get("equipstaff1"),
+		attrs = moudle:Get("equipattrValue1"),
+		lv =  moudle:Get("equip1Lv1"),
+		star = moudle:Get("equip1Lv2"),
+		smallIcon = moudle:Get("SmallIcon1"),
+		equipInfo = nil
+	}
+
+	local equipItem2 = {
+		infoRect = moudle:Get("equipInfo2"),
+		iconBg = moudle:Get("equipIconColor2"),
+		icon = moudle:Get("equipIcon2"),
+		tips = moudle:Get("equipTips2"),
+		name = moudle:Get("equipname2"),
+		staffs =  moudle:Get("equipstaff2"),
+		attrs = moudle:Get("equipattrValue2"),
+		lv =  moudle:Get("equip2Lv1"),
+		star = moudle:Get("equip2Lv2"),
+		smallIcon = moudle:Get("SmallIcon2"),
+		equipInfo = nil
+	}
+
+	moudle:Get("equipItemBg1"):AddOnClick(function()
+		_P.OnclickItem(self,1)
+	end)
+	moudle:Get("equipItemBg2"):AddOnClick(function()
+		_P.OnclickItem(self,2)
+	end)
+
+	self.mEquipItem1 = equipItem1
+	self.mEquipItem2 = equipItem2
+
+	_P.RefreshEquipItem(self)
+end
+
+function _P.RefreshEquipItem(self)
+	equipItem1 = self.mEquipItem1
+	equipItem2 = self.mEquipItem2
+
+	equipItem1.infoRect.Activity = false
+	equipItem1.tips.Activity = true
+	equipItem1.iconBg.SpriteName = "ty_018"
+	equipItem1.icon.SpriteName = "yifu"
+	equipItem1.lv.Text = ""
+	equipItem1.star.Text = ""
+	equipItem1.smallIcon.Activity = false
+	equipItem1.equipInfo = nil
+
+	equipItem2.infoRect.Activity = false
+	equipItem2.tips.Activity = true
+	equipItem2.iconBg.SpriteName = "ty_018"
+	equipItem2.icon.SpriteName = "xiagnzi"
+	equipItem2.lv.Text = ""
+	equipItem2.star.Text = ""
+	equipItem2.smallIcon.Activity = false
+	equipItem2.equipInfo = nil
+
+	local staffData = MStaff.GetStaffDataByID(self.mStaffid)
+
+	if staffData ~= nil then
+		if staffData.equips ~= nil then
+			for k,v in pairs(staffData.equips) do
+				local csvEquip = Csv.Equip[v.equipId]
+				local equipItem = nil
+				if csvEquip.type == 1 then
+					equipItem = equipItem1
+				elseif csvEquip.type == 2 then
+					equipItem = equipItem2
+				end
+				equipItem.infoRect.Activity = true
+				equipItem.tips.Activity = false
+				equipItem.iconBg.SpriteName = csvEquip.colorIcon
+				equipItem.icon.SpriteName = csvEquip.icon
+				equipItem.name.Text = csvEquip.name
+
+				local power = MEquipt.GetAttrPower(v)
+				local powerRate = MEquipt.GetAttrPowerRate(v)
+				local str1 = ""
+				if power > 0 then
+					str1 = Csv.Text("equip_staff_attr_1",{num = power})
+				end
+				if powerRate > 0 then
+					if str1 ~= "" then
+						str1 = str1 .. "\n"
+					end
+					local rate = string.format("%.1f",powerRate/100)
+					str1 = str1..Csv.Text("equip_staff_attr_2",{num = rate})
+				end
+
+				equipItem.attrs.Text =  str1
+				equipItem.staffs.Text =  Csv.Text("equip_staff_equipStaff",{name = MEquipt.GetStaffs(v)}) 
+				equipItem.lv.Text = Csv.Text("equip_item_lv",{num = v.level})
+				equipItem.star.Text = Csv.Text("equip_item_star",{num = v.star})
+				equipItem.equipInfo = v
+				equipItem.smallIcon.Activity = true
+			end
+		end
+	end
+end
+
+function _M:GetEquipData(data)
+	_P.RefreshEquipItem(self)
+end
+
+function _P.OnclickItem(self,type)
+	local itemData = {}
+	if type == 1 then
+		itemData = self.mEquipItem1
+	elseif type == 2 then
+		itemData = self.mEquipItem2
+	end
+
+	if itemData.equipInfo then
+		--
+		WindowMgr.Create("UEquiptDetail",itemData.equipInfo,self.mStaffid)
+	else
+		WindowMgr.Create("UEquipMain",self.mStaffid,type,1)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

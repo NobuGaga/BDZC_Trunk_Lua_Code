@@ -11,6 +11,7 @@ local CCar = JRequire "Dev.Car.CCar"
 local MAircraft = JRequire "Dev.Aircraft.MAircraft"
 local CTrigger = JRequire "Dev.Main.CTrigger"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CEquipRot = JRequire "Dev.EquipRot.CEquipRot"
 
 local _M = {}
 local _P = {}
@@ -82,6 +83,10 @@ function _P.OnGetItem(data)
 			CCar.CheckCarRedPoint()
 		end
 
+		if csvItem.type == Define.BagType.EquipChip then
+			CEquipRot.CheckEquipRotRedPoint()
+		end
+
 		-- 银行理财检测红点
 		if data.item.itemid == Define.AssetsType.Gold then
 			CActivity.UpdateInvestmentRed()
@@ -117,6 +122,10 @@ function _P.OnDelItem(data)
 
 		if csvItem.type == 6 then
 			CCar.CheckCarRedPoint()
+		end
+
+		if csvItem.type == Define.BagType.EquipChip then
+			CEquipRot.CheckEquipRotRedPoint()
 		end
 
 		if data.item.itemid == Define.AssetsType.Gold then

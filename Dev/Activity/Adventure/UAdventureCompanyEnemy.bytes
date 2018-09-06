@@ -80,22 +80,12 @@ function _P.CreateEnemyItem(self, itemGrid, data)
 			itemModule:Get("BarText").Text = tostring(math.ceil(fillAmount * 100))..'%'
 			itemModule:Get("Bar").FillAmount = fillAmount
 
-			local levelConf = Csv.AdventureLevel[taskConf.level]
-			if levelConf then
-				itemModule:Get("Icon").SpriteName = levelConf.icon
-
-				local curStageMax = _P.GetCurStageTotalStar(self, levelConf.stage)
-				local maxStar = itemModule:Get("StarBg").CachedTran.childCount
-				for i=1,maxStar do
-					local curStarImg = itemModule:Get("Star" .. i)
-					if i <= levelConf.star then
-						curStarImg.Color = Color.white
-					else
-						curStarImg.Color = GRAY
-					end
-					curStarImg.Activity = i<= curStageMax
-				end
+			local curLevelConf = Csv.AdventureLevel[taskConf.level]
+			if curLevelConf ~= nil then
+				itemModule:Get("Icon").SpriteName = curLevelConf.icon
 			end
+
+			itemModule:Get("LevelText").Text = taskConf.level
 		end
 
 		itemModule:Get("rewardTitle2").Text = Csv.Text("adventure_enemy_reward")
@@ -205,18 +195,6 @@ function _R.OnNewGangEnmeyPush(self, listData)
 	end
 
 	_P.SetEnemyListData(self, listData)
-end
-
-
-function _P.GetCurStageTotalStar(self, stageId)
-	local totalNum = 0
-	for k,v in pairs(Csv.AdventureLevel) do
-		if v.stage == math.floor(stageId) then
-			totalNum = totalNum + 1
-		end
-	end
-
-	return totalNum
 end
 
 

@@ -24,6 +24,9 @@ local RedStr = 'ff5d8c'
 local GreenStr = '5d99ff'
 local AtriIconNames = {"ty_133", "ty_134", "ty_135", "ty_136"}
 local StaffRectPos = {Vector2(0, -332), Vector2(0, -460)}
+local OutlineColors = {Color(1, 1, 1, 1), Color(102/255, 241/255, 64/255, 1),
+						Color(61/255, 233/255, 253/255, 1), Color(222/255, 129/255, 249/255, 1),
+						Color(255/255, 174/255, 87/255, 1), Color(241/255, 112/255, 112/255, 1), Color(255/255, 235/255, 67/255, 1)}
 -- local StarBgIcons = {"yg_bg_008", "yg_bg_009", "yg_bg_010"
 -- 					,"yg_bg_011", "yg_bg_012", "yg_bg_013","yg_bg_013"}
 
@@ -729,7 +732,10 @@ function _M:OnCreate(eventData, activityData)
 
 	local eventconf = Csv.AdventureMainEvent[self.mData.taskId]
 	module:Get("C_Text_0").Text = Csv.Text("adventure_title")
-	module:Get("Name").Text = eventconf.title
+	local nameText = module:Get("Name")
+	nameText.Text = eventconf.title
+	nameText.Color = OutlineColors[eventconf.star]
+
 	module:Get("Info").Text = eventconf.desc
 	module:Get("OpenText").Text = Csv.Text("adventure_staff_confirm")
 	module:Get("BtnText22").Text = Csv.Text("adventure_back")
@@ -778,9 +784,9 @@ function _M:OnCreate(eventData, activityData)
 	-- local starBgImg = module:Get("StarBg")
 	-- starBgImg.SpriteName = StarBgIcons[eventconf.star]
 
-	for i=1,7 do
-		module:Get("Star"..i).Activity = i <= eventconf.star
-	end
+	-- for i=1,7 do
+	-- 	module:Get("Star"..i).Activity = i <= eventconf.star
+	-- end
 
 	-- 设置类型图片
 	local typeImg = module:Get("TypeImg")
@@ -801,7 +807,6 @@ function _P.SetProRewardData(self, data)
 	local pointText = self.mModule:Get("PointText")
 	local proText = self.mModule:Get("gailvNum")
 	local currencyText = self.mModule:Get("OrderText")
-	
 
 	if data == nil then
 		pointText.Text = Csv.Text("adventure_event_point", {num = 0})
@@ -810,7 +815,7 @@ function _P.SetProRewardData(self, data)
 	else
 		local splitReward = MActivity.AdventureRewardSplit(data.reward)
 		pointText.Text = Csv.Text("adventure_event_point", {num = splitReward.point})
-		proText.Text = data.compatibility .. '%'
+		proText.Text = math.max(math.ceil(data.compatibility), 10) .. '%'
 		currencyText.Text = Csv.Text("adventure_event_currency", {num = splitReward.currency})
 	end
 end

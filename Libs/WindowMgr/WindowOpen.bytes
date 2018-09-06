@@ -8,6 +8,7 @@ local MMain = JRequire "Dev.Main.MMain"
 local CCommon = JRequire "Dev.Common.CCommon"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local CArena = JRequire "Dev.Arena.CArena"
 
 local _M = {}
 
@@ -308,6 +309,13 @@ function _M.Open(sysId, ...)
 			WindowMgr.Create("URechargeAward", _SysId.RechargeReward_DailyGift)
 		elseif sysId == _SysId.Fund then
 			WindowMgr.Create("UFundPanel")
+		elseif sysId == _SysId.Arena then
+			-- WindowMgr.Create("UArena")
+			CArena.ReqOpenUI()
+		elseif sysId == _SysId.EquipRot then
+			WindowMgr.Create("UEquipRotMainPanel")
+		elseif sysId == _SysId.MidAFestival then
+			WindowMgr.Create("UMidautumnActivity")
 		end
 	end
 end

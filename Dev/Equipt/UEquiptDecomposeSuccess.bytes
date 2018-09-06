@@ -2,18 +2,10 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
-local CCar = JRequire "Dev.Car.CCar"
-local MCar = JRequire "Dev.Car.MCar"
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
-
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
-
 
 --事件派发
 function _M:Dispatch(funcName, ...)
@@ -23,19 +15,16 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-
-function _M:EndDestroy( ... )
-	if self.OnCloseCall ~= nil then
-		self.OnCloseCall()
-	end
-end
-
-
 --界面构建
-function _M:OnCreate(carid, getList, onClose)
-	local module = self:CreateMoudle(self._RootNode, "M_Car_Decompose_Success")
+function _M:OnCreate(data)
+	local module = self:CreateMoudle(self._RootNode, "M_EquipmentDecompose_Success")
 	self.mModule = module
 	self.OnCloseCall = onClose
+
+	module:Get("BackBtn"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,0.9)
 
 	local confirmBtn = module:Get("C_Btn_b")
 	confirmBtn:AddOnButton(function ( ... )
@@ -43,6 +32,18 @@ function _M:OnCreate(carid, getList, onClose)
 		self:Destroy()
 	end, nil, 0.9)
 
+	module:Get("Title").Text = Csv.Text("equip_decomposeSuccess_title")
+	module:Get("Get").Text = Csv.Text("equip_decomposeSuccess_get")
+	module:Get("C_text").Text = Csv.Text("common_sure")
+
+	local content = module:Get("Content")
+	if data.itemList ~= nil then
+		for k,v in pairs(data.itemList) do
+			CCommon.CreateItem(content, v.key, function ( ... ) -- 打开道具详情界面
+				WindowMgr.Create("UBagDetailPop", v.key)
+			end, {num = v.value})
+		end
+	end
 end
 
 

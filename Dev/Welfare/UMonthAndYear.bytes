@@ -14,6 +14,8 @@ local MONTHCARD_ID = 1
 local CARD_ACTORID = 10066
 local YEARCARD_ID = 2
 local CARD_ACTORID = 10067
+local MonthGetStaffId = Csv.Const(124)[1]
+local YearGetStaffId = Csv.Const(125)[1]
 
 function _M:ctor(parent)
 	self._RootNode = parent
@@ -47,6 +49,7 @@ function _P.ShowMonthCard(self)
 	local costNum = moudle:Get("money")
 	local buyText = moudle:Get("buy")
 	local tipsText = moudle:Get("text7_0")
+	local firstGetText = moudle:Get("C_text9")
 
 	titleText.Text = Csv.Text("welfare_monthCard_title")
 	chixuText.Text = Csv.Text("welfare_monthCard_chixu")
@@ -64,6 +67,20 @@ function _P.ShowMonthCard(self)
 	costNum.Text = "¥"..Csv.Const(11006)[1]
 	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
 	tipsText.Text =Csv.Text("welfare_monthCard_tips")
+
+	if MonthGetStaffId ~= nil then
+		local staffConf = Csv.Personnel[MonthGetStaffId]
+		if staffConf ~= nil then
+			firstGetText.Text = Csv.Text("welfare_monthCard_gettip", {name = staffConf.name})
+			moudle:Get("Staffbody").SpriteName = staffConf.asset
+
+			if staffConf.star ~= nil then
+				for i = 1,6 do
+					moudle:Get("Star" .. i .. i).Activity = i <= staffConf.star
+				end
+			end
+		end
+	end
 
 	leftTime1.Activity = false
 
@@ -125,6 +142,7 @@ function _P.ShowYearCard(self)
 	local costNum = moudle:Get("money_0")
 	local buyText = moudle:Get("buy_0")
 	local tipsText = moudle:Get("text7_2")
+	local getStaffText = moudle:Get("text1_1")
 
 	titleText.Text = Csv.Text("welfare_yearCard_title")
 	chixuText.Text = Csv.Text("welfare_longlife")
@@ -139,6 +157,21 @@ function _P.ShowYearCard(self)
 	costNum.Text = "¥"..Csv.Const(11007)[1]
 	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
 	tipsText.Text =Csv.Text("welfare_yearCard_tips")
+
+	if YearGetStaffId ~= nil then
+		local staffConf = Csv.Personnel[YearGetStaffId]
+		if staffConf ~= nil then
+			getStaffText.Text = Csv.Text("welfare_yearCard_gettip", {name = staffConf.name})
+
+			moudle:Get("Staffbody2").SpriteName = staffConf.asset
+
+			if staffConf.star ~= nil then
+				for i = 1,6 do
+					moudle:Get("Star" .. i).Activity = i <= staffConf.star
+				end
+			end
+		end
+	end
 
 	self.mBuyText_Y = buyText
 

@@ -219,9 +219,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 	local _isUseGold = MTalk.IsCostDiamond
 
 	if _value ~= nil and _value ~= "" then
-		local isGMMsg = false
 		if string.sub(_value, 1, 1) == '@' then
-			isGMMsg = true
 			local strTable = LuaUtil.StringSplit(string.sub(_value, 2), ' ')
 			if strTable ~= nil and #strTable > 0 then
 				local gmKey = strTable[1]
@@ -234,16 +232,22 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 			end
 		end
 
-		if not isGMMsg then
-			GameSetting.HttpPostDataToPHP(Define.PostUrlType.Talk, {sChannel = _channel, sContent = _value, ipAddress = GameSetting.IP,
-										  chatObject = recvName or "", deviceCode = GameSetting.DeviceID, sTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
-		end
 		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.CheckChatUrl)
 		session:AppendParam("content", _value)
 		session:AppendParam("servId", MLogin.GetServerId())
 		session:AppendParam("roleId", MPlayer.GetId())
 		session:AppendParam("name", MPlayer.GetName())
 		session:AppendParam("account", MLogin.GetAccount())
+		session:AppendParam("sChannel", _channel)
+		session:AppendParam("ipAddress", GameSetting.PublicIP)
+		session:AppendParam("chatObject", recvName or "")
+		session:AppendParam("deviceCode", GameSetting.DeviceID)
+		session:AppendParam("sTime", os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond()))
+		session:AppendParam("appID", GameSetting.AppID)
+		session:AppendParam("roleLevel", MPlayer.GetLevel())
+		session:AppendParam("roleVip", MPlayer.PlayerInfo.vip)
+		session:AppendParam("openID", GameSetting.Openid)
+		session:AppendParam("platform", GameSetting.Platform)
 		session:SetCallBack(function (isOk, param1, param2)
 			if isOk then
 				local retTable = rapidjson.decode(param1)
@@ -251,13 +255,13 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 					local state = retTable.status
 					if state == 0 then
 						--正常
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold })
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content,oriValue = _value, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold, sign = retTable.sign })
 					elseif state == 1 then
 						--违法
 						if _channel == MTalk.Channel.PrivateMsg then
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********", recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = "*********",oriValue = _value, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold, sign = retTable.sign})
 						else
-							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold})
+							_M.Send(ECmdId.cTalkReq,{channel = _channel,value = _value,oriValue = _value, recvId = recvId,valueFlag = state,param = _param,isUseGold = _isUseGold, sign = retTable.sign})
 							--[[
 							local ctx = {
 									index = 0,
@@ -279,7 +283,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 						-- error("send talk error, state == 1")
 					else
 						--敏感
-						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,oriValue = _value,param = _param,isUseGold = _isUseGold})
+						_M.Send(ECmdId.cTalkReq,{channel = _channel,value = retTable.content, recvId = recvId,valueFlag = state,oriValue = _value,param = _param,isUseGold = _isUseGold, sign = retTable.sign})
 					end
 				else
 					error("SendNewTalk --> HttpSession retTable is empty!! url:" .. GameSetting.CheckChatUrl .. ", info:" .. param2)
@@ -290,8 +294,6 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 		end)
 		HttpHelper.Request(session)	
 	elseif voiceIndex ~= nil and voiceTime ~= nil and voiceTime > 0 then
-		GameSetting.HttpPostDataToPHP(Define.PostUrlType.Talk, {sChannel = _channel, sContent = "", ipAddress = GameSetting.IP,
-									  chatObject = recvName or "", deviceCode = GameSetting.DeviceID, sTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 		_M.Send(ECmdId.cTalkReq,{channel = _channel,recvId = recvId,voiceIndex=voiceIndex,voiceTime=voiceTime,valueFlag = 0,param = _param,isUseGold = _isUseGold})
 	end
 end
@@ -371,6 +373,18 @@ _P.CGMCommond =
 		func = function()
 			WindowMgr.Create("UMessage")
 			WindowMgr.Call("UMessage","ShowDebug")
+		end
+	},
+	showspid = {
+		desc = "@showspid - 打印游戏的SPID",
+		func = function()
+			CCommon.ShowError(GameSetting.Spid)
+		end
+	},
+	showareaid = {
+		desc = "@showareaid - 打印游戏的AreaID",
+		func = function()
+			CCommon.ShowError(GameSetting.AreaId)
 		end
 	},
 }

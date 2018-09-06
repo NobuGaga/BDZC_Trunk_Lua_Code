@@ -237,6 +237,13 @@ function _P.OnClickUse()
 			WindowMgr.Create("USendNormalPacket",itemData.itemid)
 		elseif csvItem.useType == 31 then	--回收出售
 			WindowMgr.Create("UCarSellMoreMaterial",{itemid = itemData.itemid,itemcount = itemData.itemcount},true)
+		elseif csvItem.useType == 36 then	--变性卡
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						CBag.OnUseItem(itemData.itemid,1,nil)
+					end			
+				end, {content = Csv.Text("common_changeSex")})
 		else
 			if itemData.itemid == CHANGE_NAME_ITEMID then
 				WindowMgr.Create("UBagChangeName")
@@ -260,7 +267,8 @@ function _P.OnClickUse()
 end
 
 function _P.IsShowStaff(csvItem)
-	if csvItem.useType == 6 then		--员工属性增加物品
+	if csvItem.useType == 6 or --员工属性增加物品
+		csvItem.useType == 35 then	--员工重铸	
 		return true
 	end
 	if csvItem.useType == 2 or csvItem.useType == 12 then		--员工书籍经验，技能经验增加物品

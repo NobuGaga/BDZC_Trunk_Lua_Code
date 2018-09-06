@@ -1,0 +1,52 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local CStaff = JRequire "Dev.Staff.CStaff"
+
+local _M = Class(WindowBase)
+
+local _AssetList = 
+{
+	[Define.AssetsType.Coin] = 1,
+	[Define.AssetsType.Wuli] = 2,
+	[Define.AssetsType.Zhili] = 3,
+	[Define.AssetsType.Zhengzhi] = 4,
+	[Define.AssetsType.Meili] = 5,
+}
+
+function _M:OnCreate(items)
+	self._EventNode:AddOnClick(function()
+		self:Destroy()
+		WindowMgr.Destroy("UStaffRework")
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Staff_Rework_Success")
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+
+		LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
+	end, nil, 1)
+
+	SoundMgr.PlayNonStopUI(10014)
+	CCommon.CreateEffect(moudle:Get("FxNode"), 10182)
+
+	if items ~= nil then
+		local content = moudle:Get("content")
+		for _,v in pairs(items) do 
+			local itemId = v.key
+			local itemNum = v.value
+			local assetIndex = _AssetList[itemId]
+			if assetIndex ~= nil then
+				local itemCsv = Csv.Item[itemId]
+				moudle:Get("Text"..assetIndex).Text = 
+					Csv.Text("staff_rework_12", {name = itemCsv.name, num = itemNum})
+			else
+				CCommon.CreateItem(content,itemId,nil, {num = itemNum})
+			end
+		end
+	end
+end
+
+return _M

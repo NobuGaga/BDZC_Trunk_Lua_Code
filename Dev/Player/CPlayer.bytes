@@ -30,14 +30,13 @@ local CmdId =
 	cRename         = 5, --改名 PPlayer.CRename
 	cGetGift		= 6, -- 兑换码获取礼包 PPlayer.CGetGift
 	cChangeDress    = 7, --更改装扮 PPlayer.CChangeDress
-
 	--红包
 	cSendRedPacket	= 8,--发红包 PPlayer.CSendRedPacket
 	cOpenRedPacket	= 9,--打开红包 PPlayer.COpenRedPacket
-
 	cOpenChangeHead = 10,--打开换头界面	
 	cLiveHead       = 11,--兑换头像 PPlayer.CLiveHead
 	cChangeHead     = 12,--修改头像 PPlayer.CLiveHead
+	cChatBGPutOn    = 13,--穿戴聊天框 PPlayer.CChatBGPutOn
 
 	sCommonError 	= 1, --通用提示协议 PPlayer.SCommonError
 	sDailyReset 	= 2, --跨天消息
@@ -52,24 +51,24 @@ local CmdId =
 	sHeartBeat 		= 11,--心跳回包, 客户端同步服务器时间 PPlayer.SHeartBeat
 	sQuitGame 		= 12,--退出游戏  PPlayer.SQuitGame
 	sGetGift		= 14,--获取礼包返回 PPlayer.SGetGift
-
 	sTest           = 15, --测试专用 PPlayer.STest
-
 	sNoticeID       = 16, --读取Notice表的公告方式 PPlayer.SNoticeID
 	sChangeDress    = 17, --更改装扮 PPlayer.SChangeDress
 	sDisconnect		= 18, --断开连接 PPlayer.SDisconnect
-
 	--红包
 	sSendRedPacket	= 19,--发红包 PPlayer.SSendRedPacket
 	sOpenRedPacket	= 20,--打开红包 PPlayer.SOpenRedPacket
 	sRedPacketList	= 21,--红包列表 PPlayer.SRedPacketList
 	sNewRedPacket	= 22,--新红包 PPlayer.SNewRedPacket
 	sRedPacketAllReceived	= 23,--红包派完了 PPlayer.SRedPacketAllReceived
-
 	sOpenChangeHead   = 24, --打开换头界面 PPlayer.SOpenChangeHead
 	sLiveHead         = 25, --兑换头像 PPlayer.SLiveHead
 	sChangeHead       = 26, --修改头像 PPlayer.SChangeHead
-	sCrossSrv = 27, --是否跨服
+	sCrossSrv 		  = 27, --是否跨服
+	sChatBGPutOn      = 28, --穿戴的聊天框变更, 前端判断没有则为新增加入 PPlayer.SChatBGPutOn
+	sChatBGUpdate     = 29, --穿戴的聊天框变更, 前端判断没有则为新增加入 PPlayer.SChatBGPutOn
+	sChangeSexSuccess = 30, --修改性别成功
+	sSexUpdate        = 31, --性别更新 PPlayer.SChangeSex
 }
 
 function _M.ModuleClean()
@@ -91,6 +90,7 @@ function _M.ModuleInit(isReload)
 		[CmdId.cOpenChangeHead] = "",
 		[CmdId.cLiveHead] = "PPlayer.CLiveHead",
 		[CmdId.cChangeHead] = "PPlayer.CLiveHead",
+		[CmdId.cChatBGPutOn] = "PPlayer.CChatBGPutOn",
 	}
 	--接收消息协议注册
 	local recv = {
@@ -125,6 +125,10 @@ function _M.ModuleInit(isReload)
 		[CmdId.sLiveHead] = {	proto = "PPlayer.SLiveHead",					handle = _P.RepLiveHead},
 		[CmdId.sChangeHead] = {	proto = "PPlayer.SChangeHead",					handle = _P.RepChangeHead},
 		[CmdId.sCrossSrv] = {	proto = "PPlayer.SCrossSrv",					handle = _P.OnCrossSrv},
+		[CmdId.sChatBGPutOn] = {	proto = "PPlayer.SChatBGPutOn",				handle = _P.OnChatBGPutOn},
+		[CmdId.sChatBGUpdate] = {	proto = "PPlayer.SChatBGPutOn",				handle = _P.OnChatBGUpdate},
+		[CmdId.sChangeSexSuccess] = {	proto = "PPlayer.SChangeSex",			handle = _P.OnChangeSexSuccess},
+		[CmdId.sSexUpdate] = {	proto = "PPlayer.SChangeSex",					handle = _P.OnSexUpdate},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Player, send, recv, isReload)	
@@ -176,6 +180,11 @@ end
 -- 兑换码获取奖励
 function _M.GetGift(giftid)
 	_M.Send(CmdId.cGetGift, {giftid = giftid})
+end
+
+--穿戴聊天框
+function _M.ReqChatBGPutOn(id)
+	_M.Send(CmdId.cChatBGPutOn, {id = id})
 end
 
 --功能开放列表
@@ -269,10 +278,10 @@ function _P.CheckRedpoint()
 	else
 		isRedpoint = false
 	end
-	if isRedpoint ~= MPlayer.PlayerLevelUpRedpoint then
+	-- if isRedpoint ~= MPlayer.PlayerLevelUpRedpoint then
 		MPlayer.PlayerLevelUpRedpoint = isRedpoint
 		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Player,1)
-	end
+	-- end
 end
 
 function _P.OnInit(msg)
@@ -454,6 +463,30 @@ function _P.OnChangDress(data)
 	end
 end
 
+function _P.OnChatBGPutOn(data)
+
+end
+
+function _P.OnChatBGUpdate(data)
+	
+end
+
+function _P.OnChangeSexSuccess(data)
+	MPlayer.PlayerInfo.sex = data.sex
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAvatarUpdate)
+
+	if WindowMgr.IsCreated("UBag") then
+		WindowMgr.Create("UPlayer")
+	end
+
+	CCommon.ShowRight(Csv.Text("player_change17"))
+end
+
+function _P.OnSexUpdate(data)
+	MPlayer.PlayerInfo.sex = data.sex
+	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAvatarUpdate)
+	CCommon.ShowRight(Csv.Text("player_change18"))
+end
 
 --红包---
 --_type，_packetNum是备用字段，暂时没有这个需求

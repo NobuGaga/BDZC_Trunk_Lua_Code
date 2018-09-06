@@ -36,6 +36,8 @@ local JTweenerManager = CS.JTween.JTweenerManager
 local NO_WHO_POS = Vector2(17, -44)
 local HAVE_WHO_POS = Vector2(17, -85)
 local COLOR_BLACK = Color(84 / 255, 62 / 255, 62 / 255, 1)
+local COLOR_Dark = Color(100 / 255, 100 / 255, 100 / 255, 1)
+local COLOR_Light = Color(1, 1, 1, 1)
 local SECOND_COUNT = 30
 
 function _M:Destroy( ... )
@@ -135,10 +137,14 @@ function _P.OnToDone(self)
 
 		local id = self.Id
 		local csvLine = Csv.Story[id]
-		if csvLine.next ~= nil and csvLine.next > 0 then
-			_P.doCreate(self, csvLine.next)
+		if csvLine ~= nil then
+			if csvLine.next ~= nil and csvLine.next > 0 then
+				_P.doCreate(self, csvLine.next)
+			else
+				self:StoryDone()
+			end
 		else
-			self:StoryDone()
+			print("__找不到剧情id_____",id)
 		end
 	end	
 end
@@ -182,12 +188,17 @@ function _P.doCreate(self, id)
 	local csvLine = Csv.Story[id]
 	local moudle = self.Moudle
 
-	if csvLine.isSpecialTalk ~= nil and csvLine.isSpecialTalk == 1 then
-		if self.ShowStoryPop ~= nil then
-			self.ShowStoryPop:delete()
-			self.ShowStoryPop = nil
+	if csvLine ~= nil then
+		if csvLine.isSpecialTalk ~= nil and csvLine.isSpecialTalk == 1 then
+			if self.ShowStoryPop ~= nil then
+				self.ShowStoryPop:delete()
+				self.ShowStoryPop = nil
+			end
+			self.ShowStoryPop = UStoryPop.new(self.CanvasPop,csvLine,function()_P.OnToDone(self)end)
+			return
 		end
-		self.ShowStoryPop = UStoryPop.new(self.CanvasPop,csvLine,function()_P.OnToDone(self)end)
+	else
+		error("Call Story csv error!!! id:",id)
 		return
 	end
 
@@ -203,6 +214,12 @@ function _P.doCreate(self, id)
 		if csvLine.fontSize ~= nil then
 			self.Text.FontSize = csvLine.fontSize
 		end
+		if csvLine.fontPox ~= nil then
+			self.Text.LocalPosition = Vector2(csvLine.fontPox[1], csvLine.fontPox[2])
+		end
+		if csvLine.fontWH ~= nil then
+			self.Text.SizeDelta = Vector2(csvLine.fontWH[1],csvLine.fontWH[2])
+		end
 		--对话框
 		local box = moudle:Get("dialog")
 		if csvLine.box ~= nil then
@@ -210,6 +227,34 @@ function _P.doCreate(self, id)
 		end
 		if csvLine.boxPos ~= nil then
 			box.LocalPosition = Vector2(csvLine.boxPos[1], csvLine.boxPos[2])
+		end
+
+		--是否展示点击继续文本
+		local nextText = moudle:Get("continue")
+		if csvLine.showNextText ~= nil then 
+			nextText.Activity = true
+		else
+			nextText.Activity = false
+		end
+
+		--下一个图标
+		local nextImg = moudle:Get("Next")
+		if csvLine.nextImg ~= nil then
+			nextImg.SpriteName = csvLine.nextImg
+		end
+
+		--立绘
+		local leftRect = moudle:Get("Left")
+		local rightRect = moudle:Get("Right")
+		if csvLine.iconPoxL ~= nil then
+			leftRect.LocalPosition = Vector2(csvLine.iconPoxL[1],csvLine.iconPoxL[2])
+		end
+		if csvLine.iconPoxR ~= nil then
+			rightRect.LocalPosition = Vector2(csvLine.iconPoxR[1],csvLine.iconPoxR[2])
+		end
+		if csvLine.iconScale ~= nil then
+			leftRect.LocalScale = Vector3(csvLine.iconScale,csvLine.iconScale,1)
+			rightRect.LocalScale = Vector3(csvLine.iconScale,csvLine.iconScale,1)
 		end
 
 		--声音
@@ -250,7 +295,26 @@ function _P.doCreate(self, id)
 			--self.Text.LocalPosition = HAVE_WHO_POS
 			moudle:Get("NameBox").Activity = true
 			local nameSizeX = self.Name.PreferredWidth
-			self.NameBox.SizeDelta = Vector2(nameSizeX + 74,99)
+			self.NameBox.SizeDelta = Vector2(nameSizeX + 74,85)
+
+			--名字位置
+			if csvLine.namebox ~= nil then
+				self.NameBox.SpriteName = csvLine.namebox
+			end
+			if csvLine.nameBoxPox ~= nil then
+				self.NameBox.LocalPosition = Vector2(csvLine.nameBoxPox[1],csvLine.nameBoxPox[2])
+			end
+			if csvLine.nameBoxSize ~= nil then
+				self.NameBox.SizeDelta = Vector2(csvLine.nameBoxSize[1],csvLine.nameBoxSize[2])
+			end
+
+			if csvLine.namePox ~= nil then
+				self.Name.LocalPosition = Vector2(csvLine.namePox[1],csvLine.namePox[2])
+			end
+			if csvLine.nameSize ~= nil then
+				self.Name.FontSize = csvLine.nameSize
+			end
+
 		else
 			self.Name.Text = ""
 			--self.Text.LocalPosition = NO_WHO_POS
@@ -276,6 +340,7 @@ function _P.doCreate(self, id)
 					self.Left.Alpha = 0
 					self.Head.Alpha = 0
 					self.Right.Alpha = 1
+					self.Right.Color = COLOR_Light
 					self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right_Right")
 					self.Tweener:SetOnComplete(function()
 						if self.Right ~= nil then
@@ -304,7 +369,11 @@ function _P.doCreate(self, id)
 				self.Left.Activity = true
 				self.Right.Activity = true
 				--自己
-				
+				self.Right.Color = COLOR_Dark
+				self.Left.Alpha = 0
+				self.Head.Alpha = 0
+				--[[
+				--20180822剧情优化改版为玩家自己说的不显示，左侧图像变暗
 				if self.IsFirst then
 					self.IsFirst = false
 					self.Right.Alpha = 0
@@ -313,20 +382,25 @@ function _P.doCreate(self, id)
 					self.Head.Alpha = 0
 					self.Right.Alpha = 1
 				end	
+				
 				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Left")
 				self.Tweener:Play()		
+				--]]
 			elseif who == 2 then
 				self.Left.Activity = true
 				self.Right.Activity = true
+				self.Right.Color = COLOR_Light
 				--对方
 				if self.IsFirst then
 					self.IsFirst = false
 					self.Left.Alpha = 0
 					self.Head.Alpha = 0
 				else
-					self.Left.Alpha = 1
-					self.Head.Alpha = 1
-					self.Right.Alpha = 0
+					
+					--self.Left.Alpha = 1
+					--self.Head.Alpha = 1
+					self.Right.Alpha = 1
+					
 				end
 				self.Tweener = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Guide_Right")
 				self.Tweener:Play()
@@ -334,7 +408,7 @@ function _P.doCreate(self, id)
 				--没有	
 				self.Left.Activity = false
 				self.Right.Activity = false
-
+				self.Right.SpriteName = ""
 				self.IsFirst = true
 			end
 		end
@@ -445,14 +519,21 @@ function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
 
 	local moudle = JGuiManager.GetMoudle(self._Root, "M_Guidance_Story")
 	self.Moudle = moudle
+    local csvLine = Csv.Story[id]
 
 	--点击继续
 	self.Continue = moudle:Get("continue")
 	self.Continue.Text = Csv.Text("guide_continue")
 	-- local t = self.Continue.CachedTran:GetJTweener("T_Guide_Continue")
 	-- t:Play()
-
-	local tween = moudle:Get("Next"):DOAnchorPosY(-107,0.5)
+	
+	local nextImg = moudle:Get("Next")
+	if csvLine ~= nil then
+		if csvLine.nextPox ~= nil then
+			nextImg.LocalPosition = Vector2(csvLine.nextPox[1],csvLine.nextPox[2])
+		end
+	end
+	local tween = moudle:Get("Next"):DOAnchorPosY(nextImg.LocalPosition.y - 10,0.5)
 	tween:SetEase(CS.DG.Tweening.Ease.Linear)
 	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
 

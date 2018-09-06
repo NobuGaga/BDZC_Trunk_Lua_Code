@@ -17,6 +17,7 @@ local _P = {}
 
 local Btn_Img1 = "ty_024_1"
 local Btn_Img2 = "ty_024_5"
+local MAX_TAG = 6		--标签数量最大值
 
 function _P.Sort(a, b)
 	local isUpA = MLineUp.CheckIsUp(a.id)
@@ -89,6 +90,19 @@ function _M:OnCreate(index,staffid)
 			staffMoudle:Get("C_text_0").Text = Csv.Text("lineup_9")
 		end
 
+		for i = 1,MAX_TAG do
+			staffMoudle:Get("Tab"..i).Activity = false
+		end
+		if csvStaff.labelImg ~= nil then
+			for k,v in ipairs(csvStaff.labelImg) do
+				local img = staffMoudle:Get("Tab"..k)
+				if img ~= nil then
+					img.Activity = true
+					img.SpriteName = v
+				end
+			end
+		end
+
 		self.mTableItems[v.id] = {moudle = staffMoudle,data = v}
 	end
 
@@ -103,12 +117,14 @@ end
 function _P.OnClickBtn(self,staffid,index)
 	WindowMgr.Call("ULineUp","SetNowSelect",index)
 	CLineUp.LineUpAddStaff(staffid,index)
+	MLineUp.IsChange = true
 	self:Destroy()
 end
 
 function _P.OnDownBtn(self,index)
 	WindowMgr.Call("ULineUp","SetNoSelect")
 	CLineUp.LineUpDownStaff(index)
+	MLineUp.IsChange = true
 	self:Destroy()
 end
 

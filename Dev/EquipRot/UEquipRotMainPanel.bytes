@@ -1,0 +1,590 @@
+-- 装备抢夺主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CEquipRot = JRequire "Dev.EquipRot.CEquipRot"
+local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
+local MBag = JRequire "Dev.Bag.MBag"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local MaxGridNum = 6
+local ComposeActorId = 10181
+local MOVE_TWEEN = "T_EquipRob_MoveTween"
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment")
+	self.mModule = module
+
+	module:Get("C_Text").Text = Csv.Text("equipRob_main_composeTitle")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local recordBtn = module:Get("BattleRecord")
+	recordBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UEquipRotBattleReport")
+	end,nil,0.9)
+
+	local warehouseBtn = module:Get("Equipment")
+	warehouseBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UEquipMain")
+	end,nil,0.9)
+
+	local chipBagBtn = module:Get("ChipBag")
+	chipBagBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UEquipRotChipBag")
+	end,nil,0.9)
+
+	local noneText = module:Get("None")
+	local hasRect = module:Get("InfoRect")
+	noneText.Text = Csv.Text("equipRob_main_none")
+	self.mData = MEquipRot.EquipRotTable
+	if self.mData == nil or next(self.mData) == nil then
+		noneText.Activity = true
+		hasRect.Activity = false
+		return
+	end
+
+	local equipRotConf = Csv.EquipRob[self._SysId]
+	self.EquipRotConf = equipRotConf
+
+	local compoundBtn = module:Get("Compose")
+	compoundBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.OnClickCompound(self)
+	end,nil,0.9)
+	self.CompoundBtn = compoundBtn
+	module:Get("ComposeText").Text = Csv.Text("equipRob_main_compose")
+
+	_P.SetProtectData(self)
+
+	local listData = _P.GetSortList(self)
+	self.ListData = listData
+	if listData == nil or next(listData) == nil then
+		noneText.Activity = true
+		hasRect.Activity = false
+	else
+		noneText.Activity = false
+		hasRect.Activity = true
+		_P.CreateHeadList(self, listData)
+	end
+
+	local iconImg = module:Get("EIcon")
+	local upTween = iconImg.CachedTran:GetJTweener(MOVE_TWEEN)
+	upTween:Play()
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle, itemid, itemcount, isAdd)
+		local itemConf = Csv.Item[itemid]
+		if itemConf ~= nil and itemConf.type == Define.BagType.EquipChip then
+			_P.UpdateChipNumData(self, itemid)
+		end
+	end)
+end
+
+
+function _P.GetListData(self)
+	local listData = {}
+	if self.mData.activeLists ~= nil and next(self.mData.activeLists) ~= nil then
+		for itemKey,itemValue in pairs(self.mData.activeLists) do
+			local needItems = {}
+			local satisfyCount = 0 -- 符合要求的个数
+			local equipConf = Csv.EquipRobItem[itemValue]
+			if equipConf.needItems ~= nil and next(equipConf.needItems) ~= nil then
+				for needKey,needValue in pairs(equipConf.needItems) do
+					local itemId = needValue[1]
+					local itemNum = MBag.GetItemNum(itemId)
+					if itemNum > 0 then
+						if itemNum >= needValue[2] then
+							satisfyCount = satisfyCount + 1
+						end
+					end
+
+					needItems[#needItems + 1] = {itemId = itemId, hasNum = itemNum, needNum = needValue[2]}
+				end
+			end
+
+			listData[#listData + 1] = {itemId = itemValue, needItems = needItems, needGold = (equipConf.needGold or 0), desc = equipConf.desc, isCollect = (satisfyCount == #equipConf.needItems and 1) or 0}
+		end
+	end
+
+	return listData
+end
+
+
+-- 排序：已经收集齐碎片的装备→未收集齐碎片的装备(品质->id)
+function _P.GetSortList(self)
+	local sortList = _P.GetListData(self)
+	table.sort(sortList, function (a, b)
+		if a.isCollect == b.isCollect then
+			local itemConfA = Csv.Item[a.itemId]
+			local itemConfB = Csv.Item[b.itemId]
+			if itemConfA.color == itemConfB.color then
+				return itemConfA.id < itemConfB.id
+			end
+
+			return itemConfB.color < itemConfA.color
+		end
+
+		return a.isCollect > b.isCollect
+	end)
+
+	return sortList
+end
+
+
+-- 碎片数量发生变化时，更新数据
+function _P.UpdateChipNumData(self, chipId)
+	for itemKey,itemValue in pairs(self.ListData) do
+		if itemValue.needItems ~= nil and next(itemValue.needItems) ~= nil then
+			local noneNum = 0
+			local satisfyCount = 0
+			for chipKey,chipValue in pairs(itemValue.needItems) do
+				if chipValue.itemId == chipId then
+					local itemNum = MBag.GetItemNum(chipId)
+					chipValue.hasNum = itemNum
+
+					if itemNum <= 0 then
+						noneNum = noneNum + 1
+					else
+						if chipValue.hasNum >= chipValue.needNum then
+							satisfyCount = satisfyCount + 1
+						end
+					end
+					
+					if itemValue.itemId == self.CurSelectData.itemId then -- 更新格子数据、红点
+						_P.UpdateOneGridData(self, chipKey, chipValue)
+					end
+				else
+					if chipValue.hasNum >= chipValue.needNum then
+						satisfyCount = satisfyCount + 1
+					end
+				end
+			end
+
+			if noneNum > 0 then
+				itemValue.isCollect = 0
+				_P.SetEquipRedActivie(self, self.mEquipItems[itemValue.itemId].redImg, itemValue.isCollect)
+				if itemValue.itemId == self.CurSelectData.itemId then
+					self.CurSelectData.isCollect = itemValue.isCollect
+					_P.SetCompoundBtnData(self, itemValue.isCollect)
+				end
+			elseif satisfyCount == #itemValue.needItems then
+				itemValue.isCollect = 1
+				_P.SetEquipRedActivie(self, self.mEquipItems[itemValue.itemId].redImg, itemValue.isCollect)
+				if itemValue.itemId == self.CurSelectData.itemId then
+					self.CurSelectData.isCollect = itemValue.isCollect
+					_P.SetCompoundBtnData(self, itemValue.isCollect)
+				end
+			end
+		end
+	end
+end
+
+
+-- 设置单个格子数据
+function _P.UpdateOneGridData(self, index, data)
+	local module = self.mModule
+	local numText = module:Get("Num" .. index)
+	local nameText = module:Get("Name" .. index)
+	local robBtn = module:Get("black" .. index)
+	local iconImg = module:Get("Icon" .. index)
+	local qualityImg = module:Get("IconBox" .. index)
+	
+	local itemConf = Csv.Item[data.itemId]
+	if itemConf then
+		nameText.Text = itemConf.name
+		iconImg.SpriteName = itemConf.icon
+		qualityImg.SpriteName = itemConf.colorIcon
+	end
+
+	iconImg:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UBagDetailPop", data.itemId)
+	end,nil,0.9)
+
+	robBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UEquipRotRotPanel", data.itemId, self.EquipRotConf)
+	end,nil,0.9)
+
+	local colorStr = (data.needNum <= data.hasNum and 'car_main_greenShow') or 'car_main_redShow'
+	numText.Text = Csv.Text(colorStr, {num = data.hasNum, need = data.needNum})
+
+	if data.hasNum < data.needNum then
+		robBtn.Activity = true
+		iconImg.IsGray = true
+		qualityImg.IsGray = true
+	else
+		robBtn.Activity = false
+		iconImg.IsGray = false
+		qualityImg.IsGray = false
+	end
+end
+
+
+function _P.CreateHeadList(self, listData)
+	local contentTransform = self.mModule:Get("content")
+	contentTransform:DestroyChildren()
+
+	self.mEquipItems = {}
+	for i,v in ipairs(listData) do
+		self.mEquipItems[v.itemId] = _P.OnCreateEquipItem(self, contentTransform, v)
+
+		if not self.CurSelectData and i == 1 then
+			_P.UpdateSelectEquip(self, v.itemId, true)
+		end
+	end
+end
+
+
+function _P.OnCreateEquipItem(self, itemGrid, data)
+	local equipItem = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Equipment_Item", WindowType.UI, 0)
+	if itemModule ~= nil then
+		local iconImg = itemModule:Get("Icon")
+		local qualityImg = itemModule.SelfRect
+		local redImg = itemModule:Get("redPoint")
+		local levelText = itemModule:Get("Lv1")
+		local stageText = itemModule:Get("Lv2")
+		local lightImg = itemModule:Get("select")
+
+		iconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.UpdateSelectEquip(self, data.itemId, false)
+		end, nil, 0.9)
+
+		local itemConf = Csv.Item[data.itemId]
+		if itemConf then
+			iconImg.SpriteName = itemConf.icon
+			qualityImg.SpriteName = itemConf.colorIcon
+		end
+
+		levelText.Text = 'Lv' .. self.EquipRotConf.initLevel[1]
+		stageText.Text = Csv.Text("car_main_jieji") .. self.EquipRotConf.initLevel[2]
+
+		_P.SetEquipRedActivie(self, redImg, data.isCollect) -- 更新红点
+
+		equipItem.lightImg = lightImg
+		equipItem.redImg = redImg
+	end
+	
+	equipItem.data = data
+	return equipItem
+end
+
+
+function _P.SetEquipRedActivie(self, redImg, isShow)
+	local isShow = isShow == 1
+	redImg.Activity = isShow
+end
+
+
+function _P.SetCompoundBtnData(self, isShow)
+	local isShow = isShow == 1
+	if self.CompoundBtn ~= nil then
+		self.CompoundBtn.IsGray = not isShow
+		self.CompoundBtn.RaycastTarget = isShow
+		self.mModule:Get("redPoint").Activity = isShow
+	end
+end
+
+
+function _P.UpdateSelectEquip(self, itemId)
+	local curSelectItem = self.mEquipItems[itemId]
+	if self.CurSelectData == curSelectItem.data then return end
+
+	if self.CurSelectData ~= nil then
+		self.mEquipItems[self.CurSelectData.itemId].lightImg.Activity = false
+	end
+
+	self.CurSelectData = curSelectItem.data
+	if self.CurSelectData ~= nil and self.mEquipItems[self.CurSelectData.itemId] ~= nil and self.mEquipItems[self.CurSelectData.itemId].lightImg ~= nil then
+		self.mEquipItems[self.CurSelectData.itemId].lightImg.Activity = true
+	end
+
+	_P.SetEquipData(self)
+	_P.SetEquipRedActivie(self, self.mEquipItems[self.CurSelectData.itemId].redImg, self.CurSelectData.isCollect)
+	_P.SetCompoundBtnData(self, self.CurSelectData.isCollect)
+end
+
+
+function _P.SetEquipData(self)
+	local data = self.CurSelectData
+	local module = self.mModule
+	for i=1,MaxGridNum do
+		local noneImg = module:Get("Equipment" .. i)
+		if i <= #data.needItems then
+			_P.UpdateOneGridData(self, i, data.needItems[i])
+		end
+		noneImg.Activity = i <= #data.needItems
+	end
+
+	module:Get("NeedGold").Text = data.needGold
+	module:Get("zuans").Activity = data.needGold > 0
+
+	-- 设置中间装备信息
+	local itemConf = Csv.Item[data.itemId]
+	local equipConf = Csv.Equip[data.itemId]
+	if itemConf ~= nil then
+		local iconImg = module:Get("EIcon")
+		iconImg.SpriteName = itemConf.icon
+		-- module:Get("EIconBox").SpriteName = itemConf.colorIcon
+		module:Get("ELevel").Text = self.EquipRotConf.initLevel[1]
+		module:Get("EStage").Text = Csv.Text("car_main_jieji") .. self.EquipRotConf.initLevel[2]
+		module:Get("EName").Text = itemConf.name
+		module:Get("EAttr").Text = Csv.Text("equipRob_main_attrPower", {power = (equipConf.power or 0), powerPro = math.floor((equipConf.powerRate or 0) / 10000)})
+		module:Get("EDesc").Text = Csv.Text("equip_staff_equipStaff", {name = MEquipt.GetStaffs({equipId = data.itemId})})
+		module:Get("SmallIcon").SpriteName = equipConf.typeIcon
+
+		iconImg:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UBagDetailPop", data.itemId)
+		end, nil, 1)
+	end
+end
+
+
+function _P.OnClickCompound(self)
+	if MBag.CheckItemEnough(Define.AssetsType.Gold, self.CurSelectData.needGold) then
+		if self.CurSelectData.isCollect == 1 then
+			CEquipRot.EquipComposeReq(self.CurSelectData.itemId)
+		end
+	end
+end
+
+
+function _P.OnClickProtect(self)
+	local leftTime = self.mData.protectTime - HeartBeat.ServSecond()
+	if leftTime > 0 then
+		CCommon.ShowError(Csv.Text("equipRob_main_protectTip"))
+	else
+		if self.mData.buyProtectCount >= self.EquipRotConf.buyProtectMax then
+			CCommon.ShowError(Csv.Text("equipRob_main_protectErr"))
+		else
+			local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyProtectPrice, self.mData.buyProtectCount + 1)
+			local showStr = Csv.Text("equipRob_main_needShow", {need = needPrice, num = math.floor(self.EquipRotConf.buyProtectTime / 3600)})
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
+					if hasGold < needPrice then
+						CCommon.ShowError(Csv.Text("err_shop_buytype"))
+					else
+						-- 购买保护时间
+						CEquipRot.BuyProtectTimeReq()
+					end
+				end
+			end, {content = string.gsub(showStr, '/n', '\n')})
+		end
+	end
+end
+
+
+-- 设置保护数据
+function _P.SetProtectData(self)
+	local module = self.mModule
+	self.ProtectTimeText = module:Get("TimeText")
+
+	local protectBtn = module:Get("Protect")
+	protectBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		_P.OnClickProtect(self)
+	end,nil,0.9)
+	self.ProtectBtn = protectBtn
+	_P.SetProtectState(self)
+end
+
+
+function _P.SetProtectState(self)
+	local leftTime = self.mData.protectTime - HeartBeat.ServSecond()
+	if leftTime > 0 then -- 正保护时间内
+		self.ProtectTimeText.Activity = true
+		self.ProtectBtn.SpriteName = 'zb_009'
+	else
+		self.ProtectTimeText.Activity = false
+		self.ProtectBtn.SpriteName = 'zb_010'
+	end
+
+	if leftTime > 0 then
+		_P.OnUpdateTime(self)
+		_P.OnStartTimer(self)
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.ProtectTimer ~= nil then
+		self.ProtectTimer:Destroy()
+		self.ProtectTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	_P.OnClearTimer(self)
+
+	local leftTime = self.mData.protectTime - HeartBeat.ServSecond()
+	if leftTime > 0 then
+		self.ProtectTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local time = self.mData.protectTime - HeartBeat.ServSecond()
+	if time > 0 then
+		self.ProtectTimeText.Text = LuaUtil.GetTimeHMS(time)
+	else
+		_P.OnClearTimer(self)
+		_P.SetProtectState(self)
+	end
+end
+
+
+-- 得到购买价格
+function _P.GetBuyPrice(priceItems, buyCount)
+	if priceItems == nil or next(priceItems) == nil then return 0 end
+
+	for k,v in pairs(priceItems) do
+		if buyCount >= v[1] and buyCount <= v[2] then
+			return v[3]
+		end
+	end
+
+	return priceItems[#priceItems][3]
+end
+
+
+-- 合成返回
+function _R.OnComposeBack(self, data)
+	-- 播放动画，更新道具数据
+	self:Lock()
+	local actorRect = self.mModule:Get("ActorPanel")
+	CCommon.CreateEffect(actorRect, ComposeActorId)
+
+	self.mModule.SelfRect:AddOnTime(function()
+		actorRect:DestroyChildren()
+		WindowMgr.Create("UEquipRotGetPanel", self.CurSelectData.itemId)
+		local equipItemConf = Csv.EquipRobItem[data.itemId]
+		local updateItemData = nil
+		if equipItemConf ~= nil then
+			local needItems = {}
+			local satisfyCount = 0 -- 符合要求的个数
+			
+			if equipItemConf.needItems ~= nil and next(equipItemConf.needItems) ~= nil then
+				for needKey,needValue in pairs(equipItemConf.needItems) do
+					local itemId = needValue[1]
+					local itemNum = MBag.GetItemNum(itemId)
+					if itemNum > 0 then
+						if itemNum >= needValue[2] then
+							satisfyCount = satisfyCount + 1
+						end
+					end
+
+					needItems[#needItems + 1] = {itemId = itemId, hasNum = itemNum, needNum = needValue[2]}
+				end
+			end
+
+			updateItemData = {itemId = equipItemConf.id, needItems = needItems, needGold = (equipItemConf.needGold or 0), desc = equipItemConf.desc, isCollect = (satisfyCount == #equipItemConf.needItems and 1) or 0}
+
+			if self.mEquipItems[data.itemId] ~= nil then
+				self.mEquipItems[data.itemId].data = updateItemData
+
+				self.CurSelectData = updateItemData
+				_P.SetEquipData(self)
+				_P.SetEquipRedActivie(self, self.mEquipItems[data.itemId].redImg, updateItemData.isCollect) -- 更新红点
+				_P.SetCompoundBtnData(self, updateItemData.isCollect)
+			end
+		end
+		self:Unlock()
+	end, nil, 2.4)
+end
+
+
+-- 更新保护时间
+function _R.UpdateProtectData(self, data)
+	self.mData.protectTime = MEquipRot.EquipRotTable.protectTime
+	_P.SetProtectState(self)
+end
+
+
+-- 购买保护时间回调
+function _R.OnBuyProtectTimeBack(self, data)
+	_P.SetProtectState(self)
+end
+
+
+-- 新激活装备id传过来，需要更新上方装备数据，默认排在最后面
+function _R.AddOneEquipData(self, itemId)
+	if self.mEquipItems[itemId] ~= nil then
+		return
+	end
+
+	local needItems = {}
+	local satisfyCount = 0 -- 符合要求的个数
+	local equipConf = Csv.EquipRobItem[itemId]
+	if equipConf.needItems ~= nil and next(equipConf.needItems) ~= nil then
+		for needKey,needValue in pairs(equipConf.needItems) do
+			local itemId = needValue[1]
+			local itemNum = MBag.GetItemNum(itemId)
+			if itemNum > 0 then
+				if itemNum >= needValue[2] then
+					satisfyCount = satisfyCount + 1
+				end
+			end
+
+			needItems[#needItems + 1] = {itemId = itemId, hasNum = itemNum, needNum = needValue[2]}
+		end
+	end
+
+	local itemData = {itemId = itemId, needItems = needItems, needGold = (equipConf.needGold or 0), desc = equipConf.desc, isCollect = (satisfyCount == #equipConf.needItems and 1) or 0}
+	self.ListData[#self.ListData + 1] = itemData
+	
+	local contentTransform = self.mModule:Get("content")
+	self.mEquipItems[itemId] = _P.OnCreateEquipItem(self, contentTransform, itemData)
+
+	if not self.CurSelectData then
+		_P.UpdateSelectEquip(self, itemId, true)
+	end
+end
+
+
+return _M

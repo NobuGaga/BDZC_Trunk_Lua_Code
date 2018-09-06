@@ -57,19 +57,19 @@ end
 ------------------------------请求接口------------------------------
 --登录请求
 function _M.ReqLogin()
-	CS.Utility.LogPoint.LogPost(16, 1)
+	CS.Utility.LogPoint.LogPost(16, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqLogin()
 end
 
 --登录请求
 function _M.ReqSwitchAccount()
-	CS.Utility.LogPoint.LogPost(17, 1)
+	CS.Utility.LogPoint.LogPost(17, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqSwitchAccount()
 end
 
 --登出请求
 function _M.ReqLogout()
-	CS.Utility.LogPoint.LogPost(18, 1)
+	CS.Utility.LogPoint.LogPost(18, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqLogout()
 	MLogin.Status = MLogin.ELoginStatus.NotLogin
 end
@@ -80,7 +80,7 @@ function _M.ReqCollectData(type, roleID, roleName, roleLevel)
 	   or nil == MLogin.SelectServer.name then
 		return
 	end
-	CS.Utility.LogPoint.LogPost(19, 1)
+	CS.Utility.LogPoint.LogPost(19, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	if nil == roleID then
 		roleID = MPlayer.GetId()
 	end
@@ -105,12 +105,12 @@ function _M.ReqPay(csvID, sdkProductId, price, gold, productName, param, callbac
 	if nil ~= callback then
 		_M.PayCallBack = callback
 	end
-	CS.Utility.LogPoint.LogPost(12, 1)
-	_M.SdkObj.ReqPay(csvID, sdkProductId, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, GameSetting.Sbid, param)
+	CS.Utility.LogPoint.LogPost(12, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	_M.SdkObj.ReqPay(csvID, sdkProductId, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, MLogin.SelectServer.name, MLogin.GetAccountSpid(), GameSetting.Sbid, param)
 end
 
 function _M.ReqExit()
-	CS.Utility.LogPoint.LogPost(20, 1)
+	CS.Utility.LogPoint.LogPost(20, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqExit()
 end
 
@@ -140,12 +140,12 @@ end
 -- 初始化服务器列表
 function _P.InitServerList()
 	CS.Net.LuaConnect.AutoReconnect = false
+	MLogin.LastLoginServer = nil
+	MLogin.SelectServer = nil
+
 	local lastLoginCtx = CS.Loader.LoadAccessor.ReadText(LastLoginSrvFilePath);
 	if lastLoginCtx then
 		local lastTmp = rapidjson.decode(lastLoginCtx)
-
-		MLogin.LastLoginServer = nil
-		MLogin.SelectServer = nil
 		if MLogin.ServerList then
 			for k,v in ipairs(MLogin.ServerList) do
 				if v.server then
@@ -197,10 +197,10 @@ end
 --获取服务器列表失败
 function _P.OnGetServerlistFail()
 	CCommon.ShowReloginBox(Csv.Text("login_get_srv_err_content"), Csv.Text("common_sure"), function (isSure)
-		if isSure then
+		-- if isSure then
 			GameSetting.GameQuit()
-		end
-	end, Csv.Text("common_cancel"), -10)
+		-- end
+	end, nil, -10)
 end
 
 --Http请求获取服务器里列表
@@ -272,22 +272,24 @@ end
 ------------------------------回调接口------------------------------
 --登录回调
 function _R.OnSDKLogin(jsonStr)
-	CS.Utility.LogPoint.LogPost(16, 2)
+	CS.Utility.LogPoint.LogPost(16, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.OnLogin(jsonStr)
 	_M.GetServerList()
 end
 
 --切换账号回调
 function _R.OnSDKSwitchAccount(jsonStr)
-	CS.Utility.LogPoint.LogPost(17, 2)
+	CS.Utility.LogPoint.LogPost(17, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.ReqCollectData(SDKCollectType.ExitRole)
 	_M.SdkObj.OnSwitchAccount(jsonStr)
+	MLogin.Status = MLogin.ELoginStatus.NotLogin
+	WindowMgr.Call("ULogin", "RefreshLoginState")
 	_M.GetServerList()
 end
 
 --登出账号回调
 function _R.OnSDKLogout()
-	CS.Utility.LogPoint.LogPost(18, 2)
+	CS.Utility.LogPoint.LogPost(18, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.ReqCollectData(SDKCollectType.ExitRole)
 	MLogin.Status = MLogin.ELoginStatus.NotLogin
 	GameSetting.ToReLogin(GameSetting.ReLoginType.ToLogin)
@@ -295,7 +297,7 @@ end
 
 --支付回调
 function _R.OnSDKPay(jsonStr)
-	CS.Utility.LogPoint.LogPost(13, 1)
+	CS.Utility.LogPoint.LogPost(13, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.OnPay(jsonStr)
 	if nil ~= _M.PayCallBack then
 		_M.PayCallBack(jsonStr)
@@ -305,7 +307,7 @@ end
 
 --退出游戏回调
 function _R.OnSDKExit()
-	CS.Utility.LogPoint.LogPost(20, 2)
+	CS.Utility.LogPoint.LogPost(20, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	GameSetting.OnGameEscapePress()
 end
 

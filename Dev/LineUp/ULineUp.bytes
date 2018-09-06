@@ -5,12 +5,16 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local MLineUp = JRequire "Dev.LineUp.MLineUp"
 local CLineUp = JRequire "Dev.LineUp.CLineUp"
 local MStaff = JRequire "Dev.Staff.MStaff"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
 local MAX_TAG = 6
+local EQUIP_YIFU = "yifu"
+local EQUIP_XIANGZI = "xiagnzi"
+local Equip_BG_NO = "ty_018"
 
 local Color_Light = Color(255/255,223/255,96/255,1)
 local Color_Gray = Color(140/255,139/255,137/255,1)
@@ -28,6 +32,7 @@ function _M:OnCreate(...)
 	local moudle = self:CreateMoudle(self._RootNode, "M_NewBossPK_Array")
 	self.mMoudle = moudle
 	self.NowSelectIndex = nil
+	self.mIsLineUp = false
 	self.ImgSelect = moudle:Get("H")
 
 	moudle:Get("StaffLv").Text = Csv.Text("lineup_5")
@@ -46,12 +51,13 @@ function _M:OnCreate(...)
 		self:Destroy()
 	end,nil,0.9)
 
-	local tipsFunc = function( ... )
-		CCommon.ShowError(Csv.Text("lineup_24"))
-	end
 	--装备空点击处理
-	moudle:Get("IconBox1"):AddOnButton(tipsFunc)
-	moudle:Get("IconBox2"):AddOnButton(tipsFunc)
+	moudle:Get("IconBox1"):AddOnButton(function()
+		_P.OnclickEquip(self,1)
+	end)
+	moudle:Get("IconBox2"):AddOnButton(function()
+		_P.OnclickEquip(self,2)
+	end)
 end
 
 function _P.OnClickChange(self)
@@ -212,14 +218,17 @@ function _P.RefreshSelect(self,index)
 end
 
 function _P.RefreshBottom(self,staffid)
+	self.mStaffid = staffid
 	local moudle = self.mMoudle
 	local csvStaff = Csv.Personnel[staffid]
 	local dataStaff = MStaff.StaffTable[staffid]
+	
 	if csvStaff ~= nil and dataStaff ~= nil then
 		moudle:Get("Staff").SpriteName = csvStaff.asset
 		moudle:Get("StaffName").Text = csvStaff.name
 		moudle:Get("LvNum").Text = dataStaff.level
 		moudle:Get("GjlNum").Text = dataStaff.power
+		self.mPower = dataStaff.power
 
 		for i = 1,7 do
 			moudle:Get("Star"..i).Activity = csvStaff.star >= i
@@ -236,7 +245,78 @@ function _P.RefreshBottom(self,staffid)
 			end
 		end
 
+		_P.RefreshEquips(self)
+
 		_P.RefreshTianfu(self,staffid)
+	end
+end
+
+function _P.RefreshEquips(self)
+	local moudle = self.mMoudle
+	local staffid = self.mStaffid
+	if staffid ~= nil then
+		local dataStaff = MStaff.StaffTable[staffid]
+		if dataStaff ~= nil then
+			local yifuIcon = moudle:Get("Icon1")
+			local xiangziIcon = moudle:Get("Icon2")
+			local yifuIconBg = moudle:Get("IconBox1")
+			local xiangziIconBg = moudle:Get("IconBox2")
+			local yifuLv = moudle:Get("icon1Lv")
+			local yifuStar = moudle:Get("icon1Star")
+			local xiangziLv = moudle:Get("icon2Lv")
+			local xiangziStar = moudle:Get("icon2Star")
+			local redPoint1 = moudle:Get("redPoint1")
+			local redPoint2 = moudle:Get("redPoint2")
+
+			self.StaffInfo = dataStaff
+			--装备
+			yifuIcon.SpriteName = EQUIP_YIFU
+			xiangziIcon.SpriteName = EQUIP_XIANGZI
+			yifuIconBg.SpriteName = Equip_BG_NO
+			xiangziIconBg.SpriteName = Equip_BG_NO
+
+			yifuLv.Text = ""
+			yifuStar.Text = ""
+			xiangziLv.Text = ""
+			xiangziStar.Text = ""
+			
+			if dataStaff.equips ~= nil then
+				for k,v in pairs(dataStaff.equips) do
+					local csvEquip = Csv.Equip[v.equipId]
+					local icon = nil
+					local iconBg = nil
+					if csvEquip.type == 1 then
+						icon = yifuIcon
+						iconBg = yifuIconBg
+
+						yifuLv.Text = Csv.Text("equip_item_lv",{num = v.level})
+						yifuStar.Text = Csv.Text("equip_item_star",{num = v.star})
+					elseif csvEquip.type == 2 then
+						icon = xiangziIcon
+						iconBg = xiangziIconBg
+
+						xiangziLv.Text = Csv.Text("equip_item_lv",{num = v.level})
+						xiangziStar.Text = Csv.Text("equip_item_star",{num = v.star})
+					end
+					
+					icon.SpriteName = csvEquip.icon
+					iconBg.SpriteName = csvEquip.colorIcon
+				end
+			end
+
+			--红点
+			redPoint1.Activity = false
+			redPoint2.Activity = false
+			local equipsType1 = MEquipt.GetEquipsByType(1)
+			local equipsType2 = MEquipt.GetEquipsByType(2)
+
+			if equipsType1 ~= nil and #equipsType1 > 0 then
+				redPoint1.Activity = not MStaff.CheckIsEquip(staffid,1)
+			end
+			if equipsType2 ~= nil and #equipsType2 > 0 then
+				redPoint2.Activity = not MStaff.CheckIsEquip(staffid,2)
+			end
+		end
 	end
 end
 
@@ -322,8 +402,32 @@ function _P.GetSortLink(link)
 	end
 end
 
+function _P.OnclickEquip(self,type)
+	local dataStaff = self.StaffInfo
+	local equipInfo = nil
+	if dataStaff ~= nil then
+		local isEquip = false
+		if dataStaff.equips ~= nil then
+			for k,v in pairs(dataStaff.equips) do
+				local csvEquip = Csv.Equip[v.equipId]
+				if csvEquip.type == type then
+					isEquip = true
+					equipInfo = v
+				end
+			end
+		end
+
+		if isEquip then
+			WindowMgr.Create("UEquiptDetail",equipInfo,dataStaff.id)
+		else
+			WindowMgr.Create("UEquipMain",dataStaff.id,type,1)
+		end
+	end
+end
+
 function _R.SetList(self)
 	_P.SetList(self)
+	self.mIsLineUp = false
 end
 
 function _R.OnLineUpOpen(self)
@@ -332,10 +436,29 @@ end
 
 function _R.SetNowSelect(self,index)
 	self.NowSelectIndex = index
+	self.mIsLineUp = true
 end
 
 function _R.SetNoSelect(self)
 	self.NowSelectIndex = nil
+	self.mIsLineUp = true
+end
+
+function _R.UpdateEquip(self)
+	_P.RefreshEquips(self)
+end
+
+function _R.StaffChange(self)
+	--self.mPower
+	if self.mStaffid ~= nil and not self.mIsLineUp then
+		local newPower = MStaff.StaffTable[self.mStaffid].power
+		self.mPower = newPower
+
+		_P.RefreshTianfu(self,self.mStaffid)
+
+		self.mMoudle:Get("GjlNum").Text = newPower
+		self.mMoudle:Get("zhanli").Text = Csv.Text("lineup_19",{num = MLineUp.GetLineAllPower()})
+	end
 end
 
 return _M

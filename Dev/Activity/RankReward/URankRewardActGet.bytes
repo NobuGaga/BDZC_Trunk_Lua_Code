@@ -19,11 +19,11 @@ local _M = Class(WindowBase)
 local _P = {}
 
 --界面构建
-function _M:OnCreate(rank, rewards)
+function _M:OnCreate(rank, rewards, sysID)
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
-
+	self.sysID = sysID
 	self.moudle:Get("text").Text = Csv.Text("rankreward_get_reward", {rank = rank})
-	if nil ~= rewards then
+	if rewards then
 		SoundMgr.Play(11000)
 		_P.InitData(self)
 		_P.InitRewardList(self, rewards)
@@ -47,9 +47,9 @@ function _P.InitData(self)
 	end
 
 	self.content = self.moudle:Get("GoodsItem")
-	if nil ~= self.content then
+	if self.content then
 		self.layout = self.content:AddGridLayoutGroup()
-		if nil ~= self.layout then
+		if self.layout then
 			self.rewardColumnCount = self.layout.constraintCount
 			self.rewardRowHeight = self.layout.cellSize.y + self.layout.spacing.y
 		end
@@ -60,7 +60,7 @@ end
 function _P.InitRewardList(self, rewards)
 	for k, reward in pairs(rewards) do
 		local rewardItem, effect = CCommon.CreateItem(self.content, reward.key, CCommon.ShowItemTips, 
-													  {num = reward.value}, Define.SysId.RankReward)
+													  {num = reward.value}, self.sysID)
 		if effect then
 			local originSize = effect.SelfRect.SizeDelta
 			local sizeX = self.layout.cellSize.x / ItemSizeX * originSize.x

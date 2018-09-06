@@ -308,6 +308,7 @@ function  _P.InitSkinInfoPanel(self)
 	self.textAttr1 = self.moudle:Get("textAttr1")
 	self.textAttr2 = self.moudle:Get("textAttr2")
 	self.textSkillBuff = self.moudle:Get("textSkillBuff")
+	self.textSkillExpBuff = self.moudle:Get("textSkillExpBuff")
 	self.moudle:Get("textScoreTitle").Text = Csv.Text("aircraft_skin_power")
 	self.textScore = self.moudle:Get("textScore")
 
@@ -357,6 +358,7 @@ function _R.RefreshSkinInfoPanel(self)
 		
 		self.textScore.Text = MAircraft.SkinScore[self.skinList[self.selectIndex].skinID]
 		self.textSkillBuff.Text = Csv.Text("aircraft_skin_effect_buff", {num = _P.GetSkinSchoolBuff(self)})
+		self.textSkillExpBuff.Text = Csv.Text("aircraft_skin_exp_buff", {num = _P.GetSkinSchoolExpBuff(self)})
 
 		local attrData = _P.GetSkinAttr(self)
 		local index = 1
@@ -379,6 +381,7 @@ function _R.RefreshSkinInfoPanel(self)
 			self.textScore.Text = MAircraft.CalculatePowerBase(csvAircraft.id)
 			self.textAttr2.Text = ""
 			self.textSkillBuff.Text = ""
+			self.textSkillExpBuff.Text = ""
 
 			self.selectSkinID = skinData
 		 	self.isSelectOwn = 0 ~= MBag.GetItemNum(self.selectSkinID)
@@ -482,6 +485,18 @@ function _P.GetSkinSchoolBuff(self)
 		end
 	else
 		error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 字段 get 错误")
+	end
+	return nil
+end
+
+--获取飞机皮肤资质加成
+function _P.GetSkinSchoolExpBuff(self)
+	local csvAircraftSkin = _P.GetSkinData(self, self.selectIndex)
+	local bookExp = csvAircraftSkin.bookExp
+	if bookExp then
+		return bookExp
+	else
+		error("表 AircraftSkin 对应的ID " .. self.selectIndex .. " 字段 bookExp 错误")
 	end
 	return nil
 end

@@ -120,11 +120,11 @@ function _P.GetContent(self,islast)
 	elseif self.curStage == 2 then
 		local index = math.min(self.curStage - 1, #self.randMatch)
 		local randV = self.randMatch[index]
-		return  _P.GetSecondContent(self,randV)
+		return  _P.GetSecondContent(self)
 	elseif self.curStage == 3 then
 		local index = math.min(self.curStage - 1, #self.randMatch)
 		local randV = self.randMatch[index]
-		return  _P.GetthirdContent(self,randV)
+		return  _P.GetthirdContent(self)
 	end
 	
 end
@@ -154,13 +154,13 @@ function _P.GetContentByPoint(self,random)
 end
 
 -- 修改，暂时全部改成最大值，by:pyh
-function _P.GetSecondContent(self,randv)
-	return self.talkRandGroup1[1].key
+function _P.GetSecondContent(self)
+	return self.talkRandGroup1
 end
 
 -- 修改，暂时全部改成最大值，by:pyh
-function _P.GetthirdContent(self,randv)
-	return self.talkRandGroup2[1].key
+function _P.GetthirdContent(self)
+	return self.talkRandGroup2
 end
 
 function _P.GetNextTarget(self)
@@ -203,13 +203,14 @@ function _M:OnCreate(data, isDown, taskId, OnClose)
 	self.OnCloseCall = OnClose
 	self.adventureCsv = Csv.Adventure[data.actId]
 	self.advEventCsv = Csv.AdventureMainEvent[taskId]
+	self.advEventPartCsv = Csv.AdventureMainEventPart[taskId]
 	self.mData = data
 	self.fillData = data.compatibility
 
 	self.pause = false
 	self.stop = false
 	self.startVal = 0
-	self.Bg = module:Get("BG")
+	-- self.Bg = module:Get("BG")
 	self.qipao = module:Get("qipao")
 	self.slider = module:Get("Fill")
 	self.sliderText = module:Get("SliderNum")
@@ -241,32 +242,40 @@ function _M:OnCreate(data, isDown, taskId, OnClose)
 	end
 
 	self.talkGroup = {}
-	for k,v in pairs(self.advEventCsv.talkGroup) do
-		table.insert(self.talkGroup,{key = k, value = v})
+	for k,v in pairs(self.advEventPartCsv.talkGroup) do
+		local curKey = ''
+		local talkConf4 = Csv.AdventureTalkstring[v[1]]
+		if talkConf4 ~= nil then
+			curKey = talkConf4.talk
+		end
+
+		table.insert(self.talkGroup,{key = curKey, value = v[2] / 10000})
 	end
 	table.sort(self.talkGroup, function(a,b)
 		return a.value > b.value
 	end)
 
-	self.talkRandGroup1 = {}
-	for k,v in pairs(self.advEventCsv.talkrandomGroup1) do
-		table.insert(self.talkRandGroup1,{key = k, value = v})
+	self.talkRandGroup1 = ''
+	local talkConf1 = Csv.AdventureTalkstring[self.advEventPartCsv.talkrandomGroup1]
+	if talkConf1 ~= nil then
+		self.talkRandGroup1 = talkConf1.talk
 	end
-	table.sort(self.talkRandGroup1, function(a,b)
-		return a.value > b.value
-	end)
 
-	self.talkRandGroup2 = {}
-	for k,v in pairs(self.advEventCsv.talkrandomGroup2) do
-		table.insert(self.talkRandGroup2,{key = k, value = v})
+	self.talkRandGroup2 = ''
+	local talkConf2 = Csv.AdventureTalkstring[self.advEventPartCsv.talkrandomGroup2]
+	if talkConf2 ~= nil then
+		self.talkRandGroup2 = talkConf2.talk
 	end
-	table.sort(self.talkRandGroup2, function(a,b)
-		return a.value > b.value
-	end)
 
 	self.talkRandGroup3 = {}
-	for k,v in pairs(self.advEventCsv.talkrandomGroup3) do
-		table.insert(self.talkRandGroup3,{key = k, value = v})
+	for k,v in pairs(self.advEventPartCsv.talkrandomGroup3) do
+		local curKey = ''
+		local talkConf3 = Csv.AdventureTalkstring[v[1]]
+		if talkConf3 ~= nil then
+			curKey = talkConf3.talk
+		end
+
+		table.insert(self.talkRandGroup3,{key = curKey, value = v[2] / 10000})
 	end
 	table.sort(self.talkRandGroup3, function(a,b)
 		return a.value > b.value
@@ -275,7 +284,7 @@ function _M:OnCreate(data, isDown, taskId, OnClose)
 	CCommon.CreateEffect(self.sgirl, 20003)
 	self.sgirl.LocalScale = Vector3(0.4,0.4,0.4)
 	self.sgirl.LocalPosition = Vector2(20,-900)
-	self.Bg.SpriteName = self.advEventCsv.talkBg
+	-- self.Bg.SpriteName = self.advEventCsv.talkBg
 
 	self.target = self.stage[1]
 	self.curStage = 1

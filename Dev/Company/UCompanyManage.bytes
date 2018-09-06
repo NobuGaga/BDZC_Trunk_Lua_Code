@@ -92,9 +92,6 @@ function _M:OnCreate(...)
 	local oneKeyLevel = tonumber(Csv.Const(Define.Const.CompanyManageOneKeyLevel)[1])
 	local oneKeyVip = tonumber(Csv.Const(Define.Const.CompanyManageOneKeyLevel)[2])
 	local BtnOne = moudle:Get("Btn")
-	local TextTips = moudle:Get("TextTips")
-	TextTips.Activity = true
-	TextTips.Text = Csv.Text("company_manageTip1")
 	moudle:Get("SliderName").Text = Csv.Text("company_manageTip2")
 	if MPlayer.GetLevel() >= oneKeyLevel or MPlayer.GetVip() >= oneKeyVip then
 		BtnOne.IsGray = false
@@ -135,6 +132,13 @@ function _M:OnCreate(...)
 
 	_P.UpdateTime(self)
 	_R.RefreshScaleExp(self)
+	_P.RefreshScaleTime(self)
+end
+
+function _P.RefreshScaleTime(self)
+	local moudle = self.mMoudle
+	local TextTips = moudle:Get("TextTips")
+	TextTips.Text = Csv.Text("company_manageTip1",{time = luaUtil.GetTimeHMS(MCompany.GetScaleTime())})
 end
 
 function _P.OnClickOne()
@@ -162,6 +166,7 @@ function _P.SetManageData(self,moudle,data)
 	local csvManage = Csv.Manage[data.id]
 	local maxTimes = Csv.Company[MPlayer.GetLevel()].harvest[data.id]
 	moudle:Get("Btn"):AddOnButton(function ( ... )
+		moudle:Get("Btn").LocalScale = Vector3(1,1,1)
 		SoundMgr.Play(GainItemSoundId[data.id])
 		local manage = MCompany.ManageTable[data.id]
 		if manage ~= nil then
@@ -231,8 +236,9 @@ function _P.SetManageData(self,moudle,data)
 	if data.times > 0 then
 		moudle:Get("text_8").Text = Csv.Text("company_exp",{num = data.times,max = maxTimes})
 	else
-		moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time)
+		moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time  - HeartBeat.ServSecond())
 	end
+	_P.RefreshScaleTime(self)
 end
 
 function _P.GetSortTable(rawTable)

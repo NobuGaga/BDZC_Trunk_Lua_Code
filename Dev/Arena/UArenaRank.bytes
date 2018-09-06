@@ -1,0 +1,254 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MArena = JRequire "Dev.Arena.MArena"
+local CArena = JRequire "Dev.Arena.CArena"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--黄色
+local PAGECOLOR1 = Color(243 / 255, 210 / 255, 47 / 255, 1)
+--蓝色
+local PAGECOLOR2 = Color(0 / 255, 195 / 255, 1, 1)
+
+local SELECT_BTN = {
+	Rank = 1,
+	Reward = 2
+}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnArenaRank(self)
+	if self.SelectBtn == SELECT_BTN.Rank then
+		_P.refreshRankList(self)
+	end
+end
+
+function _R.OnArenaDailyReward(self, msg)
+	if self.SelectBtn == SELECT_BTN.Rank then
+		local tabMoudle = self.LastTabMoudle
+		if tabMoudle ~= nil then
+			local pos = tabMoudle:Get("btnGet").RootCanvasPos
+			if msg.rewardList ~= nil then
+				for index,item in pairs(msg.rewardList) do
+					CCommon.ShowFlyItem(self._RootNode, item.key, item.value, index * 0.6, pos + Vector2(-100, 0))
+				end
+			end
+			_P.updateRankGetBtn(self, tabMoudle, true)
+		end
+	end
+end
+
+function _R.OnArenaDaily(self)
+	if self.SelectBtn == SELECT_BTN.Rank then
+		local tabMoudle = self.LastTabMoudle
+		if tabMoudle ~= nil then
+			_P.updateRankGetBtn(self, tabMoudle)
+		end
+	end
+end
+
+function _P.updateRankGetBtn(self, tabMoudle, isNeedTween)
+	local btn = tabMoudle:Get("btnGet")
+	if MArena.DailyState == MArena.DailyRewardState.NoGet then
+		tabMoudle:Get("GetAnim").Activity = false
+		btn.Activity = true
+		btn.IsGray = false
+		btn:AddOnButton(function( ... )
+			CArena.ReqDailyReward()
+		end)
+	elseif MArena.DailyState == MArena.DailyRewardState.NoFight then
+		tabMoudle:Get("GetAnim").Activity = false
+		btn.Activity = true
+		btn.IsGray = true
+		btn.RaycastTarget = false
+	else
+		btn.Activity = false	
+		if isNeedTween then
+			tabMoudle:Get("GetAnim").Activity = false
+			local effect
+			SoundMgr.PlaySystem(10004)
+			effect = CCommon.CreateEffect(tabMoudle:Get("biack2"), 5, btn.LocalPosition, function( ... )	
+				if effect ~= nil then
+					effect:Destroy()
+				end
+				btn.Activity = false
+				tabMoudle:Get("GetAnim").Activity = true
+			end)
+		else
+			tabMoudle:Get("GetAnim").Activity = true
+		end
+	end
+end
+
+_P.selectFunc = {
+	[SELECT_BTN.Rank] = function (self)
+		local moudle = self.mMoudle
+		moudle:Get("Btn_c1").Color = PAGECOLOR1
+		moudle:Get("Btn_c2").Color = PAGECOLOR2
+		moudle:Get("C_text1").Color = Color.black
+		moudle:Get("C_text2").Color = Color.white
+
+		local tabMoudle = self:CreateMoudle(moudle.SelfRect, "M_Sports_Ranking_Rank")
+		self.LastTabMoudle = tabMoudle
+		tabMoudle:Get("ranking").Text = Csv.Text("club_rank_num")
+		tabMoudle:Get("name").Text = Csv.Text("club_rank_name")
+		tabMoudle:Get("Fraction").Text = Csv.Text("Arena_12")
+		tabMoudle:Get("textBtnGet").Text = Csv.Text("quest_get")
+		tabMoudle:Get("name_0").Text = Csv.Text("commerce_battle23")
+		tabMoudle:Get("nametext").Text = MPlayer.GetName()
+		tabMoudle:Get("textSelfRank").Text = Csv.Text("commerce_rank3")
+		if MArena.CurRank <= 0 then
+			tabMoudle:Get("rankNum").Text = "10000+"
+		else
+			tabMoudle:Get("rankNum").Text = tostring(MArena.CurRank)
+		end
+		self:RegistRedpoint(tabMoudle:Get("redpoint"), Define.SysId.Arena, MArena.REDPOINT_INDEX.DailyReward)
+		tabMoudle:Get("Tips").Text = Csv.Text("Arena_13")
+		_P.refreshRankList(self)
+		_P.updateRankGetBtn(self, tabMoudle)
+
+		local lastRank = MArena.DailyRank
+		local isHave = false
+		if MArena.DailyState ~= MArena.DailyRewardState.NoFight and lastRank ~= nil and lastRank > 0 then
+			for _,rewardCsvLine in pairs(Csv.ArenaDailyReward) do
+				if rewardCsvLine.id <= lastRank and rewardCsvLine.toRank >= lastRank then
+					if rewardCsvLine.reward ~= nil then
+						isHave = true
+						tabMoudle:Get("ToDayImg").Activity = true
+						tabMoudle:Get("ToDay").Text = Csv.Text("Arena_21")
+						local itemRoot = tabMoudle:Get("Items")
+						itemRoot:DestroyChildren()
+						for _,v in pairs(rewardCsvLine.reward) do
+							CCommon.CreateItem(itemRoot,v[1],function ( ... )
+								WindowMgr.Create("UBagDetailPop", v[1])
+							end, {num = v[2]})
+						end						
+					end
+					break
+				end
+			end			
+		end
+		if not isHave then
+			tabMoudle:Get("ToDayImg").Activity = false
+		end
+	end,
+	[SELECT_BTN.Reward] = function (self)
+		local moudle = self.mMoudle
+		moudle:Get("Btn_c1").Color = PAGECOLOR2
+		moudle:Get("Btn_c2").Color = PAGECOLOR1
+		moudle:Get("C_text1").Color = Color.white
+		moudle:Get("C_text2").Color = Color.black
+
+		local tabMoudle = self:CreateMoudle(moudle.SelfRect, "M_Sports_Ranking_Reward")
+		self.LastTabMoudle = tabMoudle
+		tabMoudle:Get("Tips").Text = Csv.Text("Arena_11")
+
+		_P.refreshRewardList(self)
+	end,
+}
+
+function _P.refreshRankList(self)
+	local moudle = self.LastTabMoudle
+	if moudle == nil then
+		return
+	end
+	local itemContent = moudle:Get("content")
+	itemContent:DestroyChildren()
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+	local rankList = MArena.RankList
+	if #rankList > 0 then
+		self.scrollController = RankVertical.new(moudle:Get("scrollView"),itemContent,"M_Sports_Ranking_Rank",
+		function(index,value,moudle)
+			if moudle ~= nil then
+				if value.rank > 3 then
+					moudle:Get("rank").Text = value.rank
+				end
+
+				moudle:Get("name").Text = value.name
+				moudle:Get("value").Text = tostring(value.force)
+				moudle.SelfRect.LocalPosition = Vector2(0,((63 + 12) * #rankList - 12)/2 - ((index - 1) * (63 + 12) + 63/2))
+			end
+		end)
+		self.scrollController:CreateScroll(14,850,670,63,12,rankList)
+	end
+end
+
+function _P.refreshRewardList(self)
+	local moudle = self.LastTabMoudle
+	if moudle == nil then
+		return
+	end
+	local itemContent = moudle:Get("content")
+	itemContent:DestroyChildren()
+
+	local rewardLines = {}
+	for id,_ in pairs(Csv.ArenaDailyReward) do
+		table.insert(rewardLines, id)
+	end
+	table.sort(rewardLines)
+	for _,id in pairs(rewardLines) do
+		local csvLine = Csv.ArenaDailyReward[id]
+		local oneMoudle = self:CreateMoudle(itemContent, "M_Sports_Ranking_Reward_Item")
+		oneMoudle:Get("textTitle").Text = csvLine.title
+		local itemRoot = oneMoudle:Get("GoodsItem")
+		if csvLine.reward ~= nil then
+			for _,info in pairs(csvLine.reward) do
+				CCommon.CreateItem(itemRoot,info[1], function ( ... )
+					WindowMgr.Create("UBagDetailPop", info[1])
+				end,{num = info[2]})
+			end
+		end
+	end
+end
+
+function _P.selectBtn(self, index)
+	if self.SelectBtn ~= index then
+		self.SelectBtn = index
+
+		if self.LastTabMoudle ~= nil then
+			self.LastTabMoudle:Destroy()
+			self.LastTabMoudle = nil
+		end
+
+		_P.selectFunc[index](self)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	CArena.ReqRank()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Sports_Ranking")
+	self.mMoudle = moudle
+	self.SelectBtn = 0
+	self.LastTabMoudle = nil
+	self.scrollController = nil
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_text1").Text = Csv.Text("charitable_self_rank")
+	moudle:Get("C_text2").Text = Csv.Text("charitable_rank_reward")
+	moudle:Get("Btn_c1"):AddOnButton(function( ... )
+		_P.selectBtn(self, SELECT_BTN.Rank)
+	end)
+	moudle:Get("Btn_c2"):AddOnButton(function( ... )
+		_P.selectBtn(self, SELECT_BTN.Reward)
+	end)
+	_P.selectBtn(self, SELECT_BTN.Rank)
+end
+
+return _M

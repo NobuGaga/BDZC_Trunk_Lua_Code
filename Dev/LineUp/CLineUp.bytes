@@ -3,6 +3,8 @@ local EventCenter = JRequire "Dev.EventCenter"
 local CMain = JRequire "Dev.Main.CMain"
 local MMain = JRequire "Dev.Main.MMain"
 local CStaff = JRequire "Dev.Staff.CStaff"
+local MStaff = JRequire"Dev.Staff.MStaff"
+local MEquipt = JRequire "Dev.Equipt.MEquipt"
 
 local _M = {}
 local _P = {}
@@ -37,8 +39,25 @@ end
 function _M.CheckRedpoint()
 	local LineUpList = MLineUp.LineUpList
 	local SeatNum = MLineUp.SeatNum
+	
 	for i=1,SeatNum do
-		CMain.UpdateRedpoint(LineUpList[i] == nil or LineUpList[i] <= 0, Define.SysId.LineUp, i)
+		local staffID = LineUpList[i]
+		local isRed = false
+
+		if staffID == nil or staffID <= 0 then
+			isRed = true
+		else
+			local equipsType1 = MEquipt.GetEquipsByType(1)
+			local equipsType2 = MEquipt.GetEquipsByType(2)
+
+			if equipsType1 ~= nil and #equipsType1 > 0 then
+				isRed = not MStaff.CheckIsEquip(staffID,1)
+			end
+			if equipsType2 ~= nil and #equipsType2 > 0 then
+				isRed = not MStaff.CheckIsEquip(staffID,2)
+			end
+		end
+		CMain.UpdateRedpoint(isRed, Define.SysId.LineUp, i)
 	end
 
 	CStaff.CheckStaffRedPoint()
@@ -57,6 +76,7 @@ function _M.LineUpOpen()
 end
 
 function _P.OnLineUpInit(data)
+	print("OnLineUpInit!!!")
 	MLineUp.InitLine(data)
 	_M.CheckRedpoint()
 
@@ -73,5 +93,6 @@ function _P.OnLineUpOpen(data)
 		WindowMgr.Call("ULineUp","OnLineUpOpen")
 	end
 end
+
 
 return _M

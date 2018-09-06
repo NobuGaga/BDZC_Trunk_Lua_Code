@@ -320,7 +320,11 @@ function _P.InitBody(self)
 		local titleID = self.listPosIndexCsvData[self.lastSelectIndex]
 		local posData = MParliament.GetListData(titleID)
 		if nil ~= posData then
-			CPlayer.LookPlayerReq(posData.playerID)
+			if posData.serverid == nil then
+				CPlayer.LookPlayerReq(posData.playerID)
+			else
+				CPlayer.LookPlayerByServerID(posData.playerID, posData.serverid)
+			end
 		end
 	end, nil, 1)
 	self.Head = self.moudle:Get("PosHead")

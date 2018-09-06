@@ -55,7 +55,7 @@ function _M:BeforeDestroy( ... )
 end
 
 function _P.ShowFirstEnter(self)
-	self.WaitChapterStartStory = true
+	MBattle.IsFirstOpen = true
 	local curId = MBattle.CurId
 	local curBattleCsv = Csv.Battle[curId]
 	WindowMgr.Create("UBattlePartStart", curBattleCsv.part, function()
@@ -163,7 +163,7 @@ function _R.OnResult(self, data)
 		local lastBattleCsv = Csv.Battle[lastBattleId]
 		local curBattleCsv = Csv.Battle[curId]
 		if lastBattleCsv.chapter ~= curBattleCsv.chapter then
-			self.WaitChapterStartStory = true
+			MBattle.IsFirstOpen = true
 			if lastBattleCsv.part ~= curBattleCsv.part then
 				self:Lock()
 				self.Moudle.SelfRect:AddOnTime(function()
@@ -289,14 +289,15 @@ function _P.UpdateBattleState(self, chapterId, info)
 		info.icon:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			if battleCsv.next ~= nil and battleCsv.next > 0 then
-				if self.WaitChapterStartStory then
-					self.WaitChapterStartStory = false
+				if MBattle.IsFirstOpen  then
+					MBattle.IsFirstOpen = false
 					if chapterCsv.startStory ~= nil and chapterCsv.startStory > 0 then
 						if self.StoryMoudle ~= nil then
 							self.StoryMoudle:Destroy()
 							self.StoryMoudle:delete()
 							self.StoryMoudle = nil
 						end
+						
 						self.StoryMoudle = UStoryMoudle.new(self.StoryRoot, chapterCsv.startStory, function()
 							if self.Moudle ~= nil then
 								if chapterCsv.type == MBattle.BattleType.BOSS then
@@ -387,8 +388,72 @@ function _P.CreateBoss()
 	end
 
 	WindowMgr.Create("ULineUpCheck",callBack)
+	-- local DATA = {}
+	-- DATA.result = true
+	-- DATA.fight = {}
+	-- DATA.staffs = {}
+	-- DATA.rstaffs = {}
+	-- for i = 1,5 do
+	-- 	local staff = {staffid = 10000 + i,staffcolor = i}
+	-- 	table.insert(DATA.staffs,staff)
+	-- 	table.insert(DATA.rstaffs,staff)
+	-- end
+
+	-- local report1 = {}
+	-- report1.index = 1
+	-- report1.result = true
+	-- report1.staffid = 10001
+	-- report1.baseblood = 10000
+	-- report1.initblood = 11000
+	-- report1.laveblood = 5000
+
+	-- report1.rstaffid = 10001
+	-- report1.rbaseblood = 5000
+	-- report1.rinitblood = 6000
+	-- report1.rlaveblood = 0
+	-- report1.buffs = {}
+	-- local buff1 = {}
+	-- buff1.source = true
+	-- buff1.skillid = 10001
+	-- buff1.buffs = {{buffid = 1,target = true,staffid = 10001}}
+	-- local buff2 = {}
+	-- buff2.source = false
+	-- buff2.skillid = 10001
+	-- buff2.buffs = {{buffid = 1,target = false,staffid = 10001}}
+	-- table.insert(report1.buffs,buff1)
+	-- table.insert(report1.buffs,buff2)
+
+	-- local report2 = {}
+	-- report2.index = 2
+	-- report2.result = false
+	-- report2.staffid = 10001
+	-- report2.baseblood = 5000
+	-- report2.initblood = 6000
+	-- report2.laveblood = 0
+
+	-- report2.rstaffid = 10002
+	-- report2.rbaseblood = 10000
+	-- report2.rinitblood = 11000
+	-- report2.rlaveblood = 5000
+	-- report2.buffs = {}
+	-- local buff3 = {}
+	-- buff3.source = true
+	-- buff3.skillid = 10001
+	-- buff3.buffs = {{buffid = 1,target = false,staffid = 10003}}
+	-- local buff4 = {}
+	-- buff4.source = true
+	-- buff4.skillid = 10001
+	-- buff4.buffs = {{buffid = 1,target = true,staffid = 10002}}
+	-- table.insert(report2.buffs,buff3)
+	-- table.insert(report2.buffs,buff4)
+
+	-- table.insert(DATA.fight,report1)
+	-- table.insert(DATA.fight,report2)
+
+	-- WindowMgr.Create("UBattlePvp",DATA)
 end
 
+--前端计算获得经验值，与后端各自计算，修改公式时需同步
 function _P.GetMoney()
 	local zhili = MPlayer.GetAttr(Define.AttrType.Zhili)
 	if zhili ~= nil then
@@ -649,21 +714,19 @@ function _P.RefreshTips(self,isAnimate,isall)
 				local lastNum = self.mLastGufen
 				local nowNum = gufen
 				self.mLastGufen = nowNum
-				if lastNum ~= nowNum then
-					local dura = 0.3
-					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
-						if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
-					end, function()
-						if TextUpdate ~= nil then 
-							if isall then
-								TextUpdate.Text = LuaUtil.NumberFormat(100)
-							else
-								TextUpdate.Text = LuaUtil.NumberFormat(nowNum) 
-							end
+				local dura = 0.3
+				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+					if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+				end, function()
+					if TextUpdate ~= nil then 
+						if isall then
+							TextUpdate.Text = LuaUtil.NumberFormat(100)
+						else
+							TextUpdate.Text = LuaUtil.NumberFormat(nowNum) 
 						end
-					end)
-					t:SetTarget(TextUpdate.CachedTran)
-				end
+					end
+				end)
+				t:SetTarget(TextUpdate.CachedTran)
 			end
 			box:AddOnTime(function()
 				Num1:DOScale(1,0.5)

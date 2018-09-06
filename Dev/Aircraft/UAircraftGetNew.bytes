@@ -80,6 +80,8 @@ function _P.InitVuew(self, skinData)
 	self.module:Get("textEffectTitle").Text = Csv.Text("aircraft_skin_effect")
 	self.module:Get("textSkillBuff").Text = Csv.Text("aircraft_skin_effect_buff", 
 													 {num = _P.GetSkinSchoolBuff(skinData)})
+	self.module:Get("textExpBuff").Text = Csv.Text("aircraft_skin_exp_buff", 
+													 {num = _P.GetSkinSchoolExpBuff(skinData)})
 	
 	self.module:Get("textScore").Text = Csv.Text("aircraft_skin_score", 
 												 {num = MAircraft.SkinScore[skinData.id]})
@@ -110,6 +112,14 @@ function _P.GetSkinSchoolBuff(skinData)
 				end
 			end
 		end
+	end
+	return 0
+end
+
+--获取飞机皮肤游学经验加成
+function _P.GetSkinSchoolExpBuff(skinData)
+	if nil ~= skinData.bookExp then
+		return skinData.bookExp
 	end
 	return 0
 end

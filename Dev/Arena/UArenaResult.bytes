@@ -1,0 +1,57 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MArena = JRequire "Dev.Arena.MArena"
+local CArena = JRequire "Dev.Arena.CArena"
+
+local _M = Class(WindowBase)
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(closeCall, isSuccess, rewardList, lastInfo)
+	self.OnCloseCall = closeCall
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_Sports_Success")
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	if rewardList ~= nil then
+		local content = moudle:Get("Items")
+		for _,v in pairs(rewardList)do
+			CCommon.CreateItem(content,v.key,function ( ... )
+				WindowMgr.Create("UBagDetailPop", v.key)
+			end, {num = v.value})
+		end
+	end
+	if lastInfo.rank > MArena.CurRank then
+		moudle:Get("Point").Text = Csv.Text("Arena_16")
+		moudle:Get("PointNum").Text = tostring(lastInfo.rank - MArena.CurRank) 
+		CCommon.CreateEffect(moudle:Get("UPFx"), 10191)
+	else
+		moudle:Get("Point").Activity = false
+	end
+	moudle:Get("Score").Text = Csv.Text("Arena_17")
+	moudle:Get("ScoreNum").Text = tostring(MArena.Score - lastInfo.score)
+	moudle:Get("Tips").Text = Csv.Text("charitable_donate_close")
+
+	if isSuccess then
+		SoundMgr.PlayNonStopUI(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10179)		
+	else
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10180)
+	end
+end
+
+return _M

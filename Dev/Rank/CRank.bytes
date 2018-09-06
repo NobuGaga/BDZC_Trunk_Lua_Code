@@ -2,6 +2,7 @@ local MRank = JRequire "Dev.Rank.MRank"
 local MRelations = JRequire "Dev.Relations.MRelations"
 local CMain = JRequire "Dev.Main.CMain"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local MCrossActivity = JRequire "Dev.CrossActivity.MCrossActivity"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = {}
@@ -79,6 +80,9 @@ function _P.OnGetList(data)
 	if data.islocal == false and Define.CrossRankTypeFunc[data.rankid] ~= nil then
 		local info = Define.CrossRankTypeFunc[data.rankid]
 		WindowMgr.Call(info.view, info.func, data)
+	elseif data.islocal == false and MCrossActivity.UpdateActivitySelfRank(data.rankid, data.selfrank, data.selfvalue) then
+		WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.CrossRankReward)
+		WindowMgr.Call("UTimeLimitActRank", "OnRefreshView", data)
 	elseif Define.RankTypeFunc[data.rankid] ~= nil then
 		local info = Define.RankTypeFunc[data.rankid]
 		WindowMgr.Call(info.view, info.func, data)

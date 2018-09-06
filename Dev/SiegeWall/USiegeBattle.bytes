@@ -81,7 +81,7 @@ function _R.OnResult(self,data)
 	self:Lock()
 	self.mMoudle:Get("Btn_back").RaycastTarget = false
 	self.mData = data
-	self.IsWin = data.result
+	self.IsWin = data.fight.result
 	self.StaffEffectTable = {}
 	self.BuffTable = {}
 	self.ReportTable = _P.GetBattleReport(_P.GetSortReport(data.fight.fight))
@@ -97,12 +97,14 @@ function _R.RefreshBuff(self)
 end
 
 ------------
+--[[
 function _R.RefreshFight(self)
 	local Data = self.mData
 	if Data ~= nil then
 		_P.ReadyFight(self,Data)
 	end
 end
+--]]
 
 function _P.ShowResult(self)
 	local Data = self.mData
@@ -126,7 +128,7 @@ function _M:OnCreate(data)
 	end, nil, 1.2)
 
 	----------------------
-	self.mData = data
+	self.mDataInfo = data
 	local bossData = Csv.SiegeBoss[data.id]
 	self.mBossData = bossData
 	MSiege.selectBossId = data.indexID
@@ -135,7 +137,7 @@ function _M:OnCreate(data)
 		bossBloodMax = 1000,
 		bossBlood = 1000,
 		bossImg = bossData.body, 
-		bossTab = "", 
+		bossTab = bossData.smallbg, 
 		bossBg = bossData.bg
 	}
 	self.mBossMsg = bossMsg
@@ -312,7 +314,7 @@ function _P.RefreshBuffs(self)
 				end
 			end
 			--不是自己阵营不存在阵营buff
-			local _data = self.mData
+			local _data = self.mDataInfo
 			--阶段2
 			if MSiege.Phase == 2 then
 				if _data.type ~= nil then 
@@ -565,13 +567,13 @@ function _P.GetBattleReport(reports)
 					local csvBuff = Csv.Buff[value.skillid]
 					if csvBuff ~= nil and csvBuff.show ~= nil and csvBuff.show > 0 then
 						local buff = {type = MBattle.BattleFightType.Buff,skillid = value.skillid,buffid = value.buffid,staffid = v.staffid,targetstaffs = value.staffid,index = v.index,
-									initblood = v.initblood,laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood}
+									initblood = v.initblood,laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,baseblood = v.baseblood}
 						table.insert(reportTable,buff)
 					end
 				end
 			end
 			local data = {type = MBattle.BattleFightType.Fight,index = v.index,result = v.result,staffid = v.staffid,initblood = v.initblood,
-			laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,rstaffid = v.rstaffid}
+			laveblood = v.laveblood,rinitblood = v.rinitblood,rlaveblood = v.rlaveblood,rstaffid = v.rstaffid,baseblood = v.baseblood}
 			table.insert(reportTable,data)
 		end
 	end
@@ -620,8 +622,9 @@ function _P.OnFight(self, data)
 			local oneHurt = data.initblood - data.laveblood
 			info.Blood:DOKill()
 			info.BloodSlider:DOKill()
+			
 			local fill = lastBlood / MStaff.StaffTable[data.staffid].power
-			local ft = info.BloodBar:DOFillAmount(fill, 0.2)
+			local ft = info.BloodSlider:DOFillAmount(fill, 0.2)
 			local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
 				if info.Blood ~= nil then
 					info.Blood.Text = value
@@ -631,7 +634,7 @@ function _P.OnFight(self, data)
 					info.Blood.Text = lastBlood
 				end
 
-				CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
+				--CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
 			end)
 			t:SetTarget(info.Blood.CachedTran)
 		end
@@ -684,7 +687,7 @@ function _P.OnFight(self, data)
 
 		local StaffAttackEnd = function()
 			doHurtBoss()
-			--doHurtStaff()
+			doHurtStaff()
 			t:Play(T_FB_Staff_AttackBack)
 		end
 
@@ -724,6 +727,7 @@ function _P.PlayNextAnimate(self)
 					staffImg.SpriteName = csvStaff.asset
 				end
 			end
+			self.Own.BloodSlider.FillAmount = 1
 			local t2 = staffImg:DOAnchorPosY(-360,0.15)
 			t2:SetEase(CS.DG.Tweening.Ease.Linear)
 			t2:OnComplete(

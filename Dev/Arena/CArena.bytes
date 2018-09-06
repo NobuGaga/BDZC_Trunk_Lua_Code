@@ -1,0 +1,214 @@
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local MArena = JRequire "Dev.Arena.MArena"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = {}
+local _P = {}
+
+local CMD_ID = 
+{
+	cArenaOpenUI					= 1,--打开竞技场界面(返回界面信息)
+	cArenaMessage					= 2,--点击战斗记录按钮
+	cArenaRank						= 3,--点击排行按钮
+	cArenaDailyReward				= 5,--请求领取每日排名奖励(排行那边的那个)
+	cArenaExchange					= 6,--请求兑换物品 PArena.CArenaExchange
+	cArenaFight						= 7,--点击某个玩家进行挑战 PArena.CArenaFight
+	cArenaRevenge					= 8,--点击某个玩家进行复仇 PArena.CArenaFight
+	cArenaRefreshShop				= 9,--手动刷新商店 
+	cArenaFightBuy					= 10,--购买战斗次数
+	cArenaShopCall					= 11,--定时刷新商店
+	cArennFightCall					= 12,--定时刷新战斗次数 
+----------
+	sArenaInit						= 1,--初始化信息 PArena.SArenaInfo
+	sArenaUpdate					= 2,--竞技场信息变更 PArena.SArenaRankUpdate
+	sArenaOpenUI					= 3,--打开竞技场界面(返回界面信息) PArena.SArenaOpenUI
+	sArenaMessage					= 4,--战斗记录返回 PArena.SArenaMessage
+	sArenaRank						= 5,--排行信息返回 PArena.SArenaRank
+	sArenaFightChanged 				= 6,--战斗的时候排名已变化 PArena.SArenaOpenUI
+	sArenaDailyReward				= 7,--请求领取每日排名奖励(排行那边的那个) PArena.SArenaReward
+	sArenaExchange					= 8,--兑换物品返回 PArena.SArenaExchange
+	sArenaFight						= 9,--战报信息返回 PArena.SArenaFight
+	sArenaRefreshShop				= 10,--手动刷新商店返回 PArena.SArenaShop
+	sArenaFightBuy					= 11,--购买战斗次数返回 PArena.SArenaFightRefresh
+	sArenaShopCall					= 12,--定时刷新商店返回 PArena.SArenaShop
+	sArennFightCall					= 13,--定时刷新战斗次数返回 PArena.SArenaFightRefresh
+
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[CMD_ID.cArenaOpenUI] = "",						--打开竞技场界面(返回界面信息)
+		[CMD_ID.cArenaMessage] = "",					--点击战斗记录按钮
+		[CMD_ID.cArenaRank] = "",						--点击排行按钮
+		[CMD_ID.cArenaDailyReward] = "",				--请求领取每日排名奖励(排行那边的那个)
+		[CMD_ID.cArenaExchange] = "PArena.CArenaExchange",--请求兑换物品
+		[CMD_ID.cArenaFight] = "PArena.CArenaFight",	--点击某个玩家进行挑战
+		[CMD_ID.cArenaRevenge] = "PArena.CArenaFight",	--点击某个玩家进行复仇
+		[CMD_ID.cArenaRefreshShop] = "",				--手动刷新商店
+		[CMD_ID.cArenaFightBuy] = "",					--购买战斗次数
+		[CMD_ID.cArenaShopCall] = "",					--定时刷新商店
+		[CMD_ID.cArennFightCall] = "",					--定时刷新战斗次数
+	}
+	local recv = {
+		[CMD_ID.sArenaInit]			=		{proto = "PArena.SArenaInfo",		handle = _P.OnArenaInfo},
+		[CMD_ID.sArenaUpdate]		=		{proto = "PArena.SArenaRankUpdate",	handle = _P.OnArenaRankUpdate},
+		[CMD_ID.sArenaOpenUI]		=		{proto = "PArena.SArenaOpenUI",		handle = _P.OnArenaOpenUI},
+		[CMD_ID.sArenaMessage]		=		{proto = "PArena.SArenaMessage",	handle = _P.OnArenaMessage},
+		[CMD_ID.sArenaRank]			=		{proto = "PArena.SArenaRank",		handle = _P.OnArenaRank},
+		[CMD_ID.sArenaFightChanged] = 		{proto = "PArena.SArenaOpenUI",		handle = _P.OnArenaFightChanged},
+		[CMD_ID.sArenaDailyReward]	=		{proto = "PArena.SArenaReward",		handle = _P.OnArenaDailyReward},
+		[CMD_ID.sArenaExchange]		=		{proto = "PArena.SArenaExchange",	handle = _P.OnArenaExchange},
+		[CMD_ID.sArenaFight]		=		{proto = "PArena.SArenaFight",		handle = _P.OnArenaFight},
+		[CMD_ID.sArenaRefreshShop]	=		{proto = "PArena.SArenaShop",		handle = _P.OnArenaRefreshShop},
+		[CMD_ID.sArenaFightBuy]		=		{proto = "PArena.SArenaFightRefresh",handle = _P.OnArenaFightBuy},
+		[CMD_ID.sArenaShopCall]		=		{proto = "PArena.SArenaShop",		handle = _P.OnArenaShopCall},
+		[CMD_ID.sArennFightCall]	=		{proto = "PArena.SArenaFightRefresh",handle = _P.OnArenaFightCall},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.Arena, send, recv, isReload)
+end
+
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function(eventHandle)
+	if MArena.IsInGame then
+		local backInfo = MArena.Update()
+		if backInfo.refShop then
+			_M.ReqShopCall()
+		end
+		if backInfo.refFight then
+			_M.ReqFightCall()
+		end
+	end
+end, true)
+EventCenter.RegistCallEvent(Define.EventListenId.ToReLogin, function (eventHandle)
+	MArena.IsInGame = false
+end, true)
+
+--清空模块
+function _M.ModuleClean()
+	MArena.Clean()
+end
+
+function _M.ReqOpenUI()
+	_M.Send(CMD_ID.cArenaOpenUI)
+	CCommon.ShowLoading()
+end
+function _M.ReqMessage()
+	_M.Send(CMD_ID.cArenaMessage)
+end
+function _M.ReqRank()
+	_M.Send(CMD_ID.cArenaRank)
+end
+function _M.ReqDailyReward()
+	_M.Send(CMD_ID.cArenaDailyReward)
+end
+function _M.ReqExchange(id)
+	_M.Send(CMD_ID.cArenaExchange, {id = id})
+end
+function _M.ReqFight(id, rank)
+	_M.Send(CMD_ID.cArenaFight, {id = id, rank = rank})
+end
+function _M.ReqRevenge(id)
+	_M.Send(CMD_ID.cArenaRevenge, {id = id})
+end
+function _M.ReqRefreshShop()
+	_M.Send(CMD_ID.cArenaRefreshShop)
+end
+function _M.ReqFightBuy()
+	_M.Send(CMD_ID.cArenaFightBuy)
+end
+function _M.ReqShopCall()
+	_M.Send(CMD_ID.cArenaShopCall)
+end
+function _M.ReqFightCall()
+	_M.Send(CMD_ID.cArennFightCall)
+end
+
+--------------------------------------
+--------------------------------------
+
+function _M.CheckRedpoint()
+	CMain.UpdateRedpoint(MMain.FuncIsOpen(Define.SysId.Arena) and MArena.DailyState == MArena.DailyRewardState.NoGet, Define.SysId.Arena, MArena.REDPOINT_INDEX.DailyReward)
+	CMain.UpdateRedpoint(MMain.FuncIsOpen(Define.SysId.Arena) and MArena.FightTimes > 0, Define.SysId.Arena, MArena.REDPOINT_INDEX.FightNum)
+end
+function _P.OnArenaInfo(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaInfo--->>>")
+	MArena.OnInit(data)	
+	_M.CheckRedpoint()
+	WindowMgr.Call("UArena", "OnUpdateRank")
+	WindowMgr.Call("UArena", "OnArenaFightCount")
+	WindowMgr.Call("UArenaRank", "OnArenaDaily")
+end
+function _P.OnArenaRankUpdate(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaRankUpdate--->>>")
+	MArena.UpdateRank(data.rank)
+	WindowMgr.Call("UArena", "OnUpdateRank")
+end
+function _P.OnArenaOpenUI(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaOpenUI--->>>")
+	CCommon.HideLoading()
+	MArena.OnArenaOpenUI(data)
+	WindowMgr.Create("UArena", data)
+end
+function _P.OnArenaMessage(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaMessage--->>>")
+	WindowMgr.Call("UArenaMessage", "OnArenaMessage", data)
+end
+function _P.OnArenaRank(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaRank--->>>")
+	MArena.OnArenaRank(data)
+	WindowMgr.Call("UArenaRank", "OnArenaRank")
+end
+function _P.OnArenaDailyReward(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaDailyReward--->>>")
+	MArena.UpdateDailyState(data.dailyState)
+	_M.CheckRedpoint()
+	WindowMgr.Call("UArenaRank", "OnArenaDailyReward", data)	
+end
+function _P.OnArenaExchange(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaExchange--->>>")
+	MArena.UpdateScore(data.socre)
+	MArena.UpdateShopItemNum(data.id, data.lessTimes or 0)
+	WindowMgr.Call("UArenaShop", "OnArenaExchange", data.id)
+end
+function _P.OnArenaFight(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaFight--->>>")
+	local lastInfo =
+	{
+		rank = MArena.CurRank,
+		score = MArena.Score
+	}
+	MArena.OnArenaFight(data)
+	_M.CheckRedpoint()
+	WindowMgr.Call("UArena", "OnArenaFight", data, lastInfo)	
+end
+function _P.OnArenaFightChanged(data)
+	CCommon.HideLoading()
+	MArena.OnArenaOpenUI(data)
+	WindowMgr.Call("UArena", "OnArenaFightChanged", data)
+end
+function _P.OnArenaRefreshShop(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaRefreshShop--->>>")
+	MArena.OnRefreshShop(data)
+	WindowMgr.Call("UArenaShop", "OnArenaRefreshShop", true)
+end
+function _P.OnArenaFightBuy(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaFightBuy--->>>")
+	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime)
+	_M.CheckRedpoint()
+	WindowMgr.Call("UArena", "OnArenaFightCount")	
+	CCommon.ShowRight(Csv.Text("Arena_20"))
+end
+function _P.OnArenaShopCall(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaShopCall--->>>")
+	MArena.OnRefreshShop(data)
+	WindowMgr.Call("UArenaShop", "OnArenaRefreshShop")	
+end
+function _P.OnArenaFightCall(data)
+	--LuaUtil.DumpTable(data, "-----OnArenaFightCall--->>>")
+	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime)
+	_M.CheckRedpoint()
+	WindowMgr.Call("UArena", "OnArenaFightCount")
+end
+
+return _M

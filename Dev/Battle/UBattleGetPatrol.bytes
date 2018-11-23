@@ -1,49 +1,74 @@
 ----------------------文件引用--------------------------
 --@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [SDK.SDKShareType.bytes#_M]
+local SDKShareType = JRequire "SDK.SDKShareType"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
-local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Checkpoint_Acquisition"
+
+-- 关卡收购成功音效ID
+local GetSuccessSoundID = 10044
+-- 收购成功特效
+local GetSuccessEffectID = 10050
+-- 战斗胜利（收购成功）
+local WinEffectID = 10002
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
 --私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
 
 function _M:EndDestroy()
-	if self.OnCloseCall ~= nil then
+	if self.OnCloseCall then
 		self.OnCloseCall()
 	end
-
-	EventCenter.CallEventTrigger(Define.EventListenId.GetPatrol, self.PatrolId)
 end
 
 --界面构建
-function _M:OnCreate(bgSp, patrolId, callBack)
+function _M:OnCreate(bossSprite, patrolID, callBack)
 	self._EventNode:AddOnClick(function()
 		SoundMgr.Play(10001)
 		self:Destroy()
-	end, nil)
-	self:Lock()
+	end)
 	self.OnCloseCall = callBack
-	self.PatrolId = patrolId
-	SoundMgr.Play(10044)
-	local csv = Csv.Patrol[patrolId]
-	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Acquisition")
-	--moudle:Get("bg").SpriteName = bgSp
-	moudle:Get("bsx").SpriteNameAutoScale = csv.personIcon
-	moudle:Get("text").Text = Csv.Text("battle_getPatrol1", {str = csv.companyName})
-	moudle:Get("text4").Text = Csv.Text("battle_getPatrol3")
-	moudle:Get("text3").Text = Csv.Text("battle_getPatrol2", {str = csv.name})
+	local csvPatrol = Csv.Patrol[patrolID]
 
-	CCommon.CreateEffect(moudle:Get('EffectNode'), 10050, nil, function()
+	local moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	moudle:Get("background").SpriteName = csvPatrol.bgIcon
+	moudle:Get("textName").Text = csvPatrol.name
+	moudle:Get("textCompanyName").Text = csvPatrol.companyName
+	moudle:Get("textGetTips").Text = Csv.Text("battle_get_success")
+	moudle:Get("heroSprite").SpriteName = csvPatrol.personIcon
+
+	SoundMgr.Play(GetSuccessSoundID)
+	self:Lock()
+	CCommon.CreateEffect(moudle:Get('effectNode'), GetSuccessEffectID, nil, function()
 		self:Unlock()
-		LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close2"))
-	end,nil,nil,3)
-	CCommon.CreateEffect(moudle:Get('EffectNode2'), 10002)
-end
+		LuaUtil.TextAddThreePoint(moudle:Get("textCloseTips"), Csv.Text("common_close2"))
+	end, nil, nil, 3)
+	CCommon.CreateEffect(moudle:Get('effectNode2'), WinEffectID)
 
---function _M:OnCreateTweenDone()
---	self:Lock()
---end
+	local btnShare = moudle:Get("btnShare")
+	if MMain.FuncIsOpen(Define.SysId.Share) then
+		btnShare.Activity = true
+		btnShare:AddOnButton(function()
+			SDKMgr.ReqShare(SDKShareType.WinBattle)
+		end)
+		moudle:Get("textBtnShare").Text = Csv.Text("quest_share_btn")
+	else
+		btnShare.Activity = false
+	end
+end
 
 return _M

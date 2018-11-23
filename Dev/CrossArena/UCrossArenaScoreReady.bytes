@@ -1,0 +1,180 @@
+--跨服竞技场-积分赛开始匹配界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CLogin = JRequire "Dev.Login.CLogin"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+--开始匹配
+local MATCH_START = "kf_017"
+--匹配中
+local MATCHING = "kf_018"
+--匹配成功
+local MATCH_SUCCESS = "kf_019"
+
+function _M:BeforeDestroy()
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	self.StartRand = false
+	self.StartOpenBattle = false
+	self.StartOpenBattleTime = 0
+	self.CurRandIndex = 1
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Match")
+	self.Moudle = moudle
+	moudle:Get("Time").Text = ""
+	moudle:Get("Tips").Text = Csv.Text("cross_arena_tx13")
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title5")
+	moudle:Get("TextImg").SpriteName = MATCH_START
+	moudle:Get("ranktext").Text = Csv.Text("adventure_rank")
+	moudle:Get("rankBg"):AddOnButton(function()
+		WindowMgr.Create("UCrossArenaScoreRank")
+	end)
+	--倒计时
+	self.countdown = moudle:Get("Time2")
+	local function doUpdate(self)
+		local serverTime = HeartBeat.ServSecond()
+		local startTime, endTime = MCrossArena.GetJiFenSaiTime()
+		local rs = endTime - serverTime
+		if rs < 0 then
+			rs = 0
+		end
+		self.countdown.Text = Csv.Text("cross_arena_tx7") .. LuaUtil.GetTimeHMS(rs)
+	end
+	doUpdate(self)
+	self.countdown:AddOnUpdate(function()
+		doUpdate(self)
+	end, nil, 1)
+	moudle:Get("click"):AddOnButton(function(...)
+		--开始匹配
+		if MCrossArena.ARENA_STAGE_TYPE.ScoreMatch ~= MCrossArena.GetArenaStageType() then
+			CCommon.ShowError(Csv.Text("cross_arena_tx28"))
+			return
+		end
+		if MCrossArena.GetScoreMatchCount() <= 0 then
+			CCommon.ShowError(Csv.Text("cross_arena_tx27"))
+		else
+			CCrossArena.CCUMatchPlayer()
+		end
+	end,nil, 0.9)
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	self.pipeizhongFx = CCommon.CreateEffectEx(moudle:Get("canvas1"), 10233)
+	self.pipeiTweener = moudle:Get("TextImg").CachedTran:GetJTweener("T_CrossMatchStart")
+	self.pipeiTweener:Play()
+	self.EffectState = 1
+	moudle:Get("headBox1"):AddOnUpdate(function()
+		if self.StartRand then
+			local data = MCrossArena.GetMatchInfo()
+			if data and data.randplayer then
+
+				SoundMgr.Play(10064)
+				
+				if self.EffectState == 1 then
+					self.EffectState = 2
+					if self.pipeizhongFx ~= nil then
+						self.pipeizhongFx:Destroy()
+						self.pipeizhongFx = nil
+					end
+					moudle:Get("JDT").Activity = false
+					self.pipeizhongFx = CCommon.CreateEffectEx(moudle:Get("canvas1"), 10220)
+				end
+				self:Lock()
+				local player = data.randplayer[self.CurRandIndex]
+				if player then
+					moudle:Get("TextImg").SpriteName = ""
+					moudle:Get("head1").SpriteNameAutoScale = MPlayer.GetOtherHeadYuanIcon(player.headid, player.sex)
+					moudle:Get("name1").Text = player.name
+					self.CurRandIndex = self.CurRandIndex + 1
+				else
+					self.StartRand = false
+					self.CurRandIndex = 1
+					self.StartOpenBattle = true
+					self.StartOpenBattleTime = 0
+					if data.other then
+						moudle:Get("head1").SpriteNameAutoScale = MPlayer.GetOtherHeadYuanIcon(data.other.headid, data.other.sex)
+						moudle:Get("name1").Text = data.other.name
+						moudle:Get("TextImg").SpriteName = ""
+					end
+				end
+			end
+		end
+		if self.StartOpenBattle then
+			if self.EffectState == 1 or self.EffectState == 2 then
+				self.EffectState = 3
+				if self.pipeizhongFx ~= nil then
+					self.pipeizhongFx:Destroy()
+					self.pipeizhongFx = nil
+				end
+				moudle:Get("JDT").Activity = true
+				self.pipeizhongFx = CCommon.CreateEffectEx(moudle:Get("canvas1"), 10219)
+			end
+			self.StartOpenBattleTime = self.StartOpenBattleTime + 0.5
+			if self.StartOpenBattleTime > 2 then
+				self:Unlock()
+				self.StartOpenBattle = false
+				self:Destroy()
+				WindowMgr.Create("UCrossArenaScoreBattle")
+			end
+		end
+	end, nil, 0.5)
+
+	_R.RefreshData(self)
+end
+
+function _R.RefreshData(self)
+	local moudle = self.Moudle
+	local data = MCrossArena.GetMatchInfo()
+	if data == nil then
+		return
+	end
+	moudle:Get("text1").Text = Csv.Text("lectures_rank_curNum") .. (data.rank or 0)
+	moudle:Get("text2").Text = Csv.Text("adventure_main_point") .. (data.score or 0)
+	self.StartRand = data.other ~= nil and data.randplayer ~= nil
+	moudle:Get("namebg1").Activity = data.other ~= nil
+	moudle:Get("Time").Text = Csv.Text("cross_arena_matchtext0", {num=data.matchCount})
+	moudle:Get("name2").Text =  MPlayer.GetName()
+	moudle:Get("head2").SpriteNameAutoScale = MPlayer.GetHeadIcon()
+end
+
+return _M

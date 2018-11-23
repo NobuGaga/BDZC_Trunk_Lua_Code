@@ -14,11 +14,11 @@ local function InitPlayerInfo()
 		vip = 0,	--VIP等级
 		level = 1,	--当前等级
 		exp = 0,	--当前经验
-		avatar = 
+		avatar =
 		{
 			head = 101,
 			body = 1,
-		},--外观     
+		},--外观
 		attr = {},	--属性
 		sex = 1,
 		titleID = 0,--称号id 0没有穿
@@ -26,6 +26,8 @@ local function InitPlayerInfo()
 		titleList = {},
 		serverId = 0, --区服ID
 		iscross = false, --是否跨服
+		chatBg = 0,--当前使用的聊天框id
+		getChatBg = {},--已经拥有的聊天框列表
 	}
 	for _,v in pairs(Define.AttrType) do
 		info.attr[v] = 0
@@ -77,7 +79,7 @@ function _M.DequeueNotice()
 			table.remove(_M.NoticeList, 1)
 		end
 		return first
-	end	
+	end
 	return nil
 end
 
@@ -144,7 +146,7 @@ end
 _M.Attr2StrCache = nil
 function _M.Attr2Str(key)
 	if _M.Attr2StrCache == nil then
-		_M.Attr2StrCache = 
+		_M.Attr2StrCache =
 		{
 			[Define.AttrType.Wuli] = Csv.Text("staff_attri1"),
 			[Define.AttrType.Zhengzhi] = Csv.Text("staff_attri3"),
@@ -172,7 +174,7 @@ function _M.GetBodySp()
 		local fashionData = Csv.Title[_M.PlayerInfo.titleID]
 		avatarCsv = Csv.Avatar[fashionData.avatarId]
 	end
-	
+
 	return avatarCsv["asset_".._M.PlayerInfo.sex]
 end
 
@@ -276,6 +278,39 @@ end
 
 function _M.IsCross()
 	return _M.PlayerInfo.iscross
+end
+
+function _M.GetHeadBG()
+	return _M.GetOtherHeadBG(_M.PlayerInfo.chatBg, _M.PlayerInfo.vip)
+end
+function _M.GetOtherHeadBG(chatHeadBgId, vipLv)
+	if chatHeadBgId ~= nil and chatHeadBgId > 0 then
+		local csv = Csv.ChatHeadBG[chatHeadBgId]
+		if csv ~= nil then
+			return csv.headIcon
+		else
+			error("csv ChatHeadBG error: ", chatHeadBgId)
+		end
+	end
+
+	local vipCsv = Csv.Vip[vipLv or 0]
+	return vipCsv.imgBord or ""
+end
+function _M.GetChatBG()
+	return _M.GetOtherChatBG(_M.PlayerInfo.chatBg, _M.PlayerInfo.vip)
+end
+function _M.GetOtherChatBG(chatHeadBgId, vipLv)
+	if chatHeadBgId ~= nil and chatHeadBgId > 0 then
+		local csv = Csv.ChatHeadBG[chatHeadBgId]
+		if csv ~= nil then
+			return csv.chatIcon
+		else
+			error("csv ChatHeadBG error: ", chatHeadBgId)
+		end
+	end
+
+	local vipCsv = Csv.Vip[vipLv or 0]
+	return vipCsv.imgTalk or ""
 end
 
 return _M

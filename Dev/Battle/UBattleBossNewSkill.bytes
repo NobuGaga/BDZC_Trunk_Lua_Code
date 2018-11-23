@@ -25,6 +25,7 @@ function _M:ctor(parent,data,doneCall,refreshIconCall)
 	self._RootNode = parent
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_BoosPk_SecondKill2", WindowType.UI, 0)
 	self.mMoudle = moudle
+	SoundMgr.Play(10058)
 
 	local transBody = self.mMoudle.SelfRect.CachedTran
 	self.mTweenBody = transBody:GetJTweener(EFFECT)
@@ -81,17 +82,24 @@ function _M:ctor(parent,data,doneCall,refreshIconCall)
 			if refreshIconCall ~= nil then
 				refreshIconCall()
 			end
+			SoundMgr.Play(10060)
 		end,nil,(1.2 + #buffTable * 0.1))
 	end
 
+	local nameText = moudle:Get("text3")
 	if data.skillid ~= nil then
 		local csvBuff = Csv.Buff[data.skillid]
 		if csvBuff ~= nil then
 			moudle:Get("text1").Text = csvBuff.desc2
-			moudle:Get("text3").Text = csvBuff.title
+			nameText.Text = csvBuff.title
 			moudle:Get("text4").Text = csvBuff.titleE
 		end
 	end
+
+	-- 出现名字的时候播放音效
+	-- nameText:AddOnTime(function()
+	-- 	SoundMgr.Play(10059)
+	-- end, nil, 0.8)
 
 	if data.staffid ~= nil then
 		local csvStaff = Csv.Personnel[data.staffid]

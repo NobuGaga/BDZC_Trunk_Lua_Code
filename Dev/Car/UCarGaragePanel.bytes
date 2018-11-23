@@ -316,7 +316,7 @@ function _P.SetCarAttrData(self, data)
 	for i=1, 4 do
 		local lightNum = attrLightList[i]
 		local nameStr = "Attr" .. i .. "Value"
-		for j=1, MCar.CarSeatOpenMax do
+		for j=1, 5 do
 			local valueImg = self.mModule:Get(nameStr .. j)
 			if valueImg then
 				valueImg.Activity = j <= lightNum
@@ -352,7 +352,7 @@ function _P.SetCarGraphData(self, carConf, carData)
 	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[qualityNum]
 	self.mModule:Get("Circular").SpriteName = qualityData.name
 
-	for i=1, MCar.CarSeatOpenMax do
+	for i=1, 5 do
 		local arcRect = self.mModule:Get("Arc" .. i)
 		if arcRect then
 			arcRect.Activity = i <= qualityData.num

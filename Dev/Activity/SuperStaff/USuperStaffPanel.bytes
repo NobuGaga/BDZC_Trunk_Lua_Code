@@ -10,6 +10,7 @@ local TabGroup = JRequire "Dev.Common.TabGroup"
 local CCommon = JRequire "Dev.Common.CCommon"
 local luaUtil = JRequire"Libs.LuaUtil"
 local MBag = JRequire "Dev.Bag.MBag"
+local MMain = JRequire "Dev.Main.MMain"
 
 local GTE_EFFECT_ID = 5
 local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
@@ -19,11 +20,6 @@ local RecuitVec = Vector2(94, 70)
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
-
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
 
 
 function _M:BeforeDestroy()
@@ -56,6 +52,7 @@ function _M:OnCreate()
 
 	local pageData = _P.GetListData()
 	local count = pageData.listCount
+	local pageScrollView = module:Get("PageScrollView")
 	local contentTransform = self.mModule:Get("PageContent")
 	self.mData = pageData.listData
 	self.PageModules = {}
@@ -66,12 +63,13 @@ function _M:OnCreate()
 		index = index + 1
 	end
 	
+	local itemIndexTab = {}
 	if count > 0 then
 		local colorLight = Color(255/255, 225/255, 75/255, 1)
 		local colorDefault = Color(0/255, 195/255, 255/255, 1)
 		local tabHandle = TabGroup.new(function(funcId)
 			_P.OnChoose(self, funcId)
-		end, "yth_023", "yth_023", nil, nil, nil, nil, nil, nil, colorDefault, colorLight)
+		end, "fl_007_1", "fl_008_1", nil, nil, nil, nil,pageScrollView,contentTransform, colorDefault, colorLight)
 	
 		local index = 1
 		for k,v in pairs(self.mData) do
@@ -80,34 +78,73 @@ function _M:OnCreate()
 			if activityConf and onePageModule then
 				tabHandle:Add(v.actId, onePageModule.imageWidget, onePageModule.textWidget, activityConf.title)
 			end
+			itemIndexTab[index] = v.actId
 
 			index = index + 1
 		end
 
 		-- 取第一个数据
 		local curActId = next(self.mData)
+		--当有红点优先红点
+		if self.RedFuncId ~= nil then
+			local redConf = Csv.ActivityJaonChen[self.RedFuncId]
+			curActId = redConf.sortId
+		end
 		local curData = self.mData[curActId]
 		if curData ~= nil then
 			tabHandle:Choose(curData.actId)
 		end
 		self.TabHandle = tabHandle
+		self.mItemIndexTab = itemIndexTab
+	end
+
+	local nextBtn = module:Get("NextBtn")
+	local beforeBtn = module:Get("BeforeBtn")
+
+	nextBtn:AddOnButton(function()
+		_P.OnClickNext(self,1)
+	end,nil,1)
+
+	beforeBtn:AddOnButton(function()
+		_P.OnClickNext(self,-1)
+	end,nil,1)
+end
+
+function _P.OnClickNext(self,num)
+	if self.CurSelectData.actId ~= nil then
+		local activityConf = Csv.ActivityJaonChen[self.CurSelectData.actId]
+		local nextIndex = activityConf.sortId + num
+		local nextFuncId = self.mItemIndexTab[nextIndex]
+		if nextFuncId ~= nil then
+			self.TabHandle:Choose(nextFuncId)
+		end
 	end
 end
 
-
 function _P.CreatePageItem(self, itemGrid, index, data)
-	local itemModule = JGuiManager.GetMoudle(itemGrid, 'M_Activity_SuperStaff_Item', WindowType.UI, 0)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, 'M_Activity_SuperStaff_Item2', WindowType.UI, 0)
 	if itemModule == nil then return end
+
+	local activityConf = Csv.ActivityJaonChen[data.actId]
 
 	itemModule.name = 'Btn_c' .. index
 	local nameText = itemModule:Get("Name")
 	nameText.name = "C_text" .. index
 
+	local Img = itemModule.SelfRect
+	Img.SpriteName = activityConf.funcImg
+	
 	self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.SuperStaff, data.actId)
+
+	if self.RedFuncId == nil then
+		local isRed = MMain.RedpointIsActive(Define.SysId.SuperStaff,data.actId)
+		if isRed then
+			self.RedFuncId = data.actId
+		end
+	end
 
 	return {imageWidget = itemModule.SelfRect, textWidget = nameText}
 end
-
 
 function _P.GetListData()
 	local jianchenList = MActivity.GetListFromType(Define.ActivityType.JianChen)
@@ -155,8 +192,10 @@ function _P.SetListData(self, peopleList, isTimer)
 	if listData == nil then return end
 
 	local itemContent = self.mModule:Get("content")
+	local itemScroll = self.mModule:Get("scrollView")
 	itemContent:DestroyChildren()
 	itemContent.LocalPosition = Vector2.zero
+	self.mTargetPoint = nil
 
 	self.mAllListData = {}
 	for i,v in ipairs(listData) do
@@ -165,6 +204,13 @@ function _P.SetListData(self, peopleList, isTimer)
 
 	if isTimer then
 		_P.OnStartTimer(self)
+	end
+
+	--移动至可兑换员工
+	if self.mTargetPoint ~= nil then
+		if itemScroll.SizeDelta.y - self.mTargetPoint <= 0 then
+			itemContent.LocalPosition = Vector2(0,self.mTargetPoint - itemScroll.SizeDelta.y)
+		end
 	end
 end
 
@@ -249,6 +295,14 @@ function _P.OnCreateItem(self, data, itemGrid)
 
 		-- 设置每个item红点
 		self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.SuperStaff, self.CurSelectData.actId, data.index)
+
+		--记录最早一个红点位置
+		if self.mTargetPoint == nil then
+			local isRed = MMain.RedpointIsActive(Define.SysId.SuperStaff, self.CurSelectData.actId, data.index)
+			if isRed then
+				self.mTargetPoint = itemModule.SelfRect.SizeDelta.y*data.index +20*(data.index-1)
+			end
+		end
 	end
 
 	item.module = itemModule

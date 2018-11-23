@@ -1,0 +1,45 @@
+--@RefType [SDK.iOSYiWanSDK.bytes#_M]
+local iOSYiWanSDK = require "SDK.iOSYiWanSDK"
+--@RefType [SDK.SDKFuncName.bytes#_M]
+local SDKFuncName = JRequire "SDK.SDKFuncName"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local rapidjson = require "rapidjson"
+
+------------------------------CS类引用------------------------------
+local ISDKManager = CS.Utility.ISDKManager
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+local _M = Class(iOSYiWanSDK)
+
+------------------------------请求接口------------------------------
+function _M.ReqSwitchAccount()
+	local data = {func = SDKFuncName.SDKLogin}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+function _M.ReqLogout()
+	local data = {func = SDKFuncName.SDKLogout}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+	MLogin.Status = MLogin.ELoginStatus.Login
+end
+
+function _M.ReqEnterUserCenter()
+	local data = {func = SDKFuncName.SDKUserCenter}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+function _M.ReqShare(type)
+	local data = {func = SDKFuncName.SDKShare, type = type}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+return _M

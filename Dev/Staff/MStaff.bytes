@@ -4,8 +4,7 @@ local MEquipt = JRequire "Dev.Equipt.MEquipt"
 
 local _M = {}
 local _P = {}
-local MBag = JRequire "Dev.Bag.MBag"
-local STAFFMAXCOLOR = Csv.Const(Define.Const.StaffMax)[4]
+
 
 _M.StaffTable = {}
 _M.LastChooseStaff = nil
@@ -249,116 +248,6 @@ function _M.OnStaffAddItem(data)
 			staff.power = data.power
 		end
 	end
-end
-
-function _M.CheckLineUpRedpoint()
-	local LineUpList = MLineUp.LineUpList
-	local SeatNum = MLineUp.SeatNum
-	for i=1,SeatNum do
-		if LineUpList[i] == nil or LineUpList[i] <= 0 then
-			return true
-		end
-	end
-	return false
-end
-
-function _M.GetRedPointStaff()
-	local staffTable = _M.StaffTable
-	for k,v in pairs(staffTable) do
-		local state = _M.GetRedPointState(k)
-		if state then
-			return true
-		end
-	end
-	return _M.CheckLineUpRedpoint()
-end
-
-function _M.GetRedPointState(staffid)
-	if _M.GetRedPointColorUp(staffid) then
-		return true
-	end
-	if _M.GetRedPointBookUp(staffid) then
-		return true
-	end
-	if _M.GetRedPointSkillUp(staffid) then
-		return true
-	end
-	if _M.GetRedPointAureoleUp(staffid) then
-		return true
-	end
-	return false
-end
-
-function _M.GetRedPointColorUp(staffid)
-	local staff = _M.StaffTable[staffid]
-	if staff ~= nil then
-		local maxLevel = Csv.ColorUp[staff.color].lvMax
-		if staff.level >= maxLevel and staff.color < STAFFMAXCOLOR then
-			local items = Csv.ColorUp[staff.color].cost
-			local state,str = MBag.GetCostState(items,false)
-			return state
-		end
-	end
-	return false
-end
-
-function _M.GetRedPointBookUp(staffid)
-	local staff = _M.StaffTable[staffid]
-	if staff ~= nil then
-		local csvStaff = Csv.Personnel[staffid]
-		local bookexp = staff.bookexp
-		for k,v in pairs(csvStaff.book) do
-			local maxLevel = Csv.ColorUp[staff.color].bookMaxLv
-			local level = staff.book[v[1]]
-			if level < maxLevel then 
-				local cost = Csv.BookLv[v[2]*1000 + staff.book[v[1]]].expNum
-				if bookexp >= cost then
-					return true
-				end
-			end
-		end
-	end
-	return false
-end
-
-function _M.GetRedPointSkillUp(staffid)
-	local staff = _M.StaffTable[staffid]
-	if staff ~= nil then
-		local skillexp = staff.skillexp
-		for k,v in pairs(staff.skill) do
-			local maxLevel = Csv.ColorUp[staff.color].skillMaxLv
-			if v < maxLevel then
-				local cost = Csv.Skill[k*1000 + v].cost
-				if skillexp >= cost then
-					return true
-				end
-			end
-		end
-	end
-	return false
-end
-
-function _M.GetRedPointAureoleUp(staffid)
-	local staff = _M.StaffTable[staffid]
-	if staff ~= nil and staff.aureole ~= nil then
-		for k,v in pairs(staff.aureole) do
-			if v.open then
-				return true
-			end
-			local maxLevel = Csv.ColorUp[staff.color].aureoleMaxLv
-			if v.level < maxLevel then
-				local csvAureole = Csv.Aureole[k*1000 + v.level]
-				if csvAureole.costitem ~= nil then
-					local costTable = {csvAureole.costitem,csvAureole.costcount}
-					local state,str = MBag.GetCostState(costTable,true)
-					if state then
-						return true
-					end
-				end
-			end
-		end
-	end
-	return false
 end
 
 function _M.GetAllAttrNotObtained(id)

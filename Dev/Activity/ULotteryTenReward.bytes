@@ -18,7 +18,7 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(ids)
+function _M:OnCreate(ids, isCross)
 	self:Lock()
 	self._RootNode:AddOnTime(function()
 		self:Unlock()
@@ -39,12 +39,22 @@ function _M:OnCreate(ids)
 		for index,v in pairs(ids) do
 			TimeDelay.DelayCall((index - 1) * 0.2, false, function( ... )
 				if moudle ~= nil then
-					local lotteryItemCsv = Csv.LotteryItem[v]
-					local itemCsv = Csv.Item[lotteryItemCsv.item]
+					local lotteryItemCsv = nil
+					local itemCsv = nil
+					if isCross then
+						lotteryItemCsv = Csv.CrossLotteryItem[v.id]
+						itemCsv = Csv.Item[v.item.key]
+						moudle:Get("Num"..index).Text = v.item.value
+					else
+						lotteryItemCsv = Csv.LotteryItem[v]
+						itemCsv = Csv.Item[lotteryItemCsv.item]
+						moudle:Get("Num"..index).Text = lotteryItemCsv.num
+					end
+					
 					local itemSp = moudle:Get("Item"..index)
 					itemSp.SpriteName = itemCsv.colorIcon
 					moudle:Get("Icon"..index).SpriteName = itemCsv.icon
-					moudle:Get("Num"..index).Text = lotteryItemCsv.num
+					
 					SoundMgr.Play(11000)
 					-- itemSp:AddOnButton(function ( ... )
 					-- 	SoundMgr.Play(10001)

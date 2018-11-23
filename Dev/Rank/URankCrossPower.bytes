@@ -78,30 +78,6 @@ function _P.ScrollCallBack(self,index,value,moudle)
 		moudle:Get("name").Text = value.name
 		_P.SetLevelAndTitle(value, moudle)
 		moudle:Get("value").Text = value.value
-
-		-- local vip = value.vip
-		-- local imgKuang = moudle:Get("VipBox")
-		-- local imgNum = moudle:Get("VipNum")
-		-- if vip ~= nil then
-		-- 	local csvVip = Csv.Vip[vip]
-		-- 	if vip <= 0 then
-		-- 		imgKuang.Activity = false
-		-- 		imgNum.Activity = false
-		-- 	else
-		-- 		imgKuang.Activity = true
-		-- 		imgNum.Activity = true
-		-- 		imgKuang.SpriteName = csvVip.imgBord
-		-- 		imgNum.SpriteName = csvVip.icon
-		-- 	end
-		-- else
-		-- 	imgKuang.Activity = false
-		-- 	imgNum.Activity = false
-		-- end
-
-		-- if value.sex ~= nil and value.headid ~= nil then
-		-- 	moudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(value.headid,value.sex)
-		-- end
-
 		moudle.SelfRect.LocalPosition = _P.GetPos(self,index)
 
 		moudle.SelfRect:AddOnButton(function(...)
@@ -149,6 +125,7 @@ function _M:BeforeDestroy()
 end
 
 function _M:Destroy()
+	self:BeforeDestroy()
 	local moudle = self.Moudle
 	if moudle ~= nil then
 		moudle:Destroy()

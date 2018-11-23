@@ -79,6 +79,8 @@ local ECmdId = {
 	sRefuseTiQin                         =   28,--拒绝提亲返回
 	sNewMBaby                            =   29,--新的未婚宝宝
 
+	cGirlSkillBreakout					 =	 30,--技能突破 PGirl.CSkillBreakout
+
 	--认识美女
 	sNewGirlKnown						=	30,--新结识美女
 	sUpdateGirlKnown					=	31,--更新结识美女
@@ -108,7 +110,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cGirlDate] = "PGirl.CDate",
 		[ECmdId.cGirlUseGift] = "PGirl.CUseGift",
 		[ECmdId.cGirlSkillUp] = "PGirl.CSkillUp",
-		[ECmdId.cGirlOneKeyDate] = "",
+		[ECmdId.cGirlOneKeyDate] = "PGirl.COneKeyDate",
 		[ECmdId.cGirlEventSelect] = "PGirl.CGirlEventSelect",
 		--
 		[ECmdId.cBabySetName] = "PGirl.CSetBabyName",
@@ -136,6 +138,8 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cGirlRename] = "PGirl.CGirlRename",
 		[ECmdId.cLookOthersBaby] = "PGirl.CLookOthersBaby",
 		[ECmdId.cNewCoupleAck] = "PGirl.CNewCoupleAck",
+
+		[ECmdId.cGirlSkillBreakout] = "PGirl.CSkillBreakout",
 	}
 	local recv = {
 		[ECmdId.sGirlList]		=	{proto = "PGirl.SInit",		handle = _M.Init},
@@ -221,9 +225,13 @@ function _M.ReqSkillUp(girlID,skillID)
 	_M.Send(ECmdId.cGirlSkillUp,{girlid = girlID,skillid = skillID})
 end
 
-function _M.ReqOneKeyDate()
+function _M.ReqSkillBreakout(_girlid,_skillid)
+	_M.Send(ECmdId.cGirlSkillBreakout,{girlid = _girlid,skillid = _skillid})
+end
+
+function _M.ReqOneKeyDate(_girlid)
 	MGirl.FriendChange = 0 --友谊值增加量
-	_M.Send(ECmdId.cGirlOneKeyDate)
+	_M.Send(ECmdId.cGirlOneKeyDate,{girlid = _girlid})
 end
 
 function _M.ReqDateEvent(index)
@@ -344,7 +352,7 @@ function _P.RepDate(data)
 	if data.date.makebaby == true then
 		MGirl.isBaby = true
 		MGirl.AddBaby(data.date.girlid) --新增一个宝宝数量
-		WindowMgr.Call("UGirlDetail","RefreshBaby")
+		WindowMgr.Call("UGirlUnlock","RefreshBaby")
 	end
 	--DateEvent
 	_M.CheckUnlockRedpoint()
@@ -373,34 +381,30 @@ end
 
 function _P.RepUpdateCharm(data)
 	MGirl.UpdateCharm(data)
-	WindowMgr.Call("UGirlDetail","RefreshCharm",data.charm,data.changecharm)
 	WindowMgr.Call("UGirlGiftPop","RefreshCharm",data.charm,data.changecharm)
 	WindowMgr.Call("UGirlUnlock","RefreshCharm",data.girlid,data.charm,data.changecharm)
 end
 
 function _P.RepUpdateIntimacy(data)
 	MGirl.UpdateIntimacy(data)
-	WindowMgr.Call("UGirlDetail","RefreshIntimacy",data.intimacy,data.changeintimacy)
 	WindowMgr.Call("UGirlGiftPop","RefreshIntimacy",data.intimacy,data.changeintimacy)
 	WindowMgr.Call("UGirlUnlock","RefreshIntimacy",data.girlid,data.intimacy,data.changeintimacy)
 end
 
 function _P.RepUpdateFriend(data)
 	MGirl.UpdateFriend(data)
-	WindowMgr.Call("UGirlDetail","RefreshFriend",data.friend)
+	WindowMgr.Call("UGirlUnlock","RefreshFriend",data.girlid,data.friend,data.changefriend)
 	WindowMgr.Call("UGirlSkillPop","RefreshFriend",data.friend)
-	WindowMgr.Call("UGirlUnlock","CheckItemRed",data.girlid)
 end
 
 function _P.RepUpdateSkill(data)
 	MGirl.UpdateSkill(data)
 	WindowMgr.Call("UGirlSkillPop","RefreshSkillItem",data.girlid,data.skillid)
-	WindowMgr.Call("UGirlDetail","RefreshRedPoint")
+	WindowMgr.Call("UGirlUnlock","RefreshRedPoint")
 	WindowMgr.Call("UGirlUnlock","CheckItemRed",data.girlid)
 end
 
 function _P.RepDateEvent(data)
-	--CCommon.ShowError(Csv.Text("Girl_friendName")..Csv.Text("Girl_skill_add")..data.award)
 	WindowMgr.Call("UGirlDate","GetDateEvent",data.award)
 end
 
@@ -618,10 +622,10 @@ end
 
 function _P.RepMarrySomeone(data)
 	MGirl.MarryBack(data.babyid,data.success)
-	WindowMgr.Call("UGirlMarried","RefreshToggle")
 	if data.success == true then
 		MGirl.RefuseQingqiu(MGirl.SelectQingqiuID)--结婚成功删除请求
 	end
+	WindowMgr.Call("UGirlMarried","RefreshToggle")
 end
 
 function _P.RefuseTiQin(data)
@@ -661,6 +665,8 @@ end
 
 function _M.CheckUnlockRedpoint()
 	local isRedpoint = false
+
+	--体力点相关
 	if MGirl.CheckCanDate() == true and MMain.FuncIsOpen(Define.SysId.Girl) then
 		isRedpoint = true
 	end

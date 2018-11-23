@@ -1,0 +1,278 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Academy_Story"
+
+--特效ID
+local BottomCloudEffect = 10089
+local TopCloudEffect = 10090
+local ForeCloudEffect = 10091
+local FlyStartEffect = 1
+local FlyingEffect = 2
+local FlyingStopEffect = 3
+local AircraftID = 36201
+local SkinID = 0
+
+local TweenFlyStart = "T_AirCraft_Up_New"
+local TweenFlyEnd = "T_AirCraft_Down"
+local TweenBtn = "T_AirCraft_Btn"
+
+--[[
+local CsvData = Csv.Const(86)
+local StartBG = CsvData[1]
+local EndBG = CsvData[2]
+--]]
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate(onComplete)
+	self.onStoryComplete = onComplete
+	local moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle = moudle
+
+	self.mUpBg = moudle:Get("bottonBg")
+	self.mDownBg = moudle:Get("downBg")
+	self.mDownBg.Activity = false
+
+	_P.InitAircraftInfo(self)
+	_P.InitOtherInfo(self)
+	_P.InitFlyStartTweenTime(self)
+	_P.InitEffect(self)
+end
+
+--初始化飞机信息
+function _P.InitAircraftInfo(self)
+	self.airCraft = self.moudle:Get("airCraft")
+	self.airCraft:AddOnButton(function()
+		_P.OnClickFly(self)
+	end, nil, 1)
+
+	if SkinID == 0 then
+		local csvAircraft = Csv.Aircraft[AircraftID]
+		self.airCraft.SpriteName = csvAircraft.asset
+	else
+		local csvAircraftSkin = Csv.AircraftSkin[SkinID]
+		self.airCraft.SpriteName = csvAircraftSkin.asset
+	end
+
+	self.airCraftAnimCsv = Csv.AircraftAnimation[self.airCraft.SpriteName.."_new"]
+	local pos = self.airCraftAnimCsv.pos
+	self.airCraft.LocalPosition = Vector2(pos[1], pos[2])
+
+	--手指特效
+	local effectNode = self.moudle:Get("fingerActor")
+	CCommon.CreateEffect(effectNode, 10138)
+end
+
+function _P.InitOtherInfo(self)
+	self.btnTips = self.moudle:Get("btnTips")
+	self.moudle:Get("textBtnTips").Text = Csv.Text("aircraft_story_tips")
+	self.btnTips:AddOnButton(function()
+		_P.OnClickFly(self)
+	end, nil, 1)
+	self.btnTipsTween = self.btnTips.CachedTran:GetJTweener(TweenBtn)
+	self.btnTipsTween:Play()
+
+	self.goTips = self.moudle:Get("goTips")
+	self.goTips.Activity = false
+	self.textGoTips = self.moudle:Get("textGoTips")
+
+	self.btnSkip = self.moudle:Get("btnSkip")
+	self.moudle:Get("textBtnSkip").Text = Csv.Text("guide_pass")
+	self.btnSkip:AddOnButton(function()
+		_P.OnCloseStory(self)
+	end, nil, 1)
+	self.btnSkip.Activity = false
+
+	self.bottonBg = self.moudle:Get("bottonBg")
+	--self.bottonBg.SpriteName = StartBG
+end
+
+function _P.OnClickFly(self)
+	SoundMgr.Play(10001)
+	_P.PlayStartFly(self)
+	self.airCraft.RaycastTarget = false
+	self.btnTips.Activity = false
+	if self.btnTipsTween then
+		self.btnTipsTween:DOKill()
+		self.btnTipsTween = nil
+	end
+	self.btnSkip.Activity = true
+
+	self.moudle:Get("fingerActor").Activity = false
+
+	--起飞
+	SoundMgr.Play(10066)
+end
+
+function _P.OnCloseStory(self)
+	if self.onStoryComplete then
+		self.onStoryComplete()
+	end
+	SoundMgr.Destroy(10066)
+	self:Destroy()
+end
+
+--初始化飞机飞行开始动画时间值
+function _P.InitFlyStartTweenTime(self)
+	self.airCraftTween = self.airCraft.CachedTran:GetJTweener(TweenFlyStart)
+	if self.airCraftTween == nil then
+		return
+	end
+	local maxTime = 0
+	local maxTweenFlyNum = self.airCraftTween.Tweeners.Length
+	for index = 0, maxTweenFlyNum - 1 do
+		local temp = self.airCraftTween.Tweeners[index]
+		if temp == nil then
+			break
+		end
+		local tempTime = temp.Duration + temp.Delay
+		if maxTime < tempTime then
+			maxTime = tempTime
+		end
+		index = index + 1
+	end
+	self.FlyStartTweenTime = maxTime
+end
+
+--初始化界面特效
+function _P.InitEffect(self)
+	CCommon.CreateEffect(self.moudle:Get("bottomCloud"), BottomCloudEffect)
+	CCommon.CreateEffect(self.moudle:Get("topCloud"), TopCloudEffect)
+	CCommon.CreateEffect(self.moudle:Get("foreCloud"), ForeCloudEffect)
+	
+	local background = self.moudle:Get("background")
+	self.bgHeight = background.SizeDelta.y
+	self.bgOriginY = background.LocalPosition.y
+	self.backEffectCanvas = self.moudle:Get("backEffectCanvas")
+	self.foreEffectCanvas = self.moudle:Get("foreEffectCanvas")
+
+	self.propeller = self.moudle:Get("propeller")
+	self.landWave = self.moudle:Get("landWave")
+	self.flyEffectNode = self.moudle:Get("flyEffect")
+end
+
+--播放飞机Tween动画
+function _P.PlayAircraftTween(self, TweenName, OnComplete)
+	if self.airCraftTween then
+		self.airCraftTween:DOKill()
+		self.airCraftTween = nil
+	end
+	self.airCraftTween = self.airCraft.CachedTran:GetJTweener(TweenName)
+	if OnComplete then
+		self.airCraftTween:SetOnComplete(OnComplete)
+	end
+	self.airCraftTween:Play()
+end
+
+--获取飞机动画表对应的飞行特效ID
+function _P.GetCsvEffectIDByName(self, effectID)
+	if self.airCraftAnimCsv.propEffect then
+		local csvValue = self.airCraftAnimCsv.propEffect[effectID]
+		if csvValue then
+			return csvValue
+		end
+	end
+	return nil
+end
+
+--播放起飞动画
+function _P.PlayStartFly(self)
+	local effectID = _P.GetCsvEffectIDByName(self, FlyStartEffect)
+	if effectID == nil then 
+		return 
+	end
+	self.propeller.Activity = false
+	CCommon.CreateEffect(self.flyEffectNode, effectID, nil, function()
+		_P.PlayFlyLow(self, true)
+	end)
+	_P.StartWaveEffect(self)
+end
+
+--播放降落动画
+function _P.PlayEndFly(self)
+	_P.PlayAircraftTween(self, TweenFlyEnd, function ()
+		_P.PlayFlyHeigher(self, false)
+	end)
+end
+
+--播放冲击波动画
+function _P.StartWaveEffect(self)
+	CCommon.CreateEffect(self.landWave, self.airCraftAnimCsv.wave_effect)
+end
+
+--播放低空飞行动画
+function _P.PlayFlyLow(self, isUp)
+	local distance = 0
+	local effectID
+	if isUp then
+		distance = -self.airCraftAnimCsv.fly_dic
+	else 
+		distance = 0
+		effectID = _P.GetCsvEffectIDByName(self, FlyingStopEffect)
+	end
+	if isUp then
+		CCommon.CreateEffect(self.flyEffectNode, _P.GetCsvEffectIDByName(self, FlyingEffect))
+	else
+		CCommon.CreateEffect(self.flyEffectNode, effectID, nil, function()
+			self.propeller.Activity = true
+		end)
+		_P.StartWaveEffect(self)
+	end
+	local csvEffect = Csv.Effect[effectID]
+	local time = (csvEffect and csvEffect.dura) or 1
+	self.backEffectCanvas:DOAnchorPosY(distance, time)
+	local temp = self.foreEffectCanvas:DOAnchorPosY(distance, time)
+	temp:OnComplete(function ()
+		if isUp then
+			_P.PlayFlyHeigher(self, true)
+		else
+			_P.OnCloseStory(self)
+		end
+	end)
+end
+
+--播放高空飞行动画
+function _P.PlayFlyHeigher(self, isUp)
+	local distance = 0
+	if isUp then
+		distance = - self.bgOriginY - self.bgHeight / 4
+		self.flyEffectNode:DestroyChildren()
+		CCommon.CreateEffect(self.flyEffectNode, _P.GetCsvEffectIDByName(self, FlyingEffect))
+	else
+		distance = -self.airCraftAnimCsv.fly_dic
+		self.goTips.Activity = false
+		if self.textTween then
+			self.textTween:Destroy()
+		end
+	end
+	self.backEffectCanvas:DOAnchorPosY(distance, self.airCraftAnimCsv.fly_time)
+	local temp = self.foreEffectCanvas:DOAnchorPosY(distance, self.airCraftAnimCsv.fly_time)
+	temp:OnComplete(function ()
+		if isUp then
+			self.goTips.Activity = true
+			self.textTween = LuaUtil.TextAddThreePoint(self.textGoTips, Csv.Text("aircraft_story_go_tips"))
+			_P.PlayAircraftTween(self, TweenFlyStart)
+			self.airCraft:AddOnTime(function ()
+				--self.bottonBg.SpriteName = EndBG
+				self.mDownBg.Activity = true
+				_P.PlayEndFly(self)
+			end, nil, self.FlyStartTweenTime)
+		else
+			self.flyEffectNode:DestroyChildren()
+			_P.PlayFlyLow(self, false)
+		end
+	end)
+end
+
+return _M

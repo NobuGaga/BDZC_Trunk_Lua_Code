@@ -1,0 +1,242 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+local ROOM_EFFECT = 10087
+local CURTAIN_SCALE_TYPE = Csv.Const(10219) --1帘子动 2帘子不动
+
+local Curtain_Right = "T_GirlDate_Curtain_Right"
+local Curtain_Left = "T_GirlDate_Curtain_Left"
+local Curtain_Top = "T_GirlDate_Curtain_Top"
+local T_Curtain_Open = "T_Curtain_Open"
+local T_Curtain_Close = "T_Curtain_Close"
+local T_Curtain_Scale = "T_Curtain_Scale"
+local T_Curtain_Scale_Once = "T_Curtain_Scale_Once"
+local T_GirlDate_Red = "T_GirlDate_Red"
+local T_GirlDate_Red_Open = "T_GirlDate_Red_Open"
+local T_GirlDate_Red_Close = "T_GirlDate_Red_Close"
+
+local GirlDate_Fly_Text = "GirlDate_Fly_Text"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local Girl_ID = Csv.Const(150)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(callBack)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Date_Story")
+	self.mMoudle = moudle
+	self.mCallBack = callBack
+
+	if Girl_ID == nil then
+		Girl_ID = 2001
+	end
+	
+	self.mState = 0
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		local state = self.mState
+		if state == 5 then
+			self:Destroy()
+			--结束回调
+			callBack()
+		elseif  state == 1 then
+			self.mState = 2
+			_P.ShowCurtain(self)
+		elseif state == 3 then
+			self.mState = 4
+			_P.ShowCurtain(self)
+		elseif state == 4 then
+			_P.OpenCurtainTween(self)
+		end
+	end)
+
+	local value = moudle:Get("value")
+	local curtain = moudle:Get("Curtain")
+	local mainActorPanel = moudle:Get("ActorPanel")
+	local redCurtain = moudle:Get("red")
+
+	--value
+	local bg = moudle:Get("bg")
+	local body = moudle:Get("body")
+	local talk = moudle:Get("DHKtext")
+	local talkBg = moudle:Get("DHK")
+
+	self.girl_prefab = nil
+	self.mBg = bg
+	self.mBody = body
+	self.mTalk = talk
+	self.mTalkBg = talkBg
+
+	local topCurtain = moudle:Get("top")
+	local rightCurtain = moudle:Get("right")
+	local leftCurtain = moudle:Get("left")
+	local rightTween = rightCurtain.CachedTran:GetJTweener(Curtain_Right)
+	local leftTween = leftCurtain.CachedTran:GetJTweener(Curtain_Left)
+	local topTween = topCurtain.CachedTran:GetJTweener(Curtain_Top)
+	local redTween = redCurtain.CachedTran:GetJTweener(T_GirlDate_Red)
+
+	self.mTopCurt = topCurtain
+	self.mRightTween = rightTween
+	self.mLeftTween = leftTween
+	self.mTopTween = topTween
+	self.mMainActor = mainActorPanel
+	self.mRedTween = redTween
+
+	self.mValue = value
+	self.mCurtain = curtain
+
+	-------------------------
+	value.Activity = false
+	curtain.Activity = false
+	local girlData = Csv.KnowGirl[Girl_ID]
+	self.mGirlData = girlData
+
+	local StoryBack = function()
+		if body ~= nil then
+			value.Activity = true
+			bg.SpriteName = girlData.datebg
+
+			local girlCsv = Csv.Girl[girlData.id]
+			if self.girl_prefab ~= nil then
+				self.girl_prefab:Destroy()
+				self.girl_prefab = nil
+			end
+			if girlCsv.prefab ~= nil and girlCsv.prefab > 0 then
+				self.girl_prefab = CCommon.CreateActor(body, girlCsv.prefab, CCommon.ActorFieldMap.girl_home)
+				body.SpriteName = ""
+			else
+				body.SpriteName = girlData.dateIcon
+			end
+			
+			talk.Text = Csv.Text("guide_date_talk")--girlData.dateTalk
+			self.mState = 2
+			_P.ShowCurtain(self)
+		end
+	end
+
+	StoryBack()
+end
+
+function _P.ShowCurtain(self)
+	self.mCurtain.Activity = true
+
+	local state = self.mState
+	local CloseCurtain = function()
+		self:Unlock()
+		
+		local redCurtainClose = function()
+			if state == 2 then
+				_P.OpenCurtain(self)
+			elseif state == 4 then
+				--播放特效
+				self.mMainActor.Activity = true
+				local roomEffect = CCommon.CreateEffect(self.mMainActor,ROOM_EFFECT)
+				local EndScale = function()
+					local RedCurtainOpen = function()
+						local OpenCurtain = function()
+							self:Unlock()
+							self.mCurtain.Activity = false
+						end
+					
+						self.mRightTween:SetWaitEventOnComplete(T_Curtain_Open, OpenCurtain)
+						self.mState = 5
+						_P.OpenCurtainTween(self)
+					end
+					self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Open,RedCurtainOpen)
+					self.mRedTween:Play(T_GirlDate_Red_Open)
+				end
+		
+				self.mRightTween:SetWaitEventOnComplete(T_Curtain_Scale, EndScale)
+				_P.ScaleCurtainTween(self)
+			end
+		end
+		self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Close, redCurtainClose)
+		self.mRedTween:Play(T_GirlDate_Red_Close)
+	end
+	self.mRightTween:SetWaitEventOnComplete(T_Curtain_Close, CloseCurtain)
+
+	self:Lock()
+	_P.CloseCurtainTween(self)
+end
+function _P.OpenCurtain(self)
+	self.mValue.Activity = true
+	local girlData = self.mGirlData
+	self.mBg.SpriteName = girlData.roombg
+
+	local girlCsv = Csv.Girl[girlData.id]
+	if self.girl_prefab ~= nil then
+		self.girl_prefab:Destroy()
+		self.girl_prefab = nil
+	end
+	if girlCsv.homePrefab ~= nil and girlCsv.homePrefab > 0 then
+		self.girl_prefab = CCommon.CreateActor(self.mBody, girlCsv.homePrefab, CCommon.ActorFieldMap.girl_home)
+		self.mBody.SpriteName = ""
+	else
+		self.mBody.SpriteName = girlData.roomIcon
+	end		
+	self.mTalk.Text = Csv.Text("guide_room_talk")--girlData.roomTalk
+
+	local RedCurtainOpen = function()
+		
+		local _OpenCurtain = function()
+			self.mCurtain.Activity = false
+			self:Unlock()
+		end
+	
+		self.mRightTween:SetWaitEventOnComplete(T_Curtain_Open, _OpenCurtain)
+		
+		---美女约会流程改版-------
+		if CURTAIN_SCALE_TYPE == 2 then
+			self.mState = 5
+			--结束
+		else
+			self.mState = 3
+		end
+	
+		_P.OpenCurtainTween(self)
+	end
+	
+	self:Lock()
+	self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Open,RedCurtainOpen)
+	self.mRedTween:Play(T_GirlDate_Red_Open)
+end
+
+function _P.OpenCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Open)
+	self.mLeftTween:Play(T_Curtain_Open)
+	self.mTopTween:Play(T_Curtain_Open)
+end
+
+function _P.CloseCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Close)
+	self.mLeftTween:Play(T_Curtain_Close)
+	self.mTopTween:Play(T_Curtain_Close)
+end
+
+function _P.ScaleCurtainTween(self)
+	self.mRightTween:Play(T_Curtain_Scale)
+	self.mLeftTween:Play(T_Curtain_Scale)
+	self.mTopTween:Play(T_Curtain_Scale)
+end
+
+function _P.ScaleCurtainOnceTween(self)
+	self.mRightTween:Play(T_Curtain_Scale_Once)
+	self.mLeftTween:Play(T_Curtain_Scale_Once)
+	self.mTopTween:Play(T_Curtain_Scale_Once)
+end
+
+return _M

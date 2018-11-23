@@ -32,6 +32,11 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _M:BeforeDestroy()
+	CRelations.CMainInit()
+	MRelations.isWaitingReport = false
+end
+
 --界面构建
 function _M:OnCreate(...)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_StarPK")
@@ -52,7 +57,6 @@ function _M:OnCreate(...)
 
 	moudle:Get("C_BackBtn"):AddOnButton(function()
 		SoundMgr.Play(10002)
-		CRelations.CMainInit()
 		self:Destroy()
 	end,nil,0.9)
 
@@ -63,7 +67,7 @@ function _M:OnCreate(...)
 		SoundMgr.Play(10002)
 		CRelations.CRelationOnekey()
 		--WindowMgr.Create("URelationsSetup")
-	end,nil,1.2)
+	end,nil,0.9)
 
 	local effectPanel = moudle:Get("EffectActorPanel")
 	CCommon.CreateEffect(effectPanel,ONEKEY_EFFECT)
@@ -417,10 +421,6 @@ function _P.ShowAwardFly(self,index)
 			CCommon.ShowFlyItem(self.mMoudle.SelfRect, v[1], v[2],delay)
 		end
 	end
-end
-
-function _M:BeforeDestroy()
-	MRelations.isWaitingReport = false
 end
 
 function _R.OnLock(self)

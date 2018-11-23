@@ -180,21 +180,29 @@ function _P.ShowTopGirlItems(self,selectid)
 			table.insert(topgirlTab,{id = data.id,peopleId = v,moudle = girlMoudle})
 		end
 		
-
 		if lastID < 0 then
-			lastID = lastGirlID
+			lastID = lastGirlIDs[1]
 		end
 	end
 
 	self.mTopGirlTab = topgirlTab
+	self.mLastID = lastID
 
 	content:AddOnTime(function()
 		if selectid ~= nil then
 			_P.SelectGirl(self,selectid)
 		else
-			_P.SelectGirl(self,lastID)
+			if lastID ~= nil then
+				_P.SelectGirl(self,lastID)
+			end
 		end
 	end,nil,0.05)
+end
+
+function _P.WaitForDestroy(self)
+	self.mMoudle.SelfRect:AddOnTime(function()
+		self:Destroy()
+	end,nil,1)
 end
 
 function _P.CreateTopGirl(self,content,v)
@@ -237,6 +245,7 @@ function _P.SelectGirl(self,id)
 		CWharf.ReqGirlEvent(wharfPeopleData.girlId)--请求美女事件状态
 	else
 		print("___找不到码头人物id___",id)
+		return
 	end
 
 	self.selectGirl = wharfPeopleData.girlId
@@ -486,17 +495,25 @@ function _R.CheckGirlDone(self)
 						self.mUStoryMoudle:delete()
 						self.mUStoryMoudle = nil
 					end
-					self.mUStoryMoudle =  UStoryMoudle.new(self.mMoudle.SelfRect,girlData.knownStory)
-	
-					--刷新美女列表
-					self.isDone = false
+
+					local stroyBack = function()
+						--刷新美女列表
+						self.isDone = false
+						
+						self.mContent_1.Activity = true
+						self.mContent_2.Activity = true
+						self.mContent_3.Activity = true
+						self.mArrow1.Activity = true
+						self.mArrow2.Activity = true
+
+						if self.mLastID == nil then
+							self:Destroy()
+						end
+					end
+					self.mUStoryMoudle =  UStoryMoudle.new(self.mMoudle.SelfRect,girlData.knownStory,stroyBack)
+
 					_P.ShowTopGirlItems(self)
 
-					self.mContent_1.Activity = true
-					self.mContent_2.Activity = true
-					self.mContent_3.Activity = true
-					self.mArrow1.Activity = true
-					self.mArrow2.Activity = true
 				end,nil,0.5)
 
 				self:Unlock()

@@ -4,6 +4,10 @@ local MRelations = JRequire "Dev.Relations.MRelations"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local _M = Class(WindowBase)
 
+function _M:BeforeDestroy()
+	CRelations.CMainInit()
+end
+
 --界面构建
 function _M:OnCreate(data)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Lobby_Confirm")
@@ -26,7 +30,6 @@ function _M:OnCreate(data)
 	end,nil,0.9)
 	moudle:Get("choose2"):AddOnButton(function()
 		SoundMgr.Play(10001)
-		CRelations.CMainInit()
 		self:Destroy()
 	end,nil,0.9)
 end

@@ -43,6 +43,20 @@ function _M.ShowNoticePopup(retryHttpNode, keyWord)
 	end
 end
 
+
+function _M.ShowLoginNoticeByBtn()
+	if WindowMgr.IsCreated("ULogin") and MNotice.LoginData ~= nil then
+		WindowMgr.Call("ULogin", "OnGetNoticeBack")
+	else
+		if not _M.IsNotLoginNotice then
+			_M.ShowLoginNoticeReq(true)
+			_M.IsNotLoginNotice = true
+		else
+			CCommon.ShowRight(Csv.Text("notice_no"))
+		end
+	end
+end
+
 ------------------Client -- Server----------------
 --获取公告信息
 function _M.HttpShowNotice(keyWord)
@@ -61,13 +75,35 @@ function _M.HttpShowNotice(keyWord)
 						MNotice.IsOpened = true	
 					end
 				else
-					error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. retTable.errormsg)
+					--error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. retTable.errormsg)
 				end
 			else
-				error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
+				--error("SendNotice --> HttpSession retTable is empty!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
 			end
 		else
-			error("SendNotice --> HttpSession error!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
+			--error("SendNotice --> HttpSession error!! url:" .. GameSetting.NoticeUrl .. ", info:" .. param2)
+		end
+	end)
+	HttpHelper.Request(session)
+end
+
+
+-- 请求获取登陆公告信息,isNotAutoReq不是自动请求
+function _M.ShowLoginNoticeReq(isNotAutoReq)
+	if MNotice.IsOpenLogin and (not isNotAutoReq) then return end -- 自动请求，若请求过，不需再次请求
+
+	local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.LoginNoticeUrl)
+	session:AppendParam("spid", GameSetting.Spid)
+	session:SetCallBack(function (isOk, param1, param2)
+		if isOk then
+			local retTable = rapidjson.decode(param1)
+			if retTable ~= nil and retTable.errorno == 0 then
+				MNotice.SetLoginData(retTable.data)
+				if WindowMgr.IsCreated("ULogin") and MNotice.LoginData ~= nil then
+					WindowMgr.Call("ULogin", "OnGetNoticeBack")
+					MNotice.IsOpenLogin = true
+				end
+			end
 		end
 	end)
 	HttpHelper.Request(session)

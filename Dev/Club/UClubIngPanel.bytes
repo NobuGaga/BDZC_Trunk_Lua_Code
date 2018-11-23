@@ -7,6 +7,7 @@ local MClub = JRequire "Dev.Club.MClub"
 local CClub = JRequire"Dev.Club.CClub"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
 
 local ItemHeight = 250
 local StretchOffsets = 120
@@ -72,10 +73,29 @@ function _M:OnCreate(data)
 	
 	self.maxNum = clubConf.maxJoin
 	self.totalScore = data.totalScore
+	local playerid = MPlayer.GetId()
 	module:Get("name").Text = data.name
 	module:Get("SeatNum").Text = ((data.msgList == nil and 0) or #data.msgList) .. '/' .. self.maxNum
 	module:Get("FractionNum").Text = (data.totalScore < 0 and 0) or data.totalScore
 	module:Get("NumberNum").Text = data.playerid
+	module:Get("C_text").Text = Csv.Text("vote_53")
+
+	-- 邀请相关
+	local inviteBtn = module:Get("C_Btn_a")
+	local inviteTimeText = module:Get("TimeText")
+	if data.playerid == playerid then
+		inviteBtn:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			_P.OnClickToInvite(self)
+		end, nil, 0.9)
+		self.InviteBtn = inviteBtn
+		self.InviteTimeText = inviteTimeText
+		self.InviteBuyCost = Csv.Const(20169)[2]
+		_P.CreateInviteTimer(self)
+	else
+		inviteBtn.Activity = false
+		inviteTimeText.Activity = false
+	end
 
 	_P.OnSetPartyBg(self, data.clubtype)
 	-- 倒计时
@@ -103,7 +123,6 @@ function _M:OnCreate(data)
 		_P.GetNewMsgData(self, data.msgList)
 	end
 
-	local playerid = MPlayer.GetId()
 	if MClub.isShowSuccessPanel and data.playerid == playerid then
 		WindowMgr.Create("UClubSuccessPanel", data.playerid)
 		MClub.isShowSuccessPanel = false
@@ -119,6 +138,92 @@ function _M:OnCreate(data)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end)
+end
+
+
+function _P.CreateInviteTimer(self)
+	local inviteTime = self.partyData.inviteTime - HeartBeat.ServSecond()
+	_P.SetInviteState(self, inviteTime)
+	if inviteTime > 0 then
+		_P.OnClearInviteTimer(self)
+		self.InviteComp = self.InviteTimeText:AddOnUpdate(function()
+			_P.OnUpdateInviteTime(self)
+		end, nil, 1)
+	end
+end
+
+
+function _P.OnClickToInvite(self)
+	local leftTime = self.partyData.inviteTime - HeartBeat.ServSecond()
+	if leftTime > 0 then
+		CCommon.ShowError(Csv.Text("club_disband_cd"))
+		return
+	end
+
+	local needPrice = _P.GetBuyPrice(self)
+	local showStr = (needPrice > 0 and Csv.Text("club_ing_inviteCost1", {num = needPrice})) or Csv.Text("club_ing_inviteCost2")
+
+	CCommon.CheckTips(function(isSure,rg)
+		if isSure == true then
+			local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+			if hasNum < needPrice then
+				CCommon.ShowError(Csv.Text("err_gold_not_enough"))
+			else
+				--确定邀请内容
+				local inviteValue = ""
+				if self.partyData.clubtype ~= nil then
+					
+					local csvInvite = nil
+					if self.partyData.clubtype == 1 then
+						csvInvite = Csv.TalkInvite[1]
+					else
+						csvInvite = Csv.TalkInvite[2]
+					end
+					
+					if csvInvite ~= nil and csvInvite.value ~= nil then
+						local inviteIndex = math.random(1,#csvInvite.value)
+						inviteValue = csvInvite.value[inviteIndex]
+					end
+				end
+
+				CClub.OnSendInviteReq(inviteValue)
+			end
+		end
+	end, {content = showStr})
+end
+
+
+-- 得到购买价格
+function _P.GetBuyPrice(self)
+	if self.InviteBuyCost == nil or next(self.InviteBuyCost) == nil then return 0 end
+
+	local buyCount = self.partyData.inviteNum + 1
+	for k,v in pairs(self.InviteBuyCost) do
+		if buyCount >= v[1] and buyCount <= v[2] then
+			return v[3]
+		end
+	end
+
+	return self.InviteBuyCost[#self.InviteBuyCost][3]
+end
+
+
+
+function _P.SetInviteState(self, leftTime)
+	local timeBgRect = self.mModule:Get("TimeTextBg")
+	if leftTime > 0 then
+		timeBgRect.Activity = true
+		self.InviteBtn.IsGray = true
+		self.InviteBtn.RaycastTarget = false
+	else
+		timeBgRect.Activity = false
+		self.InviteBtn.IsGray = false
+		self.InviteBtn.RaycastTarget = true
+	end
+
+	if timeBgRect.Activity then
+		self.InviteTimeText.Text = LuaUtil.GetTimeHMS(leftTime)
+	end
 end
 
 
@@ -169,10 +274,28 @@ function _P.OnUpdateTime(self, timeRect)
 end
 
 
+function _P.OnUpdateInviteTime(self)
+	local inviteTime = self.partyData.inviteTime - HeartBeat.ServSecond()
+	_P.SetInviteState(self, inviteTime)
+
+	if inviteTime <= 0 then
+		_P.OnClearInviteTimer(self)
+	end
+end
+
+
 function _P.OnClearTimer(self)
 	if self.UpdateComp ~= nil then
 		self.UpdateComp:Destroy()
 		self.UpdateComp = nil
+	end
+end
+
+
+function _P.OnClearInviteTimer(self)
+	if self.InviteComp ~= nil then
+		self.InviteComp:Destroy()
+		self.InviteComp = nil
 	end
 end
 
@@ -488,6 +611,15 @@ function _R.OnJoinCallBack(self, data)
 	local itemGrid = self.mModule:Get("content2")
 	self.noneText.Activity = false
 	_P.OnCreateInfoItem(newMsgData, itemGrid, listNum)
+end
+
+
+function _R.OnInviteFriendBack(self, data)
+	CCommon.ShowError(Csv.Text("club_ing_inviteErr"))
+
+	self.partyData.inviteTime = data.inviteTime + HeartBeat.ServSecond()
+	self.partyData.inviteNum = data.inviteNum
+	_P.CreateInviteTimer(self)
 end
 
 

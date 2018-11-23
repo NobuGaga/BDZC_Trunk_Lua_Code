@@ -235,6 +235,15 @@ function _M.TransToYMD(times)
     return str;
 end
 
+--把时间戳转为年月日
+function _M.TransToYMD2(times)
+    local str = ""
+    str = os.date("%Y",times).."."--"年"
+    str = str..os.date("%m",times).."."--"月"
+    str = str..os.date("%d",times)--"日"
+    return str;
+end
+
 --把时间戳转为月日
 function _M.TransToMD(times)
     local str
@@ -246,6 +255,13 @@ function _M.TransToMDH(time)
     local temp = os.date("*t", time)
     return Csv.Text("common_MDH", {month = temp.month, day = temp.day, hour = temp.hour})
 end
+function _M.TransToMDHM(time)
+    local temp = os.date("*t", time)
+    local hour = temp.hour < 10 and "0"..temp.hour
+    local min = temp.min < 10 and "0"..temp.min
+    return Csv.Text("common_MDHM", {month = temp.month, day = temp.day, hour = hour, min = min})
+end
+
 
 --把时间戳转为YYYY-MM-DD格式的时间
 function _M.TransToYearMonthDay(times)

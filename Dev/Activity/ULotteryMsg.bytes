@@ -2,8 +2,6 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
-local CActivity = JRequire "Dev.Activity.CActivity"
-local MActivity = JRequire "Dev.Activity.MActivity"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -18,7 +16,7 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate()
+function _M:OnCreate(msgs)
 	local module = self:CreateMoudle(self._RootNode, "M_Luck_Draw_TC")
 	module:Get("BackBtn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -26,7 +24,6 @@ function _M:OnCreate()
 	end, nil, 1.2)
 	module:Get("Title").Text = Csv.Text("lottery_10")
 
-	local msgs = MActivity.LotteryMessage
 	if msgs ~= nil and #msgs > 0 then
 		local content = module:Get("content")
 		local index = 0
@@ -35,7 +32,11 @@ function _M:OnCreate()
 			local msgInfo = msgs[i]
 			local itemCsv = Csv.Item[msgInfo.itemId]
 			local textWidget = self:CreateMoudle(content, "M_Luck_Draw_TC_Item")
-			textWidget.SelfRect.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
+			if msgInfo.itemId == Define.AssetsType.Gold and msgInfo.itemCount ~= nil and msgInfo.itemCount > 0 then
+				textWidget.SelfRect.Text = Csv.Text("DLottery_getGold", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
+			else
+				textWidget.SelfRect.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
+			end
 
 			if index == MAX_COUNT then
 				break

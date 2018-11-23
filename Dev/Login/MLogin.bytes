@@ -23,6 +23,8 @@ _M.Password = ""
 _M.ServerList = {}
 --上次登陆选择的服务器
 _M.LastLoginServer = nil
+-- 登陆过的服务器列表
+_M.LoginedServerList = {}
 --选择服务器
 _M.SelectServer = nil
 
@@ -64,6 +66,19 @@ function _M.GetAccount()
 		end
 		-- return tmp[1] .. "&" .. string.upper(tmp[2])
 	end
+	return account
+end
+
+-- 开发账号拼接
+function _M.GetDevelopAccount()
+	local account = nil
+	if string.find(_M.Account, "&") then
+		account = _M.GetAccount()
+	else
+		_M.Account = _M.Account .. "&develop"
+		account = _M.GetAccount()
+	end
+
 	return account
 end
 

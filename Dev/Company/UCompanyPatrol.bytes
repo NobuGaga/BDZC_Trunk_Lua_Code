@@ -26,6 +26,27 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _P.onPressLightBook(self)
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Get("BlackEmpty").Activity = false
+		moudle:Get("bookLight").Activity = false
+		moudle:Get("blackbg2").Alpha = 0
+		moudle:Get("book").Alpha = 0
+		moudle:Get("dialog").Activity = true
+		if self.AwardID ~= nil then
+			WindowMgr.Create("UCompanyPatrolAward",self.AwardID)
+		end
+		_P.CreatePatrol(self,false)
+		local tableItems = self.mTableItems
+		for k,v in pairs(tableItems) do
+			if v.id < MCompany.GetNowPatrolID() then
+				v.moudle:Get("black").Activity = true
+			end
+		end
+	end
+end
+
 --界面构建
 function _M:OnCreate(...)
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_company_Tab3", WindowType.UI, 0)
@@ -56,25 +77,6 @@ function _M:OnCreate(...)
 		else
 			CCompany.CompanyPatrol()
 			moudle:Get("BSX").RaycastTarget = false
-		end
-	end,nil,1)
-
-	moudle:Get("bookLight"):AddOnButton(function()
-		SoundMgr.Play(10001)
-		moudle:Get("BlackEmpty").Activity = false
-		moudle:Get("bookLight").Activity = false
-		moudle:Get("blackbg2").Alpha = 0
-		moudle:Get("book").Alpha = 0
-		moudle:Get("dialog").Activity = true
-		if self.AwardID ~= nil then
-			WindowMgr.Create("UCompanyPatrolAward",self.AwardID)
-		end
-		_P.CreatePatrol(self,false)
-		local tableItems = self.mTableItems
-		for k,v in pairs(tableItems) do
-			if v.id < MCompany.GetNowPatrolID() then
-				v.moudle:Get("black").Activity = true
-			end
 		end
 	end,nil,1)
 
@@ -304,9 +306,13 @@ function _R.OnPatrol(self,data)
 		local book = moudle:Get("book")
 		blackBG:DOFade(0.35,1)
 		book:DOFade(1,1)
+		--[[
 		book:AddOnTime(function()
-			moudle:Get("bookLight").Activity = true
-		end,nil,0.25)
+			-- moudle:Get("bookLight").Activity = true
+			_P.onPressLightBook(self)
+		end,nil,0.8)
+		--]]
+		_P.onPressLightBook(self)
 	end,nil,delayTime + 0.37)
 
 	moudle:Get("dialog").Activity = false

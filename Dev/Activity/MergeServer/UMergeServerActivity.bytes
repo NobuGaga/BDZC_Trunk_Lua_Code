@@ -1,0 +1,249 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local UMergeServerLogin = JRequire "Dev.Activity.MergeServer.UMergeServerLogin"
+local UMergeServerFireworks = JRequire "Dev.Activity.MergeServer.UMergeServerFireworks"
+local UMergeServerPayPanel = JRequire "Dev.Activity.MergeServer.UMergeServerPayPanel"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local MoudleName = "M_Autumn_Main"
+local btnClose = "C_Back_Btn"
+local PageItemName = "M_Autumn_Main_Item"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.curMoudle then
+		self.curMoudle:delete()
+		self.curMoudle = nil
+	end
+	if self.tabGroup then
+		self.tabGroup:delete()
+		self.tabGroup = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(sysId, isShowFirst)
+	self.SysId = sysId
+	_P.InitMoudleTopInfo(self)
+	_P.InitPageView(self)
+
+	-- 首次进入活动打开预览界面
+	if isShowFirst then
+		local loginData = self.actPageDataCache[Define.ActivityType.MergeSrv_Login]
+		if loginData ~= nil and loginData.isHasShow == true then
+			local isShowTag = Csv.Const(20165)[1] == 1
+			if isShowTag then
+				WindowMgr.Create("UMidautunnLookPanel", loginData.actId)
+				loginData.isHasShow = false
+				CActivity.SetSerShowViewTag(loginData.actId)
+			end
+		end
+	end
+	
+	self.isFirst = false
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(btnClose):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		if self.curMoudle then
+			self.curMoudle:Destroy()
+		end
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = self.moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self.SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self.SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+end	
+
+--初始化页签界面
+function _P.InitPageView(self)
+	_P.InitActivityTypeGroup(self)
+	self.tabGroup = TabGroup.new(function (actType) _P.OnClickPage(self, actType) end)
+	self.pageTabNode = self.moudle:Get("pageContent")
+	self.pageItemCache = {}
+	self.pageNode = self.moudle.SelfRect
+	for index, actType in ipairs(self.actTypeGroup) do
+		local actDataList = MActivity.GetListFromType(actType)
+		if actDataList then
+			for _, actData in pairs(actDataList) do
+				if actData.sysId == self.SysId then -- 获取该系统id对应的数据
+					if self.curActType == nil then
+						self.curActType = actType
+					end
+					self.actPageDataCache[actType] = actData
+					local itemMoudle = JGuiManager.GetMoudle(self.pageTabNode, PageItemName)
+					self.tabGroup:Add(actData.actType, itemMoudle.SelfRect, itemMoudle:Get("textTitle"), actData.title)
+					self:RegistRedpoint(itemMoudle:Get("redpoint"), actData.sysId, actData.actId)
+					self.pageItemCache[actData.actType] = itemMoudle.SelfRect
+				end
+			end
+		end
+	end
+	self.isFirst = true
+	self.tabGroup:Choose(self.curActType)
+end
+
+--初始化中秋活动类型
+function _P.InitActivityTypeGroup(self)
+	local csvFuncValue = Csv.Func[self.SysId]
+	if csvFuncValue == nil or csvFuncValue.actType == nil then
+		error("Csv Func SysID " .. self.SysId .. " is nil or actType is nil")
+		return
+	end
+	self.actTypeGroup = {}
+	for index, actType in ipairs(csvFuncValue.actType) do
+		self.actTypeGroup[index] = actType
+	end
+	self.actPageDataCache = {}
+	self.moudle:Get("C_Text").Text = csvFuncValue.name
+end
+
+--点击页签事件
+function _P.OnClickPage(self, actType)
+	if actType == self.curActType and not self.isFirst then
+		return
+	end
+	local actData = self.actPageDataCache[actType]
+	if actData ==  nil then
+		return
+	end
+	local loginActList = MActivity.GetListFromType(Define.ActivityType.MergeSrv_Login)
+	local fireworkActList = MActivity.GetListFromType(Define.ActivityType.MergeSrv_Firework)
+	local payActList = MActivity.GetListFromType(Define.ActivityType.MergeSrv_Recharge)
+	if loginActList and loginActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMergeServerLogin.new(self.pageNode, actData.actId)
+	elseif fireworkActList and fireworkActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMergeServerFireworks.new(self.pageNode, actData.actId, self._LockNode)
+	elseif payActList and payActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMergeServerPayPanel.new(self.pageNode, actData.actId)
+	end
+end
+
+function _P.RefreshCurrentView(self, actType)
+	if self.curMoudle then
+		self.curMoudle:Destroy()
+		self.curMoudle:delete()
+		self.curMoudle = nil
+	end
+	self.curActType = actType
+end
+
+--判断关闭界面及活动关闭提示
+function _P.JudgeToCloseActivity(self, actType)
+	local isClosePage = _P.JudgeToRemovePage(self, actType)
+	if isClosePage and not self.isShowCloseTips then
+		self.isShowCloseTips = true
+		CCommon.ShowError(Csv.Text("err_lottery_activity_close"))
+		self.moudle.SelfRect:AddOnTime(function ()
+			self.isShowCloseTips = false
+		end, nil, 5)
+	end
+	if next(self.pageItemCache) == nil then
+		self:Destroy()
+	end
+end
+
+--判断移除页签
+function _P.JudgeToRemovePage(self, actType)
+	local typeDataList = MActivity.GetListFromType(actType)
+	if typeDataList == nil then
+		self.tabGroup:Remove(actType)
+		local itemMoudle = self.pageItemCache[actType]
+		if itemMoudle then
+			itemMoudle:Destroy()
+			self.pageItemCache[actType] = nil
+		end
+		if self.curActType == actType then
+			local showActType
+			for _, type in ipairs(self.actTypeGroup) do
+				if actType ~= type and self.pageItemCache[type] ~= nil then
+					showActType = type
+					break
+				end
+			end
+			if showActType ~= nil then
+				self.tabGroup:Choose(showActType)
+			end
+		end
+		return true
+	end
+	return false
+end
+
+---------------------------------------中秋活动通用接口---------------------------------------
+function _R.OnUpdateViewData(self, data, actType)
+	if self.curActType == actType and self.curMoudle ~= nil then
+		self.curMoudle:UpdateViewData(data)
+	end
+end
+
+function _R.OnUpdateViewState(self, data, actType)
+	_P.JudgeToCloseActivity(self, actType)
+	if self.curActType == actType and self.curMoudle ~= nil then
+		self.curMoudle:OnUpdateViewState(data)
+	end
+end
+
+function _R.GetRewardBack(self, data, actType)
+	if self.curActType == actType and data and self.curMoudle ~= nil then
+		self.curMoudle:GetRewardBack(data)
+	end
+end
+
+---------------------------------------中秋活动烟花接口---------------------------------------
+function _R.OnIngniteFireBack(self, data)
+	if data and self.curActType == Define.ActivityType.MergeSrv_Firework and self.curMoudle ~= nil then
+		self.curMoudle:OnIngniteFireBack(data)
+	end
+end
+
+---------------------------------------中秋充值接口---------------------------------------
+function _R.OnGetPayDayBack(self, data)
+	if data and self.curActType == Define.ActivityType.MergeSrv_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:GetDayRewardBack(data)
+	end
+end
+
+function _R.UpdatePayNumData(self, data)
+	if data and self.curActType == Define.ActivityType.MergeSrv_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:UpdatePayNumData(data)
+	end
+end
+
+function _R.OnDayUpdatePush(self, data)
+	if data and self.curActType == Define.ActivityType.MergeSrv_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:OnDayUpdatePush(data)
+	end
+end
+
+return _M

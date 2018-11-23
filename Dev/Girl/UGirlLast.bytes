@@ -2,6 +2,7 @@ local JGuiManager = CS.JGui.JGuiManager
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local MGirl = JRequire "Dev.Girl.MGirl"
 local CCommon = JRequire "Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
 
 local DATE_EFFECT_ID = 10098
 
@@ -115,6 +116,7 @@ function _P.ShowItem(self,_moudle,data)
 	local bsxSp = _moudle:Get("bsx")
 	local name = _moudle:Get("Name")
 	local tips = _moudle:Get("tips")
+	local tips2 = _moudle:Get("omit")
 	local btnGame = _moudle:Get("BtnGame")
 	local btnDate = _moudle:Get("BtnDate")
 	local redPoint = _moudle:Get("redPoint")
@@ -128,8 +130,14 @@ function _P.ShowItem(self,_moudle,data)
 	end
 	bsxSp.SpriteName = girlsData.lockicon
 	name.Text = MGirl.GetGirlName(data.girlid)----girlsData.name
+	
 	tips.Text = _P.GetLastTalk(data)
-
+	if tips.PreferredWidth >= 440 then
+		tips2.Text = "......"
+	else
+		tips2.Text = ""
+	end
+	
 	--检测提示
 	local isRed = true
 	if data.state <= 1 then

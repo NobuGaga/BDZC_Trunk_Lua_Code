@@ -3,6 +3,8 @@ local MBattle = JRequire "Dev.Battle.MBattle"
 --@RefType [Dev.EventCenter.bytes#_M]
 local EventCenter = JRequire "Dev.EventCenter"
 local CCommon = JRequire "Dev.Common.CCommon"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -15,6 +17,9 @@ local CMD_ID =
 	cUnlock = 2,
 	cSeckillBattle = 3,
 	cAcquisition = 4,
+	cBossReset = 5,
+	cMapOneGet = 6,--领取一个地图的收益
+	cMapAllGet = 7,--领取所有地图的收益
 
 	sInit = 1,
 	sResult = 2,
@@ -22,6 +27,9 @@ local CMD_ID =
 	sSeckillBattle = 4,
 	sAcquisition = 5,
 	sBattleBossFight = 6,
+	sBossReset = 7,
+	sMapUpdate = 8, --刷新关卡大地图 PBattle.PMapUpdate
+	sMapOneGet = 9, --领取宝箱收益 PBattle.SMapOneGet
 }
 
 function _M.ModuleClean()
@@ -35,6 +43,9 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cUnlock] = "PBattle.CUnlock",
 		[CMD_ID.cSeckillBattle] = "PBattle.CSeckillBattle",
 		[CMD_ID.cAcquisition] = "",
+		[CMD_ID.cBossReset] = "PBattle.CBattle",
+		[CMD_ID.cMapOneGet] = "PBattle.CMapOneGet",
+		[CMD_ID.cMapAllGet] = "",
 	}
 	--接收消息协议注册
 	local recv = {
@@ -44,9 +55,13 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sSeckillBattle] = {	proto = "PBattle.SSeckillBattle", 	handle = _P.OnSeckillResult},
 		[CMD_ID.sAcquisition] = {	proto = "PBattle.SAcquisition", 	handle = _P.OnAcquisitionResult},
 		[CMD_ID.sBattleBossFight] = {	proto = "SFight", 		handle = _P.OnBossResult},
+		[CMD_ID.sBossReset] = {	proto = "PBattle.SBossReset", 		handle = _P.OnBossResetBack},
+		[CMD_ID.sMapUpdate] = {	proto = "PBattle.PMapUpdate", 		handle = _P.OnBattleMapUpdate},
+		[CMD_ID.sMapOneGet] = {	proto = "PBattle.SMapOneGet", 		handle = _P.OnBattleMapBoxGet},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Airport, send, recv, isReload)	
+	MBattle.InitCsvBattleData()
 end
 
 --注册12点重置监听
@@ -56,6 +71,10 @@ end, true)
 
 EventCenter.RegistCallEvent(Define.EventListenId.FirstEnterGame,function( ... )
 	MBattle.IsFirstCreateBattle = true
+end, true)
+
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function( ... )
+	_P.UpdateMapRedpoint()
 end, true)
 
 -----------------------Client -- Server-----------------
@@ -78,6 +97,21 @@ function _M.AcquisitionReq()
 	_M.Send(CMD_ID.cAcquisition)
 end
 
+-- 关卡boss重置
+function _M.BossResetReq(id, staffId)
+	_M.Send(CMD_ID.cBossReset, {id = id, staffId = staffId})
+end
+
+--请求1个地图的收益
+function _M.MapOneGetReq(id)
+	_M.Send(CMD_ID.cMapOneGet, {id = id})
+end
+
+--请求所有地图的收益
+function _M.MapAllGetReq()
+	_M.Send(CMD_ID.cMapAllGet)
+end
+
 -----------------------Server -- Client-----------------
 
 function _P.OnDayout()
@@ -91,9 +125,9 @@ end
 function _P.OnInit(data)
 	MBattle.CurId = data.id
 	MBattle.CurBlood = data.blood
-
 	MBattle.LockedStaffs = {}
 	MBattle.StaffLifeNum = {}
+	MBattle.FightBossTimes = data.fightBossTimes
 	if data.lockStaffs ~= nil then
 		for _,v in pairs(data.lockStaffs) do
 			MBattle.LockedStaffs[v] = true
@@ -102,6 +136,47 @@ function _P.OnInit(data)
 	if data.staffLifeNum ~= nil then
 		for _,v in pairs(data.staffLifeNum) do
 			MBattle.StaffLifeNum[v.id] = v.count
+		end
+	end
+	_P.OnBattleMapUpdate(data.mapInfo)
+end
+
+function _P.OnBattleMapUpdate(data)
+	MBattle.BattleMapUpdate(data)
+	WindowMgr.Call("UBattleBigMap", "OnBattleMapUpdate", data)
+
+	--小红点
+	_P.UpdateMapRedpoint()
+end
+
+function _P.OnBattleMapBoxGet(data)
+	MBattle.BattleMapList[data.id] = data.startTime
+	WindowMgr.Call("UBattleBigMap", "OnBattleMapBoxGet", data)
+	--小红点
+	_P.UpdateMapRedpoint()
+end
+
+local HeartBeat
+function _P.UpdateMapRedpoint()
+	if MBattle.BattleMapIsInit then
+		if HeartBeat == nil then
+			HeartBeat = JRequire "Dev.Player.HeartBeat"
+		end
+		local isHaveRedpoint = false
+		local nowTime = HeartBeat.ServSecond()
+		if MBattle.BattleMapStartTime > 0 and nowTime - MBattle.BattleMapStartTime >= Csv.Const(152) then
+			CMain.UpdateRedpoint(true, Define.SysId.BusinessMap, 1)
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.BusinessMap, 1)
+		end
+
+		for csvId,startTime in pairs(MBattle.BattleMapList) do
+			local csvLine = Csv.BattleCity[csvId]
+			if csvLine.boxReward ~= nil and (nowTime - startTime) / csvLine.boxSpaceTime >= csvLine.boxMaxNum then
+				CMain.UpdateRedpoint(true, Define.SysId.BusinessMap, csvId)
+			else
+				CMain.UpdateRedpoint(false, Define.SysId.BusinessMap, csvId)
+			end
 		end
 	end
 end
@@ -118,7 +193,7 @@ function _P.OnResult(data)
 		MBattle.CurId = data.id
 		MBattle.CurBlood = data.blood
 	end
-	
+	local lastCityID = MBattle.CurCityId
 	--锁定的员工
 	if data.lockStaff ~= nil then
 		MBattle.LockedStaffs[data.lockStaff] = true
@@ -131,14 +206,19 @@ function _P.OnResult(data)
 	--调用播放
 	if WindowMgr.IsCreated("UBattleFight") then
 		WindowMgr.Call("UBattleFight","OnResult", data, function ()
-			WindowMgr.Call("UBattle","OnResult", data)
+			WindowMgr.Call("UBattle","OnResult", data, lastCityID)
 		end)
 	elseif WindowMgr.IsCreated("UBattleBoss") then
 		WindowMgr.Call("UBattleBoss","OnResult", data, function ()
-			WindowMgr.Call("UBattle","OnResult", data)
+			WindowMgr.Call("UBattle","OnResult", data, lastCityID)
 		end)
 	else
-		WindowMgr.Call("UBattle","OnResult", data)
+		WindowMgr.Call("UBattle","OnResult", data, lastCityID)
+	end
+
+	--检测弱引导是否关闭
+	if MMain.curWeakGuide ~= nil then
+		WindowMgr.RefreshWeakGuide(MMain.curWeakGuide.funcID,MMain.curWeakGuide.id)
 	end
 end
 
@@ -162,19 +242,20 @@ function _P.OnSeckillResult(data)
 			MBattle.CurId = lastData.id
 			MBattle.CurBlood = lastData.blood
 		end
-
+		local lastCityID = MBattle.CurCityId
 		--调用播放
 		if WindowMgr.IsCreated("UBattleFight") then
 			WindowMgr.Call("UBattleFight", "OnSeckillResult", lastData, function ()
-				WindowMgr.Call("UBattle", "OnResult", lastData)
+				WindowMgr.Call("UBattle", "OnResult", lastData, lastCityID)
 			end)
 		end
 	end
+
+	--检测弱引导是否关闭
+	if MMain.curWeakGuide ~= nil then
+		WindowMgr.RefreshWeakGuide(MMain.curWeakGuide.funcID,MMain.curWeakGuide.id)
+	end
 end
-
-
-
-
 
 function _P.OnUnlock(data)
 	MBattle.LockedStaffs[data.staffId] = nil
@@ -193,44 +274,25 @@ function _M.EnterBattle()
 			if csvChapter ~= nil and csvBattle.next ~= nil and csvBattle.next > 0 then
 				if MBattle.IsFirstBattle() then
 					if MBattle.IsFirstCreateBattle then
-						--MBattle.IsFirstCreateBattle = nil
-						--WindowMgr.Create("UBattleBigMap",true)
 						WindowMgr.Create("UBattle")
 					else
-						--WindowMgr.Create("UBattleBigMap",false)
 						WindowMgr.Create("UBattle")
 					end
 				else
 					WindowMgr.Create("UBattle")
 				end
 			else
-				--WindowMgr.Create("UBattleBigMap",false)
 				WindowMgr.Create("UBattle")
 			end
 		else
-			--WindowMgr.Create("UBattleBigMap",false)
 			WindowMgr.Create("UBattle")
 		end
 	else
-		--WindowMgr.Create("UBattleBigMap",false)
 		WindowMgr.Create("UBattle")
 	end
 end 
 
 function _P.OnAcquisitionResult(data)
-	-- print(data.curId)
-	-- print(data.lastId)
-	-- for k1,v1 in ipairs(data.battle) do
-	-- 	for k,v in ipairs(v1.list) do
-	-- 		print("-----------------")
-	-- 		print(v.id)
-	-- 		print(v.state)
-	-- 		print(v.hurt)
-	-- 		print(v.blood)
-	-- 		print(v.money)
-	-- 		print(v.selfcost)
-	-- 	end
-	-- end
 	local list = _P.GetAcquisitionList(data)
 	local isNextChapter,lastBlood = _P.GetIsNextChapter(list)
 	if isNextChapter then
@@ -239,14 +301,15 @@ function _P.OnAcquisitionResult(data)
 			MBattle.CurId = csvBattle.next
 			MBattle.CurBlood = Csv.Battle[csvBattle.next].gold
 		else
-			print("------------csvBattle为空 or csvBattle.next 为空--------------")
+			error("------------Battle csv 为空 or csvBattle.next 为空--------------", data.lastId)
 		end
 	else
 		MBattle.CurId = data.lastId
 		MBattle.CurBlood = lastBlood
 	end
+	local lastCityID = MBattle.CurCityId
 	if data.lastId > data.curId then
-		WindowMgr.Call("UBattle","OnAcquisition",list)
+		WindowMgr.Call("UBattle","OnAcquisition",list, lastCityID)
 	else
 		CCommon.ShowError(Csv.Text("battle_acqu1"))
 	end
@@ -304,14 +367,15 @@ function _P.OnBossResult(data)
 			MBattle.CurBlood = csvBattle.gold
 		end
 	end
+	local lastCityID = MBattle.CurCityId
+	WindowMgr.Call("UBattleBossNew","OnResult",data)
+	WindowMgr.Call("UBattle", "OnResult", data, lastCityID)
+end
 
-	if WindowMgr.IsCreated("UBattleBossNew") then
-		WindowMgr.Call("UBattleBossNew","OnResult",data)
-	end
-
-	if WindowMgr.IsCreated("UBattle") then
-		WindowMgr.Call("UBattle", "OnResult", data)
-	end
+function _P.OnBossResetBack(data)
+	MBattle.FightBossTimes = data.fightBossTimes
+	MBattle.CurBlood = data.blood
+	WindowMgr.Call("UBattleBossNew", "OnBossResetBack", data)
 end
 
 return _M

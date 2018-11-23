@@ -33,15 +33,11 @@ local DefaultPos = Vector2(274, -73)
 local AptiUpPos = Vector2(158, -19)
 local AtriUpNeedLevel = Csv.Const(20163)
 
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
-
 
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -203,7 +199,7 @@ function _P.OnCreateParkingItem(self, itemGrid, data)
 			local selectTween = selectImg.CachedTran:GetJTweener(SelectParkingTween)
 			selectTween:Play()
 		end
-		
+
 		_P.UpdateParkingData(itemModule, data)
 	end
 
@@ -252,6 +248,14 @@ function _P.UpdateParkingData(itemModule, data)
 		qualityImg.SizeDelta = Vector2(138, 137)
 
 		isShowRed = MCar.CheckShowRed(data.state, nil)
+	end
+
+	local seatConf = Csv.CarSeatOpen[data.index]
+	if seatConf and seatConf.showCondition then
+		local conditionData = MCar.CarSeatList[seatConf.showCondition]
+		if conditionData and conditionData.state then
+			itemModule.SelfRect.Activity = (conditionData.state ~= MCar.SeatStateEnum.UnOpen and conditionData.state ~= MCar.SeatStateEnum.Stop)
+		end
 	end
 
 	redImg.Activity = isShowRed
@@ -386,7 +390,7 @@ function _P.SetCarData(self, id, isPlaySound, isChange)
 	local carCheelPos2 = carConf.carCheelLaterPos or {0, 0}
 	self.FrontActorPanel1.LocalPosition = Vector2(carCheelPos1[1], carCheelPos1[2])
 	self.LaterActorPanel1.LocalPosition = Vector2(carCheelPos2[1], carCheelPos2[2])
-	
+
 	local changeBtn = self.mModule:Get("ChangeBtn")
 	changeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
@@ -431,11 +435,11 @@ function _P.SetCarAttrData(self, data, carId)
 	attrLightList[2] = MCar.GetAttrLightNum(attrData.Zhili, 2, carId)
 	attrLightList[3] = MCar.GetAttrLightNum(attrData.Zhengzhi, 3, carId)
 	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, carId)
-	
+
 	for i=1, 4 do
 		local lightNum = attrLightList[i]
 		local nameStr = "Attr" .. i .. "Value"
-		for j=1, MCar.CarSeatOpenMax do
+		for j=1, 5 do
 			local valueImg = self.mModule:Get(nameStr .. j)
 			if valueImg then
 				valueImg.Activity = j <= lightNum
@@ -443,7 +447,7 @@ function _P.SetCarAttrData(self, data, carId)
 		end
 
 		self.mModule:Get("AttrText" .. i).Text = Csv.Text("car_main_attri" .. i)
-		
+
 		local numText = self.mModule:Get("AttrNum" .. i)
 		if i == 1 then
 			numText.Text = attrData.Wuli
@@ -470,7 +474,7 @@ function _P.SetCarGraphData(self, carConf, carData)
 	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[qualityNum]
 	self.mModule:Get("Circular").SpriteName = qualityData.name
 
-	for i=1, MCar.CarSeatOpenMax do
+	for i=1, 5 do
 		self.mModule:Get("Arc" .. i).Activity = i <= qualityData.num
 	end
 
@@ -504,7 +508,7 @@ function _P.OnCreateStaffItem(self, itemGrid, staffData, index)
 			SoundMgr.Play(10001)
 			_P.OnClickStaffItem(self, index)
 		end, nil, 0.9)
-		
+
 		_P.UpdateOneStaffData(self, itemModule, staffData)
 	end
 
@@ -735,7 +739,7 @@ function _P.SetCarLevelUpData(self)
 			curAttrNum = MCar.GetCarAttrNum(carData.Attr.Meili, carData.level)
 			nextAttrNum = MCar.GetCarAttrNum(carData.Attr.Meili, carData.level + 1)
 		end
-		
+
 		self.mModule:Get("CurAttr" .. i).Text = Csv.Text("car_main_attri" .. i) .. ':+' .. ((curAttrNum == -1 and "MAX") or curAttrNum)
 		self.mModule:Get("NextAttr" .. i).Text = '+' .. ((nextAttrNum == -1 and "MAX") or nextAttrNum)
 	end
@@ -783,7 +787,7 @@ function _P.SetCarStarUpData(self)
 	self.MaxText.Activity = isMax
 	self.upBtn.Activity = not isMax
 	self.upItemGrid.Activity = not isMax
-	
+
 	for i=1, 4 do
 		local curAttrNum = 0
 		local nextAttrNum = 0
@@ -800,7 +804,7 @@ function _P.SetCarStarUpData(self)
 			curAttrNum = MCar.GetCarStarAddNum(carData.star, carConf.id, 4)
 			nextAttrNum = MCar.GetCarStarAddNum(carData.star + 1, carConf.id, 4)
 		end
-		
+
 		self.mModule:Get("CurAttr" .. i).Text = Csv.Text("car_main_attrPro" .. i, {num = ((curAttrNum == -1 and "MAX") or curAttrNum)})
 		self.mModule:Get("NextAttr" .. i).Text = (nextAttrNum == -1 and "MAX") or Csv.Text("car_main_addPro", {num = nextAttrNum})
 	end
@@ -868,7 +872,7 @@ function _P.SetAptiUpData(self)
 	-- 资质经验消耗
 	local intensifyConf = Csv.CarUpQualification[carData.carid * 1000 + (carData.intensifylv or 0)]
 	if intensifyConf == nil then return end
-
+	intensifyConf = Csv.CarUpQualification2[intensifyConf.id2]
 	_P.SetAptiUpAttrData(self, carData, intensifyConf)
 	_P.SetAptiUpCostData(self, intensifyConf)
 end
@@ -882,7 +886,7 @@ function _P.SetAptiUpCostData(self, intensifyConf)
 		if costExpConf then
 			module:Get("icon1").SpriteName = costExpConf.icon
 			module:Get("gl1").Text = Csv.Text("car_aptiUp_pro")
-			module:Get("glnum1").Text = Csv.Text("car_aptiUp_proNum", {num = intensifyConf.aptiExpUpPro / 100})
+			module:Get("glnum1").Text = Csv.Text("car_aptiUp_proNum", {num = intensifyConf.aptiExpUpProC / 100})
 
 			local costText = module:Get("num1")
 			local curGetNum = MBag.GetItemNum(costExpConf.id)
@@ -894,7 +898,7 @@ function _P.SetAptiUpCostData(self, intensifyConf)
 			end
 		end
 	end
-	
+
 
 	-- 道具消耗
 	local costItem = intensifyConf.aptiItemUpCost
@@ -903,7 +907,7 @@ function _P.SetAptiUpCostData(self, intensifyConf)
 		if costItemConf then
 			module:Get("icon2").SpriteName = costItemConf.icon
 			module:Get("gl2").Text = Csv.Text("car_aptiUp_pro")
-			module:Get("glnum2").Text = Csv.Text("car_aptiUp_proNum", {num = intensifyConf.aptiItemUpPro / 100})
+			module:Get("glnum2").Text = Csv.Text("car_aptiUp_proNum", {num = intensifyConf.aptiItemUpProC / 100})
 
 			local costItemText = module:Get("num2")
 			local curItemGetNum = MBag.GetItemNum(costItemConf.id)
@@ -926,7 +930,7 @@ function _P.SetAptiUpAttrData(self, data, intensifyConf)
 	attrLightList[2] = MCar.GetAttrLightNum(attrData.Zhili, 2, carId)
 	attrLightList[3] = MCar.GetAttrLightNum(attrData.Zhengzhi, 3, carId)
 	attrLightList[4] = MCar.GetAttrLightNum(attrData.Meili, 4, carId)
-	
+
 	for i=1, 4 do
 		self.mModule:Get("AptiShow" .. i).Text = Csv.Text("car_main_attri" .. i) .. ':'
 		local numText = self.mModule:Get("AptiNum" .. i)
@@ -1120,7 +1124,7 @@ function _R.CarStarUpBack(self, data)
 		-- 更新下方数据
 		_P.SetCarStarUpData(self)
 		self.mModule:Get("ScoreNum").Text = data.score
-		
+
 		local curStar = data.star
 		local starData = MCar.GetCarStarIcon(curStar)
 		if curStar > 5 and starData.num == 1 then
@@ -1131,15 +1135,15 @@ function _R.CarStarUpBack(self, data)
 			if tweenData then
 				tweenData.ToAngleZ = nextAngles
 			end
-	
+
 			angleTween:SetOnComplete(function()
 				self.mModule:Get("Circular").SpriteName = starData.name
-				
+
 				for i=1, 5 do
 					local animStar = self.mModule:Get("Arc" .. i)
 					animStar.Activity = false
 				end
-	
+
 				_P.OnPlayStarAnim(self, 1, true)
 				_P.OnPlayAnimFinish(self, data)
 			end)
@@ -1151,13 +1155,13 @@ function _R.CarStarUpBack(self, data)
 			if actorPos then
 				actorPanel.LocalPosition = Vector2(actorPos.x, actorPos.y)
 			end
-	
+
 			animStar.Activity = true
 			CCommon.CreateEffect(actorPanel, StarUpAtorId, nil, function( ... )
 				_P.OnPlayAnimFinish(self, data)
 			end)
 		end
-	
+
 		-- 更新红点
 		_P.UpdateStarUpRed(self, data)
 
@@ -1173,7 +1177,7 @@ function _P.OnPlayStarAnim(self, index, isShow)
 	local actorPanel = self.mModule:Get("StarUpActorPanel")
 	local actorPos = animStar.RootCanvasPos
 	actorPanel.LocalPosition = Vector2(actorPos.x, actorPos.y)
-	
+
 	CCommon.CreateEffect(actorPanel, StarUpAtorId, nil, function( ... )
 		animStar.Activity = isShow
 	end)
@@ -1209,7 +1213,7 @@ function _R.StaffRideCarBack(self, updateStaff, data)
 		if attr.Zhili and attr.Zhili > 0 then playAnimList[#playAnimList + 1] = Csv.Text("car_main_attrget2", {name = staffConf.name, num = attr.Zhili}) end
 		if attr.Zhengzhi and attr.Zhengzhi > 0 then playAnimList[#playAnimList + 1] = Csv.Text("car_main_attrget3", {name = staffConf.name, num = attr.Zhengzhi}) end
 		if attr.Meili and attr.Meili > 0 then playAnimList[#playAnimList + 1] = Csv.Text("car_main_attrget4", {name = staffConf.name, num = attr.Meili}) end
-		
+
 		for i,v in ipairs(playAnimList) do
 			CCommon.ShowFlyText(addAnim, v , (i - 1) * 0.5)
 		end
@@ -1305,8 +1309,11 @@ function _P.UpdateAptiUpCostData(self, itemid)
 
 		-- 资质经验消耗
 		local intensifyConf = Csv.CarUpQualification[carData.carid * 1000 + (carData.intensifylv or 0)]
-		if intensifyConf and (intensifyConf.aptiExpUpCost[1] == itemid or intensifyConf.aptiItemUpCost[1] == itemid) then
-			_P.SetAptiUpCostData(self, intensifyConf)
+		if intensifyConf then
+			intensifyConf = Csv.CarUpQualification2[intensifyConf.id2]
+			if intensifyConf.aptiExpUpCost[1] == itemid or intensifyConf.aptiItemUpCost[1] == itemid then
+				_P.SetAptiUpCostData(self, intensifyConf)
+			end
 		end
 	end
 end
@@ -1339,7 +1346,7 @@ function _P.OnClickIntensify(self, type)
 	-- 资质经验消耗
 	local intensifyConf = Csv.CarUpQualification[carData.carid * 1000 + (carData.intensifylv or 0)]
 	if intensifyConf == nil then return end
-
+	intensifyConf = Csv.CarUpQualification2[intensifyConf.id2]
 	-- 资质经验消耗
 	local costData = nil
 	if type == 1 then
@@ -1366,7 +1373,7 @@ function _R.UpdateAptiUpBack(self, data)
 		-- 资质经验消耗
 		local intensifyConf = Csv.CarUpQualification[data.carid * 1000 + (data.intensifylv or 0)]
 		if intensifyConf == nil then return end
-
+		intensifyConf = Csv.CarUpQualification2[intensifyConf.id2]
 		_P.SetAptiUpCostData(self, intensifyConf)
 	else
 		self:Lock()

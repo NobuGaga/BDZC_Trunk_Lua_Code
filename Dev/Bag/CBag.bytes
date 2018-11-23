@@ -77,6 +77,7 @@ function _P.OnGetItem(data)
 	if csvItem ~= nil then
 		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
 			CActivity.UpdateRecuitStaffRed(data.item.itemid)
+			CActivity.UpdateRecuitGirlRed(data.item.itemid)
 		end
 
 		if csvItem.type == 6 then
@@ -118,6 +119,7 @@ function _P.OnDelItem(data)
 	if csvItem ~= nil then
 		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
 			CActivity.UpdateRecuitStaffRed(data.item.itemid)
+			CActivity.UpdateRecuitGirlRed(data.item.itemid)
 		end
 
 		if csvItem.type == 6 then
@@ -127,7 +129,7 @@ function _P.OnDelItem(data)
 		if csvItem.type == Define.BagType.EquipChip then
 			CEquipRot.CheckEquipRotRedPoint()
 		end
-
+		
 		if data.item.itemid == Define.AssetsType.Gold then
 			-- 银行理财检测红点
 			CActivity.UpdateInvestmentRed()
@@ -135,6 +137,7 @@ function _P.OnDelItem(data)
 										  Balance = MBag.GetItemNum(Define.AssetsType.Gold),
 										  uTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 		end
+		_P.CheckIsUpdateStaffRed(data.item.itemid)
 	end
 	--_P.CheckMergeRedPoint(data.item.itemid)
 	EventCenter.CallEventTrigger(Define.EventListenId.ItemUpdateEvent, data.item.itemid , data.item.itemcount, false)
@@ -169,7 +172,7 @@ function _P.OnStaffChange(data)
 	if WindowMgr.IsCreated("UStaffDetails") then
 		WindowMgr.Call("UStaffDetails","UpdateStaffAttr")
 	end
-	CStaff.CheckStaffRedPoint()
+	CStaff.CheckAllStaffRedPoint()
 end
 
 function _P.OnUsePackage(data)
@@ -191,8 +194,8 @@ end
 function _P.CheckIsUpdateStaffRed(itemid)
 	local csvItem = Csv.Item[itemid]
 	if csvItem ~= nil then
-		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 1 then
-			CStaff.CheckStaffRedPoint()
+		if csvItem.isForColorUp ~= nil and (csvItem.isForColorUp == 1 or csvItem.isForColorUp == 2) then
+			CStaff.CheckAllStaffRedPoint()
 		end
 	end
 end

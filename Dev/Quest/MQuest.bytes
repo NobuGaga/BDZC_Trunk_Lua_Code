@@ -22,7 +22,10 @@ _M.DailyQuest = {}
 _M.ActiveAwardRewards = {}
 --当前活跃度
 _M.ActiveAward = 0
-
+--领取每日已分享奖励次数
+_M.GotShareRewardTime = 0
+--分享次数
+_M.ShareTime = 0
 
 function _M.Clean()
 	_M.MainQuest.questid = 0
@@ -34,6 +37,13 @@ function _M.Clean()
 	_M.ActiveAwardRewards = {}
 	_M.ActiveAwards = {}
 	_M.ActiveAward = 0
+	_M.GotShareRewardTime = 0
+	_M.ShareTime = 0
+end
+
+_M.MAX_SHARE_TIME = Csv.Const(140)[1]
+function _M.IsCanGetShareReward()
+	return _M.ShareTime >= _M.MAX_SHARE_TIME and _M.GotShareRewardTime == 0
 end
 
 function _M.MainTaskIsEnd()

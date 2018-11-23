@@ -1,0 +1,89 @@
+--@RefType [SDK.AndroidYiWanSDK.bytes#_M]
+local AndroidYiWanSDK = require "SDK.AndroidYiWanSDK"
+--@RefType [SDK.SDKFuncName.bytes#_M]
+local SDKFuncName = JRequire "SDK.SDKFuncName"
+--@RefType [SDK.SDKCollectType.bytes#_M]
+local SDKCollectType = JRequire "SDK.SDKCollectType"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType  [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire "Libs.LuaUtil"
+
+local rapidjson = require "rapidjson"
+
+------------------------------CS类引用------------------------------
+local ISDKManager = CS.Utility.ISDKManager
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+local _M = Class(AndroidYiWanSDK)
+
+------------------------------请求接口------------------------------
+--收集数据
+function _M.ReqCollectData(type, serverID, serverName, roleID, roleName, roleLevel)
+	if SDKCollectType.LvUpRole == type or SDKCollectType.ExitRole == type then
+		return
+	end
+	local data = {func = SDKFuncName.SDKCollectData, type = type, serverID = serverID, 
+				  serverName = serverName, roleID = roleID, roleName = roleName, roleLevel = roleLevel}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+function _M.ReqSwitchAccount()
+	local data = {func = SDKFuncName.SDKSwitchAccount}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+	MLogin.Status = MLogin.ELoginStatus.NotLogin
+	WindowMgr.Call("ULogin", "RefreshLoginState")
+	GameSetting.LogPoint(16, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+end
+
+function _M.ReqEnterUserCenter()
+	local data = {func = SDKFuncName.SDKUserCenter}
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+function _M.ReqShare(type)
+	local data = {func = SDKFuncName.SDKShare, type = type }
+	local dataString =  rapidjson.encode(data)
+	ISDKManager.Call(dataString)
+end
+
+------------------------------回调接口------------------------------
+--登录回调
+function _M.OnLogin(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	if jsonTab and jsonTab.errmessage == nil then
+		MLogin.Password = jsonTab.password
+	else
+		CCommon.ShowError(jsonTab.errmessage)
+	end
+end
+
+--登录请求验证
+function _M.OnSDKLoginHttpRequest(jsonStr)
+	local jsonTab = rapidjson.decode(jsonStr)
+	MLogin.Account = jsonTab.account
+	if jsonTab.openid == nil then
+		local accountPrefix = LuaUtil.StringSplit(MLogin.Account, "&")
+		if accountPrefix and accountPrefix[1] then
+			jsonTab.openid = accountPrefix[1]
+		else
+			jsonTab.openid = MLogin.Account
+		end
+	end
+	GameSetting.SetOpenid(jsonTab.openid)
+	GameSetting.SetAreaID(jsonTab.areaid)
+
+	local data = {func = "OnSDKLogin"}
+	data.password = "123456"
+	SDKMgr.OnSdkCallBack(rapidjson.encode(data))
+end
+
+return _M

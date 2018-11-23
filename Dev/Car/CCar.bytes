@@ -429,13 +429,15 @@ function _P.SetSeatData(list)
 	for i=1, seatMax do
 		local oneData = {index = i}
 		if i <= openNum then
-			local oneSeatData = list[i]
-			local carId = oneSeatData.value
-			if carId and carId > 0 then
-				oneData.state = MCar.SeatStateEnum.Equiping
-				oneData.carid = carId
-			else
-				oneData.state = MCar.SeatStateEnum.UnEquip
+			local oneSeatData = _P.GetSeatData(list, i)
+			if oneSeatData then
+				local carId = oneSeatData.value
+				if carId and carId > 0 then
+					oneData.state = MCar.SeatStateEnum.Equiping
+					oneData.carid = carId
+				else
+					oneData.state = MCar.SeatStateEnum.UnEquip
+				end
 			end
 		else
 			if i == openNum + 1 then
@@ -446,6 +448,19 @@ function _P.SetSeatData(list)
 		end
 
 		MCar.CarSeatList[i] = oneData
+	end
+end
+
+
+function _P.GetSeatData(list, key)
+	if list == nil then
+		return
+	end
+
+	for k,v in pairs(list) do
+		if v.key == key then
+			return v
+		end
 	end
 end
 

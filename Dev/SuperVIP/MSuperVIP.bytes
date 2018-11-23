@@ -1,0 +1,36 @@
+local _M = {}
+
+_M.Data = {}
+
+_M.isPlayerInit = false
+_M.isRechargeInit = false
+
+function _M.SetData(code, data)
+	_M.Data.code = code
+	_M.Data.contactType = data.contactType
+	_M.Data.contactInfo = data.contactInfo
+	_M.Data.description = data.description
+	_M.Data.reward = {}
+	if data.reward then
+		for _, itemData in pairs(data.reward) do
+			if itemData.itemID and itemData.itemNum then
+				local rewardData = {}
+				rewardData.itemID = itemData.itemID
+				rewardData.itemNum = itemData.itemNum
+				table.insert(_M.Data.reward, rewardData)
+			end
+		end
+	end
+end
+
+function _M.IsShowSuperVIP()
+	return _M.Data.code == 0
+end
+
+function _M.Clean()
+	_M.Data = {}
+	_M.isPlayerInit = false
+	_M.isRechargeInit = false
+end
+
+return _M

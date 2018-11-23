@@ -39,6 +39,12 @@ function _M:OnCreate(data,isVote)
 	text5.Text = Csv.Text("siege_battle_getjifen",{num = data.jifen})--副本积分："
 	text6.Text = ""
 
+	local luckText = moudle:Get("luck")
+	local itemContent = moudle:Get("Items")
+
+	luckText.Activity = false
+	itemContent.Activity = false
+
 	SoundMgr.Play(10014)
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), failEffect)
 end

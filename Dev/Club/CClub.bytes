@@ -3,6 +3,7 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local EventCenter = JRequire "Dev.EventCenter"
 local CCommon = JRequire "Dev.Common.CCommon"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CMain = JRequire "Dev.Main.CMain"
 
 local _M = {}
 local _P = {}
@@ -19,6 +20,7 @@ local ECmdId =
 	cClubShopBuy = 6,      -- 宴会商城购买（兑换） PClub.CShopBuy
 	cClubGainAward = 7,    -- 领取宴会结算奖励
 	cClubRefer = 8,        -- 根据编号查询宴会信息 PClub.CRefer
+	cClubSendInvite = 9,   -- 发送邀请信息
 	
 	sClubInit = 1,         -- 宴会初始化 PClub.SInit
 	sClubJoin = 2,         -- 参加宴会 PClub.SJoin
@@ -30,6 +32,7 @@ local ECmdId =
 	sClubRefreshList = 8,  -- 刷新宴会列表 PClub.SSRefreshList
 	sClubGainAward = 9,    -- 领取宴会结算奖励回调 PClub.SGainAaward
 	sClubRefer = 10,       -- 查询返回 PClub.SRefer
+	sClubSendInvite = 11,  -- 发送邀请信息返回 PClub.SInvite
 }
 
 
@@ -54,6 +57,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cClubShopBuy] = "PClub.CShopBuy",
 		[ECmdId.cClubGainAward] = "",		
 		[ECmdId.cClubRefer] = "PClub.CRefer",
+		[ECmdId.cClubSendInvite] = "PClub.CInvite",
 	}
 	-- 接收消息协议注册
 	local func_recv = 
@@ -67,7 +71,8 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sClubShopBuy]     = { proto = "PClub.SShopBuy",     handle = _P.OnBuyCallBack},		
 		[ECmdId.sClubRefreshList] = { proto = "PClub.SSRefreshList",handle = _P.OnRefreshListBack},
 		[ECmdId.sClubGainAward]   = { proto = "PClub.SGainAaward",  handle = _P.OnGetRewardBack},
-		[ECmdId.sClubRefer]       = { proto = "PClub.SRefer",  		handle = _P.OnReferBack},		
+		[ECmdId.sClubRefer]       = { proto = "PClub.SRefer",  		handle = _P.OnReferBack},
+		[ECmdId.sClubSendInvite]  = { proto = "PClub.SInvite",  	handle = _P.OnClubSendInviteBack},
 	}
 	-- 调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Club, func_send, func_recv, isReload)
@@ -163,6 +168,12 @@ function _M.OnReferPartyReq(playerId)
 end
 
 
+-- 发送邀请
+function _M.OnSendInviteReq(_msg)
+	_M.Send(ECmdId.cClubSendInvite,{msg = _msg})
+end
+
+
 -- S2C
 -- 游艇会初始化
 function _P.OnInitData(data)
@@ -175,6 +186,12 @@ function _P.OnInitData(data)
 		MClub.ExchangeTable.nextRefreshLeftTime = data.shop.nextRefreshLeftTime + HeartBeat.ServSecond()
 		_P.OnStartTimer(data.shop.nextRefreshLeftTime)
 	end
+
+	local isShowRed = false
+	if data.leftTime and data.leftTime <= 0 then
+		isShowRed = true
+	end
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.Club)
 end
 
 
@@ -223,15 +240,19 @@ function _P.OnEnterCallBack(data)
 		return
 	end
 
-	if WindowMgr.IsCreated("UClubMainPanel") then
-		if _M.IsOwnParty(data) then -- 进入自己的party
-			MClub.isShowGoPanel = false
-			WindowMgr.Create("UClubIngPanel", data)
-		else
-			local isHas = _M.IsInThisParty(data.msgList)
-			MClub.isShowGoPanel = not isHas
-			WindowMgr.Create("UClubIngPanel", data)
-		end
+	data.inviteTime = data.inviteTime or 0
+	data.inviteNum = data.inviteNum or 0
+	if data.inviteTime ~= nil and data.inviteTime > 0 then
+		data.inviteTime = data.inviteTime + HeartBeat.ServSecond()
+	end
+
+	if _M.IsOwnParty(data) then -- 进入自己的party
+		MClub.isShowGoPanel = false
+		WindowMgr.Create("UClubIngPanel", data)
+	else
+		local isHas = _M.IsInThisParty(data.msgList)
+		MClub.isShowGoPanel = not isHas
+		WindowMgr.Create("UClubIngPanel", data)
 	end
 end
 
@@ -243,6 +264,11 @@ function _P.OnFinishCallBack(data)
 		WindowMgr.Create("UClubRewardPanel", data)
 	else
 		MClub.rewardPanelData = data
+	end
+
+	if MClub.CurJoinPartyId == MPlayer.GetId() then
+		CMain.UpdateRedpoint(true, Define.SysId.Club)
+		WindowMgr.Call("UClubMainPanel", "MineClubFinishBack")
 	end
 end
 
@@ -265,6 +291,8 @@ function _P.OnHostCallBack(data)
 	enterPartyData.totalScore = 0
 	enterPartyData.msgList = {}
 	enterPartyData.clubtype = data.clubtype
+	enterPartyData.inviteTime = 0
+	enterPartyData.inviteNum = 0
 	MClub.CurJoinPartyId = playerId
 
 	MClub.isShowSuccessPanel = true
@@ -314,6 +342,8 @@ function _P.OnGetRewardBack(data)
 
 	MClub.ClubTable.openFlag = false
 	_P.OnAddPlayerNum(data.gainPoint, data.gainScore)
+
+	CMain.UpdateRedpoint(false, Define.SysId.Club)
 	WindowMgr.Call("UClubMainPanel", "OnRefreshOwnText", data)
 end
 
@@ -321,6 +351,14 @@ end
 -- 查询返回
 function _P.OnReferBack(data)
 	WindowMgr.Call("UClubNumJoinPanel", "OnGetInfoBack", data)
+end
+
+
+-- 发送邀请返回
+function _P.OnClubSendInviteBack(data)
+	if WindowMgr.IsCreated("UClubIngPanel") then
+		WindowMgr.Call("UClubIngPanel", "OnInviteFriendBack", data)
+	end
 end
 
 

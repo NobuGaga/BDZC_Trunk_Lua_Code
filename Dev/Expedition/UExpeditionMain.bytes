@@ -1,0 +1,78 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MBag = JRequire "Dev.Bag.MBag"
+local luaUtil = JRequire"Libs.LuaUtil"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local MAP_WIDTH = 1500
+local MAP_HEIGHT = 1468
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(sysId)
+	print("______________",sysId)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Expedition_Main")
+	self.Moudle = moudle
+
+	self.LastAssetsNum = {}
+
+	local titleText = moudle:Get("C_Text")
+	local backBtn = moudle:Get("C_Back_Btn")
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+
+	titleText.Text = Csv.Text("expedition_title")
+	backBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	helpBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+	end, nil, 1.2)
+
+	moudle:Get("ShpoBtn"):AddOnButton(function()
+		--打开兑换商店
+	end)
+
+	moudle:Get("C_text").Text = Csv.Text("expedition_refresh_btn")
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--重置
+	end,nil,0.9)
+
+	--------------------------------------------------------------------
+	local buildTable = {}
+	local map = moudle:Get("Map")
+	map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
+
+	for i = 1,12,1 do
+		local buildRect = moudle:Get("build"..i)
+		if buildRect ~= nil then
+			local buildMoudle = JGuiManager.GetMoudle(buildRect, "M_Expedition_Main_Content", WindowType.UI, 10)
+
+
+		end
+		buildTable[i] = buildRect
+	end
+	
+
+	self.mBuilds = buildTable
+	self.Map = map
+	self.mScrollView = moudle:Get("scrollView")
+	
+
+end
+
+
+return _M

@@ -110,23 +110,12 @@ function _P.CreateTalkItem(self, msgInfo)
 			_P.SetTalkItemTitle(oneMoudle, titleId)
 		end
 		oneMoudle:Get("sender").Text = MPlayer.GetName()
-
-		csvVip = Csv.Vip[vip]
-		if csvVip.imgBord ~= nil then
-			oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-		else
-			oneMoudle:Get("OutBox").Activity = false
-		end
-
-		if csvVip.imgTalk ~= nil then
-			oneMoudle:Get("talk").SpriteName = csvVip.imgTalk
-		end
+		oneMoudle:Get("OutBox").SpriteName = MPlayer.GetHeadBG()
+		oneMoudle:Get("talk").SpriteName = MPlayer.GetChatBG()
 	else
 		local playerInfo = MFriend.GetPrivateTalkInfo(self.PlayerID)
 		oneMoudle = self:CreateMoudle(self.ViewContent, "M_Talk_Item")
 		oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(playerInfo.headId,playerInfo.sex,true)
-
-		oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
 
 		if playerInfo.titleId ~= nil and playerInfo.titleId > 0 then
 			-- oneMoudle:Get("title").Text = Csv.Title[playerInfo.titleId].name
@@ -152,17 +141,9 @@ function _P.CreateTalkItem(self, msgInfo)
 				},headIcon.RootCanvasPos + Vector2(100, -20), playerInfo.name)	
 			end)
 		end
-
-		csvVip = Csv.Vip[playerInfo.vip]
-		if csvVip.imgBord ~= nil then
-			oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-		else
-			oneMoudle:Get("OutBox").Activity = false
-		end
-
-		if csvVip.imgTalk ~= nil then
-			oneMoudle:Get("talk").SpriteName = csvVip.imgTalk
-		end
+		oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(playerInfo.chatBg, playerInfo.vip)
+		oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
+		oneMoudle:Get("talk").SpriteName = MPlayer.GetOtherChatBG(playerInfo.chatBg, playerInfo.vip)
 	end
 	table.insert(self.MessageObjs, oneMoudle)
 	local isHaveTime = false
@@ -223,7 +204,7 @@ function _P.CreateTalkItem(self, msgInfo)
 		talkValue.Text = msgInfo.value or ""
 
 		local width = talkValue.PreferredWidth
-		local BgH = talkValue.PreferredHeight + 40
+		local BgH = talkValue.PreferredHeight + 92
 		local BgW = width
 		if BgW > 400 then
 			BgW = 400
@@ -232,10 +213,10 @@ function _P.CreateTalkItem(self, msgInfo)
 			BgW = BgW + 30
 		end
 		talkValue.SizeDelta = Vector2(BgW,BgH - 40)
-		talkBg.SizeDelta = Vector2(BgW + 80,BgH)
+		talkBg.SizeDelta = Vector2(BgW + 100,BgH)
 		local valueHeight = 0
 		if BgH >= 90 then
-			valueHeight = BgH - 60
+			valueHeight = BgH - 100
 		end
 		if isHaveTime then
 			oneMoudle.SelfRect.SizeDelta = Vector2(730,240 + valueHeight)

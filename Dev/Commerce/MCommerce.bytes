@@ -1,6 +1,7 @@
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local _M = {}
 
-_M.JobType = 
+_M.JobType =
 {
 	HuiYuan = 0,
 	HuiZhang = 1,
@@ -8,7 +9,7 @@ _M.JobType =
 	JingYing = 3
 }
 
-_M.BattleState = 
+_M.BattleState =
 {
 	Close = 1,
 	Doing = 2,
@@ -32,6 +33,8 @@ _M.MyCommerceInfo = nil
 _M.JobName = nil
 --副本红点
 _M.BattleRedPoint = false
+--商会修学小红点
+_M.StudyRedState = 0
 
 function _M.Clean()
 	_M.LastPowerRankTime = 0
@@ -41,15 +44,28 @@ function _M.Clean()
 	_M.MyCommerceInfo = nil
 	_M.JobName = nil
 	_M.BattleRedPoint = false
+	_M.StudyRedState = 0
 end
 
 function _M.IsJoinCommerce()
 	return _M.MyCommerceId > 0
 end
 
+function _M.IsDissolution()
+	if _M.MyCommerceId > 0 and _M.MyCommerceInfo and _M.MyCommerceInfo.disbandTime ~= nil and _M.MyCommerceInfo.disbandTime > HeartBeat.ServSecond() then
+		return true
+	else
+		return false
+	end
+end
+
+function _M.GetDissolutionTime()
+	return _M.MyCommerceInfo.disbandTime or 0
+end
+
 function _M.GetJobStr(job)
 	if _M.JobName == nil then
-		_M.JobName = 
+		_M.JobName =
 		{
 			[_M.JobType.HuiYuan] = Csv.Text("commerce_job4"),
 			[_M.JobType.HuiZhang] = Csv.Text("commerce_job1"),
@@ -85,6 +101,19 @@ function _M.IsMyCommerce(commerceId)
 		return false
 	end
 	return commerceId == _M.MyCommerceId
+end
+
+function _M.IsCommerceHuiZhang()
+	if _M.MyCommerceId <= 0 then
+		return false
+	end
+	if _M.MyCommerceInfo ~= nil and _M.MyCommerceInfo.myInfo ~= nil then
+		local myInfo = _M.MyCommerceInfo.myInfo
+		if _M.JobType.HuiZhang == myInfo.job then
+			return true
+		end
+	end
+	return false
 end
 
 return _M

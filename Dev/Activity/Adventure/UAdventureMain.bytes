@@ -29,12 +29,14 @@ local StarUpActorId = 10080
 local LevelUpActorId = 10113
 local GetActorId = 10006
 local TouYin = 10183
+local HightQualityId = 10199
 local FightStateIcons = {"shijiantu_1","shijiantu_2"}
 local FirstLevelId = 1
 local IconBoxBgIcons = {"qy_020_1", "qy_020_2", "qy_020_3"
 					,"qy_020_4", "qy_020_5", "qy_020_6","qy_020_7"}
 local StarBoxBgIcons = {"qy_020_1_2", "qy_020_2_2", "qy_020_3_2"
 					,"qy_020_4_2", "qy_020_5_2", "qy_020_6_2","qy_020_7_2"}
+local HightQualityPos = {{-232, 270},{0, 270},{224, 270},{-232, 0},{4, 0},{224, 0}}
 
 
 function _M:Dispatch(funcName, ...)
@@ -216,6 +218,9 @@ function _P.OnCreateItem(self,data,contentTransform,isSetAlpha)
 		local qualityIcon = itemMoudle:Get("OutBox")
 		local BlackRect =  itemMoudle:Get("Black")
 		local TapImg = itemMoudle:Get("Tab")
+		local actorPanel = self.mModule:Get("ItemActorPanel" .. data.taskIndex)
+		actorPanel.Activity = csvEvent.star == 7
+
 		ImgIcon:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
 			_P.OnClickItem(self, data, self.mData, csvEvent.taskType)
@@ -294,6 +299,7 @@ function _M:OnCreate(...)
 			CActivity.ReqSubLevel(self.mData.isSelectDown, false)
 		end
 
+		WindowMgr.Create("ULimitActivity") 
 		self:Destroy()
 	end, nil, 1.2)
 	local BtnRule = module:Get("C_Full_Help_Btn")
@@ -398,7 +404,6 @@ function _M:OnCreate(...)
 	_P.SetNoneText(self)
 
 	-- 设置下方数据
-
 	local actorPanel = self.mModule:Get("StarUpActorPanel")
 	CCommon.CreateEffect(actorPanel, TouYin)
 
@@ -450,6 +455,30 @@ function _M:OnCreate(...)
 
 	_P.SetRefereshCost(self)
 	_P.SetGirlTalkText(self, self.eventTableDatas)
+
+	-- 奇遇新手指导
+	if self.mData ~= nil and self.mData.isFirstOpen == true then
+		self.mData.isFirstOpen = false
+		CActivity.OnSetAdvNewLookTag()
+
+		local newImg = module:Get("GuideImg")
+		newImg.Activity = true
+		newImg:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			self.NewImg.Activity = false
+		end, nil, 1)
+		self.NewImg = newImg
+	end
+
+	-- 七星品质显示特效
+	for k,v in pairs(self.mRawTableItems) do
+		local itemRect = v.module
+		if itemRect ~= nil then
+			local actorPanel = module:Get("ItemActorPanel" .. k)
+			local posData = HightQualityPos[k]
+			CCommon.CreateEffect(actorPanel, HightQualityId, Vector2(posData[1], posData[2]))
+		end
+	end
 end
 
 

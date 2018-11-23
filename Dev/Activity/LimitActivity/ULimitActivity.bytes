@@ -1,0 +1,158 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+-- @RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+-- @RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MMain = JRequire "Dev.Main.MMain"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MSiege = JRequire"Dev.SiegeWall.MSiege"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshActivity(self)
+	_P.RefreshView(self)
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_TimeLimitActivity")
+	self.moudle = moudle
+
+	self.moudle:Get("btnBack"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	_P.RefreshView(self)
+end
+
+function _P.RefreshView(self)
+	local moudle = self.moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+
+	local openFunc = MMain.GetOpenedFuncs(self._SysId, true)
+
+	local itemTab = {}
+	for k,v in pairs(openFunc)do
+		_P.CreateItem(self,content,v)
+	end
+	self.mItemTab = itemTab
+end
+
+function _P.CreateItem(self,content,data)
+	local _moudle = JGuiManager.GetMoudle(content, 'M_TimeLimitActivity_Item', WindowType.UI, 0)
+
+	local typeList = {}
+	local activityType = nil
+	local activityId = nil
+	local activityData = nil
+	local state = nil
+	local confCsv = nil
+
+	--奇遇（总裁很忙）
+	if data.id == Define.SysId.Adventure then
+		activityType = Define.ActivityType.Adventure
+		activityId = MActivity.ActIdForType[activityType]
+		confCsv = Csv.Adventure[activityId]
+	--新官上任1（巅峰会谈，欢乐周末，工作应酬）
+	elseif data.id == Define.SysId.XinGuan1 then
+		activityType = Define.ActivityType.XinGuan1
+		activityId = MActivity.ActIdForType[activityType]
+		confCsv = Csv.ActivityNewTake[activityId]
+	--环球旅行
+	elseif data.id == Define.SysId.GlobalTraval then
+		activityType = Define.ActivityType.GlobalTraval
+		activityId = MActivity.ActIdForType[activityType]
+		confCsv = Csv.GlobalTraval[activityId]
+	--财富峰会
+	elseif data.id == Define.SysId.SiegeWall then
+		activityType = Define.ActivityType.SiegeWall
+		activityId = MSiege.ActivityId
+		confCsv = Csv.Siege[activityId]
+	--慈善活动
+	elseif data.id == Define.SysId.Charitable then
+		activityType = Define.ActivityType.Charitable
+		activityId = MActivity.ActIdForType[activityType]
+		confCsv = Csv.Charity[activityId]
+	end
+
+	local bg = _moudle:Get("background")
+	local activityTime = _moudle:Get("textLastTime")
+	local lastITime = _moudle:Get("textTimeCounter")
+	local red = _moudle:Get("redpoint")
+	red.Activity = false
+
+	if data.id == Define.SysId.SiegeWall then
+		bg.SpriteName = confCsv.limitBg
+		
+		local SiegeData = Csv.Siege[MSiege.ActivityId]
+		local _endTime = MSiege.EndTime - SiegeData.settleTime
+		activityTime.Text = Csv.Text("limit_activity_time", {startTime = luaUtil.TransToYMD2(MSiege.StartTime),
+												endTime = luaUtil.TransToMD(_endTime)})
+
+		if _endTime <= HeartBeat.ServSecond() then
+			lastITime.Text = Csv.Text("limit_activity_done")
+		else
+			lastITime.Text = Csv.Text("limit_activity_lastTime",{time = LuaUtil.GetTimeHMS(_endTime - HeartBeat.ServSecond())})
+		end
+		_moudle.SelfRect:AddOnUpdate(function()
+			if _endTime <= HeartBeat.ServSecond() then
+				lastITime.Text = Csv.Text("limit_activity_done")
+			else
+				lastITime.Text = Csv.Text("limit_activity_lastTime",{time = LuaUtil.GetTimeHMS(_endTime - HeartBeat.ServSecond())})
+			end
+		end,nil,1)
+	else
+		if confCsv ~= nil then
+			typeList = MActivity.GetListFromType(activityType)
+			activityData = typeList[activityId]
+			state = activityData.state
+	
+			bg.SpriteName = confCsv.limitBg
+
+			activityTime.Text = Csv.Text("limit_activity_time", {startTime = luaUtil.TransToYMD2(state.startTime),
+			endTime = luaUtil.TransToYMD2(state.startTime + confCsv.settleTime)})
+
+			if state.lefttime <= HeartBeat.ServSecond() then
+				lastITime.Text = Csv.Text("limit_activity_done")
+			else
+				lastITime.Text = Csv.Text("limit_activity_lastTime",{time = LuaUtil.GetTimeHMS(state.lefttime - HeartBeat.ServSecond())})
+			end
+
+			_moudle.SelfRect:AddOnUpdate(function()
+				if state.lefttime <= HeartBeat.ServSecond() then
+					lastITime.Text = Csv.Text("limit_activity_done")
+				else
+					lastITime.Text = Csv.Text("limit_activity_lastTime",{time = LuaUtil.GetTimeHMS(state.lefttime - HeartBeat.ServSecond())})
+				end
+			end,nil,1)
+		end
+	end
+	
+	local btn = _moudle:Get("btnOpen")
+	_moudle:Get("textBtnOpen").Text = Csv.Text("limit_activity_go")
+	btn:AddOnButton(function()
+		WindowOpen.Open(data.id)
+	end)
+
+	self:RegistRedpoint(red, Define.SysId.LimitActivity,data.id)
+	return _moudle
+end
+
+return _M

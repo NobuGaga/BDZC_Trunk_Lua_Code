@@ -7,7 +7,9 @@ local CLineUp = JRequire "Dev.LineUp.CLineUp"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local MEquipt = JRequire "Dev.Equipt.MEquipt"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
-local _M = Class(WindowBase)
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+
+local _M = Class()
 local _P = {}
 local _R = {}
 
@@ -27,29 +29,48 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
 --界面构建
-function _M:OnCreate(...)
-	local moudle = self:CreateMoudle(self._RootNode, "M_NewBossPK_Array")
+function _M:ctor(root)
+	self._RootNode = root
+
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_NewBossPK_Array", WindowType.UI, 0)
 	self.mMoudle = moudle
 	self.NowSelectIndex = nil
 	self.mIsLineUp = false
 	self.ImgSelect = moudle:Get("H")
 
+	moudle:Get("redPoint3").Activity = false
 	moudle:Get("StaffLv").Text = Csv.Text("lineup_5")
 	moudle:Get("StaffGjl").Text = Csv.Text("lineup_6")
-	moudle:Get("C_Text").Text = Csv.Text("lineup_7")
 	moudle:Get("C_text").Text = Csv.Text("lineup_12")
-	moudle:Get("C_text2").Text = Csv.Text("common_sure")
-	
+	moudle:Get("C_text2").Text = Csv.Text("lineup_35")
 	_P.SetList(self)
 
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		_P.OnClickChange(self)
-	end,nil,0.9)
+	end)
+	local btn2 = moudle:Get("C_Btn_a2")
+	btn2:AddOnButton(function()
+		CCommon.CheckTips(function(isSure, arg)
+			if isSure then
+				CLineUp.ClickAutoChange()
 
-	moudle:Get("C_Btn_b"):AddOnButton(function()
-		self:Destroy()
-	end,nil,0.9)
+				btn2.IsGray = true
+				btn2.RaycastTarget = false
+				btn2:AddOnTime(function (  )
+					btn2.IsGray = false
+					btn2.RaycastTarget = true
+				end, nil, 2)
+			end
+		end, {content = Csv.Text("lineup_36")})
+	end)
 
 	--装备空点击处理
 	moudle:Get("IconBox1"):AddOnButton(function()
@@ -57,6 +78,15 @@ function _M:OnCreate(...)
 	end)
 	moudle:Get("IconBox2"):AddOnButton(function()
 		_P.OnclickEquip(self,2)
+	end)
+
+	moudle:Get("C_text_c").Text = Csv.Text("lineup_30")
+	moudle:Get("C_Btn_c"):AddOnButton(function()
+		if MStaff.NoStaff(self.mStaffid) then
+			WindowMgr.Create("UStaffDetailsNotObtained", self.mStaffid)
+		else
+			WindowMgr.Create("UStaffDetails", self.mStaffid)
+		end
 	end)
 end
 
@@ -73,7 +103,10 @@ function _P.SetList(self)
 	self.ImgSelect:SetParent(moudle.SelfRect.CachedTran)
 	self.ImgSelect.Activity = false
 	content:DestroyChildren()
-	self:UnRegistRedpoint()
+
+	--TODO
+	WindowMgr.UnRegistChildrenRedpointForPath("UStaff", Define.SysId.Staff, Define.SysId.LineUp)
+	
 	local seatNum = MLineUp.SeatNum
 	local list = MLineUp.LineUpList
 	if seatNum ~= nil and list ~= nil then
@@ -103,7 +136,8 @@ function _P.SetList(self)
 				_P.OnClickSeat(self,i)
 			end,nil,1)
 
-			self:RegistRedpoint(itemMoudle:Get("redPoint"), Define.SysId.LineUp, i)
+			--TODO
+			WindowMgr.RegistRedpoint("UStaff", itemMoudle:Get("redPoint"), Define.SysId.Staff, Define.SysId.LineUp, i)
 
 			self.ItemList[i] = itemMoudle
 		end
@@ -166,7 +200,7 @@ function _P.SetList(self)
 		end
 	end
 
-	moudle:Get("zhanli").Text = Csv.Text("lineup_19",{num = MLineUp.GetLineAllPower()})
+	moudle:Get("zhanli").Text = MLineUp.GetLineAllPower()
 	if MLineUp.GetLineStaffNum() >= MLineUp.SeatNum then
 		moudle:Get("chuzhanyuangong").Text = Csv.Text("lineup_20",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
 	else
@@ -218,6 +252,7 @@ function _P.RefreshSelect(self,index)
 end
 
 function _P.RefreshBottom(self,staffid)
+	local preStaffid = self.mStaffid
 	self.mStaffid = staffid
 	local moudle = self.mMoudle
 	local csvStaff = Csv.Personnel[staffid]
@@ -228,6 +263,8 @@ function _P.RefreshBottom(self,staffid)
 		moudle:Get("StaffName").Text = csvStaff.name
 		moudle:Get("LvNum").Text = dataStaff.level
 		moudle:Get("GjlNum").Text = dataStaff.power
+		moudle:Get("GGZLtext").Text = dataStaff.power
+		moudle:Get("GGZLtext"):AddContentSizeFitter():SetLayoutHorizontal()
 		self.mPower = dataStaff.power
 
 		for i = 1,7 do
@@ -452,13 +489,50 @@ function _R.StaffChange(self)
 	--self.mPower
 	if self.mStaffid ~= nil and not self.mIsLineUp then
 		local newPower = MStaff.StaffTable[self.mStaffid].power
+		local newlevel = MStaff.StaffTable[self.mStaffid].level
 		self.mPower = newPower
 
 		_P.RefreshTianfu(self,self.mStaffid)
 
+		self.mMoudle:Get("LvNum").Text = newlevel
+		self.mMoudle:Get("GGZLtext").Text = newPower
+		self.mMoudle:Get("GGZLtext"):AddContentSizeFitter():SetLayoutHorizontal()
 		self.mMoudle:Get("GjlNum").Text = newPower
-		self.mMoudle:Get("zhanli").Text = Csv.Text("lineup_19",{num = MLineUp.GetLineAllPower()})
+		self.mMoudle:Get("zhanli").Text = MLineUp.GetLineAllPower()
 	end
+end
+
+function _R.JumptoEmptyItem(self)
+	local itemMoudle = self.ItemList[1]
+	if itemMoudle == nil then
+		return
+	end
+	local seatNum = MLineUp.SeatNum
+	local list = MLineUp.LineUpList
+	local moveNum = 0
+	if seatNum ~= nil and list ~= nil then
+		for i = 1,MLineUp.SeatNum do
+			if list[i] == nil then
+				moveNum = i
+				break
+			end
+		end
+	else
+		return
+	end
+	moveNum = moveNum - 1
+	if moveNum < 0 then
+		moveNum = 0
+	end
+	local moudle = self.mMoudle
+	local scrollViewWidth = moudle:Get("scrollView").SizeDelta.x
+	local content = moudle:Get("Content")
+	local layout = content:AddHorizontalLayoutGroup()
+	local spacing = layout.spacing
+	local left = layout.padding.left
+	local itemWidth = itemMoudle.SelfRect.SizeDelta.x
+	local movePos = (spacing + (itemWidth or 0)) * moveNum + left - (scrollViewWidth - itemWidth)
+	content:DOAnchorPosX(-movePos, 0)
 end
 
 return _M

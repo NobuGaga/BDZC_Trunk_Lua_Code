@@ -1,0 +1,90 @@
+--跨服竞技场-积分排行
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+
+function _M:BeforeDestroy()
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Screen_Publish")
+	self.Moudle = moudle
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title1")
+	moudle:Get("text1").Text = Csv.Text("cross_arena_title3")
+	moudle:Get("ranking").Text = Csv.Text("cross_arena_tx2")
+	moudle:Get("name").Text = Csv.Text("cross_arena_tx3")
+	moudle:Get("Fraction").Text = Csv.Text("cross_arena_tx4")
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title1")
+	moudle:Get("TopTitle").Text = Csv.Text("cross_arena_title2")
+
+	local startTime, endTime = MCrossArena.GetYuBeiShuaixuanRsltTime()
+	moudle:Get("TimeText").Text = Csv.Text("cross_arena_end", {num = LuaUtil.TransToMDHM(endTime)})
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	_R.RefreshData(self)
+end
+
+function _R.RefreshData(self)
+	local data = MCrossArena.GetScoreRankList()
+	if data == nil or data.rankList == nil then
+		return
+	end
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+
+	local list = data.rankList
+	table.sort(list, function(a, b)
+		return a.rank < b.rank
+	end)
+
+	for k, v in pairs(list) do
+		if v.rank >= 1 and v.rank <= 3 then
+			local newsMoudle = JGuiManager.GetMoudle(content, "M_CrossSports_Screen_Publish_Rank"..v.rank)
+			newsMoudle:Get("name").Text = v.name
+			newsMoudle:Get("value").Text = v.value
+		else
+			local newsMoudle = JGuiManager.GetMoudle(content, "M_CrossSports_Screen_Publish_Rank4")
+			newsMoudle:Get("rank").Text = v.rank
+			newsMoudle:Get("name").Text = v.name
+			newsMoudle:Get("value").Text = v.value
+		end
+	end
+end
+
+return _M

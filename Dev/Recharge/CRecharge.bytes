@@ -6,6 +6,8 @@ local MWelfare = JRequire"Dev.Welfare.MWelfare"
 local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
 local CPlayer = JRequire "Dev.Player.CPlayer"
 -- local CTarget = JRequire "Dev.Target.CTarget"
+--@RefType [Dev.SuperVIP.CSuperVIP.bytes#_M]
+local CSuperVIP = JRequire "Dev.SuperVIP.CSuperVIP"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -41,7 +43,8 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sRechargeInfo] = {		 proto = "PRecharge.SRechargeInfo", handle = _P.OnProductInfo},
 	}
 	--调用注册接口, 用获得发送函数
-	_M.Send = SocketMgr.Regist(Define.SysId.Recharge, func_send, func_recv, isReload)	
+	_M.Send = SocketMgr.Regist(Define.SysId.Recharge, func_send, func_recv, isReload)
+	MRecharge.FilterCsvRechargeSpid()
 end
 
 ------------------Client -- Server----------------
@@ -58,6 +61,7 @@ function _P.OnInit(data)
 		WindowMgr.Call("URecharge", "OnRefreshView", data.viplevel, data.value, csvVip[data.viplevel].upExp)
 	end
 	CPlayer.OnUpdateVip()
+	CSuperVIP.OnRechargeInit()
 end
 
 function _P.OnRechargeSuccess(data)

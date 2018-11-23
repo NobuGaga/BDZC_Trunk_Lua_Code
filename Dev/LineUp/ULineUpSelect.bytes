@@ -61,6 +61,13 @@ function _M:OnCreate(index,staffid)
 		staffMoudle:Get("name").Text = csvStaff.name
 		staffMoudle:Get("number1").Text = v.level
 		staffMoudle:Get("number2").Text = v.power
+
+		local addLink = MLineUp.GetAddStaffLinkNum(index, v.id)
+		if addLink > 0 then
+			staffMoudle:Get("jiban").Text = Csv.Text("lineup_31", {num = addLink})
+		else
+			staffMoudle:Get("jiban").Text = ""
+		end
 		local BtnUp = staffMoudle:Get("C_Btn_b")
 		BtnUp:AddOnButton(function()
 			SoundMgr.Play(10001)
@@ -115,14 +122,14 @@ function _M:OnCreate(index,staffid)
 end
 
 function _P.OnClickBtn(self,staffid,index)
-	WindowMgr.Call("ULineUp","SetNowSelect",index)
+	WindowMgr.Call("UStaff","SetNowSelect",index)
 	CLineUp.LineUpAddStaff(staffid,index)
 	MLineUp.IsChange = true
 	self:Destroy()
 end
 
 function _P.OnDownBtn(self,index)
-	WindowMgr.Call("ULineUp","SetNoSelect")
+	WindowMgr.Call("UStaff","SetNoSelect")
 	CLineUp.LineUpDownStaff(index)
 	MLineUp.IsChange = true
 	self:Destroy()

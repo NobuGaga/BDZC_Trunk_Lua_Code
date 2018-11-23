@@ -75,9 +75,9 @@ EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function(eventHand
 		if backInfo.refShop then
 			_M.ReqShopCall()
 		end
-		if backInfo.refFight then
-			_M.ReqFightCall()
-		end
+		-- if backInfo.refFight then
+		-- 	_M.ReqFightCall()
+		-- end
 	end
 end, true)
 EventCenter.RegistCallEvent(Define.EventListenId.ToReLogin, function (eventHandle)
@@ -194,7 +194,7 @@ function _P.OnArenaRefreshShop(data)
 end
 function _P.OnArenaFightBuy(data)
 	--LuaUtil.DumpTable(data, "-----OnArenaFightBuy--->>>")
-	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime)
+	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime, data.buyTimes)
 	_M.CheckRedpoint()
 	WindowMgr.Call("UArena", "OnArenaFightCount")	
 	CCommon.ShowRight(Csv.Text("Arena_20"))
@@ -206,7 +206,7 @@ function _P.OnArenaShopCall(data)
 end
 function _P.OnArenaFightCall(data)
 	--LuaUtil.DumpTable(data, "-----OnArenaFightCall--->>>")
-	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime)
+	MArena.UpdateFightTimes(data.fightTimes, data.refreshTime, data.buyTimes)
 	_M.CheckRedpoint()
 	WindowMgr.Call("UArena", "OnArenaFightCount")
 end

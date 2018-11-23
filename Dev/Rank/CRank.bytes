@@ -83,6 +83,10 @@ function _P.OnGetList(data)
 	elseif data.islocal == false and MCrossActivity.UpdateActivitySelfRank(data.rankid, data.selfrank, data.selfvalue) then
 		WindowMgr.Call("URankRewardAct", "OnRefreshView", Define.SysId.CrossRankReward)
 		WindowMgr.Call("UTimeLimitActRank", "OnRefreshView", data)
+	elseif data.islocal == false and data.rankid == Define.CrossRankType.CrossArena then
+		if WindowMgr.IsCreated("UCrossArenaScoreRank") then
+			WindowMgr.Call("UCrossArenaScoreRank", "RefreshData")
+		end
 	elseif Define.RankTypeFunc[data.rankid] ~= nil then
 		local info = Define.RankTypeFunc[data.rankid]
 		WindowMgr.Call(info.view, info.func, data)

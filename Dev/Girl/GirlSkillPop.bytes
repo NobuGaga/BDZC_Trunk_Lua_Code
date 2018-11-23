@@ -4,6 +4,7 @@ local MGirl = JRequire"Dev.Girl.MGirl"
 local CGirl = JRequire"Dev.Girl.CGirl"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -67,63 +68,152 @@ end
 
 function _P.SetSkillLevel(self,_moudle,girlID,id,up)
 	local levelText= _moudle:Get("level")
+
+	local currentTitle = _moudle:Get("present_title")
+	local currentTab = _moudle:Get("Icon1")
 	local currentText = _moudle:Get("present_text") --
 	local currentValue = _moudle:Get("present_value")
+
+	local nextTitle = _moudle:Get("later_title")
+	local nextTab = _moudle:Get("Icon2")
 	local nextText = _moudle:Get("later_text")
 	local nextValue = _moudle:Get("later_value")
-	local needText = _moudle:Get("consume_text")
+
+	local needTitle = _moudle:Get("consume_title")
+	local needText = _moudle:Get("consume_value")
+	local needIcon = _moudle:Get("Icon3")
+	local needNum = _moudle:Get("IconNum")
+	needIcon.Activity = false
+	currentTab.Activity = false
+	nextTab.Activity = false
+
 	local nameText = _moudle:Get("name_text")
+
+	currentTitle.Text = Csv.Text("Girl_skill_currentTitle")
+	nextTitle.Text = Csv.Text("Girl_skill_nextTitle")
+	needTitle.Text = Csv.Text("Girl_skill_nextUseTitle")
 	
 	local Csvdata = Csv.GirlSkill[id]
 	local level = MGirl.GetSkillLvByID(girlID,id) --那数据
+	local breatOutLv = MGirl.GetSkillBreakoutLvByID(girlID,id) --突破数据
 	local Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+level]
+	local CsvBreakOunt = Csv.GirlSkillBreakout[id*1000+breatOutLv]
+	local nextCsvBreakOunt = Csv.GirlSkillBreakout[id*1000+breatOutLv+1]
+	local beforeCsvBreakOunt = Csv.GirlSkillBreakout[id*1000+breatOutLv-1]
+
+	
+	local maxLevel = Csvdata.maxLevel
+	if CsvBreakOunt ~= nil then
+		maxLevel = CsvBreakOunt.maxSkillLv
+	end
+
+	local beforeMaxLevel = Csvdata.maxLevel
+	if beforeCsvBreakOunt ~= nil then
+		beforeMaxLevel = beforeCsvBreakOunt.maxSkillLv
+	end
 
 	--还要向M拿当前美女技能等级
 	local staffDate = Csv.Personnel[Csvdata.employe]
 
 	nameText.Text = Csvdata.name
-	levelText.Text =  Csv.Text("Girl_skill_Lv",{level = level})
-	--levelText.LocalPosition = Vector2(nameText.PreferredWidth + levelText.PreferredWidth/2 +25,0) 
+	levelText.Text =  Csv.Text("Girl_skill_Lv",{level = level,max = maxLevel})
 	
 	local value = _P.GetSkillAttribute(Csvdata.attribute)
-	currentText.Text = Csv.Text("Girl_skill_currentValue",{staff = staffDate.name,value = value})--"当前效果:胆识、魅力属性增加"
-	nextText.Text = Csv.Text("Girl_skill_nextValue",{staff = staffDate.name,value = value})--"升级效果：胆识、魅力属性增加"
+
+	if Csvdata.employeTagImg == nil then
+		currentText.Text = Csv.Text("Girl_skill_currentValue1",{staff = staffDate.name,value = value})--"当前效果:胆识、魅力属性增加"
+		nextText.Text = Csv.Text("Girl_skill_nextValue1",{staff = staffDate.name,value = value})--"升级效果：胆识、魅力属性增加"
 	
+		currentText.LocalPosition = Vector2(0, 0)
+		nextText.LocalPosition = Vector2(0, 0)
+	else
+		currentTab.Activity = true
+		nextTab.Activity = true
+
+		currentTab.SpriteName = Csvdata.employeTagImg[1]
+		nextTab.SpriteName = Csvdata.employeTagImg[1]
+
+		currentText.Text = Csv.Text("Girl_skill_currentValue2",{value = value})
+		nextText.Text = Csv.Text("Girl_skill_nextValue2",{value = value})
+
+		currentText.LocalPosition = Vector2(80, 0)
+		nextText.LocalPosition = Vector2(80, 0)
+	end
+	
+	needText.Activity = true
+	needIcon.Activity = false
 	if level <= 0 then
 		levelText.Activity = false
-		currentText.Activity = false
-		needText.Text =Csv.Text("Girl_skill_unlock",{value = Csvdata.unlock})--解锁条件：<color=#ff2323>40</color>友谊值"
+		currentTitle.Activity = false
+		needTitle.Text =Csv.Text("Girl_skill_unlock",{value = Csvdata.unlock})--解锁条件：<color=#ff2323>40</color>友谊值"
+		needText.Activity = false
 	else
-		if Costdata ~= nil and Costdata.cost ~= 0  then
-			levelText.Activity = true
-			currentText.Activity = true
-			needText.Text =Csv.Text("Girl_skill_nextUse",{value = Costdata.cost})--升级消耗：<color=#ff2323>40</color>友谊值"
+		levelText.Activity = true
+		currentTitle.Activity = true
+		--有突破
+		if nextCsvBreakOunt ~= nil then
+			if Costdata ~= nil and Costdata.cost ~= 0  then
+				if level >= maxLevel then
+					--需要突破
+					local needItemId = nextCsvBreakOunt.cost[1]
+					local needItemNum = nextCsvBreakOunt.cost[2]
+					local csvNeedItem = Csv.Item[needItemId]
+					local hasNum = MBag.GetItemNum(needItemId)
+
+					if csvNeedItem ~= nil then
+						needText.Activity = false
+						needIcon.Activity = true
+
+						needIcon.SpriteName = csvNeedItem.icon
+						
+						if hasNum >= needItemNum then
+							needNum.Text = "<color=#00ff00>"..hasNum.."/"..needItemNum.."</color>"
+						else
+							needNum.Text = "<color=#ff0000>"..hasNum.."/"..needItemNum.."</color>"
+						end
+					end
+				else
+					--无需突破
+					needText.Text = Csv.Text("Girl_skill_nextUse",{value = Costdata.cost})--升级消耗：<color=#ff2323>40</color>友谊值"
+				end
+			else
+				nextTitle.Activity = false
+				nextValue.Text = Csv.Text("max")
+				needTitle.Text = Csv.Text("Girl_skill_max")--升级消耗：<color=#ff2323>40</color>友谊值"
+				needText.Activity = false
+			end
 		else
-			levelText.Activity = true
-			currentText.Activity = true
-			nextText.Activity = false
-			nextValue.Text = Csv.Text("max")
-			needText.Text = Csv.Text("Girl_skill_max")--升级消耗：<color=#ff2323>40</color>友谊值"
+			if Costdata ~= nil and Costdata.cost ~= 0  then
+				needText.Text =Csv.Text("Girl_skill_nextUse",{value = Costdata.cost})--升级消耗：<color=#ff2323>40</color>友谊值"
+			else
+				nextTitle.Activity = false
+				nextValue.Text = Csv.Text("max")
+				needTitle.Text = Csv.Text("Girl_skill_max")--升级消耗：<color=#ff2323>40</color>友谊值"
+				needText.Activity = false
+			end
 		end
 	end
 
 	if up then
 		SoundMgr.PlayNonStopUI(10017)
-		CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), 10010,nil,function()
-
-			currentValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level) --"15%"
-			nextValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level+1) -- "30%"
-
-			local currentTween = currentValue.CachedTran:GetJTweener(NUM_SACLE)
-			local nextTween = nextValue.CachedTran:GetJTweener(NUM_SACLE)
-			currentTween:Play()
-			nextTween:Play()
-		end)
+		--突破更新
+		if beforeMaxLevel == level and maxLevel > level then
+			CCommon.ShowError(Csv.Text("Girl_skill_breakout_scueess"))
+		else
+			CCommon.CreateEffect(self.mMoudle:Get("UpActorPanel"), 10010,nil,function()
+				currentValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level) --"15%"
+				nextValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level+1) -- "30%"
+				
+				local currentTween = currentValue.CachedTran:GetJTweener(NUM_SACLE)
+				local nextTween = nextValue.CachedTran:GetJTweener(NUM_SACLE)
+				currentTween:Play()
+				nextTween:Play()
+			end)
+		end
 	else
 		currentValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level) --"15%"
 		nextValue.Text = _P.GetSkillAttrValue(Csvdata.attrType,Csvdata.param,level+1) -- "30%"
 	end
-
 
 	local upGradeText = _moudle:Get("C_text")
 	local upGradeBtn = _moudle:Get("C_Btn_b")
@@ -134,19 +224,50 @@ function _P.SetSkillLevel(self,_moudle,girlID,id,up)
 		upGradeBtn.Activity = true
 	end
 
-	if Costdata ~= nil and Costdata.cost ~= 0  then
-		upGradeBtn.RaycastTarget = true
-		upGradeBtn.IsGray = false
-		upGradeText.Text = Csv.Text("Girl_skill_levelUp")
-		upGradeBtn:AddOnButton(function ( ... )
-			upGradeBtn.LocalScale = Vector3(1,1,1)
-			SoundMgr.Play(10001)
-			CGirl.ReqSkillUp(girlID,id)
-		end)
+	--突破，满级
+	if level >= maxLevel then
+		--有突破
+		if nextCsvBreakOunt ~= nil then
+			--未满级
+			if Costdata ~= nil and Costdata.cost ~= 0  then
+				--突破
+				upGradeText.Text = Csv.Text("Girl_skill_breakout")
+				upGradeBtn:AddOnButton(function ( ... )
+					upGradeBtn.LocalScale = Vector3(1,1,1)
+					SoundMgr.Play(10001)
+	
+					if nextCsvBreakOunt ~= nil then
+						local needItemId = nextCsvBreakOunt.cost[1]
+						local needItemNum = nextCsvBreakOunt.cost[2]
+	
+						if MBag.CheckItemEnough(needItemId,needItemNum) then
+							CGirl.ReqSkillBreakout(girlID,id)
+						end
+					else
+						CCommon.ShowError(Csv.Text("Girl_skill_breakout_noscueess"))
+					end
+				end)
+			else
+				--满级
+				upGradeBtn.RaycastTarget = false
+				upGradeBtn.IsGray = true
+				upGradeText.Text = Csv.Text("MAX")
+			end
+		else
+			--无突破，满级
+			upGradeBtn.RaycastTarget = false
+			upGradeBtn.IsGray = true
+			upGradeText.Text = Csv.Text("MAX")
+		end
 	else
-		upGradeBtn.RaycastTarget = false
-		upGradeBtn.IsGray = true
-		upGradeText.Text = Csv.Text("MAX")
+		if Costdata ~= nil and Costdata.cost ~= 0  then
+			upGradeText.Text = Csv.Text("Girl_skill_levelUp")
+			upGradeBtn:AddOnButton(function ( ... )
+				upGradeBtn.LocalScale = Vector3(1,1,1)
+				SoundMgr.Play(10001)
+				CGirl.ReqSkillUp(girlID,id)
+			end)
+		end
 	end
 end
 

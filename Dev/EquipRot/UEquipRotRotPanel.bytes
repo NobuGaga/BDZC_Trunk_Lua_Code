@@ -49,7 +49,8 @@ function _M:OnCreate(chipId, equipRotConf)
 	self.ChipId = chipId
 
 	local recoverText = module:Get("Time")
-	recoverText.Text = Csv.Text("common_power", {num = MLineUp.GetLineAllPower()})
+	self.TotalPower = MLineUp.GetLineAllPower()
+	recoverText.Text = Csv.Text("common_power", {num = self.TotalPower})
 
 	local addBtn = module:Get("AddBtn")
 	addBtn:AddOnButton(function(...)
@@ -71,6 +72,20 @@ function _M:OnCreate(chipId, equipRotConf)
 	self.RobText = robText
 	_P.SetRotTextState(self, self.mData.leftRobCount)
 
+	-- 自动购买
+	self.AutoGouImg = module:Get("gou")
+	self.AutoGouImg.Activity = MEquipRot.IsRobAutoBuy
+	local autoAddBtn = module:Get("AutoBtn")
+	autoAddBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		MEquipRot.IsRobAutoBuy = not MEquipRot.IsRobAutoBuy
+		self.AutoGouImg.Activity = MEquipRot.IsRobAutoBuy
+	end, nil, 0.9)
+	module:Get("AutoText").Text = Csv.Text("global_autoTip")
+	self.GoldNumText = module:Get("AssetNum_2")
+	self.AutoCostText = module:Get("CostText")
+	_P.SetAutoCostData(self)
+
 	CEquipRot.EnterRobReq(chipId)
 end
 
@@ -88,8 +103,7 @@ function _P.OnClickBuyRotCount(self)
 		local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyRotPrice, self.mData.buyRobCount + 1)
 		CCommon.CheckTips(function(isSure,rg)
 			if isSure == true then
-				local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
-				if hasGold < needPrice then
+				if self.AssetNum < needPrice then
 					CCommon.ShowError(Csv.Text("err_shop_buytype"))
 				else
 					-- 购买抢夺次数
@@ -154,8 +168,7 @@ function _P.OnClickRefreshView(self)
 		local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyRefreshPrice, self.mData.buyRefereshCount + 1)
 		CCommon.CheckTips(function(isSure,rg)
 			if isSure == true then
-				local hasGold = MBag.GetItemNum(Define.AssetsType.Gold)
-				if hasGold < needPrice then
+				if self.AssetNum < needPrice then
 					CCommon.ShowError(Csv.Text("err_shop_buytype"))
 				else
 					-- 购买刷新次数
@@ -220,7 +233,12 @@ function _P.OnCreateEnemyItem(self, itemGrid, data)
 
 		nameText.Text = data.name
 		itemModule:Get("Power").Text = Csv.Text("lineup_11")
-		powerText.Text = data.power
+		if self.TotalPower < data.power then
+			powerText.Text = Csv.Text("equipRob_main_redShow", {num = data.power})
+		else
+			powerText.Text = Csv.Text("equipRob_main_greenShow", {num = data.power})
+		end
+		
 		itemModule:Get("Info").Text = Csv.Text("rank_modeT")
 		levelText.Text = data.level .. Csv.Text("parliament_tip21")
 		rotText.Text = Csv.Text("equipRob_qd_rot")
@@ -240,14 +258,9 @@ function _P.OnCreateEnemyItem(self, itemGrid, data)
 		else
 			proText.Text = Csv.Text("equipRob_qd_proGet" .. data.getProType or 1)
 		end
-
-		local vipConf = Csv.Vip[data.vip]
-		if vipConf ~= nil and vipConf.imgBord ~= nil then
-			itemModule:Get("OutBox").SpriteName = vipConf.imgBord
-			itemModule:Get("VipImg").SpriteNameAutoScale = "friend_num_" .. data.vip
-		else
-			itemModule:Get("OutBox").Activity = false
-		end
+		
+		itemModule:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(data.chatBg, data.vip)
+		itemModule:Get("VipImg").SpriteNameAutoScale = "friend_num_" .. data.vip
 
 		rotBtn.IsGray = data.isRobed
 		rotBtn.RaycastTarget = not data.isRobed
@@ -262,9 +275,16 @@ function _P.OnClickRob(self, data)
 	if data.isRobed then
 		CCommon.ShowError(Csv.Text("equipRob_qd_roted"))
 	else
-		if self.mData.leftRobCount <= 0 then
-			CCommon.ShowError(Csv.Text("equipRob_qd_err"))
-			return
+		if MEquipRot.IsRobAutoBuy then
+			if self.mData.leftRobCount <= 0 and self.mData.buyRobCount >= self.ExtraBuyRobTime then
+				CCommon.ShowError(Csv.Text("equipRob_qd_buyErr"))
+				return
+			end
+		else
+			if self.mData.leftRobCount <= 0 then
+				CCommon.ShowError(Csv.Text("equipRob_qd_err"))
+				return
+			end
 		end
 
 		local leftTime = self.mData.protectTime - HeartBeat.ServSecond()
@@ -296,6 +316,15 @@ function _P.SetRotTextState(self, leftRobNum)
 end
 
 
+function _P.SetAutoCostData(self)
+	self.AssetNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	self.GoldNumText.Text = LuaUtil.NumberFormat(self.AssetNum)
+
+	local needPrice = _P.GetBuyPrice(self.EquipRotConf.buyRotPrice, self.mData.buyRobCount + 1)
+	self.AutoCostText.Text = Csv.Text("global_autoShow", {num = needPrice})
+end
+
+
 function _R.OnEnterRobViewBack(self, data)
 	if data ~= nil and data.robList ~= nil then
 		_P.CreateEnemyList(self, data.robList)
@@ -310,14 +339,20 @@ function _R.OnRobCallBack(self, data)
 			if self.mModule ~= nil then
 				WindowMgr.Create("UEquipRotResult", data.fightInfo.result, data.getList, function( ... )
 					WindowMgr.Destroy("UBattlePvp")
+
+					if data.robList ~= nil and next(data.robList) ~= nil then
+						_R.OnEnterRobViewBack(self, data)
+					end
 				end)
 			end
 		end)
 	end
 
+	self.mData.buyRobCount = data.buyRobCount
 	_P.SetRotTextState(self, data.leftRobCount)
+	_P.SetAutoCostData(self)
 
-	if self.RobTable[data.index] ~= nil then
+	if self.RobTable and self.RobTable[data.index] ~= nil then
 		self.RobTable[data.index].isRobed = data.isRobed
 	end
 
@@ -337,6 +372,7 @@ end
 function _R.OnBuyRotTimeBack(self, data)
 	CCommon.ShowError(Csv.Text("lastgirl_exchange"))
 	_P.SetRotTextState(self, self.mData.leftRobCount)
+	_P.SetAutoCostData(self)
 end
 
 
@@ -351,6 +387,7 @@ function _R.OnRefreshBack(self, data)
 
 	_P.SetRefreshShowText(self)
 	_R.OnEnterRobViewBack(self, data)
+	_P.SetAutoCostData(self)
 end
 
 

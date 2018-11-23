@@ -1,0 +1,30 @@
+-- 中秋累计登陆-活动预览界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+
+
+function _M:OnCreate(actId)
+	local module = self:CreateMoudle(self._RootNode, "M_Autumn_Sign_Yulan")
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.2)
+
+	local loginConf = Csv.ActivityMidLogin[actId]
+	if loginConf ~= nil then
+		module:Get("Bg").SpriteName = loginConf.previewBg
+	end
+
+	LuaUtil.TextAddThreePoint(module:Get("Tips"), Csv.Text("common_clickanywayToclose"))
+end
+
+
+return _M

@@ -146,7 +146,11 @@ function _P.CreateItem(self, index, data)
 	item.data = data
 	item.btnGet:AddOnButton(function()
 		SoundMgr.Play(10001)
-		local rechargeData = Csv.Recharge[item.data.productID]
+		local productId = item.data.productID
+		if GameSetting.IsTaiWan then
+			productId = item.data.productID2
+		end
+		local rechargeData = Csv.Recharge[productId]
 		if MActivity.RewardGetState.CanNotGet == item.data.getState then
 			self.selectBuyIndex = index
 			SDKMgr.ReqPay(rechargeData.id, rechargeData.sdkProductId, rechargeData.cost, rechargeData.diamond, item.data.productName, self.actId, function(jsonStr)

@@ -4,6 +4,8 @@ local CActivity = JRequire "Dev.Activity.CActivity"
 local CMain = JRequire "Dev.Main.CMain"
 local CCommon = JRequire "Dev.Common.CCommon"
 local CLineUp = JRequire "Dev.LineUp.CLineUp"
+local MBag = JRequire "Dev.Bag.MBag"
+
 
 local _M = {}
 local _P = {}
@@ -105,59 +107,58 @@ end
 function _P.OnGetStaffData(data)
 	MStaff.Clean()
 	MStaff.StaffInit(data.stafflist)
-	_M.CheckStaffRedPoint()
-	if WindowMgr.IsCreated("UStaffDetails") then
-		WindowMgr.Call("UStaffDetails","ResetView")
-	end
-	CLineUp.CheckRedpoint()
+
+	_M.CheckAllStaffRedPoint()
+	
+	WindowMgr.Call("UStaffDetails","ResetView")
 end
 
 function _P.OnStaffLevelUp(data)
 	MStaff.OnStaffLevelUp(data)
+	_M.CheckStaffRedPoint(data.staffid)
+
 	WindowMgr.Call("UStaff","ChangeStaffLv",data.staffid)
 	WindowMgr.Call("UStaffDetails","StaffLvUp",data)
-	_M.CheckStaffRedPoint()
 end
 
 function _P.OnStaffColorUp(data)
 	MStaff.OnStaffColorUp(data)
+	_M.CheckStaffRedPoint(data.staffid)
+
 	WindowMgr.Call("UStaff","ChangeStaffColor",data.staffid)
 	WindowMgr.Call("UStaffDetails","StaffColorUp",data)
-	_M.CheckBookRedPoint(data.staffid)
-	_M.CheckSkillRedPoint(data.staffid)
-	_M.CheckAureoleRedPoint(data.staffid)
-	_M.CheckStaffRedPoint()
 end
 
 function _P.OnStaffBookUp(data)
 	if data.success then
 		MStaff.OnStaffBookUp(data)
+		_M.CheckStaffRedPoint(data.staffid)
 	end
 	WindowMgr.Call("UStaffDetails","StaffBookUp",data)
 	WindowMgr.Call("UStaffBookUpPop","CreateData",data)
-	_M.CheckBookRedPoint(data.staffid)
 end
 
 function _P.OnStaffSkillUp(data)
 	MStaff.OnStaffSkillUp(data)
+	_M.CheckStaffRedPoint(data.staffid)
 	WindowMgr.Call("UStaffDetails","StaffSkillUp",data)
-	_M.CheckSkillRedPoint(data.staffid)
 end
 
 function _P.OnStaffAureoleUp(data)
 	MStaff.OnStaffAureoleUp(data)
+	_M.CheckStaffRedPoint(data.staffid)
 	WindowMgr.Call("UStaffDetails","StaffAureoleUp",data)
-	_M.CheckAureoleRedPoint(data.staffid)
 end
 
 function _P.OnStaffAureoleActive(data)
 	MStaff.OnStaffAureoleActive(data)
+	_M.CheckStaffRedPoint(data.staffid)
 end
 
 function _P.OnStaffNew(data)
 	MStaff.OnStaffNew(data)
-
 	CTrigger.OnGetNewStaff(data.id)
+	_M.CheckStaffRedPoint(data.id)
 	if WindowMgr.IsCreated("UBag") then
 		WindowMgr.Call("UBag","AddNewStaff",data.id)
 	end
@@ -171,27 +172,31 @@ end
 
 function _P.OnStaffUpdateBookExp(data)
 	MStaff.OnStaffUpdateBookExp(data)
-	_M.CheckStaffRedPoint()
+	_M.CheckStaffRedPoint(data.staffid)
 end
 
 function _P.OnStaffAddItem(data)
 	MStaff.OnStaffAddItem(data)
+	_M.CheckStaffRedPoint(data.staffid)
 end
 
 function _P.OnStaffUpdateSkillExp(data)
 	MStaff.OnStaffUpdateSkillExp(data)
-	_M.CheckStaffRedPoint()
+	_M.CheckStaffRedPoint(data.staffid)
 end
 
 function _P.OnStaffChange(data)
 	MStaff.OnStaffNew(data.staff)
-	_M.CheckStaffRedPoint()
+	_M.CheckStaffRedPoint(data.staff.id)
 
-	if WindowMgr.IsCreated("ULineUp") then
-		WindowMgr.Call("ULineUp","StaffChange")
+	if WindowMgr.IsCreated("UStaff") then
+		WindowMgr.Call("UStaff","StaffChange")
 	end
 	if WindowMgr.IsCreated("UEquipMain") then
 		WindowMgr.Call("UEquipMain","StaffChange")
+	end
+	if WindowMgr.IsCreated("UStaffDetails") then
+		WindowMgr.Call("UStaffDetails","StaffChange")
 	end
 end
 
@@ -219,37 +224,79 @@ function _P.OnStaffRestSuccessful(data)
 	end
 end
 
---红点处理
-function _M.CheckStaffRedPoint()
-	local isRedpoint = MStaff.GetRedPointStaff()
-	MStaff.StaffRedPoint = isRedpoint
-	CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff)
-end
-
-function _M.CheckBookRedPoint(staffid)
-	local isRedpoint = MStaff.GetRedPointBookUp(staffid)
-	if isRedpoint ~= MStaff.BookRedPoint then
-		MStaff.BookRedPoint = isRedpoint
-		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Book)
-		_M.CheckStaffRedPoint()
+function _M.CheckStaffRedPoint(staffid)
+	local staff = MStaff.StaffTable[staffid]
+	if staff ~= nil then
+		local isRedpoint = false
+		--1. 提拔
+		local maxLevel = Csv.ColorUp[staff.color].lvMax
+		if staff.level >= maxLevel and staff.color < Csv.Const(Define.Const.StaffMax)[4] then
+			local items = Csv.ColorUp[staff.color].cost
+			isRedpoint = MBag.GetCostState(items,false)
+		end
+		
+		CMain.UpdateRedpoint(isRedpoint, Define.SysId.Staff, Define.SysId.Staff_List, staffid, Define.SysId.Staff_Staff, 1)
+		--2. 资质升级
+		local csvStaff = Csv.Personnel[staffid]
+		local bookexp = staff.bookexp
+		for k,v in pairs(csvStaff.book) do
+			isRedpoint = false
+			local maxLevel = Csv.ColorUp[staff.color].bookMaxLv
+			local level = staff.book[v[1]]
+			if level < maxLevel then 
+				local cost = Csv.BookLv[v[2]*1000 + staff.book[v[1]]].expNum
+				if bookexp >= cost then
+					isRedpoint = true
+				end
+			end
+			CMain.UpdateRedpoint(isRedpoint, Define.SysId.Staff, Define.SysId.Staff_List, 
+				staffid,  Define.SysId.Staff_Staff, Define.SysId.Staff_Book, v[1])
+		end
+		--3. 技能升级
+		isRedpoint = false
+		local skillexp = staff.skillexp
+		for k,v in pairs(staff.skill) do
+			local maxLevel = Csv.ColorUp[staff.color].skillMaxLv
+			if v < maxLevel then
+				local cost = Csv.Skill[k*1000 + v].cost
+				if skillexp >= cost then
+					isRedpoint = true
+					break
+				end
+			end
+		end
+		CMain.UpdateRedpoint(isRedpoint, Define.SysId.Staff, Define.SysId.Staff_List, 
+			staffid, Define.SysId.Staff_Staff, Define.SysId.Staff_Skill)
+		--4. 光环升级
+		isRedpoint = false
+		if staff.aureole ~= nil then
+			for k,v in pairs(staff.aureole) do
+				if v.open then
+					isRedpoint = true
+					break
+				end
+				local maxLevel = Csv.ColorUp[staff.color].aureoleMaxLv
+				if v.level < maxLevel then
+					local csvAureole = Csv.Aureole[k*1000 + v.level]
+					if csvAureole.costitem ~= nil then
+						local costTable = {csvAureole.costitem,csvAureole.costcount}
+						local state,str = MBag.GetCostState(costTable,true)
+						if state then
+							isRedpoint = true
+							break
+						end
+					end
+				end
+			end
+		end
+		CMain.UpdateRedpoint(isRedpoint, Define.SysId.Staff, Define.SysId.Staff_List, 
+			staffid, Define.SysId.Staff_Staff, Define.SysId.Staff_Aureole)
 	end
 end
 
-function _M.CheckSkillRedPoint(staffid)
-	local isRedpoint = MStaff.GetRedPointSkillUp(staffid)
-	if isRedpoint ~= MStaff.SkillRedPoint then
-		MStaff.SkillRedPoint = isRedpoint
-		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Skill)
-		_M.CheckStaffRedPoint()
-	end
-end
-
-function _M.CheckAureoleRedPoint(staffid)
-	local isRedpoint = MStaff.GetRedPointAureoleUp(staffid)
-	if isRedpoint ~= MStaff.AureoleRedPoint then
-		MStaff.AureoleRedPoint = isRedpoint
-		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Staff_Aureole)
-		_M.CheckStaffRedPoint()
+function _M.CheckAllStaffRedPoint()
+	for staffid,_ in pairs(MStaff.StaffTable) do
+		_M.CheckStaffRedPoint(staffid)
 	end
 end
 

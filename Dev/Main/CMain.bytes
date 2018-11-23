@@ -8,6 +8,7 @@ local CRelations = JRequire "Dev.Relations.CRelations"
 local SDKMgr = JRequire "SDK.SDKMgr"
 local CParliament = JRequire "Dev.Parliament.CParliament"
 local CRank = JRequire "Dev.Rank.CRank"
+local CActivity = JRequire "Dev.Activity.CActivity"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -18,9 +19,11 @@ local CmdId =
 {
 	cGuideDone = 1,
 	cStoryDone = 2,
+	cWeakGuideDo = 3,
 
 	sInit = 1,
 	sFuncUpdate = 2,
+	sWeakGuideDo = 3,
 }
 
 function _M.ModuleClean()
@@ -33,12 +36,14 @@ function _M.ModuleInit(isReload)
 	{
 		[CmdId.cGuideDone]	= "PMain.CGuideDone",
 		[CmdId.cStoryDone]	= "PMain.CStoryDone",
+		[CmdId.cWeakGuideDo] = "PMain.CWeakGuideDo",
 	}
 	--接收消息协议注册
 	local func_recv = 
 	{
 		[CmdId.sInit] = {			proto = "PMain.SInit", 		handle = _P.OnInit},
 		[CmdId.sFuncUpdate] = {		proto = "PMain.SFuncUpdate", 	handle = _P.OnFuncUpdate},
+		[CmdId.sWeakGuideDo] = {		proto = "PMain.SWeakGuideDo", 	handle = _P.OnWeakGuideDo},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.SysOpen, func_send, func_recv, isReload)	
@@ -58,10 +63,15 @@ function _M.OnStoryDone(storyID)
 	end
 end
 
+function _M.ReqWeakGuide(_weakGuideID)
+	_M.Send(CmdId.cWeakGuideDo, {weakGuideid = _weakGuideID})
+end
+
 --功能开放列表
 function _P.OnInit(msg)
 	local openedFuns = {}
 	local finishGuides = {}
+	local weakGuides = {}
 	if msg.funcList ~= nil then
 		for _,v in pairs(msg.funcList) do
 			openedFuns[v] = true
@@ -72,8 +82,15 @@ function _P.OnInit(msg)
 			finishGuides[v] = true
 		end
 	end
+	if msg.weakguideList ~= nil then
+		for k,v in pairs(msg.weakguideList)do
+			table.insert(weakGuides,{id = v.key,num = v.value})
+		end
+	end
+
 	MMain.Funcs = openedFuns
 	MMain.Guides = finishGuides
+	MMain.WeakGuides = weakGuides
 end
 
 --功能开放刷新
@@ -82,7 +99,9 @@ function _P.OnFuncUpdate(msg)
 		for k,v in pairs(msg.list) do
 			MMain.Funcs[v.funcId] = v.isOpen
 
-			EventCenter.CallEventTrigger(Define.EventListenId.FuncOpenEvent, v.funcId, v.isOpen)
+			if Csv.Func[v.funcId] ~= nil then
+				EventCenter.CallEventTrigger(Define.EventListenId.FuncOpenEvent, v.funcId, v.isOpen)
+			end
 
 			if v.funcId == Define.SysId.Relations and v.isOpen then
 				CRelations.CMainInit()
@@ -92,7 +111,30 @@ function _P.OnFuncUpdate(msg)
 				CRank.CheckRankRedPoint()
 			elseif v.funcId == Define.SysId.Parliament and v.isOpen then
 				CParliament.RefreshParRedPoint()
+			elseif v.funcId == Define.SysId.XinGuan1 	
+				or v.funcId == Define.SysId.Charitable 	
+				or v.funcId == Define.SysId.Adventure 
+				or v.funcId == Define.SysId.SiegeWall 
+				or v.funcId == Define.SysId.GlobalTraval then
+					CActivity.CheckLimitRed(v.funcId,v.isOpen)
 			end
+		end
+	end
+end
+
+function _P.OnWeakGuideDo(data)
+	if MMain.WeakGuides == nil then
+		MMain.WeakGuides = {}
+	end
+
+	if data.weakguide ~= nil then
+		local _id = data.weakguide.key
+		local _num = data.weakguide.value
+
+		MMain.WeakGuides[_id] = {id = _id,num = _num}
+
+		if MMain.curWeakGuide ~= nil then
+			WindowMgr.RefreshWeakGuide(MMain.curWeakGuide.funcID,_id)
 		end
 	end
 end

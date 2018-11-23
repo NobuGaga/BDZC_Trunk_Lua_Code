@@ -38,7 +38,7 @@ local HAVE_WHO_POS = Vector2(17, -85)
 local COLOR_BLACK = Color(84 / 255, 62 / 255, 62 / 255, 1)
 local COLOR_Dark = Color(100 / 255, 100 / 255, 100 / 255, 1)
 local COLOR_Light = Color(1, 1, 1, 1)
-local SECOND_COUNT = 30
+local SECOND_COUNT = 120
 
 function _M:Destroy( ... )
 	if self._Root ~= nil then
@@ -62,6 +62,11 @@ function _M:Destroy( ... )
 			self.ShowGirlOrStaffMoudle = nil
 		end
 
+		if self.MusicID > 0 then
+			SoundMgr.DestroyMusic(self.MusicID, true)
+			self.MusicID = 0
+		end
+
 		self._Root:Destroy()
 		self._Root = nil
 
@@ -76,6 +81,8 @@ function _M:Destroy( ... )
 				EventCenter.CallEventTrigger(Define.EventListenId.GetGirl, info.objId)
 			elseif info.storyType == 2 then
 				EventCenter.CallEventTrigger(Define.EventListenId.GetStaff, info.objId)
+			elseif info.storyType == 5 or info.storyType == 6 then
+				EventCenter.CallEventTrigger(Define.EventListenId.KnowGirl, info.objId)
 			end
 		end
 		if self.DoneCall ~= nil then
@@ -141,7 +148,16 @@ function _P.OnToDone(self)
 			if csvLine.next ~= nil and csvLine.next > 0 then
 				_P.doCreate(self, csvLine.next)
 			else
-				self:StoryDone()
+				local darkImg = self.Moudle:Get("darkBg")
+				if csvLine.darkTime ~= nil and darkImg ~= nil then
+					local tween = darkImg:DOFade(1,csvLine.darkTime)
+					tween:OnComplete(function ( ... )
+						darkImg.Alpha = 0
+						self:StoryDone()
+					end)
+				else
+					self:StoryDone()
+				end
 			end
 		else
 			print("__找不到剧情id_____",id)
@@ -261,6 +277,17 @@ function _P.doCreate(self, id)
 		if csvLine.sound ~= nil and csvLine.sound > 0 then
 			SoundMgr.PlaySystem(csvLine.sound)
 		end
+		if csvLine.music ~= nil and self.MusicID ~= csvLine.music then
+			if self.MusicID > 0 then
+				SoundMgr.DestroyMusic(self.MusicID, true)
+				self.MusicID = 0
+			end
+			if csvLine.music > 0 then
+				SoundMgr.PlayMusic(csvLine.music)
+				self.MusicID = csvLine.music
+			end
+		end
+
 		--跳过
 		if csvLine.canSkip == 1 then
 			self.Pass.Activity = true
@@ -516,7 +543,7 @@ function _M:ctor(parent, id, doneCall, showGirlOrStaff,objData)
 	self.IsFirst = true
 	self.LastThatSp = nil
 	self.objData = objData
-
+	self.MusicID = 0
 	local moudle = JGuiManager.GetMoudle(self._Root, "M_Guidance_Story")
 	self.Moudle = moudle
     local csvLine = Csv.Story[id]

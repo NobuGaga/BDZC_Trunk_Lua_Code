@@ -1,0 +1,37 @@
+-- 中秋活动，累计充值奖励预览界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:OnCreate(needDay, itemList)
+	local module = self:CreateMoudle(self._RootNode, "M_Daily_Preview")
+
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	module:Get("border").RaycastTarget = true
+	module:Get("back_btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("text1").Text = Csv.Text("quest_actPre")
+	-- module:Get("text2").Text = Csv.Text("quest_actPreGet")
+	module:Get("text3").Text = Csv.Text("quest_unlock")
+	module:Get("text4").Text = Csv.Text("midAutumn_leiji", {num = needDay})
+
+	local itemGrid = module:Get("Items")
+	if itemList ~= nil then
+		for k,v in pairs(itemList) do
+			CCommon.CreateItem(itemGrid, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.MidAFestival)
+		end
+	end
+end
+
+return _M

@@ -1,0 +1,151 @@
+-- 剧情引导-座驾
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local BOXTIP_POSY = "T_Club_Host_PosY"
+
+local T_Car_Guide_Tween = "T_Guide_Car"
+local T_GuideCar_Go = "T_GuideCar_Go"
+local T_GuideCar_Bar_Down = "T_GuideCar_Bar_Down"
+local T_GuideCar_Bridge = "T_GuideCar_Bridge"
+local T_GuideCar_BridgeA = "T_GuideCar_BridgeA"
+local T_GuideCar_Company = "T_GuideCar_Company"
+local T_CompanyCar_Down = "T_CompanyCar_Down"
+--T_GuideCar_Go
+
+
+local T_CAR_MOVE = 10229
+local T_CAR_TIRE_GET = 10230
+local T_CAR_TIRE_DONE = 10231
+local T_CAR_SUNSHINE = 10232
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Car_Story")
+	self.mModule = module
+	self.OnCloseCall = onClose
+
+	module:Get("textBtnTips").Text = Csv.Text("car_togo")
+	module:Get("textBtnSkip").Text = Csv.Text("guide_pass")
+
+	local carGuideTween = module.SelfRect.CachedTran:GetJTweener(T_Car_Guide_Tween)
+	-- 播放上下浮动动画
+	local clickRect = module:Get("btnTips")
+	local moveTween = clickRect.CachedTran:GetJTweener(BOXTIP_POSY)
+	local moveTweenData = moveTween:GetTweenForType(CS.JTween.JTweenerType.AnchorPosY)
+	moveTweenData.ToPosY = 100
+	moveTween:Play()
+	self.ClickRect = clickRect
+
+	-- 播放点点点动画
+	local goingRect = module:Get("goTips")
+	LuaUtil.TextAddThreePoint(module:Get("textGoTips"), Csv.Text("car_going"))
+	self.GoingRect = goingRect
+
+	local skipBtn = module:Get("btnSkip")
+	skipBtn:AddOnButton(function()
+		_P.OnClickSkip(self)
+	end, nil, 1)
+	self.SkipBtn = skipBtn
+
+	local barRect = module:Get("Bar")
+	local bridgeRect = module:Get("Bridge")
+	local companyRect = module:Get("Company")
+
+	barRect.Activity = true
+	bridgeRect.Activity = false
+	companyRect.Activity = false
+
+	local barActor = module:Get("BarActor")
+	local bridgeActor = module:Get("BridgeActor")
+	local companyActor = module:Get("CompanyActor")
+
+	local carMoveEffect = CCommon.CreateEffect(bridgeActor, T_CAR_MOVE)
+	local sunshineEffect = CCommon.CreateEffect(bridgeActor, T_CAR_SUNSHINE)
+	local fingerEffect = CCommon.CreateEffect(barActor, 10138)
+	
+	local ToDone = function()
+		module.SelfRect:AddOnTime(function()
+			self:Destroy()
+			onClose()
+		end,nil,0.5)
+	end
+
+	local carDown = function()
+		SoundMgr.Destroy(10067)
+		SoundMgr.Play(10068)
+		carGuideTween:Play(T_CompanyCar_Down)
+		CCommon.CreateEffect(companyActor, T_CAR_TIRE_DONE)
+	end
+
+	local bridgeDown = function()
+		bridgeRect.Activity = false
+		companyRect.Activity = true
+
+		carGuideTween:Play(T_GuideCar_Company)
+	end
+
+	local bridgeMove = function()
+		carGuideTween:Play(T_GuideCar_BridgeA)
+	end
+
+	local barDown = function()
+		barRect.Activity = false
+		bridgeRect.Activity = true
+
+		carGuideTween:Play(T_GuideCar_Bridge)
+	end
+
+	local carGo = function()
+		carGuideTween:Play(T_GuideCar_Bar_Down)
+	end
+
+	carGuideTween:SetWaitEventOnComplete(T_GuideCar_Go, carGo)
+	carGuideTween:SetWaitEventOnComplete(T_GuideCar_Bar_Down, barDown)
+	carGuideTween:SetWaitEventOnComplete(T_GuideCar_Bridge, bridgeMove)
+	carGuideTween:SetWaitEventOnComplete(T_GuideCar_BridgeA,bridgeDown)
+	carGuideTween:SetWaitEventOnComplete(T_GuideCar_Company, carDown)
+	carGuideTween:SetWaitEventOnComplete(T_CompanyCar_Down, ToDone)
+
+
+	module:Get("carImg"):AddOnClick(function()
+		clickRect.Activity = false
+		fingerEffect.Activity = false
+
+		CCommon.CreateEffect(barActor, T_CAR_TIRE_GET)
+		carGuideTween:Play(T_GuideCar_Go)
+
+		SoundMgr.Play(10067)
+	end)
+	
+	companyRect:AddOnClick(function()
+		self:Destroy()
+		onClose()
+	end)
+end
+
+
+function _P.OnClickSkip(self)
+	if self.OnCloseCall then
+		self.OnCloseCall()
+	end
+
+	self:Destroy()
+end
+
+
+return _M

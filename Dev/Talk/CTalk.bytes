@@ -234,7 +234,7 @@ function _M.SendNewTalk(_channel,_value, recvId, voiceIndex, voiceTime, recvName
 
 		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.CheckChatUrl)
 		session:AppendParam("content", _value)
-		session:AppendParam("servId", MLogin.GetServerId())
+		session:AppendParam("servId", MPlayer.GetServerId())
 		session:AppendParam("roleId", MPlayer.GetId())
 		session:AppendParam("name", MPlayer.GetName())
 		session:AppendParam("account", MLogin.GetAccount())
@@ -328,7 +328,7 @@ _P.CGMCommond =
 	window = {
 		desc = "@window - 打开功能界面 [id]",
 		func = function (sysId)
-			WindowOpen.Open(sysId)
+			WindowOpen.Open(tonumber(sysId))
 		end
 	},
 	twinkle = {
@@ -375,6 +375,12 @@ _P.CGMCommond =
 			WindowMgr.Call("UMessage","ShowDebug")
 		end
 	},
+	flyfunc = {
+		desc = "@flyfunc - 播放功能开启动画",
+		func = function(id)
+			WindowMgr.Call("UMain","PlayFlyFunc", tonumber(id))
+		end
+	},
 	showspid = {
 		desc = "@showspid - 打印游戏的SPID",
 		func = function()
@@ -385,6 +391,23 @@ _P.CGMCommond =
 		desc = "@showareaid - 打印游戏的AreaID",
 		func = function()
 			CCommon.ShowError(GameSetting.AreaId)
+		end
+	},
+	showfunclist = {
+		desc = "@showfunclist - 打印游戏的SDK方法列表名",
+		func = function()
+			if GameSetting.SDKFuncNameList then
+				local splitFunc = LuaUtil.StringSplit(GameSetting.SDKFuncNameList, ",")
+				local str = ""
+				for _, funcName in pairs(splitFunc) do
+					if funcName then
+						str = str .. funcName .. ",\n"
+					end
+				end
+				CCommon.ShowError(str)
+			else
+				CCommon.ShowError("SDKFuncNameList 为空")
+			end
 		end
 	},
 }

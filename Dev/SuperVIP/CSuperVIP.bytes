@@ -1,0 +1,78 @@
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Login.MLogin.bytes#_M]
+local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [Dev.Recharge.MRecharge.bytes#_M]
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+--@RefType [Dev.SuperVIP.MSuperVIP.bytes#_M]
+local MSuperVIP = JRequire "Dev.SuperVIP.MSuperVIP"
+
+local rapidjson = require "rapidjson"
+
+local HttpHelper = CS.Utility.HttpHelper
+local HttpSession = CS.Utility.HttpSession
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+function _M.ModuleClean()
+	MSuperVIP.Clean()
+end
+
+function _M.OnPlayerInit()
+	MSuperVIP.isPlayerInit = true
+	if MSuperVIP.isRechargeInit then
+		_P.HttpRequest()
+	end
+end
+
+function _M.OnRechargeInit()
+	MSuperVIP.isRechargeInit = true
+	if MSuperVIP.isPlayerInit then
+		_P.HttpRequest()
+	end
+end
+
+--Http请求超时处理
+function _M.OnTimeOutRequested(retryHttpNode)
+	if _P.isRequested == false then
+		return
+	end
+	retryHttpNode:AddOnUpdate(function ()
+		if _P.isRequested then
+			_P.HttpRequest()
+		end
+	end, nil, 5)	-- 5秒后没有返回修改
+end
+
+--获取超级VIP信息
+function _P.HttpRequest()
+	if GameSetting.SuperVipUrl == nil or GameSetting.SuperVipUrl == "" then
+		return
+	end
+	local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.SuperVipUrl)
+	session:AppendParam("spid", GameSetting.Spid)
+	session:AppendParam("serverid", MPlayer.GetServerId())
+	session:AppendParam("oriserverid", MLogin.SelectServer.id)
+	session:AppendParam("roleID", MPlayer.GetId())
+	session:AppendParam("viplevel", MRecharge.VipData.level)
+	session:AppendParam("vipExp", MRecharge.VipData.exp)
+	session:SetCallBack(function (isOk, param1, param2)
+		_P.isRequested = false
+		if not isOk then
+			return
+		end
+		local recData = rapidjson.decode(param1)
+		if recData == nil or recData.data == nil then
+			return
+		end
+		MSuperVIP.SetData(recData.errorno, recData.data)
+		WindowMgr.Call("UMain", "RefreshTopBtns")
+	end)
+	HttpHelper.Request(session)
+	_P.isRequested = true
+end
+
+return _M

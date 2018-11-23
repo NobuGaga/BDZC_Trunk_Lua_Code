@@ -1,0 +1,65 @@
+local MInvitation = JRequire "Dev.Invitation.MInvitation"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cInPutInvitationCode = 1,      	-- 输入邀请码 PFriendInvitation.CInvitationCode
+	cGetReward = 2,   -- 领取奖励	PFriendInvitation.CGetReward
+	
+	sInit = 1,         	-- 初始化 PFriendInvitation.sInvitationInit
+	sInPutSuccess = 2,      	-- 输入成功
+	sGetReward = 3,			-- 领奖返回 PFriendInvitation.SGetReward
+}
+
+
+function _M.ModuleClean()
+	MInvitation.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cInPutInvitationCode] = "PFriendInvitation.CInvitationCode",
+		[ECmdId.cGetReward] = "PFriendInvitation.CGetReward",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sInit]         = { proto = "PFriendInvitation.SInvitationInit",          handle = _P.OnInvitationInit},
+		[ECmdId.sInPutSuccess]       = { proto = "PFriendInvitation.SInputResult",        handle = _P.OnInPutSuccess},
+		[ECmdId.sGetReward]        = { proto = "PFriendInvitation.SGetReward",          handle = _P.OnGetReward},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Invitation, func_send, func_recv, isReload)
+end
+
+function _M.ReqInvitationCode(_code)
+	_M.Send(ECmdId.cInPutInvitationCode, {code = _code})
+end
+
+function _M.ReqGetReward(_type,_index)
+	_M.Send(ECmdId.cGetReward, {type = _type,index = _index})
+end
+
+-- Server -> Client
+function _P.OnInvitationInit(data)
+	MInvitation.InvitationInit(data)
+	WindowMgr.Call("UWelfare","RefreshInvitationRed")
+end
+
+function _P.OnInPutSuccess(data)
+	MInvitation.IsInvitation = data.IsInvitation
+	WindowMgr.Call("UWelfare","InPutSuccess",data)
+end
+
+function _P.OnGetReward(data)
+	MInvitation.AddGainTimes(data.type,data.index)
+	MInvitation.CheckRedPoint()
+	WindowMgr.Call("UWelfare","GetReward",data)
+end
+
+return _M

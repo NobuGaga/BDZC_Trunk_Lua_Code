@@ -73,6 +73,36 @@ if CommerceRankType and type(CommerceRankType) == "table" then
 	end
 end
 
+-- 消费积分返利，设置每一阶段每一类型请求刷新标记
+function _M.GetConsumePointRefreshState()
+	local stateList = {}
+	for i=1,3 do
+		local stageNum = _M.GetConsumePointStageNum(i)
+		if stageNum > 0 then
+			local typeList = {}
+			for j=1,stageNum do
+				typeList[j] = false
+			end
+
+			stateList[i] = typeList
+		end
+	end
+
+	return stateList
+end
+
+
+function _M.GetConsumePointStageNum(typeId)
+	local stageNum = 0
+	for k,v in pairs(Csv.ConsumeScore) do
+		if v.consumeType == typeId then
+			stageNum = stageNum + 1
+		end
+	end
+
+	return stageNum
+end
+
 _M.FuturesState = {
 	DEF = 1, -- 未抽取
 	CHOU=2, -- 已抽取
@@ -91,6 +121,7 @@ _M.ActIdForType = {}				-- 活动类型对应活动ID
 _M.LotteryMessage = {}				-- 抽奖消息
 _M.LotterySuperGetter = {playerId = 0, playerName = ""}
 _M.XinGuanRed = false
+_M.XinGuanRankRed = false
 _M.SevenDayTargetPageRedIndex = -1	-- 七日目标今日目标页签红点Index
 _M.MaxStageNum = tonumber(Csv.Const(20151))
 _M.InvestmentRed = false
@@ -106,6 +137,13 @@ _M.AdventureConstData = Csv.Const(20162) -- 奇遇系统全局配置表数据
 _M.AdventureBattleRewards = {}			 -- 奇遇系统战斗奖励
 _M.IsShowsOneRecharge = true
 _M.AdventureUpdateTmp = nil
+_M.IsMidFireAutoBuy = false
+_M.IsMergeSerFireAutoBuy = false
+_M.ConsumePointReqState = _M.GetConsumePointRefreshState()
+_M.ConsumePointRed = false
+_M.FlopCardRed = {}
+_M.FlopCardRefreshData = {} -- 倒计时数据
+
 
 function _M.Clean()
 	_M.ActList = {}
@@ -115,11 +153,12 @@ function _M.Clean()
 	_M.ActRankQuestTime = {}
 	_M.ActIdForType = {}
 	_M.IsUpdateTime1 = false
-	_M.IsUpdateTime2 = false	
+	_M.IsUpdateTime2 = false
 	_M.XinGuanStatus = {}
 	_M.LotteryMessage = {}
 	_M.LotterySuperGetter = {playerId = 0, playerName = ""}
 	_M.XinGuanRed = false
+	_M.XinGuanRankRed = false
 	_M.InvestmentRed = false
 	_M.FuturesSelectIndex = 0
 	_M.FuturesReward = {}
@@ -130,6 +169,12 @@ function _M.Clean()
 	_M.AdventureBattleRewards = {}
 	_M.IsShowsOneRecharge = true
 	_M.AdventureUpdateTmp = nil
+	_M.IsMidFireAutoBuy = false
+	_M.IsMergeSerFireAutoBuy = false
+	_M.ConsumePointReqState = _M.GetConsumePointRefreshState()
+	_M.ConsumePointRed = false
+	_M.FlopCardRed = {}
+	_M.FlopCardRefreshData = {}
 end
 
 function _M.ClearForType(actType)
@@ -170,6 +215,7 @@ function _M.UpdateAct(id, type, info)
 		tmp[id] = info
 	else
 		tmp = {[id] = info}
+	
 		_M.ActTypeCached[type] = tmp
 	end
 	_M.ActIdForType[type] = id
@@ -253,7 +299,7 @@ function _M.GetRechargeOpenFunc()
 			end
 		end
 	end
-	if isNeedSort and #funcs > 0 then
+	if #funcs > 0 then
 		table.sort( funcs, function (a, b)
 			return a.sort < b.sort
 		end )
@@ -503,16 +549,50 @@ function _M.CheckThisItemIsLight(exchangeConf, exchangeShop, data, numId)
 	return count ~= totalNum or curNum == 0
 end
 
-function _M.CheckHasExchange(exchangeShop, numberCount)
+function _M.CheckHasExchange(actId, exchangeShop, numberCount)
 	local isHas = false
 	for k,v in pairs(Csv.GlobalTravalExchange) do
-		if not _M.CheckThisItemIsLight(v, exchangeShop, numberCount, v.id) then
+		if v.actId == actId and not _M.CheckThisItemIsLight(v, exchangeShop, numberCount, v.id) then
 			isHas = true
 			break
 		end
 	end
 
 	return isHas
+end
+
+
+-- 中秋活动，每天档位不一样，若找不到当天档位，默认取最后一位的
+function _M.GetTodayData(listData, today)
+	if listData == nil then
+		return
+	end
+
+	local curData = listData[today]
+	if curData then
+		return curData
+	else
+		return listData[#listData]
+	end
+end
+
+
+-- 欢乐周末-合服活动，判断是否有该系统该类型的活动数据
+function _M.CheckHasFixActData(actTypeList, funcId)
+	if actTypeList ~= nil then
+		for k,actType in pairs(actTypeList) do
+			local actDataList = _M.GetListFromType(actType)
+			if actDataList then
+				for actKey, actData in pairs(actDataList) do
+					if actData.sysId == funcId then
+						return true
+					end
+				end
+			end
+		end
+	end
+	
+	return false
 end
 
 

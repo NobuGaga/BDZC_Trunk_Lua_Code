@@ -14,12 +14,6 @@ local PointerRotateActs = {0, -53, -110, -178, -232}
 local getActorId = 10123
 local TEXT_ALP_TWEEN = "T_TEXT_SHOW"
 
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
-
-
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -76,7 +70,7 @@ function _P.SetCarAttrData(self, data)
 	for i=1, 4 do
 		local lightNum = attrLightList[i]
 		local nameStr = "Attr" .. i .. "Value"
-		for j=1, MCar.CarSeatOpenMax do
+		for j=1, 5 do
 			local valueImg = self.mModule:Get(nameStr .. j)
 			if valueImg then
 				valueImg.Activity = j <= lightNum
@@ -111,7 +105,7 @@ function _P.SetCarGraphData(self, carConf, carData)
 	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[carData.color]
 	self.mModule:Get("Circular").SpriteName = qualityData.name
 
-	for i=1, MCar.CarSeatOpenMax do
+	for i=1, 5 do
 		local arcRect = self.mModule:Get("Arc" .. i)
 		if arcRect then
 			arcRect.Activity = i <= qualityData.num

@@ -16,10 +16,6 @@ local QualityIconNameArr = {"zj_009_4", "zj_009_3", "zj_009_2", "zj_009_1", "zj_
 local PointerRotateActs = {0, -53, -110, -178, -232}
 local getActorId = 10123
 
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
-
 
 --事件派发\
 function _M:Dispatch(funcName, ...)
@@ -94,7 +90,7 @@ function _P.SetCarAttrData(self, data)
 	for i=1, 4 do
 		local lightNum = attrLightList[i]
 		local nameStr = "Attr" .. i .. "Value"
-		for j=1, MCar.CarSeatOpenMax do
+		for j=1, 5 do
 			local valueImg = self.mModule:Get(nameStr .. j)
 			if valueImg then
 				valueImg.Activity = j <= lightNum
@@ -130,7 +126,7 @@ function _P.SetCarGraphData(self, carConf, carData)
 	self.mModule:Get("CarQuality").SpriteName = QualityIconNameArr[qualityNum]
 	self.mModule:Get("Circular").SpriteName = qualityData.name
 
-	for i=1, MCar.CarSeatOpenMax do
+	for i=1, 5 do
 		local arcRect = self.mModule:Get("Arc" .. i)
 		if arcRect then
 			arcRect.Activity = i <= qualityData.num

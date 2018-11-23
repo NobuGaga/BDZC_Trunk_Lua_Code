@@ -1,0 +1,82 @@
+--跨服竞技场-开赛第一天预备筛选期界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+
+function _M:BeforeDestroy()
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Screen")
+	self.Moudle = moudle
+	local startTime, endTime = MCrossArena.GetYuBeiShuaixuanRsltTime()
+	moudle:Get("TimeText").Text = Csv.Text("cross_arena_end", {num = LuaUtil.TransToMDHM(endTime)})
+	moudle:Get("TopTitle").Text = Csv.Text("cross_arena_title2")
+	-- moudle:Get("InfoText").Text = Csv.Text("cross_arena_desc")
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title1")
+	moudle:Get("C_text").Text = Csv.Text("cross_arena_tx1")
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	moudle:Get("C_Btn_a"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		-- self:Destroy()
+		WindowOpen.Open(Define.SysId.Arena)
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	self.countDown = moudle:Get("TimeText3")
+	self.BottomBg = moudle:Get("BottomBg")
+
+	local function updateTime(self)
+		local startTime, endTime = MCrossArena.GetYuBeiShuaixuanTime()
+		local serverTime = HeartBeat.ServSecond()
+		local rs = endTime - serverTime
+		local str = "00:00:00"
+		if rs > 0 then
+			str = LuaUtil.GetTimeHMS(rs)
+		end
+		self.countDown.Text = Csv.Text("cross_arena_countdown", {time = str})
+	end
+
+	updateTime(self)
+	self.BottomBg:AddOnUpdate(function()
+		updateTime(self)
+	end,nil,1)
+end
+
+return _M

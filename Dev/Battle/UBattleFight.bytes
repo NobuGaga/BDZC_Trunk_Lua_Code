@@ -80,9 +80,11 @@ function _R.OnResult(self, data, onDoneCall)
 	self.resultData = data
 	self.onDoneCall = onDoneCall
 	self.isShowResult = nil
-	if self.IsNoPassBtn then
-
-	else
+	self.Own.MoneyImg.Activity = false
+	self.Own.MoneyImg.SpriteNameAutoScale = _P.GetMoneyImgName(MBag.GetItemNum(Define.AssetsType.Soldier))
+	self.Enemy.MoneyImg.Activity = false
+	self.Enemy.MoneyImg.SpriteNameAutoScale = _P.GetMoneyImgName(self.LastEnemyBlood)
+	if not self.IsNoPassBtn then
 		self.skipBtn.Activity = true
 	end	
 	_P.RefreshBobyInfo(self)
@@ -99,9 +101,9 @@ function _R.OnSeckillResult(self, data, onDoneCall)
 	self.isWin = (data.state == MBattle.ResultState.Win)
 	self.PkRoot.Activity = false
 	self.seckillActorPanel.Activity = false
-	if self.IsNoPassBtn then
-
-	else
+	self.Own.MoneyImg.Activity = false
+	self.Enemy.MoneyImg.Activity = false
+	if not self.IsNoPassBtn then
 		self.skipBtn.Activity = false
 	end
 	self.Enemy.Blood.Activity = false
@@ -151,6 +153,8 @@ end
 -- 显示结果
 function _P.DoShowResult(self)
 	if self.Moudle ~= nil then
+		self.skipBtn.Activity = false
+		_P.DestroyProEffect(self)
 		if self.resultData.state == MBattle.ResultState.Fail or
 			self.resultData.state == MBattle.ResultState.Continue
 		then
@@ -160,7 +164,14 @@ function _P.DoShowResult(self)
 		else
 			WindowMgr.Create("UBattleWin", self.resultData.id, self.resultData.money, function ()
 				_P.OnResultClose(self)
-			end, self.ownPower, self.resultData.selfcost)
+
+				if self.IsAutoBattleNext then
+					self.IsAutoBattleNext = nil
+					_P.OnPressPK(self)
+				end
+			end, self.ownPower, self.resultData.selfcost, false, function()
+				self.IsAutoBattleNext = true
+			end)
 		end
 
 		self.isShowResult = true
@@ -233,7 +244,9 @@ function _P.OnPlayThatBlood(self, isFast)
 
 	self.Enemy.BloodBar:DOFillAmount(curRoundBlood / lastBattleCsv.gold, isWinDelay)
 	self.thatIntTween = JTweenerManager.IntTween(self.LastEnemyNum, curRoundBlood, isWinDelay, function(value)
-		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(value) end
+		if self.Enemy.Blood ~= nil then 
+			self.Enemy.Blood.Text = LuaUtil.NumberFormat(value)
+		 end
 	end, function()
 		if self.Enemy.Blood ~= nil then 
 			self.Enemy.Blood.Text = LuaUtil.NumberFormat(curRoundBlood)
@@ -253,9 +266,11 @@ function _P.OnPlayFastThatBlood(self, delay)
 	local lastBattleCsv = Csv.Battle[lastBattleId]
 	self.Enemy.BloodBar:DOFillAmount(nowBlood / lastBattleCsv.gold, delay)
 	local t = JTweenerManager.IntTween(self.LastEnemyBlood, nowBlood, delay, function(value)
-		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(value) end
+		if self.Enemy.Blood ~= nil then
+			 self.Enemy.Blood.Text = LuaUtil.NumberFormat(value) end
 	end, function()
-		if self.Enemy.Blood ~= nil then self.Enemy.Blood.Text = LuaUtil.NumberFormat(nowBlood) end
+		if self.Enemy.Blood ~= nil then
+			 self.Enemy.Blood.Text = LuaUtil.NumberFormat(nowBlood) end
 	end)
 	t:SetTarget(self.Enemy.Blood.CachedTran)
 end
@@ -303,7 +318,9 @@ function _P.OnPlayOneReport(self, isFast)
 			local delayTime = (reportData.playType == BattleShowEnum.Task and 1.2) or 1.9
 			self.BG:AddOnTime(function()
 				if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
-					_P.SetBloodData(self, reportData.campType, isFast)
+					if self.isShowResult == nil then
+						_P.SetBloodData(self, reportData.campType, isFast)
+					end
 				end
 
 				if self.isSkipBattle then self.isSkipBattle = nil end
@@ -365,14 +382,26 @@ function _P.OnPlayTalk(self, data)
 	SoundMgr.PlayNonStopUI(10020)
 	talkTweener:Play()
 
+	local enemyImg = (data.campType == CampEnum.Enemy and self.Enemy.MoneyImg) or self.Own.MoneyImg
 	if data.isShowHit then
 		self.Moudle.SelfRect:AddOnTime(function()
 			self.isPlayAttack = true
+			enemyImg.Activity = true
+
 			SoundMgr.PlayNonStopUI(10021)
-			CCommon.CreateEffect(actorPanel, attackActorId, nil, function( ... ) -- 播放攻击效果
+			local effectRect = CCommon.CreateEffect(actorPanel, attackActorId, nil, function( ... ) -- 播放攻击效果
 				self.isPlayAttack = nil
 			end)
-		end, nil, 1.1)
+
+			if data.campType == CampEnum.Enemy and (not self.isWin) and effectRect ~= nil then
+				effectRect.LocalRotation = CS.UnityEngine.Quaternion(180, 0, 0, 1)
+				effectRect.LocalScale = Vector3(-1, 1, 1)
+			end
+		end, nil, 0.6)
+
+		enemyImg:AddOnTime(function()
+			enemyImg.Activity = false
+		end, nil, 0.9)
 	else
 		SoundMgr.PlayNonStopUI(10023)
 	end
@@ -420,13 +449,19 @@ function _P.OnPlaySeckillAnim(self)
 
 			SoundMgr.PlayNonStopUI(10028)
 			CCommon.CreateEffect(self.Enemy.ActorPanel, seckillAttackActorId, nil, function( ... ) -- 播放攻击效果
-				shakeTweener:DOKill()
+				if shakeTweener ~= nil then
+					shakeTweener:Restore()
+					shakeTweener:DOKill()
+				end
 
 				if scrollTween ~= nil then
 					self.Enemy.TalkText:DOKill()
 				end
 			end)
+		end, nil, 1.1)
 
+		local tabImg = self.Moudle:Get("tab")
+		tabImg:AddOnTime(function()
 			_P.OnPlayFastOwnBlood(self, 1.8)
 			_P.OnPlayFastThatBlood(self, 1.8)
 
@@ -448,7 +483,7 @@ function _P.OnPlaySeckillAnim(self)
 					end, nil, oneDelay)
 				end
 			end
-		end, nil, 1.1)
+		end, nil, 1.5)
 	end)
 end
 
@@ -468,6 +503,8 @@ function _P.AcountSeckillResult(self)
 	local lastBattleData = MBattle.GetCurData(seckillData.list, seckillData.lastId)
 
 	if curBattleData and lastBattleData then
+		self.skipBtn.Activity = false
+		_P.DestroyProEffect(self)
 		if curBattleData.state == MBattle.ResultState.Fail then
 			WindowMgr.Create("UBattleFail", self.resultData.id, self.resultData.hurt, function ()
 				_P.OnResultClose(self)
@@ -615,6 +652,8 @@ function _P.OnClickFast(self)
 			self.moveTween2 = nil
 		end
 	end
+
+	_P.OnPlayThatBlood(self, true)
 end
 
 
@@ -808,9 +847,7 @@ function _P.RefreshBattle(self, isFinished)
 	self.LastEnemyNum = self.LastEnemyBlood -- 上一轮敌人血量数
 	self.PkRoot.Activity = true
 	self.seckillActorPanel.Activity = true
-	if self.IsNoPassBtn then
-
-	else
+	if not self.IsNoPassBtn then
 		self.skipBtn.Activity = false
 	end	
 	self.Enemy.Blood.Activity = true
@@ -850,6 +887,7 @@ function _P.OnPressPK(self)
 	self.PkRoot.Activity = false
 	self.seckillActorPanel.Activity = false
 	if MPlayer.GetAttr(Define.AttrType.Wuli) <= 0 or MBag.GetItemNum(Define.AssetsType.Soldier) <= 0 then
+		self.skipBtn.Activity = false
 		WindowMgr.Create("UBattleFail", self.LastBattleID, 0, function ()
 			if self.Moudle ~= nil then
 				self.PkRoot.Activity = true
@@ -933,7 +971,8 @@ function _M:OnCreate()
 		BobyBg1 = moudle:Get("difangyuangong"),
 		BobyBg2 = moudle:Get("difangyuangong2"),
 		ActorPanel = moudle:Get("EnemyActorPanel"),
-		Level = moudle:Get("EnemyLevel")
+		Level = moudle:Get("EnemyLevel"),
+		MoneyImg = moudle:Get("moneyImg1")
 	}
 	self.Own = 
 	{
@@ -947,7 +986,8 @@ function _M:OnCreate()
 		TalkText = moudle:Get("Owndialogue"),
 		BobyBg1 = moudle:Get("staffBSX"),
 		BobyBg2 = moudle:Get("staffBSX1"),
-		ActorPanel = moudle:Get("MineActorPanel")
+		ActorPanel = moudle:Get("MineActorPanel"),
+		MoneyImg = moudle:Get("moneyImg")
 	}
 
 	local seckillTipText = moudle:Get("SeckillTip")
@@ -1069,7 +1109,8 @@ function _P.GetBattlerReportData(self)
 	if #self.mineStaffs ~= 3 then return end
 	self.reportData = {}
 	self.totalMineNum = 0 -- 当前我方战斗总轮数
-	self.totalEnemyNum = 0 -- 当前我方战斗总轮数
+	self.totalEnemyNum = 0 -- 当前敌方战斗总轮数
+	self.CurEnemyRound = 0 --当前敌方战斗轮数
 	
 	for i=1, 3 do
 		local curStaff = self.mineStaffs[i]
@@ -1085,7 +1126,7 @@ function _P.GetBattlerReportData(self)
 		if curLayerProb == nil then break end
 
 		local isOver = _P.IsOver(curLayerProb.overWinProb)
-		if (not self.isWin) or (not isOver) then -- 战斗继续
+		if (not self.isWin) or (not isOver) then
 			if self.isBossBattle then
 				if _P.IsHasStaffResist(curLayerProb.resistProb) then -- 敌方有员工挡刀
 					self.isBossBattle = false
@@ -1190,6 +1231,24 @@ function _P.GetBattleLevel(enemyPower, ownPower)
 end
 
 
+-- 玩家身上金钱图片显示
+function _P.GetMoneyImgName(moneyNum)
+	if moneyNum == nil or moneyNum <= 0 then
+		return ''
+	elseif moneyNum > 0 and moneyNum < 100000 then
+		return 'Money_1'
+	elseif moneyNum >= 100000 and moneyNum < 10000000 then
+		return 'Money_2'
+	elseif moneyNum >= 10000000 and moneyNum < 50000000 then
+		return 'Money_3'
+	elseif moneyNum >= 50000000 and moneyNum < 100000000 then
+		return 'Money_4'
+	else
+		return 'Money_5'
+	end
+end
+
+
 -- 一键跳过战斗(强制将敌方进度设置为0)
 function _P.OnSkipBattle(self)
 	if self.isWin then
@@ -1225,6 +1284,21 @@ function _P.OnSeckillBattle(self)
 		CCommon.ShowError(Csv.Text("battle_seckillErr"))
 	else
 		CBattle.SeckillBattleReq(self.LastBattleID)
+	end
+end
+
+
+-- 进入结算界面前删掉股份特效
+function _P.DestroyProEffect(self)
+	if self and self.Moudle then
+		local actorLightPanel = self.Moudle:Get("ActorLightPanel")
+		local actorDarkPanel = self.Moudle:Get("ActorDankPanel")
+		if actorLightPanel then
+			actorLightPanel:DestroyChildren()
+		end
+		if actorDarkPanel then
+			actorDarkPanel:DestroyChildren()
+		end
 	end
 end
 

@@ -82,11 +82,12 @@ function _P.RepEquipUpdate(data)
 	if WindowMgr.IsCreated("UStaffDetails") then
 		WindowMgr.Call("UStaffDetails","RefreshEquip")
 	end
-	if WindowMgr.IsCreated("ULineUp") then
-		WindowMgr.Call("ULineUp","UpdateEquip")
+	if WindowMgr.IsCreated("UStaff") then
+		WindowMgr.Call("UStaff","LineUpdateEquip")
 	end
 	
 	WindowMgr.Call("UEquipMain","ChangeEquip")
+	WindowMgr.Call("UBag", "ChangeEquip")
 end
 
 function _P.RepDecompose(data)
@@ -94,6 +95,8 @@ function _P.RepDecompose(data)
 
 	WindowMgr.Call("UEquipMain","RefreshView")
 	WindowMgr.Call("UEquipMain","ShowDecomposeView",data)
+	WindowMgr.Call("UBag", "RefreshEquipView", data)
+	WindowMgr.Call("UBag", "ShowDecomposeView", data)
 end
 
 function _P.RepDecomposeOnekey(data)
@@ -101,6 +104,8 @@ function _P.RepDecomposeOnekey(data)
 
 	WindowMgr.Call("UEquipMain","RefreshView")
 	WindowMgr.Call("UEquipMain","ShowDecomposeView",data)
+	WindowMgr.Call("UBag","RefreshEquipView",data)
+	WindowMgr.Call("UBag","ShowDecomposeView",data)
 end
 
 function _P.RepEquipLevelUp(data)
@@ -108,7 +113,7 @@ function _P.RepEquipLevelUp(data)
 	--更新装备详情、员工装备
 	WindowMgr.Call("UEquiptDetail","UpdateData")
 	WindowMgr.Call("UStaffDetails","RefreshEquip")
-	WindowMgr.Call("ULineUp","UpdateEquip")
+	WindowMgr.Call("UStaff","LineUpdateEquip")
 end
 
 function _P.RepEquipStarUp(data)
@@ -123,7 +128,7 @@ function _P.RepEquipStarUp(data)
 
 	WindowMgr.Call("UEquiptDetail","UpdateData")
 	WindowMgr.Call("UStaffDetails","RefreshEquip")
-	WindowMgr.Call("ULineUp","UpdateEquip")
+	WindowMgr.Call("UStaff","LineUpdateEquip")
 end
 
 

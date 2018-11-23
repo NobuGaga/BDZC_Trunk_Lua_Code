@@ -6,7 +6,7 @@ local _M = Class()
 local _P = {}
 
 --界面构建
-function _M:ctor(parent,id)
+function _M:ctor(parent,id, registRedpointFunc)
 	self._RootNode = parent
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Staff_Aptitude", WindowType.UI, 0)
 	self.mMoudle = moudle
@@ -57,16 +57,21 @@ function _M:ctor(parent,id)
 		bookItem.color = v[2]
 		bookItem.id = v[1]
 		tableItems[v[1]] = bookItem
-		-- local starRect = bookMoudle:Get("Star")
-		-- if v[2] > 5 then
-		-- 	local spaceVec = starRect:AddGridLayoutGroup().spacing
-		-- 	local starMinus = v[2] - 5
-		-- 	local spaceNew = Vector2(spaceVec.x - starMinus*3,spaceVec.y)
-		-- 	starRect:AddGridLayoutGroup().spacing = spaceNew
-		-- end
+
+		if data ~= nil then
+			if registRedpointFunc ~= nil then
+				registRedpointFunc(bookMoudle:Get("RedPoint"), 
+					Define.SysId.Staff, 
+					Define.SysId.Staff_List, 
+					id,
+					Define.SysId.Staff_Staff,
+					Define.SysId.Staff_Book, v[1])
+			end
+		else
+			bookMoudle:Get("RedPoint").Activity = false
+		end
 	end
 	self.mTableItems = tableItems
-	_P.ResetAllBookPoint(self,id)
 end
 
 function _M:ChangeBookLv(staffid,bookid,booklv)
@@ -75,33 +80,9 @@ function _M:ChangeBookLv(staffid,bookid,booklv)
 		local moudle = bookItem.moudle
 		moudle:Get("Level").Text = Csv.Text("staff_lv",{num = booklv})
 		moudle:Get("DetailD").Text = Csv.BookLv[bookItem.color*1000 + booklv].aptitude
-		_P.ResetAllBookPoint(self,staffid)
 		local data = MStaff.GetStaffDataByID(staffid)
 		self.mMoudle:Get("AllAptitudeText").Text = Csv.Text("staff_aptitude_all",{num = MStaff.DoGetAllApitude(data)})
 	end
-end
-
-function _P.ResetAllBookPoint(self,id)
-	local data = MStaff.GetStaffDataByID(id)
-	local tableItems = self.mTableItems
-	for k,v in pairs(tableItems) do
-		local ImgPoint = v.moudle:Get("RedPoint")
-		if data == nil then
-			ImgPoint.Activity = false
-		else
-			local cost = Csv.BookLv[v.color * 1000 + data.book[v.id]].expNum
-			local staffcolor = MStaff.GetStaffDataByID(id).color
-			if data.bookexp >= cost and data.book[v.id] < Csv.ColorUp[staffcolor].bookMaxLv then
-				ImgPoint.Activity = true
-			else
-				ImgPoint.Activity = false
-			end
-		end
-	end
-end
-
-function _M:ResetAllBookPoint(id)
-	_P.ResetAllBookPoint(self,id)
 end
 
 function _M:Destroy()

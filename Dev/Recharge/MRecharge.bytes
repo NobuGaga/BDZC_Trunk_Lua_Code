@@ -2,12 +2,73 @@
 local MPlayer = JRequire "Dev.Player.MPlayer"
 
 local _M = {}
+local _P = {}
 
 _M.VipData = 
 {
 	level = 0,
 	exp = 0,
 }
+
+--设置spid对应充值表内容
+function _M.FilterCsvRechargeSpid()
+	if Csv.Recharge == nil then
+		error("MRecharge::FilterCsvRechargeSpid Recharge Csv = nil")
+		return
+	end
+	local specialRechargeLimit = Csv.Const(88)
+	local csvRechargeDefault = {}
+	local csvRechargeCopy = {}
+	for _, csvValue in pairs(Csv.Recharge) do
+		if csvValue.spid then
+			for _, spid in ipairs(csvValue.spid) do
+				if GameSetting.Spid == spid then
+					csvRechargeCopy[#csvRechargeCopy + 1] = csvValue
+				end
+			end
+		elseif csvValue.spid == nil and (GameSetting.Platform == Define.PlatformType.AndroidPhone or 
+				csvValue.cost <= specialRechargeLimit) then
+			csvRechargeDefault[#csvRechargeDefault + 1] = csvValue
+		end
+	end
+	if #csvRechargeCopy == 0 then
+		_M.CsvRecharge = csvRechargeDefault
+	else
+		_M.CsvRecharge = csvRechargeCopy
+	end
+	table.sort(_M.CsvRecharge, function(left, right)
+		return left.id < right.id
+	end)
+	_P.SetCsvRechargeSdkProductId()
+end
+
+function _P.SetCsvRechargeSdkProductId()
+	_M.CsvRechargeIDToProductID = {}
+	for _, csvValue in ipairs(_M.CsvRecharge) do
+		local sdkProductIdPrefix = LuaUtil.StringSplit(csvValue.sdkProductId, ",")
+		local sdkProductId
+		if sdkProductIdPrefix and #sdkProductIdPrefix > 1 then
+			for _, value in ipairs(sdkProductIdPrefix) do
+				local spidAndProID = LuaUtil.StringSplit(value, ":")
+				if spidAndProID[1] and spidAndProID[1] == GameSetting.Spid and spidAndProID[2] then
+					sdkProductId = spidAndProID[2]
+				end
+			end
+		end
+		if sdkProductId then
+			csvValue.sdkProductId = sdkProductId
+		end
+		_M.CsvRechargeIDToProductID[csvValue.id] = csvValue.sdkProductId
+	end
+end
+
+function _M.GetCsvRechargeSdkProductId(csvID)
+	local sdkProductID = _M.CsvRechargeIDToProductID[csvID]
+	if sdkProductID == nil then
+		sdkProductID = ""
+	end
+	return sdkProductID
+end
 
 function _M.SetVipData(level, exp)
 	if nil ~= MPlayer and nil ~= MPlayer.PlayerInfo then

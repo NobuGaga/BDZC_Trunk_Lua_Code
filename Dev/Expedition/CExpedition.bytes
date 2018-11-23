@@ -1,0 +1,125 @@
+local MExpedition = JRequire"Dev.Expedition.MExpedition"
+local EventCenter = JRequire "Dev.EventCenter"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = {
+	cMeetingBossInfo				= 2,--请求关卡boss 数据
+	cMeetingFight					= 3,--点击战斗按钮
+	cMeetingShopInfo				= 4,--请求兑换商店	
+	cMettingExchange				= 5,--请求兑换物品 PMeeting.CMeetingExchange
+	CMeetingReset					= 6,--重置
+	CMeetingReward					= 7,--领奖励	PMeeting.CMeetingReward
+	
+	sMeetingInit					= 1,--初始化信息 PMeeting.SAMeetingInIt
+	sMeetingBossInfo				= 2,--关卡boss 数据 PMeeting.SMeetingBossInfo
+	sMeetingFight					= 3,--点击战斗按钮 PMeeting.SMeetingFight
+	sMeetingShopInfo				= 4,--请求兑换商店PMeeting.SMeetingShopInfo
+	sMettingExchange				= 5,--请求兑换物品 PMeeting.SMeetingShopInfo
+	sMeetingReset					= 6,--重置 Pmeeting.SMeetingReset
+	sMeetingReward					= 7,--领奖励	PMeeting.SMeetingReward
+}
+
+--清空模块
+function _M.ModuleClean()
+	MExpedition.Clean()
+end
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cMeetingBossInfo] = "",
+		[ECmdId.cMeetingFight] = "",
+		[ECmdId.cMeetingShopInfo] = "",
+		[ECmdId.cMettingExchange] = "PMeeting.CMeetingExchange",
+		[ECmdId.CMeetingReset] = "",
+		[ECmdId.CMeetingReward] = "PMeeting.CMeetingReward",
+	}
+	local recv = {
+		[ECmdId.sMeetingInit]	=	{proto = "PMeeting.SAMeetingInIt",	handle = _P.RepMeetingInit},
+		[ECmdId.sMeetingBossInfo]	=	{proto = "PMeeting.SMeetingBossInfo",	handle = _P.RepBossInfo},
+		[ECmdId.sMeetingFight]	=	{proto = "PMeeting.SMeetingFight",	handle = _P.RepMeetingFight},
+		[ECmdId.sMeetingShopInfo]	=	{proto = "PMeeting.SMeetingShopInfo",	handle = _P.RepShopInfo},
+		[ECmdId.sMettingExchange]	=	{proto = "PMeeting.SMeetingShopInfo",	handle = _P.RepExchange},
+		[ECmdId.sMeetingReset]	=	{proto = "PMeeting.SMeetingReset",	handle = _P.RepReset},
+		[ECmdId.sMeetingReward]	=	{proto = "PMeeting.SMeetingReward",	handle = _P.RepReward},
+
+	}
+	
+	_M.Send = SocketMgr.Regist(Define.SysId.Expedition, send, recv, isReload)
+end
+
+--注册12点重置监听
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+		MExpedition.OnDayout()
+end, true)
+
+---------------------------------------------------
+--Client -> Server 
+----------------------------------------------------\
+function _M.ReqBossInfo()
+	print("请求boss数据————")
+	_M.Send(ECmdId.cMeetingBossInfo)
+end
+
+function _M.ReqFight()
+	print("请求战斗————")
+	_M.Send(ECmdId.cMeetingFight)
+end
+
+function _M.ReqShopInfo()
+	print("请求商店数据————")
+	_M.Send(ECmdId.cMeetingShopInfo)
+end
+
+function _M.ReqExchange(_id)
+	print("请求兑换————",_id)
+	_M.Send(ECmdId.cMettingExchange,{id = _id})
+end
+
+function _M.ReqReset()
+	print("请求重置————")
+	_M.Send(ECmdId.CMeetingReset)
+end
+
+function _M.ReqReward(_id)
+	print("请求礼包奖励————",_id)
+	_M.Send(ECmdId.CMeetingReward,{id = _id})
+end
+
+---------------------------------------------------
+-- Server -> Client
+----------------------------------------------------\
+function _P.RepMeetingInit(data)
+	print("商业会议初始化信息！")
+	MExpeditionm.Init(data)
+end
+
+function _P.RepBossInfo(data)
+	print("boss数据")
+end
+
+function _P.RepMeetingFight(data)
+	print("战斗信息")
+end
+
+function _P.RepShopInfo(data)
+	print("商店信息")
+end
+
+function _P.RepExchange(data)
+	print("兑换返回")
+end
+
+function _P.RepReset(data)
+	print("重置")
+	MExpeditionm.SetResetTimes(data)
+end
+
+function _P.RepReward(data)
+	print("领取奖励")
+	MExpeditionm.SetRewards(data)
+end
+
+
+return _M

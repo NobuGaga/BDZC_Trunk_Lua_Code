@@ -211,10 +211,12 @@ end
 -- 设置自己排名信息
 function _P.SetOwnRankData(self)
 	local curRankData
-	if self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal then
-		curRankData = self.mData.selfRank
-	else
-		curRankData = self.mData.gangRank
+	if self.mData then
+		if self.curSelectToggle == MActivity.XinGuanTypeEnum.Personal then
+			curRankData = self.mData.selfRank
+		else
+			curRankData = self.mData.gangRank
+		end
 	end
 
 	if not curRankData then return end

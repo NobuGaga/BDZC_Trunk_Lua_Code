@@ -18,6 +18,7 @@ local MTalk = JRequire "Dev.Talk.MTalk"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local CVote = JRequire "Dev.Vote.CVote"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 
 ----------------------常量定义--------------------------
 
@@ -28,7 +29,7 @@ local _P = {}
 --外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
 local _R = {}
 
-_P.BtnPress = 
+_P.BtnPress =
 {
 	[Define.SysId.Commerce_Manager] = function(self)
 		WindowMgr.Create("UCommerceManager")
@@ -52,7 +53,7 @@ _P.BtnPress =
 		WindowMgr.Create("UVoteStudy")
 	end,
 }
-_P.BtnLightUpdate = 
+_P.BtnLightUpdate =
 {
 	[Define.SysId.Commerce_Manager] = function(self)
 		local data = MCommerce.MyCommerceInfo
@@ -107,13 +108,17 @@ _P.BtnLightUpdate =
 	[Define.SysId.Commerce_Study] = function(self)
 		local funcInfo = self.Funcs[Define.SysId.Commerce_Study]
 		if funcInfo ~= nil and funcInfo.light ~= nil then
-			funcInfo.light.Activity = false
+			funcInfo.light.Activity = MCommerce.StudyRedState == 1
 		end
 	end,
 }
 
 function _R.OnUpdateHaveApply(self)
 	_P.BtnLightUpdate[Define.SysId.Commerce_Manager](self)
+end
+
+function _R.OnUpdateCommerceStudyRed(self)
+	_P.BtnLightUpdate[Define.SysId.Commerce_Study](self)
 end
 
 function _R.WaitCreateSuccess(self)
@@ -127,6 +132,38 @@ function _R.OnUpdateName(self)
 	--名字
 	moudle:Get("NameText").Text = data.name
 end
+
+function _R.OnRefreshDissolutionTime(self)
+	self.cancelDissolutionBtn.Activity = MCommerce.IsCommerceHuiZhang() and MCommerce.IsDissolution()
+	self.dissolutionBg.Activity = MCommerce.IsDissolution()
+	self.dissolutionTips.Activity = MCommerce.IsDissolution()
+
+	local function cancelCounTime(self)
+		if self.dissolutionCountTime then
+			self.dissolutionCountTime:Destroy()
+			self.dissolutionCountTime = nil
+		end
+	end
+
+	if MCommerce.IsDissolution() then
+		cancelCounTime(self)
+
+		local time = MCommerce.GetDissolutionTime() - HeartBeat.ServSecond()
+		self.dissolutionTips.Text = Csv.Text("commerce_detai128", { time = LuaUtil.GetTimeHMS(time) })
+
+		self.dissolutionCountTime = self.dissolutionBg:AddOnUpdate(function()
+			local time = MCommerce.GetDissolutionTime() - HeartBeat.ServSecond()
+			if MCommerce.IsDissolution() then
+				self.dissolutionTips.Text = Csv.Text("commerce_detai128", { time = LuaUtil.GetTimeHMS(time)})
+			else
+				cancelCounTime(self)
+			end
+		end, nil, 1)
+	else
+		cancelCounTime(self)
+	end
+end
+
 function _R.OnUpdateExp(self)
 	local data = MCommerce.MyCommerceInfo
 	local moudle = self.Moudle
@@ -178,8 +215,8 @@ function _R.OnUpdatemeMyInfo(self)
 			local tmpId = funcCsv.id
 			if funcCsv.id == Define.SysId.Commerce_Manager then
 				--商会管理
-				if myInfo.job == MCommerce.JobType.HuiZhang or 
-					myInfo.job == MCommerce.JobType.FuHuiZhang 
+				if myInfo.job == MCommerce.JobType.HuiZhang or
+					myInfo.job == MCommerce.JobType.FuHuiZhang
 				then
 					isHave = true
 				end
@@ -224,7 +261,7 @@ function _R.OnUpdatemeMyInfo(self)
 	end
 end
 
-_P.MessageStr = 
+_P.MessageStr =
 {
 	[1] = function(info)
 		-- 创建
@@ -268,7 +305,7 @@ _P.MessageStr =
 			return Csv.Text("commerce_main16", {cost = battleCsv.cost1, battle = battleCsv.name})
 		else
 			return Csv.Text("commerce_main17", {cost = battleCsv.cost2, battle = battleCsv.name})
-		end		
+		end
 	end,
 	[9] = function(info)
 		-- 击杀副本BOSS
@@ -329,7 +366,8 @@ function _R.OnOpen(self)
 	_R.OnUpdatemeMyInfo(self)
 	_R.OnUpdatemeCanFight(self)
 	_R.OnUpdatemeDynamics(self)
-	
+	_R.OnRefreshDissolutionTime(self)
+
 	if self.IsWaitShowSuccess then
 		self.IsWaitShowSuccess = false
 		WindowMgr.Create("UCommerceCreateSuccess")
@@ -354,7 +392,7 @@ end
 --外部调用派发器
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -365,7 +403,7 @@ function _M:OnCreate()
 	CCommerce.OpenReq()
 
 	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main")
-	self.Moudle = moudle	
+	self.Moudle = moudle
 
 	SoundMgr.PlaySystem(20116)
 	moudle:Get("C_BackBtn"):AddOnButton(function ( ... )
@@ -373,8 +411,19 @@ function _M:OnCreate()
 		SoundMgr.DestroySystem()
 		self:Destroy()
 	end, nil, 1.2)
-	
+
 	local funcCsv = Csv.Func[Define.SysId.Commerce]
+
+	self.dissolutionBg = moudle:Get("DissolutionTipsBg")
+	self.dissolutionTips = moudle:Get("DissolutionTips")
+	moudle:Get("C_text").Text = Csv.Text("commerce_detai129")
+	self.cancelDissolutionBtn = moudle:Get("C_Btn_a")
+	self.cancelDissolutionBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCommerce.CancelDisbandReq()
+	end)
+	self.cancelDissolutionBtn.Activity = MCommerce.IsCommerceHuiZhang() and MCommerce.IsDissolution()
+
 	moudle:Get("C_TltleText").Text = funcCsv.name
 	moudle:Get("money").Text = Csv.Text("commerce_main1")
 	moudle:Get("money_0").Text = Csv.Text("commerce_main2")
@@ -388,6 +437,7 @@ function _M:OnCreate()
 		SoundMgr.Play(10001)
 		CCommerce.QueryReq(MCommerce.MyCommerceId)
 	end)
+
 	local arrow = moudle:Get("Arrow")
 	arrow.LocalScale = Vector3(1,-1,1)
 	local t = arrow.CachedTran:GetJTweener("T_Commerce_Arrow")
@@ -425,7 +475,7 @@ function _M:OnCreate()
 			if info.channel == MTalk.Channel.UnionsMsg then
 				_R.OnTalkUpdate(self,info.sendername, info.voiceTime .. "\"")
 			end
-		end	
+		end
 	end
 
 	local BtnCz = moudle:Get("CzBtn")
@@ -436,7 +486,6 @@ function _M:OnCreate()
 
 	local CzRed = moudle:Get("lightCz")
 	self:RegistRedpoint(CzRed, Define.SysId.Commerce_Recharge)
-
 
 	_R.OnRefreshActivityBtn(self)
 end

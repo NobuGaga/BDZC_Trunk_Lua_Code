@@ -27,31 +27,97 @@ function _M:OnSelectServer()
 end
 
 function _P:UpdateServerGroup(self, groupName)
-	self.ContentSrvList:DestroyChildren()
-	local srvList = CLogin.FindServerListByGroupName(groupName)
-	for k,v in pairs(srvList) do
-		local ServerModule = JGuiManager.GetMoudle(self.ContentSrvList,"M_Login_SrvNode", WindowType.UI, 0)
-		ServerModule:Get("SrvName").Text = v.name
-		MLogin.SetSrvStatusName(v.status, ServerModule:Get("SrvStatus"), ServerModule:Get("Img"))
-		ServerModule:Get("bg"):AddOnButton(function(...)
-			SoundMgr.Play(10001)
-				CLogin.SetSelectedServer(v)
-				WindowMgr.Call("ULogin", "RefreshServerInfo")
-				self:Destroy()
-			end, nil, 0.9)
+	local recommendStr = Csv.Text("login_srv_tuijian")
+	if groupName == recommendStr then
+		self.ServerListRect.Activity = false
+		self.RecommendListRect.Activity = true
+		self.SrvList1:DestroyChildren()
+		self.SrvList2:DestroyChildren()
+		-- 推荐列表
+		local recommendData = CLogin.FindServerListByGroupName(groupName)
+		if recommendData and recommendData[1] ~= nil then
+			_P.OnCreateListItem(self, self.SrvList1, recommendData[1])
+		end
+
+		if self.LoginedSrvList then
+			for k,v in pairs(self.LoginedSrvList) do
+				_P.OnCreateListItem(self, self.SrvList2, v)
+			end
+		end
+	else
+		self.ServerListRect.Activity = true
+		self.RecommendListRect.Activity = false
+		self.ContentSrvList:DestroyChildren()
+		local srvList = CLogin.FindServerListByGroupName(groupName)
+		for k,v in pairs(srvList) do
+			_P.OnCreateListItem(self, self.ContentSrvList, v)
+		end
 	end
+end
+
+function _P.OnCreateListItem(self, parent, data)
+	local serverModule = JGuiManager.GetMoudle(parent, "M_Login_SrvNode", WindowType.UI, 0)
+	serverModule:Get("SrvName").Text = data.name
+
+	local isShowLevel = (data.charlevel ~= nil and data.charlevel ~= '' and data.charlevel ~= '0')
+	serverModule:Get("Level1").Text = (isShowLevel and Csv.Text("staff_ji", {num = data.charlevel})) or ''
+	MLogin.SetSrvStatusName(data.status, serverModule:Get("SrvStatus"), serverModule:Get("Img"))
+	serverModule:Get("bg"):AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		CLogin.SetSelectedServer(data)
+		WindowMgr.Call("ULogin", "RefreshServerInfo")
+		self:Destroy()
+	end, nil, 0.9)
+end
+
+function _P.GetRecommendData()
+	local recommendList = {}
+	if MLogin.LoginedServerList then
+		for k,v in pairs(MLogin.LoginedServerList) do
+			local serverData = CLogin.GetServerInfoByID(v)
+			recommendList[#recommendList + 1] = serverData
+
+			if #recommendList >= 4 then
+				break
+			end
+		end
+	end
+	return recommendList
 end
 
 --界面构建
 function _M:OnCreate()
 	local moudle = self:CreateMoudle(self._RootNode, "M_Login_Server")
 
+	self.LoginedSrvList = _P.GetRecommendData()
+	
 	-- 固定内容初始化
 	moudle:Get("C_Text").Text = Csv.Text("select_srv_title")
 	moudle:Get("text").Text = Csv.Text("select_srv_last")
 	moudle:Get("text1_0").Text = Csv.Text("select_srv_curr")
-	moudle:Get("LastSrvName").Text = MLogin.LastLoginServer.name
-	MLogin.SetSrvStatusName(MLogin.LastLoginServer.status, moudle:Get("LastSrvStatus"), moudle:Get("line1"))
+	moudle:Get("title1").Text = Csv.Text("login_recommend")
+	moudle:Get("title2").Text = Csv.Text("login_logined")
+
+	if self.LoginedSrvList ~= nil and self.LoginedSrvList[1] ~= nil then
+		local lastLoginData = self.LoginedSrvList[1]
+		moudle:Get("LastSrvName").Text = lastLoginData.name
+		moudle:Get("CurrentServer"):AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			CLogin.SetSelectedServer(lastLoginData)
+			WindowMgr.Call("ULogin", "RefreshServerInfo")
+			self:Destroy()
+		end, nil, 0.9)
+
+		local isShowLevel = (lastLoginData.charlevel ~= nil and lastLoginData.charlevel ~= '' and lastLoginData.charlevel ~= '0')
+		moudle:Get("LastSrvLevel").Text = (isShowLevel and Csv.Text("staff_ji", {num = lastLoginData.charlevel})) or ''
+		MLogin.SetSrvStatusName(lastLoginData.status, moudle:Get("LastSrvStatus"), moudle:Get("line1"))
+	else
+		moudle:Get("LastSrvName").Text = ''
+		moudle:Get("LastSrvLevel").Text = ''
+		moudle:Get("line1").SpriteName = ''
+		moudle:Get("LastSrvStatus").Text = ''
+	end
+
 	moudle:Get("Btn_Back"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
@@ -89,7 +155,18 @@ function _M:OnCreate()
 			bg2.Activity = true
 		end
 	end
+
+	self.ServerListRect = moudle:Get("ServerList")
+	self.RecommendListRect = moudle:Get("RecommendList")
 	self.ContentSrvList = moudle:Get("ContentSrvList")
+	self.SrvList1 = moudle:Get("ContentRecList1")
+	self.SrvList2 = moudle:Get("ContentRecList2")
+
+	-- 设置下方数据，推荐-火爆-维护
+	for i=1,4 do
+		MLogin.SetSrvStatusName(i, moudle:Get("stageText" .. i), moudle:Get("stageImg" .. i))
+	end
+
 	_P:UpdateServerGroup(self, firstGroupName)
 end
 

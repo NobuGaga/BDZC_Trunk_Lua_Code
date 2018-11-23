@@ -1,0 +1,209 @@
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = {}
+local _P = {}
+
+_M.InvitationList = {}
+_M.GainInfo = {}
+_M.IsInvitation = false
+_M.code = 0
+
+function _M.Clean()
+	_M.InvitationList = {}
+	_M.GainInfo = {}
+	_M.code = 0
+end
+
+function _M.InvitationInit(data)
+	_M.code = data.code
+	_M.IsInvitation = data.IsInvitation
+
+	_M.InvitationList = {}
+	_M.GainInfo = {}
+	if data.invitationList ~= nil then
+		local _index = 0
+		for k,v in pairs(data.invitationList)do
+			_index = _index +1
+			local data = {
+				index = _index,
+				playerId = v.playerId,
+				level = v.level,
+				power = v.power,
+				recharge = v.recharge,
+				head = {gender = v.head.gender,headid = v.head.headid },
+			}
+			table.insert(_M.InvitationList,data)
+		end
+	end
+
+	if data.gainInfo ~= nil then
+		for k,v in pairs(data.gainInfo)do
+			local data = {
+				type = v.type,
+				gainTimes = _P.GetGainNum(v.gainTimes),
+			}
+			table.insert(_M.GainInfo,data)
+		end
+	end
+
+	_M.CheckRedPoint()
+end
+
+function _P.GetGainNum(value)
+	local gains = {}
+
+	if value ~= nil then
+		for k,v in pairs(value)do
+			local data = {
+				index = v.key,
+				count = v.value
+			}
+			table.insert(gains,data)
+		end
+	end
+
+	return gains
+end
+
+function _M.GetInvitationData(index)
+	if  _M.InvitationList ~= nil then
+		for k,v in pairs(_M.InvitationList)do
+			if v.index == index then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+function _M.GetInvitationsByType(funcId,target)
+	local invitations = {}
+	if  _M.InvitationList ~= nil then
+		for k,v in pairs(_M.InvitationList)do
+			if funcId == Define.SysId.Invitation_reward then
+				table.insert(invitations,v)
+				--return #_M.InvitationList
+			elseif funcId == Define.SysId.Invitation_power then
+				if v.power >= target then
+					table.insert(invitations,v)
+				end
+			elseif funcId == Define.SysId.Invitation_chongzhi then
+				if v.recharge >= target then
+					table.insert(invitations,v)
+				end
+			end
+		end
+	end
+	return invitations
+end
+
+--获取已领奖次数
+function _M.GetGainTimes(index,type)
+	if  _M.GainInfo ~= nil then
+		for k,v in pairs(_M.GainInfo)do
+			if v.type == type then
+				if v.gainTimes ~= nil then
+					for k2,v2 in pairs(v.gainTimes)do
+						if v2.index == index then
+							return v2.count
+						end
+					end
+				end
+			end
+		end
+	end
+	return 0
+end
+
+function _M.AddGainTimes(_type,_index)
+	if  _M.GainInfo ~= nil then
+		for k,v in pairs(_M.GainInfo)do
+			if v.type == _type then
+				if v.gainTimes ~= nil then
+					for k2,v2 in pairs(v.gainTimes)do
+						if v2.index == _index then
+							v2.count = v2.count +1
+							return
+						end
+					end
+
+					local info = {index = _index,count = 1}
+					table.insert(v.gainTimes,info)
+					return
+				else
+					v.gainTimes = {}
+					local info = {index = _index,count = 1}
+					table.insert(v.gainTimes,info)
+					return
+				end
+			end
+		end
+
+		local _gainTimes = {}
+		local info = {index = _index,count = 1}
+		table.insert(_gainTimes,info)
+		table.insert(_M.GainInfo,{type = _type,gainTimes = _gainTimes})
+		return
+	end
+end
+
+function _M.CheckRedPoint()
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Invitation, true)
+	local count = #funcs
+	if count > 0 then
+		for k,v in pairs(funcs) do
+			if _M.CheckToggleRed(v.id) then
+				CMain.UpdateRedpoint(true,Define.SysId.Welfare,Define.SysId.Invitation)
+				return
+			end
+		end
+	end
+	CMain.UpdateRedpoint(false,Define.SysId.Welfare,Define.SysId.Invitation)
+end
+
+function _M.CheckToggleRed(funcId)
+	local csvInvitation = nil
+	local csvInvitationData = nil
+	local rewardType = 1
+
+	if funcId == Define.SysId.Invitation_reward then
+		csvInvitation = Csv.FriendInvitation[1001]
+	elseif funcId == Define.SysId.Invitation_power then
+		csvInvitation = Csv.FriendInvitation[1002]
+	elseif funcId == Define.SysId.Invitation_chongzhi then
+		csvInvitation = Csv.FriendInvitation[1003]
+	end
+
+	if csvInvitation ~= nil then
+		rewardType = csvInvitation.id
+		for k,v in pairs(csvInvitation.value)do
+			if v ~= nil then
+				csvInvitationData = {target = v[1],rewardid = v[2],count = v[3]}
+				local gainNum = _M.GetGainTimes(k,rewardType)
+
+				if csvInvitationData ~= nil then
+					if gainNum < csvInvitationData.count then
+						local enoughList =  _M.GetInvitationsByType(funcId,csvInvitationData.target)
+						
+						if funcId == Define.SysId.Invitation_reward then
+							--邀请人数特殊处理
+							if #enoughList >= csvInvitationData.target then
+								--可领取
+								return true
+							end
+						else
+							if #enoughList > gainNum then
+								--可领取
+								return true
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
+return _M

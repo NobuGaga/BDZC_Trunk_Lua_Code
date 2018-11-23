@@ -1,0 +1,59 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local EFFECT_ID = 10138
+local Girl_ID = Csv.Const(150)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(callBack)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Kaifang_Story")
+	self.mMoudle = moudle
+
+	local dialogRect = moudle:Get("dialog")
+	local boxRect = moudle:Get("Box")
+	local name = moudle:Get("text1")
+	local value = moudle:Get("text2")
+	local nextImg = moudle:Get("Next")
+	boxRect.Activity = false
+
+	moudle:Get("continue").Text = Csv.Text("guide_continue")
+
+	name.Text = Csv.Text("guide_date_phone_name")
+	value.Text = Csv.Text("guide_date_phone_value")
+
+	moudle:Get("bg"):AddOnClick(function()
+		--关闭描述
+		dialogRect.Activity = false
+		boxRect.Activity = true
+
+		SoundMgr.Play(10039)
+	end)
+
+	boxRect:AddOnClick(function()
+		self:Destroy()
+		callBack()
+	end)
+
+	local effectNode = moudle:Get("EffectActor")
+	CCommon.CreateEffect(effectNode, EFFECT_ID)
+
+	local tween = moudle:Get("Next"):DOAnchorPosY(nextImg.LocalPosition.y - 10,0.5)
+	tween:SetEase(CS.DG.Tweening.Ease.Linear)
+	tween:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+end
+
+return _M

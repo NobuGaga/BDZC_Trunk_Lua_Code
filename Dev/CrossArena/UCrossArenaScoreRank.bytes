@@ -1,0 +1,189 @@
+--跨服竞技场-积分赛排名界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CRank = JRequire "Dev.Rank.CRank"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local UCrossArenaScoreRankTabrank = JRequire "Dev.CrossArena.UCrossArenaScoreRankTabrank"
+local UCrossArenaScoreRankTabreward = JRequire "Dev.CrossArena.UCrossArenaScoreRankTabreward"
+local MRank = JRequire "Dev.Rank.MRank"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+local TAB_TYPE = {
+	rank = 1,
+	reward = 2,
+}
+
+local TAB_CONTENT = {
+	[1] = {id = TAB_TYPE.rank, name = Csv.Text("cross_arena_score")},
+	[2] = {id = TAB_TYPE.reward, name = Csv.Text("cross_arena_reward")}
+}
+
+function _M:BeforeDestroy()
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	if self.mTabHandle ~= nil then
+		self.mTabHandle:delete()
+		self.mTabHandle = nil
+	end
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	CRank.GetRankList(Define.CrossRankType.CrossArena, false)
+
+	self.mCurTabType = nil
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Matching_Ranking")
+	self.Moudle = moudle
+
+	self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 1)
+	self:RegistRedpoint(moudle:Get("redpoint"), Define.SysId.CrossArena, 1, 1)
+
+	moudle:Get("textBtnGet").Text = Csv.Text("cross_arena_getReward")
+	self.PageNode = moudle:Get("PageNode")
+	self.content = moudle:Get("content")
+
+	moudle:Get("textSelfRank").Text = Csv.Text("cross_arena_tx8")
+	--倒计时
+	self.TimeTitle = moudle:Get("Time")
+	self.countdown = moudle:Get("TimeNum")	
+	local function doUpdate(self)
+		local serverTime = HeartBeat.ServSecond()
+		local startTime
+		local endTime
+		if MCrossArena.GetArenaStageType() == MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt then
+			self.TimeTitle.Text = Csv.Text("cross_arena_tx29")
+			startTime, endTime = MCrossArena.GetJiFenSaiRsltTime()
+		else
+			self.TimeTitle.Text = Csv.Text("cross_arena_tx7")
+			startTime, endTime = MCrossArena.GetJiFenSaiTime()
+		end		
+		local rs = endTime - serverTime
+		if rs < 0 then
+			rs = 0
+		end
+		
+		self.countdown.Text = LuaUtil.GetTimeHMS(rs)
+	end
+
+	doUpdate(self)
+	self.countdown:AddOnUpdate(function()
+		doUpdate(self)
+	end, nil, 1)
+	moudle:Get("btnGet"):AddOnButton(function()
+		--领奖
+		CCrossArena.CCUArenaReward(MCrossArena.REWARD_TYPE.Score)
+	end,nil, 1.2)
+	moudle:Get("Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil, 1.2)
+
+	--刷新底部信息
+	_P.RefreshBotInfo(self)
+
+	--Table标签控制
+	local colorLight = Color(255/255,225/255,75/255,1)
+	local colorDefault = Color(0/255,195/255,255/255,1)
+	self.mTabHandle = TabGroup.new(function (funcId)
+		_P.OnChoose(self, funcId)
+	end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+
+	for k, v in pairs(TAB_CONTENT) do
+		self.mTabHandle:Add(v.id, moudle:Get("Btn_c"..k), moudle:Get("C_text"..k), v.name)
+	end
+	self.mTabHandle:Choose(TAB_TYPE.rank)
+end
+
+function _P.OnChoose(self, funcId)
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+	self.mCurTabType = funcId
+	local moudle = self.Moudle
+	if funcId == TAB_TYPE.rank then
+		self.ChooseMoudle = UCrossArenaScoreRankTabrank.new(self.PageNode)
+		moudle:Get("btnNode").Activity = true		
+	elseif funcId == TAB_TYPE.reward then
+		self.ChooseMoudle = UCrossArenaScoreRankTabreward.new(self.content)	
+		moudle:Get("btnNode").Activity = false
+	end
+end
+
+function _P.RefreshBotInfo(self, data)
+	local moudle = self.Moudle
+	local isGeted = MCrossArena.GetIsGetScoreReward()
+	local canShow = MCrossArena.GetArenaStageType() == MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt and MCrossArena.GetIsCanScoreMatch()
+	--排名
+	moudle:Get("textSelfRank").Activity = canShow
+	--已领取标记
+	moudle:Get("GetAnim").Activity = canShow and isGeted
+
+	local btnGet = moudle:Get("btnGet")
+	btnGet.Activity = canShow and not isGeted
+	btnGet.IsGray = isGeted
+	btnGet.RaycastTarget = not isGeted
+
+	if data ~= nil and isGeted then
+		local csvCrossAren = Csv.CrossArena[MCrossArena.State.actId]
+		local rewardList = csvCrossAren.reward[data.index]
+		if rewardList ~= nil then
+			local pos = btnGet.RootCanvasPos
+			for index,item in pairs(rewardList) do
+				CCommon.ShowFlyItem(self._RootNode, item[1], item[2], (index - 1) * 0.6, pos + Vector2(-100, 0))
+			end
+		end
+	end
+	--排行
+	local rank = 0
+	local rankinfo = MRank.AllRankTable[Define.CrossRankType.CrossArena]
+	if rankinfo ~= nil and rankinfo.ranklist then
+		for k, v in pairs(rankinfo.ranklist) do
+			if v.playerid == MPlayer.GetId() then
+				rank = v.rank
+				break
+			end
+		end
+	end
+	moudle:Get("rankNum").Text = rank
+	if rank == 0 then
+		btnGet.Activity = false
+	end
+end
+
+function _R.RefreshData(self, data)
+	local moudle = self.Moudle
+	_P.RefreshBotInfo(self, data)
+	if self.mCurTabType == TAB_TYPE.rank and self.ChooseMoudle then
+		self.ChooseMoudle:RefreshData()
+	end
+end
+
+return _M

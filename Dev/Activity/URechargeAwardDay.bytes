@@ -33,6 +33,8 @@ end
 
 function _P.CreateList(self)
 	self.mItemTable = {}
+	_P.GetCurTime(self)
+
 	local moudle = self.mMoudle
 	local content = moudle:Get("content")
 	local info
@@ -111,8 +113,7 @@ function _P.CreateList(self)
 			self.mItemTable[v.id] = item
 		end
 		content.LocalPosition = Vector2(0,RoleY)
-		if info.state.endTime ~= nil and info.state.endTime > 0 then
-			local endTime = info.state.endTime
+		if self.TodayLeaveTime ~= nil and self.TodayLeaveTime >= 0 then
 			if self.Tween ~= nil then
 				self.Tween:Destroy()
 			end
@@ -155,16 +156,24 @@ function _P.UpdateTime(self)
 		end
 	end
 	if info ~= nil then
-		local endTime = info.state.endTime
+		local endTime = self.TodayLeaveTime
 		local second = endTime - HeartBeat.ServSecond()
 		if second < 0 then
-			second = 0
+			_P.GetCurTime(self)
+			second = self.TodayLeaveTime - HeartBeat.ServSecond()
 		end
 		for k,v in pairs(self.mItemTable) do
 			local itemMoudle = v.moudle
 			itemMoudle:Get("timetext").Text = Csv.Text("chargeaward_time",{time = LuaUtil.GetTimeHMS(second)})
 		end
 	end
+end
+
+function _P.GetCurTime(self)
+	local curYear = os.date("%Y", HeartBeat.ServSecond())
+	local curMonth = os.date("%m", HeartBeat.ServSecond())
+	local curDay = os.date("%d", HeartBeat.ServSecond())
+	self.TodayLeaveTime = os.time({day = curDay, month = curMonth, year = curYear, hour = 24, minute = 0, second = 0}) - 1
 end
 
 function _P.OnClickBtn(self,id)

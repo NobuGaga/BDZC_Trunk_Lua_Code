@@ -3,6 +3,7 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
@@ -36,10 +37,7 @@ function _M:OnCreate()
 		self:Destroy()
 	end, nil, 1.2)
 
-	-- CActivity.EnterSrvRewardReq()
-	_R.OnEnterSrvReward(self, {actId = 14015, state = {state = 2, startTime = 1536119951, endTime = 1537286399, lefttime = 100000},
-		srvPrayTimes = 10, rewardList = {{index = 1, state = 1},{index = 2, state = 0},{index = 3, state = 0},{index = 4, state = 0},{index = 5, state = 0}},
-		myPrayTimes = 5})
+	CActivity.EnterSrvRewardReq()
 end
 
 
@@ -62,12 +60,31 @@ function _P.SetViewData(self, activityData)
 
 	self.PrayTable = {}
 	if activityData.rewardList ~= nil and next(activityData.rewardList) ~= nil then
-		for k,v in pairs(activityData.rewardList) do
+		local listData = _P.GetSortListData(activityData.rewardList)
+		for k,v in pairs(listData) do
 			self.PrayTable[v.index] = _P.OnCreatePrayItem(self, contentTransform, {index = v.index, needNum = prayConf.needNum[v.index], reward = prayConf.reward[v.index], state = v.state})
 		end
 	end
 
 	_P.OnStartTimer(self)
+end
+
+
+function _P.GetSortListData(listData)
+	local sortData = listData
+	table.sort(sortData, function(a, b)
+		if a.state == MActivity.RewardGetState.Geted and b.state == MActivity.RewardGetState.Geted then
+			return a.index < b.index
+		elseif a.state ~= MActivity.RewardGetState.Geted and b.state == MActivity.RewardGetState.Geted then
+			return true
+		elseif a.state == MActivity.RewardGetState.Geted and b.state ~= MActivity.RewardGetState.Geted then
+			return false
+		else
+			return a.index < b.index
+		end
+	end)
+
+	return sortData
 end
 
 
@@ -80,7 +97,7 @@ function _P.OnCreatePrayItem(self, itemGrid, data)
 		if data.reward ~= nil then
 			local itemContent = itemModule:Get("content")
 			for k,v in pairs(data.reward) do
-				CCommon.CreateItem(itemContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.Activity)
+				CCommon.CreateItem(itemContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.MidAFestival)
 			end
 
 			if #data.reward > COLUMN then
@@ -105,16 +122,20 @@ function _P.OnCreatePrayItem(self, itemGrid, data)
 			_P.OnClickBtn(self, data)
 		end, nil, 0.9)
 		
-		if data.state == 2 then  -- 已领取
+		if data.state == MActivity.RewardGetState.Geted then  -- 已领取
 			getBtn.Activity = false
 			getImg.Activity = true
 		else
 			getBtn.Activity = true
 			getImg.Activity = false
-			if self.ActivityData.srvPrayTimes >= data.needNum and data.state == 1 then
+			if self.ActivityData.srvPrayTimes >= data.needNum and MActivity.RewardGetState.CanGet then
 				btnText.Text = Csv.Text("chargeaward_get")
+				getBtn.IsGray = false
+				getBtn.RaycastTarget = true
 			else
-				btnText.Text = Csv.Text("chargeaward_go")
+				btnText.Text = Csv.Text("sevendaytarget_overdue")
+				getBtn.IsGray = true
+				getBtn.RaycastTarget = false
 			end
 		end
 	end
@@ -125,16 +146,16 @@ end
 
 
 function _P.OnClickBtn(self, data)
-	if data.state == 2 then
+	if data.state == MActivity.RewardGetState.Geted then
 		CCommon.ShowError(Csv.Text("err_reward_geted"))
+		return
+	elseif data.state == MActivity.RewardGetState.CanNotGet then
+		CCommon.ShowError(Csv.Text("err_target_condition"))
 		return
 	end
 
-	if self.ActivityData.srvPrayTimes >= data.needNum and data.state == 1 then
-		-- CActivity.GetRewardReq(self.ActivityData.actId, data.index)
-		_R.GetRewardBack(self, {actId = 14015, index = 1, isGeted = true})
-	else
-		WindowOpen.Open(Define.SysId.Recharge)
+	if self.ActivityData.srvPrayTimes >= data.needNum and data.state == MActivity.RewardGetState.CanGet then
+		CActivity.GetFireRewardReq(self.ActivityData.actId, data.index)
 	end
 end
 
@@ -195,29 +216,26 @@ function _R.GetRewardBack(self, data)
 	if data ~= nil and data.index ~= nil then
 		for k,v in pairs(self.ActivityData.rewardList) do
 			if v.index == data.index then
-				v.state = 2
+				v.state = MActivity.RewardGetState.Geted
 				break
 			end
 		end
 
-		if data.isGeted then
-			
-			local itemModule = self.PrayTable[data.index].module
-			itemModule:Get("C_Btn_a").Activity = false
+		local itemModule = self.PrayTable[data.index].module
+		itemModule:Get("C_Btn_a").Activity = false
 
-			local effectNode = itemModule:Get("EffectNode")
-			local effectmodule = CCommon.CreateEffect(effectNode, EFFECTID, nil, function( ... )
-				itemModule:Get("Geted").Activity = true
-			end, {M_Effect_Achieve_Get = "fl_030"})
-			effectmodule.SelfRect.SizeDelta = Vector2(138, 138)
-			SoundMgr.PlaySystem(10004)
+		local effectNode = itemModule:Get("EffectNode")
+		local effectmodule = CCommon.CreateEffect(effectNode, EFFECTID, nil, function( ... )
+			itemModule:Get("Geted").Activity = true
+		end, {M_Effect_Achieve_Get = "fl_030"})
+		effectmodule.SelfRect.SizeDelta = Vector2(138, 138)
+		SoundMgr.PlaySystem(10004)
 
-			local prayConf = Csv.ActivityAllSerPray[data.actId]
-			local rewardList = prayConf.reward[data.index]
-			if rewardList ~= nil then
-				for k,v in pairs(rewardList) do
-					CCommon.ShowFlyItem(self._RootNode, v[1], v[2], k*0.3, effectNode.RootCanvasPos)
-				end
+		local prayConf = Csv.ActivityAllSerPray[data.actId]
+		local rewardList = prayConf.reward[data.index]
+		if rewardList ~= nil then
+			for k,v in pairs(rewardList) do
+				CCommon.ShowFlyItem(self._RootNode, v[1], v[2], k*0.3, effectNode.RootCanvasPos)
 			end
 		end
 	end

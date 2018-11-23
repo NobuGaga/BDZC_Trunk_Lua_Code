@@ -1,0 +1,296 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local DIRNK_EFFECT_ID = 10099
+--酒量增加，消耗道具，消耗数量，自身名称，自身icon
+local RECOVE_ITEMA_1 = Csv.Const(10216)[1]--{id = 31007,cost = 100}
+local RECOVE_ITEMA_2 = Csv.Const(10216)[2]--{id = 31006,cost = 300}
+local DICE_TWEEN_1 = "T_Gril_Game_Dice1"
+local DICE_TWEEN_2 = "T_Gril_Game_Dice2"
+local BIG_DICE_ICON = {"mn_050","mn_051","mn_052"}
+local SMALL_DICE_ICON = {"mn_053","mn_054","mn_055","mn_056"}
+local T_GIRL_GAME_BTN = "T_GIRL_GAME_BTN"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local Girl_ID = Csv.Const(150)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.DoDiceGame(self)
+	local csvGuideGirl = Csv.GuideGirlDrink[self.mCsvGirlDrinkId]
+
+	local diceTween1 = self.mDiceTween1
+	local diceTween2 = self.mDiceTween2
+
+	local cupOpen1 =  self.mCupOpen1
+	local cupOpen2 =  self.mCupOpen2
+	local dice1 =  self.mDice1
+	local dice2 =  self.mDice2
+	local cupClose1 =  self.mCupClose1
+	local cupClose2 =  self.mCupClose2
+
+	diceTween1:SetOnComplete(function()
+		cupOpen1.Activity = true
+		cupOpen2.Activity = true
+		cupClose1.Activity = false
+		cupClose2.Activity = false
+
+		local bigIndex = math.random(1,#BIG_DICE_ICON)
+		local smallIndex = math.random(1,#SMALL_DICE_ICON)
+		if csvGuideGirl.result == 1 then
+			SoundMgr.Play(10035)
+			CCommon.ShowError(Csv.Text("lastgirl_dice_win"))
+			dice1.SpriteName = SMALL_DICE_ICON[smallIndex]
+			dice2.SpriteName = BIG_DICE_ICON[bigIndex]
+
+			CCommon.CreateEffect(self.mGirlActor,DIRNK_EFFECT_ID)
+		else
+			SoundMgr.Play(10036)
+			CCommon.ShowError(Csv.Text("lastgirl_dice_fail"))
+			dice1.SpriteName = BIG_DICE_ICON[bigIndex]
+			dice2.SpriteName = SMALL_DICE_ICON[smallIndex]
+
+			CCommon.CreateEffect(self.mPlayerActor,DIRNK_EFFECT_ID)
+		end
+		-----------------------
+		--延迟3秒后
+		self.mMoudle.SelfRect:AddOnTime(function()
+			cupOpen1.Activity = false
+			cupOpen2.Activity = false
+			cupClose1.Activity = true
+			cupClose2.Activity = true
+
+			if csvGuideGirl.next ~= nil then
+				self.mCsvGirlDrinkId = csvGuideGirl.next
+				_P.ShowDrink(self)
+				_P.ShowSpeek(self)
+	
+				self:Unlock()
+			else
+				--结束返回
+				self:Destroy()
+				self.mCallBack()
+			end
+		end,nil,2)
+	end)
+	
+	diceTween1:Play()
+	diceTween2:Play()
+end
+
+local csvGirlDrinkId = 1
+
+function _M:OnCreate(callBack)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Game_Story")
+	self.mMoudle = moudle
+	self.mCallBack = callBack
+
+	local backBtn = moudle:Get("C_Back_Btn")
+	backBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		self:Destroy()
+
+		callBack()
+	end, nil, 1.2)
+
+	local csvGuideGirl = Csv.GuideGirlDrink[csvGirlDrinkId]
+
+	self.mCsvGirlDrinkId = csvGirlDrinkId
+	self.mGuideGirlCsv = csvGuideGirl
+
+	self.mData = data
+	self.mSpeekTab = {}
+	self.mIsTalk = false
+	self.mIsSuccess = true
+
+	moudle:Get("DrinkerText").Text = Csv.Text("girl_drinker")
+	moudle:Get("playerDrinkerText").Text = Csv.Text("girl_drinker")
+
+	local startBtn = moudle:Get("StartBtn")
+	self.mStartBtn = startBtn
+	startBtn:AddOnButton(function(...)
+		SoundMgr.Play(10034)
+		startBtn.Activity = false
+		self:Lock()
+		--开始游戏
+		_P.DoDiceGame(self)
+	end)
+	startBtn.Activity = false
+	
+	local DHK = moudle:Get("DHK")
+	local DHKtext = moudle:Get("DHKtext")
+	self.mDHK = DHK
+	self.mDHKtext = DHKtext
+
+	------------------------
+	local girlIcon = moudle:Get("BSX")
+	local girlHead = moudle:Get("head")
+	local girlDrinks = {}
+	local girlunDrinks = {}
+	for i=1,6 do 
+		local drink = moudle:Get("Drinker"..i)
+		local undrink = moudle:Get("unDrinker"..i)
+		girlDrinks[i] = drink
+		girlunDrinks[i] = undrink
+	end
+
+	local playerHead = moudle:Get("playerhead_0")
+	local playerDrinks = {}
+	local playerunDrinks = {}
+	for i=1,6 do 
+		local drink = moudle:Get("playerDrinker"..i)
+		local undrink = moudle:Get("playerunDrinker"..i)
+		playerDrinks[i] = drink
+		playerunDrinks[i] = undrink
+	end
+
+	self.mGirlDrinks = girlDrinks
+	self.mGirlUnDrinks = girlunDrinks
+	self.mPlayerDrinks = playerDrinks
+	self.mPlayerUnDrinks = playerunDrinks
+
+	--骰子
+	local cupOpen1 = moudle:Get("cupOpen1")
+	local cupOpen2 = moudle:Get("cupOpen2")
+	local dice1 = moudle:Get("Dice1")
+	local dice2 = moudle:Get("Dice2")
+	local cupClose1 = moudle:Get("cupClose1")
+	local cupClose2 = moudle:Get("cupClose2")
+
+	local DiceTween1 = cupClose1.CachedTran:GetJTweener(DICE_TWEEN_1)
+	local DiceTween2 = cupClose2.CachedTran:GetJTweener(DICE_TWEEN_2)
+	local btnTween = startBtn.CachedTran:GetJTweener(T_GIRL_GAME_BTN)
+	btnTween:Play()
+
+	cupOpen1.Activity = false
+	cupOpen2.Activity = false
+
+	self.mCupOpen1 = cupOpen1
+	self.mCupOpen2 = cupOpen2
+	self.mDice1 = dice1
+	self.mDice2 = dice2
+	self.mCupClose1 = cupClose1
+	self.mCupClose2 = cupClose2
+	self.mDiceTween1 = DiceTween1
+	self.mDiceTween2 = DiceTween2
+
+	self.mGirlActor = moudle:Get("girlActorPanel")
+	self.mPlayerActor = moudle:Get("playerActorPanel")
+	------------------
+	if Girl_ID == nil then
+		Girl_ID = 2001
+	end
+
+	local girlsData = Csv.KnowGirl[Girl_ID]
+	local girlCsv = Csv.Girl[Girl_ID]
+	girlHead.SpriteName = girlsData.icon
+	if girlCsv.prefab ~= nil and girlCsv.prefab > 0 then
+		CCommon.CreateActor(girlIcon, girlCsv.prefab, CCommon.ActorFieldMap.girl_game)
+	else
+		girlIcon.SpriteName = girlsData.bigIcon
+	end	
+	playerHead.SpriteName = MPlayer.GetSHeadIcon()
+	moudle:Get("C_Text").Text = MGirl.GetGirlName(Girl_ID)
+
+	_P.ShowSpeek(self)
+	_P.ShowDrink(self)
+
+end
+
+function _P.ShowSpeek(self)
+	local csvGuideGirl = Csv.GuideGirlDrink[self.mCsvGirlDrinkId]
+
+	local isEnd = false
+	local speekTab = {}
+	for k,v in pairs(csvGuideGirl.girlTalk)do
+		table.insert(speekTab,v)
+	end
+	if csvGuideGirl.girlDrink <= 0 then
+		isEnd = true
+	end
+	self.mIsTalk = true
+	self.mSpeekTab = speekTab
+	_P.DoSpeek(self,isEnd)
+end
+
+function _P.DoSpeek(self,isEnd)
+	local DHKtext = self.mDHKtext
+	local DHK = self.mDHK
+	local gameBtn = self.mStartBtn
+	DHK.Activity = true
+	gameBtn.Activity = false
+
+	local speekTab = self.mSpeekTab
+
+	local doWait = function()
+		DHK:AddOnTime(function()
+			if speekTab ~=nil and #speekTab > 0 then
+				_P.DoSpeek(self)
+			else
+				self.mIsTalk = false
+				DHK.Activity = false
+
+				--结束
+				if isEnd then
+					self:Destroy()
+					self.mCallBack()
+				else
+					gameBtn.Activity = true
+				end
+			end
+		end,nil,1)
+	end
+	DHKtext.Text = speekTab[1]
+	table.remove(speekTab,1)
+	doWait()
+end
+
+function _P.ShowDrink(self)
+	local girlDrinks = self.mGirlDrinks 
+	local girlunDrinks = self.mGirlUnDrinks
+	local playerDrinks = self.mPlayerDrinks 
+	local playerunDrinks = self.mPlayerUnDrinks 
+	
+	local csvGuideGirl = Csv.GuideGirlDrink[self.mCsvGirlDrinkId]
+
+	--玩家酒量
+	for k,v in pairs(playerDrinks)do
+		playerunDrinks[k].Activity = false
+		if k <= csvGuideGirl.ownMax then
+			playerDrinks[k].Activity = true
+			if k > csvGuideGirl.ownDrink then
+				playerunDrinks[k].Activity = true
+			end
+		else
+			playerDrinks[k].Activity = false
+		end
+	end
+	--美女酒量
+	for k,v in pairs(girlDrinks)do
+		girlunDrinks[k].Activity = false
+		if k <= csvGuideGirl.girlMax then
+			girlDrinks[k].Activity = true
+			if k > csvGuideGirl.girlDrink then
+				girlunDrinks[k].Activity = true
+			end
+		else
+			girlDrinks[k].Activity = false
+		end
+	end
+end
+
+return _M

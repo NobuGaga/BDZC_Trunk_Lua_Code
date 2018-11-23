@@ -16,6 +16,8 @@ local SDKCollectType = JRequire "SDK.SDKCollectType"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 --@RefType [Dev.Talk.MTalk.bytes#_M]
 local MTalk = JRequire "Dev.Talk.MTalk"
+--@RefType [Dev.SuperVIP.CSuperVIP.bytes#_M]
+local CSuperVIP = JRequire "Dev.SuperVIP.CSuperVIP"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -302,7 +304,13 @@ function _P.OnInit(msg)
 	info.attr[Define.AttrType.Zhili] = msg.attr.Zhili
 
 	info.sex = msg.sex or 1
-
+	info.chatBg = msg.chatBg
+	info.getChatBg = {}
+	if msg.getChatBg ~= nil then
+		for _,v in pairs(msg.getChatBg) do
+			info.getChatBg[v] = true
+		end
+	end
 	local dress = {}
 	if msg.dress ~= nil then
 		for k,v in pairs(msg.dress) do
@@ -317,6 +325,7 @@ function _P.OnInit(msg)
 
 	SDKMgr.ReqCollectData(SDKCollectType.LoginRole)
 	_P.CheckRedpoint()
+	CSuperVIP.OnPlayerInit()
 end
 
 function _P.OnUpdateAttr(msg)
@@ -400,10 +409,16 @@ end
 -- 兑换兑换码返回
 function _P.OnExchangeBack(data)
 	if data.errCode == 0 then
-		WindowMgr.Call("USetting", "OnExchangeSuccess")
+		WindowMgr.Call("USetting", "OnExchangeSuccess", data.items)
 		CCommon.ShowRight(Csv.Text("set_exchange_success"))
+	elseif data.errCode == 1 then -- 礼包码已被使用或无效
+		CCommon.ShowRight(Csv.Text("set_exchange_error3"))
 	elseif data.errCode == 4 then -- 已经领取
 		CCommon.ShowRight(Csv.Text("set_exchange_error2"))
+	elseif data.errCode == 7 then -- 已使用过次此类礼包码
+		CCommon.ShowRight(Csv.Text("set_exchange_error4"))
+	elseif data.errCode == 8 then -- 礼包码已失效
+		CCommon.ShowRight(Csv.Text("set_exchange_error5"))
 	else
 		CCommon.ShowRight(Csv.Text("set_exchange_error1", {num = data.errCode}))
 	end
@@ -463,12 +478,20 @@ function _P.OnChangDress(data)
 	end
 end
 
-function _P.OnChatBGPutOn(data)
+function _P.OnChatBGPutOn(msg)
+	local info = MPlayer.PlayerInfo
+	info.chatBg = msg.id
+	info.getChatBg[msg.id] = true
 
+	WindowMgr.Call("UPlayerChatHeadBG", "OnChatBGPutOn", msg.id)
 end
 
-function _P.OnChatBGUpdate(data)
-	
+function _P.OnChatBGUpdate(msg)
+	local info = MPlayer.PlayerInfo
+	info.chatBg = msg.id
+	info.getChatBg[msg.id] = true
+
+	WindowMgr.Call("UPlayerChatHeadBG", "OnChatBGUpdate", msg.id)
 end
 
 function _P.OnChangeSexSuccess(data)

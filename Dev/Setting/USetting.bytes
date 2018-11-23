@@ -12,6 +12,8 @@ local MLogin = JRequire "Dev.Login.MLogin"
 local CNotice = JRequire "Dev.Notice.CNotice"
 --@RefType [Dev.Main.MMain.bytes#_M]
 local MMain = JRequire "Dev.Main.MMain"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -20,6 +22,8 @@ local _R = {}
 local UnityTime = CS.UnityEngine.Time
 local lastTime = 0
 
+--用户中心功能表ID
+local UserCenterFuncID = 11202
 --兑换码功能表ID
 local RedeemCodeFuncID = 11201
 
@@ -115,7 +119,7 @@ function _M:OnCreate()
 		_P.OnSetAntiData(self)
 	end
 	--联系客服
-	local isHaveCSBtn = false
+	-- local isHaveCSBtn = false
 	-- local spidCsvLine = Csv.SpidAlter[1]
 	-- if spidCsvLine ~= nil and spidCsvLine.spid ~= nil then
 	-- 	local info = spidCsvLine.spid[string.upper(GameSetting.Spid)]
@@ -123,20 +127,35 @@ function _M:OnCreate()
 	-- 		isHaveCSBtn = false
 	-- 	end
 	-- end
-	if isHaveCSBtn then
-		module:Get("C_text_0").Text = Csv.Text("set_ConnectServer")
-		local Service = module:Get("C_Btn_b")
-		Service:AddOnButton(function ( ... )
+	-- if isHaveCSBtn then
+	-- 	module:Get("C_text_0").Text = Csv.Text("set_ConnectServer")
+	-- 	local Service = module:Get("C_Btn_b")
+	-- 	Service:AddOnButton(function ( ... )
+	-- 		SoundMgr.Play(10001)
+	-- 		WindowMgr.Create("USetService")
+	-- 	end, nil, 0.9)
+	-- else
+	-- 	module:Get("C_Btn_b").Activity = false
+	-- 	local noticeBtn = module:Get("C_Btn_b2")
+	-- 	local pos = noticeBtn.LocalPosition
+	-- 	pos.x = 0
+	-- 	module:Get("C_Btn_b2").LocalPosition = pos
+	-- end	
+	--用户中心
+	local UserCenter = module:Get("C_Btn_b")
+	if MMain.FuncIsOpen(UserCenterFuncID) and not GameSetting.IsiOSCommit then
+		module:Get("C_text_0").Text = Csv.Text("set_UserCenter")
+		UserCenter:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
-			WindowMgr.Create("USetService")
+			SDKMgr.ReqEnterUserCenter()
 		end, nil, 0.9)
 	else
-		module:Get("C_Btn_b").Activity = false
+		UserCenter.Activity = false
 		local noticeBtn = module:Get("C_Btn_b2")
 		local pos = noticeBtn.LocalPosition
 		pos.x = 0
 		module:Get("C_Btn_b2").LocalPosition = pos
-	end	
+	end
 	--游戏公告
 	module:Get("C_text_0_0").Text = Csv.Text("set_Notice")
 	local Notice = module:Get("C_Btn_b2")
@@ -163,7 +182,11 @@ function _M:OnCreate()
 		module:Get("C_text_2").Text=Csv.Text("set_exit")
 		module:Get("C_Btn_d"):AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
-			GameSetting.ToReLogin(GameSetting.ReLoginType.ChangeAccount)
+			if Define.PlatformType.iOSYiWanForeign == GameSetting.Spid or Define.PlatformType.iOSYiWanAsia == GameSetting.Spid then
+				SDKMgr.ReqLogout()
+			else
+				GameSetting.ToReLogin(GameSetting.ReLoginType.ChangeAccount)
+			end
 		end,nil,0.9)
 	else
 		module:Get("C_Btn_d").Activity = false
@@ -173,7 +196,7 @@ function _M:OnCreate()
 	module:Get("C_text_3").Text=Csv.Text("set_change")
 	module:Get("C_Btn_e"):AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-	    GameSetting.ToReLogin(GameSetting.ReLoginType.NoChangeAccount)		
+	    GameSetting.ToReLogin(GameSetting.ReLoginType.ChangeServerList)		
 	end,nil,0.9)
 
 	--版本号
@@ -417,11 +440,15 @@ end
 
 
 -- 兑换码返回
-function _R.OnExchangeSuccess(self)
+function _R.OnExchangeSuccess(self, items)
 	local sdkInput = self.mModule:Get("input")
-	if sdkInput == nil then return end
+	if sdkInput ~= nil then
+		sdkInput.Text = ""
+	end
 
-	sdkInput.Text = ""
+	if items ~= nil and #items > 0 then
+		WindowMgr.Create("UGiftGet", items)
+	end
 end
 
 return _M

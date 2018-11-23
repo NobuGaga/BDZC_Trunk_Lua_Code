@@ -1,0 +1,54 @@
+-- 登陆公告界面
+local JGuiManager = CS.JGui.JGuiManager
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MNotice = JRequire "Dev.Notice.MNotice"
+
+
+local _M = Class()
+local _P = {}
+
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Login_Notice", WindowType.UI, 0)
+	self.mMoudle = module
+	module:Get("Btn_Back"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	module:Get("C_Text").Text = _P.OnOperateString(MNotice.LoginData.title)
+	module:Get("text").Text = _P.OnOperateString(MNotice.LoginData.content)
+
+	module:Get("C_Btn_a"):AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil, 0.9)
+	module:Get("C_text").Text = Csv.Text("common_sure")
+end
+
+
+-- 支持换行
+function _P.OnOperateString(textStr)
+	if textStr == nil then return '' end
+
+	local tempStr = ''
+	tempStr= string.gsub(textStr, '|', '/')
+	tempStr = string.gsub(tempStr, '&lt;', '<')
+	tempStr = string.gsub(tempStr, '&gt;', '>')
+	tempStr = string.gsub(tempStr, '/n', '\n')
+
+	return tempStr
+end
+
+
+function _M:Destroy()
+	local module = self.mMoudle
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

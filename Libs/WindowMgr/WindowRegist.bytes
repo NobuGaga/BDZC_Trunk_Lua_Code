@@ -1,5 +1,13 @@
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 
+local _WindowOpen
+local function reqWindowOpen()
+	if not _WindowOpen then
+		_WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+	end
+	return _WindowOpen
+end
+
 local _M = {}
 
 ---------------------------------------------------
@@ -155,7 +163,7 @@ _M.UGirl = {
 --手机聊天界面
 _M.UGirlUnlock = {		
 		WinType = WindowType.UI,		
-		Moudle = "Dev.Girl.GirlUnlockTab",
+		Moudle = "Dev.Girl.GrilNewUnlock",
 		IsFull = true,
 		}
 _M.UGirlMarried = {		
@@ -178,6 +186,7 @@ _M.UBattle = {
 		SysId = Define.SysId.Airport, 
 		IsFull = true,
 		MusicId = 103,
+		IsCanPop = true,
 		}
 --地产竞标主界面
 _M.UBuyLandMain = {	
@@ -253,6 +262,54 @@ _M.UAircraft = {
 		IsFull = true,
 		MusicId = 108
 		}
+--新手引导飞机剧情
+_M.UStoryAircraft = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Aircraft.UStoryAircraft",
+	IsFull = true,
+	}
+--新手引导战斗
+_M.UGuideBattle = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Battle.UGuideBattle",
+	IsFull = true,
+	}
+--新手引导美女喝酒
+_M.UGuideGirlDrink = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Girl.UGuideGirlDrink",
+	IsFull = true,
+	}
+--新手引导美女喝酒胜利
+_M.UGuideGameWin = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Girl.UGuideGameWin",
+	IsFull = true,
+	}
+--新手引导约会
+_M.UGuideDate = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Girl.UGuideDate",
+	IsFull = true,
+	}
+--新手引导手机
+_M.UGuidePhone = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Girl.UGuidePhone",
+	IsFull = true,
+	}
+--新手引导手机简历对话
+_M.UGuidePhoneTalk = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Girl.UGuidePhoneTalk",
+	IsFull = true,
+	}
+--新手引导座驾剧情
+_M.UCarGuide = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.Car.UCarGuide",
+	IsFull = true,
+}
 --邮件弹窗
 _M.UMailPanel = {	
 		WinType = WindowType.UI,    
@@ -364,6 +421,13 @@ _M.UFourTraitorsActivity = {
 		SysId = Define.SysId.JianChen,
 		IsFull = true,
 		}
+--绝世美女
+_M.USuperGirlActivity = {
+	WinType = WindowType.UI, 		
+	Moudle = "Dev.Activity.SuperGirl.USuperGirlPanel", 		
+	SysId = Define.SysId.SuperGirl,
+	IsFull = true,
+	}
 --冲榜活动
 _M.URankReward = {
 		WinType = WindowType.UI, 		
@@ -435,12 +499,6 @@ _M.UFriend = {
 		Moudle = "Dev.Friend.UFriend", 	
 		IsFull = true,	
 		}
---关卡大地图主界面
-_M.UBattleBigMap = {
-		WinType = WindowType.UI, 
-		Moudle = "Dev.Battle.UBattleBigMap",
-		IsFull = true, 		
-		}
 --抽奖活动
 _M.ULottery = {
 	WinType = WindowType.UI, 
@@ -448,11 +506,25 @@ _M.ULottery = {
 	Moudle = "Dev.Activity.ULottery", 	
 	IsFull = true,	
 	}
+-- 钻石抽奖活动
+_M.UCrossDiamondLottery = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.DiamondLottery,
+	Moudle = "Dev.CrossActivity.CrossDiamondLottery.UCrossDiamondLottery", 	
+	IsFull = true,
+	}
 --首充活动界面
 _M.UFirstRecharge = {
 	WinType = WindowType.UI, 
 	SysId = Define.SysId.FirstRecharge,
 	Moudle = "Dev.Welfare.UFirstRecharge", 	
+	IsFull = true,	
+	}
+---限时活动界面
+_M.ULimitActivity = {
+	WinType = WindowType.UI, 
+	SysId = Define.SysId.LimitActivity,
+	Moudle = "Dev.Activity.LimitActivity.ULimitActivity", 	
 	IsFull = true,	
 	}
 --选举大厅主界面
@@ -480,6 +552,12 @@ _M.ULecturesMainPanel = {
 _M.USuperStaffPanel = {
 	WinType = WindowType.UI, 
 	Moudle = "Dev.Activity.SuperStaff.USuperStaffPanel",
+	IsFull = true,
+	}
+--绝世美女主界面
+_M.USuperGirlPanel = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.SuperGirl.USuperGirlPanel",
 	IsFull = true,
 	}
 --慈善活动主界面
@@ -543,6 +621,10 @@ _M.UArena = {
 	Moudle = "Dev.Arena.UArena",
 	SysId = Define.SysId.Arena,
 	IsFull = true,
+	IsCanPop = true,
+	PopFunc = function()
+		reqWindowOpen().Open(Define.SysId.Arena)
+	end
 }
 -- 装备抢夺界面
 _M.UEquipRotMainPanel = {
@@ -551,16 +633,131 @@ _M.UEquipRotMainPanel = {
 	SysId = Define.SysId.EquipRot,
 	IsFull = true,
 }
--- 装备抢夺界面
+-- 中秋活动
 _M.UMidautumnActivity = {
 	WinType = WindowType.UI, 
 	Moudle = "Dev.Activity.Midautumn.UMidautumnActivity",
 	SysId = Define.SysId.MidAFestival,
 	IsFull = true,
 }
+-- 消费积分返利系统
+_M.UConsumePointMain = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.ConsumePoint.UConsumePointMain",
+	SysId = Define.SysId.ConsumePoint,
+	IsFull = true,
+}
+-- 合服活动
+_M.UMergeServerActivity = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Activity.MergeServer.UMergeServerActivity",
+	SysId = Define.SysId.MergeServer,
+	IsFull = true,
+}
+
+--跨服竞技场
+_M.UCrossArena = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.CrossArena.UCrossArena",
+	SysId = Define.SysId.CrossArena,
+	IsFull = true,
+	MusicId = 126
+}
+--跨服竞技场-排行榜
+_M.UCrossArenaInRank = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.CrossArena.UCrossArenaInRank",
+	IsFull = true,
+}
+
+--跨服竞技场-淘汰赛直播界面
+_M.UCrossArenaKnockoutBattle = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutBattle",
+	IsFull = true,
+	MusicId = 128
+}
+--跨服竞技场-淘汰赛准备界面
+_M.UCrossArenaKnockoutReady = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutReady",
+	IsFull = true,
+}
+
+--跨服竞技场-积分赛匹配界面
+_M.UCrossArenaScoreBattle = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.CrossArena.UCrossArenaScoreBattle",
+	IsFull = true,
+	MusicId = 127
+	--IsCanPop = true,
+	--PopFunc = function()
+		--reqWindowOpen().Open(Define.SysId.CrossArena)
+	--end
+}
+
+--跨服竞技场-积分赛开始匹配界面
+_M.UCrossArenaScoreReady = {
+	WinType = WindowType.UI,
+	Moudle = "Dev.CrossArena.UCrossArenaScoreReady",
+	IsFull = true,
+}
+-- 超级vip活动
+_M.USuperVIP = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.SuperVIP.USuperVIP",
+	SysId = Define.SysId.SuperVIP,
+	IsFull = true,
+}
+
+-- 商业会议
+_M.UExpedition = {
+	WinType = WindowType.UI, 
+	Moudle = "Dev.Expedition.UExpeditionMain",
+	SysId = Define.SysId.Expedition,
+	IsFull = true,
+}
 ---------------------------------------------------
 ----------------------Tips1------------------------
 ---------------------------------------------------
+--跨服竞技场-淘汰赛奖励
+_M.UCrossArenaKnockoutReward = {
+	WinType = WindowType.Tips3,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutReward",
+	IsFull = true,
+}
+
+--跨服竞技场-赛程表
+_M.UCrossArenaKnockoutAll = {
+	WinType = WindowType.Tips2,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutAll",
+	IsFull = true,
+}
+--跨服竞技场-积分赛排名界面
+_M.UCrossArenaScoreRank = {
+	WinType = WindowType.Tips2,
+	Moudle = "Dev.CrossArena.UCrossArenaScoreRank",
+	IsFull = true,
+}
+--跨服竞技场-淘汰赛今日比赛界面
+_M.UCrossArenaKnockoutToday = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutToday",
+	IsFull = true,
+}
+
+--跨服竞技场-淘汰赛战斗结果
+_M.UCrossArenaKnockoutBattleRslt = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.CrossArena.UCrossArenaKnockoutBattleRslt",
+}
+--关卡大地图主界面
+_M.UBattleBigMap = {
+		WinType = WindowType.Tips1, 
+		Moudle = "Dev.Battle.UBattleBigMap",
+		SysId = Define.SysId.BusinessMap,
+		IsFull = true, 		
+		}
 _M.UMoviePlay = {	
 		WinType = WindowType.Tips1, 		
 		Moudle = "Dev.Main.UMoviePlay",
@@ -790,6 +987,7 @@ _M.UFinanceBattle = {
 		WinType = WindowType.Tips1,			
 		Moudle = "Dev.Finance.UFinanceNewBattle", 
 		IsFull = true,
+		MusicId = 124,
 		}
 --游艇会界面排行榜弹窗
 _M.UClubRankPanel = {	
@@ -1111,6 +1309,7 @@ _M.UVoteBattlePop = {
 	WinType = WindowType.Tips1,	
 	Moudle = "Dev.Vote.UVoteNewBattlePop",
 	IsFull = true,
+	MusicId = 124,
 	}
 --商会界面商会进修界面
 _M.UVoteStudy = {	
@@ -1180,6 +1379,12 @@ _M.UPlayerChangeHead = {
 	Moudle = "Dev.Player.UPlayerChangeHead",
 	IsFull = true,
 	}
+--聊天和头像框
+_M.UPlayerChatHeadBG = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Player.UPlayerChatHeadBG",
+	IsFull = true,
+	}
 --慈善活动排名奖励界面
 _M.UCharitableRankPanel = {
 	WinType = WindowType.Tips1, 
@@ -1202,6 +1407,7 @@ _M.USiegeBattle = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.SiegeWall.USiegeBattle",
 	IsFull = true,
+	MusicId = 124,
 	}
 _M.UGetUDisk = {
 	WinType = WindowType.Tips1, 
@@ -1222,12 +1428,6 @@ _M.USiegeTeamMessage = {
 	WinType = WindowType.Tips1,		
 	Moudle = "Dev.SiegeWall.USiegeTeamMessage"
 	}
---奇遇界面后续事件界面
-_M.UAdventureFollow = {
-	WinType = WindowType.Tips1, 
-	Moudle = "Dev.Activity.Adventure.UAdventureFollow",
-	IsFull = true,
-}
 --奇遇界面排行榜界面
 _M.UAdventureRank = {
 	WinType = WindowType.Tips1, 
@@ -1292,13 +1492,19 @@ _M.URedEnvelopes = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.Main.URedEnvelopes",
 }
-_M.ULineUp = {
-	WinType = WindowType.Tips1, 
-	Moudle = "Dev.LineUp.ULineUp",
-}
+-- _M.ULineUp = {
+-- 	WinType = WindowType.Tips1, 
+-- 	Moudle = "Dev.LineUp.ULineUp",
+-- }
 _M.UBattleBossNew = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.Battle.UBattleBossNew",
+	IsFull = true,
+	MusicId = 124,
+}
+_M.UBattleFrame = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Battle.UBattleFrame",
 	IsFull = true,
 }
 _M.ULineUpCheck = {
@@ -1322,19 +1528,16 @@ _M.UArenaShop = {
 _M.UEquipRotRotPanel = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.EquipRot.UEquipRotRotPanel",
-	SysId = Define.SysId.EquipRot,
 }
 -- 战斗记录
 _M.UEquipRotBattleReport = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.EquipRot.UEquipRotBattleReport",
-	SysId = Define.SysId.EquipRot,
 }
 -- 碎片背包
 _M.UEquipRotChipBag = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.EquipRot.UEquipRotChipBag",
-	SysId = Define.SysId.EquipRot,
 	IsFull = true,
 }
 --员工重修
@@ -1348,13 +1551,60 @@ _M.UStaffRework = {
 _M.UEquipRotGetPanel = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.EquipRot.UEquipRotGetPanel",
-	SysId = Define.SysId.EquipRot,
 }
 -- 全服祈福界面
 _M.UMidautumnPary = {
 	WinType = WindowType.Tips1, 
 	Moudle = "Dev.Activity.Midautumn.UMidautumnPary",
-	SysId = Define.SysId.MidAFestival,
+	IsFull = true,
+}
+-- 中秋烟花获得界面
+_M.UMidautumnResult = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Midautumn.UMidautumnResult",
+}
+-- 中秋累计登陆-预览界面
+_M.UMidautunnLookPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Midautumn.UMidautunnLookPanel",
+	IsFull = true,
+}
+-- 中秋十连抽奖励界面
+_M.UMidautumnTenReward = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Midautumn.UMidautumnTenReward",
+}
+-- 中秋烟花排行版界面
+_M.UMidautumnRankPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Midautumn.UMidautumnRankPanel",
+	IsFull = true,
+}
+-- 中秋累计充值预览界面
+_M.UMidautumnPayPreview = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.Midautumn.UMidautumnPayPreview",
+}
+_M.UGiftGet = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.Setting.UGiftGet",
+}
+-- 消费积分返利-预览界面
+_M.UConsumePointPreview = {
+	WinType = WindowType.Tips1,
+	Moudle = "Dev.Activity.ConsumePoint.UConsumePointPreview",
+}
+
+-- 合服活动全服祈福界面
+_M.UMergeServerPary = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.MergeServer.UMergeServerPary",
+	IsFull = true,
+}
+-- 合服活动烟花排行版界面
+_M.UMergeServerRankPanel = {
+	WinType = WindowType.Tips1, 
+	Moudle = "Dev.Activity.MergeServer.UMergeServerRankPanel",
 	IsFull = true,
 }
 ---------------------------------------------------
@@ -1463,7 +1713,7 @@ _M.UBattleStaffChoose = {
 		}
 --查看其它玩家信息界面
 _M.UPlayerPop = {		
-		WinType = WindowType.Tips2,		
+		WinType = WindowType.Tips3,		
 		Moudle = "Dev.Player.UPlayerPop", 
 		IsFull = true,
 		}
@@ -1542,6 +1792,10 @@ _M.UCommerceBattleReport = {
 		WinType = WindowType.Tips2,    
 		Moudle = "Dev.Commerce.UCommerceBattleReport",   
 		}
+_M.UBattleFrameReward = {
+		WinType = WindowType.Tips2, 
+		Moudle = "Dev.Battle.UBattleFrameReward",
+		}	
 --律所（公司）界面选择使用哪个员工上诉弹窗
 _M.URelationsSelectStaff = {
 		WinType = WindowType.Tips2,			
@@ -1854,11 +2108,6 @@ _M.UAdventureSendPlayer = {
 	WinType = WindowType.Tips2,
 	Moudle = "Dev.Activity.Adventure.UAdventureSendPlayer",
 }
---奇遇活动玩家列表弹窗
-_M.UAdventurePlayerList = {
-	WinType = WindowType.Tips2,
-	Moudle = "Dev.Activity.Adventure.UAdventurePlayerList",
-}
 -- 奇遇宝箱领取界面
 _M.UAdventureBoxResPanel = {
 	WinType = WindowType.Tips2, 
@@ -1881,8 +2130,9 @@ _M.UAdventureBattleFail = {
 	Moudle = "Dev.Activity.Adventure.UAdventureBattleFail",
 }
 _M.UBattlePvp = {
-	WinType = WindowType.Tips2, 
+	WinType = WindowType.Tips3, 
 	Moudle = "Dev.Battle.UBattlePvp",
+	MusicId = 124,
 }
 
 --员工装备
@@ -1901,6 +2151,14 @@ _M.UStaffReworkSuccess = {
 	WinType = WindowType.Tips2, 
 	Moudle = "Dev.Staff.UStaffReworkSuccess",
 }
+_M.UBattleBigMapTips = {
+	WinType = WindowType.Tips2, 
+	Moudle = "Dev.Battle.UBattleBigMapTips",
+}
+-- _M.UBattleBigMapResult = {
+-- 	WinType = WindowType.Tips2, 
+-- 	Moudle = "Dev.Battle.UBattleBigMapResult",
+-- }
 
 ---------------------------------------------------
 ----------------------Tips3------------------------
@@ -2146,10 +2404,6 @@ _M.UEquiptDecomposeSuccess = {
 	WinType = WindowType.Tips3, 
 	Moudle = "Dev.Equipt.UEquiptDecomposeSuccess",
 }
-_M.UArenaResult = {
-	WinType = WindowType.Tips3, 
-	Moudle = "Dev.Arena.UArenaResult",
-}
 -- 装备抢夺战斗结算界面
 _M.UEquipRotResult = {
 	WinType = WindowType.Tips3, 
@@ -2186,6 +2440,15 @@ _M.UCharitableFruitTipPanel = {
 _M.USelectCost = {
 	WinType = WindowType.Tips4, 
 	Moudle = "Dev.Equipt.USelectCost",
+}
+_M.UArenaResult = {
+	WinType = WindowType.Tips4, 
+	Moudle = "Dev.Arena.UArenaResult",
+}
+--跨服战结算界面
+_M.UCrossArenaResult = {
+	WinType = WindowType.Tips4, 
+	Moudle = "Dev.CrossArena.UCrossArenaResult",
 }
 ---------------------------------------------------
 ----------------------Box------------------------

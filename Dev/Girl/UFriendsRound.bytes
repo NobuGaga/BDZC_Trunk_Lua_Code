@@ -128,6 +128,7 @@ function _M:CreatPosItem(id)
 	local headIon = _moudle:Get("Head")
 	local nameText = _moudle:Get("name")
 	local infoText = _moudle:Get("Info")
+	local imgRect = _moudle:Get("mask")
 	local img = _moudle:Get("Img")
 	local message = _moudle:Get("Message")
 	local messageText = _moudle:Get("messageText")
@@ -148,6 +149,7 @@ function _M:CreatPosItem(id)
 	end
 	
 	local itemHig = 160
+	itemHig = itemHig + infoText.PreferredHeight - 30
 	if PosData.pic_id ~= nil then
 		img.SpriteName = PosData.pic_id
 		itemHig = itemHig + 255
@@ -155,6 +157,8 @@ function _M:CreatPosItem(id)
 		if PosData.pic_pos ~= nil then
 			img.LocalPosition = Vector2(PosData.pic_pos[1],PosData.pic_pos[2])
 		end
+
+		imgRect.LocalPosition = Vector2(imgRect.LocalPosition.x,imgRect.LocalPosition.y - (infoText.PreferredHeight - 30))
 	end
 
 	_moudle.SelfRect.SizeDelta = Vector2(750,itemHig)
@@ -173,6 +177,12 @@ end
 
 function _P.SetFriendItem(data,parent,self,monentIndex)
 	local girlsData = Csv.Girl[id]
+	local PosData = Csv.GirlPost[data.id]
+	if PosData == nil then
+		print("__找不到朋友圈____________",data.id)
+		return nil
+	end
+
 	local _moudle = JGuiManager.GetMoudle(parent,"M_Girl_Friend_Item", WindowType.UI, 10)
 
 	local headIon = _moudle:Get("Head")
@@ -209,7 +219,7 @@ function _P.SetFriendItem(data,parent,self,monentIndex)
 	local isCanSend = false
 	self.mOldItemHig = 0
 
-	local PosData = Csv.GirlPost[data.id]
+
 	if PosData.type == 0 then
 		headIon.SpriteName =  MPlayer.GetHeadIcon()
 		nameText.Text = MPlayer.GetName()
@@ -255,7 +265,7 @@ function _P.SetFriendItem(data,parent,self,monentIndex)
 	end
 	local infoHig = infoText.PreferredHeight - 30
 	messageHig = messageHig + messageValue.PreferredHeight + 30
-
+	messagePoxY = messagePoxY - infoText.PreferredHeight + 30
 
 	if PosData.pic_id ~= nil then
 		img.SpriteName = PosData.pic_id

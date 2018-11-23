@@ -48,7 +48,9 @@ function _P.OnChoose(self, funcId)
 	end
 
 	if funcId == Define.SysId.Staff_Book then
-		self.ChooseMoudle = UStaffAptitude.new(self.PageNode,self.mID)
+		self.ChooseMoudle = UStaffAptitude.new(self.PageNode,self.mID, function(...)
+			self:RegistRedpoint(...)
+		end)
 	elseif funcId == Define.SysId.Staff_Skill then
 		self.ChooseMoudle = UStaffSkill.new(self.PageNode,self.mID)
 	elseif funcId == Define.SysId.Staff_Aureole then
@@ -83,7 +85,10 @@ function _M:OnCreate(id,chooseFuncId)
 		moudle:Get("Star"..i).Activity = true
 	end
 
-	SoundMgr.PlaySystem(person.sound)
+	--在新手引导情况下会导致声音冲突，冲突处理
+	if MMain.curGuidID ~= 1005 then
+		SoundMgr.PlaySystem(person.sound)
+	end
 
 	local TextTitle = moudle:Get("C_Text")
 	TextTitle.Text = Csv.Text("staff_details")
@@ -112,6 +117,14 @@ function _M:OnCreate(id,chooseFuncId)
 	local TextAttri4 = moudle:Get("Attri4")
 	TextAttri4.Text = Csv.Text("staff_attri4")
 
+	self.GGZLtext = moudle:Get("GGZLtext")
+	local dataStaff = MStaff.StaffTable[id]
+	if dataStaff then
+		self.mPower = dataStaff.power
+		self.GGZLtext.Text = dataStaff.power
+		self.GGZLtext:AddContentSizeFitter():SetLayoutHorizontal()
+	end
+
 	self.TextMax = moudle:Get("MaxText")
 	self.TextMax.Text = Csv.Text("staff_lvmax")
 
@@ -123,7 +136,6 @@ function _M:OnCreate(id,chooseFuncId)
 	local BtnClose = moudle:Get("C_Back_Btn")
 	BtnClose:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		WindowMgr.Call("UStaff","ResetPoint")
 		-- SoundMgr.DestroySystem()
 		self:Destroy()
 		end, nil, 1.2)
@@ -184,6 +196,7 @@ function _M:OnCreate(id,chooseFuncId)
 					local lvlupCount = self.Lvl10 == false and 1 or LVLUP_ONEKEY
 					CStaff.StaffLevelUp(id, lvlupCount)
 					BtnUp.RaycastTarget = false
+					XZ.RaycastTarget = false
 				else
 					if not MBag.CheckItemEnough(Define.AssetsType.Coin, 1) then
 						return
@@ -214,7 +227,7 @@ function _M:OnCreate(id,chooseFuncId)
 
 	local node = moudle:Get("PageNode")
 	self.PageNode = node
-	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff, true))
+	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff_List, true))
 	local count = #funcs
 	if count > 0 then
 		--Table标签控制
@@ -228,9 +241,16 @@ function _M:OnCreate(id,chooseFuncId)
 		for k,v in pairs(funcs) do
 			index = index + 1
 			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
-
-			--注册小红点
-			self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+			if data ~= nil then
+				self:RegistRedpoint(moudle:Get("redPoint_" .. index), 
+						Define.SysId.Staff, 
+						Define.SysId.Staff_List,
+						id, 
+						Define.SysId.Staff_Staff,
+						v.id)
+			else
+				moudle:Get("redPoint_" .. index).Activity = false
+			end
 		end
 		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
@@ -240,10 +260,16 @@ function _M:OnCreate(id,chooseFuncId)
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
-
-	CStaff.CheckBookRedPoint(MStaff.LastChooseStaff)
-	CStaff.CheckSkillRedPoint(MStaff.LastChooseStaff)
-	CStaff.CheckAureoleRedPoint(MStaff.LastChooseStaff)
+	if data ~= nil then
+		self:RegistRedpoint(moudle:Get("redPoint_colorup"), 
+				Define.SysId.Staff,
+				Define.SysId.Staff_List, 
+				id, 
+				Define.SysId.Staff_Staff,
+				1)
+	else
+		moudle:Get("redPoint_colorup").Activity = false
+	end
 
 	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
 		if itemid == Define.AssetsType.Coin then
@@ -312,9 +338,6 @@ function _P.OnCreateData(self,id)
 		local TextAttri4Data = moudle:Get("Attri4Data")
 		TextAttri4Data.Text = data.allAttr.Meili
 
-		local ImgColorupPoint = moudle:Get("redPoint_colorup")
-		ImgColorupPoint.Activity = MStaff.GetRedPointColorUp(id)
-
 		_P.SetLvlUpInfo(self, data)
 
 		local imgPos = moudle:Get("PositionIcon")
@@ -334,8 +357,6 @@ function _P.OnCreateData(self,id)
 		moudle:Get("Attri2Data").Text = math.ceil(attr2)
 		moudle:Get("Attri3Data").Text = math.ceil(attr3)
 		moudle:Get("Attri4Data").Text = math.ceil(attr4)
-		moudle:Get("redPoint_colorup").Activity = MStaff.GetRedPointColorUp(id)
-
 		_P.SetLvlUpInfo(self, def)
 		self.mMoudle:Get("C_text").Text = Csv.Text("staff_get")
 
@@ -370,6 +391,7 @@ function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
 	local moudle = self.mMoudle
 	local slider = moudle:Get("Fill")
 	local textSlider = moudle:Get("SliderText")
+	local tenBtn = moudle:Get("XZ")
 	if level >= Csv.ColorUp[STAFFMAXCOLOR].lvMax then
 		if isAnimate then
 			SoundMgr.PlayNonStopUI(10010)
@@ -384,8 +406,10 @@ function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
 			textSlider.Text = Csv.Text("staff_max")
 		end
 		self.mLastVal = 1
+		tenBtn.RaycastTarget = true
 		return
 	end
+
 	local lvlupCount = ((self.Lvl10 == false and 1) or LVLUP_ONEKEY)
 	local maxExp = _P.GetLvlUpExpNeed(id, level, lvlupCount) --Csv.LevelUp[level].cost
 	local num,val = math.modf(exp/maxExp)
@@ -401,6 +425,7 @@ function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
 		tween:OnComplete(function(...)
 			slider.FillAmount = 0
 			moudle:Get("BtnUp").RaycastTarget = true
+			tenBtn.RaycastTarget = true
 			_P.OnCreateData(self,id)
 			_P.OnPlayLevelUpAnim(self)
 		end)
@@ -417,6 +442,7 @@ function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
 				tween:OnComplete(function(...)
 					slider.FillAmount = 0
 					moudle:Get("BtnUp").RaycastTarget = true
+					tenBtn.RaycastTarget = true
 					_P.OnCreateData(self,id)
 					_P.OnPlayLevelUpAnim(self)
 				end)
@@ -424,12 +450,14 @@ function _P.SetExpSlider(self,id,exp,level,isAnimate,isUp,isGod)
 				tween = slider:DOFillAmount(val,(val - self.mLastVal)*0.3)
 				tween:OnComplete(function(...)
 					moudle:Get("BtnUp").RaycastTarget = true
+					tenBtn.RaycastTarget = true
 					_P.OnCreateData(self,id)
 				end)
 			end
 			self.mTween = tween
 		else
 			slider.FillAmount = val
+			tenBtn.RaycastTarget = true
 		end
 	end
 	local upNeeded = maxExp - exp
@@ -507,8 +535,6 @@ function _R.StaffColorUp(self,data)
 	_P.OnCreateData(self,data.staffid)
 	if MStaff.LastChoose == Define.SysId.Staff_Skill then
 		self.ChooseMoudle:ResetAllSkill(data.staffid)
-	elseif MStaff.LastChoose == Define.SysId.Staff_Book then
-		self.ChooseMoudle:ResetAllBookPoint(data.staffid)
 	end
 end
 
@@ -540,6 +566,7 @@ end
 
 function _R.ResetView(self)
 	self.mMoudle:Get("BtnUp").RaycastTarget = true
+	self.mMoudle:Get("XZ").RaycastTarget = true
 end
 
 
@@ -555,6 +582,33 @@ end
 function _R.RefreshEquip(self)
 	if MStaff.LastChoose == Define.SysId.Staff_Equip then
 		self.ChooseMoudle:GetEquipData()
+	end
+end
+
+function _R.StaffChange(self)
+	if self.mID ~= nil then
+		local dataStaff = MStaff.StaffTable[self.mID]
+		if dataStaff then
+			local prePower = self.mPower or 0
+			self.mPower = dataStaff.power
+			self.GGZLtext:DOKill()
+
+			if prePower ~= self.mPower then
+				local dura
+				local dec = math.abs(self.mPower - prePower)
+				if dec >= 10000 then
+					dura = 2
+				else
+					dura = math.max(0.2, dec / 10000 * 2)
+				end
+				local t = JTweenerManager.IntTween(prePower, self.mPower, dura, function(value)
+					if self.GGZLtext ~= nil then self.GGZLtext.Text = value end
+				end, function()
+					if self.GGZLtext ~= nil then self.GGZLtext.Text = self.mPower end
+				end)
+				t:SetTarget(self.GGZLtext.CachedTran)
+			end
+		end
 	end
 end
 

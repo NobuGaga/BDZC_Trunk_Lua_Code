@@ -9,6 +9,7 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local CArena = JRequire "Dev.Arena.CArena"
+local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
 
 local _M = {}
 
@@ -25,7 +26,6 @@ function _M.Open(sysId, ...)
 	elseif sysId == _SysId.Home then
 		WindowMgr.Create("UHomeMap")
 		WindowMgr.Call("UMain","SwitchCenterBtns",false)
-
 	elseif sysId == _SysId.Player then
 		WindowMgr.Create("UPlayer")
 	elseif sysId == _SysId.Player_LevelUp then
@@ -44,7 +44,7 @@ function _M.Open(sysId, ...)
 		end
 
 		--员工
-		if sysId == _SysId.Staff then 
+		if sysId == _SysId.Staff or sysId == _SysId.LineUp or sysId == _SysId.Staff_List then 
 			WindowMgr.Create("UStaff", sysId)
 				--员工系统详情
 		elseif  sysId == _SysId.Staff_Staff or
@@ -54,7 +54,7 @@ function _M.Open(sysId, ...)
 				sysId == _SysId.Staff_Skill or
 				--员工系统光环
 				sysId == _SysId.Staff_Aureole then
-			WindowMgr.Create("UStaffDetails", _SysId.Staff)
+			WindowMgr.Create("UStaffDetails", ...)
 
 		--美女
 		elseif sysId == _SysId.Girl or
@@ -85,7 +85,9 @@ function _M.Open(sysId, ...)
 				--背包系统合成,
 				sysId == _SysId.Bag_Synthetic or 
 				--背包系统时装
-				sysId == _SysId.Bag_Fashion then
+				sysId == _SysId.Bag_Fashion or
+				--背包装备
+				sysId == _SysId.Bag_Equip then
 			WindowMgr.Create("UBag", sysId)
 		--成就
 		elseif sysId == _SysId.Achievement then
@@ -156,6 +158,8 @@ function _M.Open(sysId, ...)
 		elseif sysId == _SysId.FirstRecharge then
 			--WindowMgr.Create("UWelfare", _SysId.Welfare_First) 
 			WindowMgr.Create("UFirstRecharge") 
+		elseif sysId == _SysId.LimitActivity then
+			WindowMgr.Create("ULimitActivity") 
 		--vip福利（主界面顶部入口）
 		elseif sysId == _SysId.VIPWelfare then
 			local vipSysId = MVipWelfare.GetVipRewardSysID()
@@ -164,11 +168,15 @@ function _M.Open(sysId, ...)
 			else
 				WindowMgr.Create("UVipWelfare", sysId)
 			end
+		elseif sysId == _SysId.BusinessMap then
+			WindowMgr.Create("UBattleBigMap")
 		--围攻华尔街
 		elseif sysId == _SysId.SiegeWall then
 			WindowMgr.Create("USiegeMain")
 		elseif sysId == _SysId.Lottery then
 			WindowMgr.Create("ULottery")
+		elseif sysId == _SysId.DiamondLottery then
+			WindowMgr.Create("UCrossDiamondLottery")
 		elseif sysId == _SysId.Questionnaire then
 			WindowMgr.Create("UQuestionnaire") 
 		elseif sysId == _SysId.Target then
@@ -248,6 +256,8 @@ function _M.Open(sysId, ...)
 		--机场
 		elseif sysId == _SysId.Airport then
 			CBattle.EnterBattle()
+		elseif sysId == _SysId.BattleMap then
+			WindowMgr.Create("UBattleBigMap")
 		--直升飞机
 		elseif sysId == _SysId.Aircraft then
 			WindowMgr.Create("UAircraft", sysId)
@@ -291,8 +301,12 @@ function _M.Open(sysId, ...)
 			WindowMgr.Create("UBuyLandMain")
 		elseif sysId == _SysId.SuperStaff then
 			WindowMgr.Create("USuperStaffPanel")
+		elseif sysId == _SysId.SuperGirl then
+			WindowMgr.Create("USuperGirlActivity", Define.ActivityType.Super_Girl)
 		elseif sysId == _SysId.MakeUp then
 			WindowMgr.Create("UPlayerChangeHead")
+		elseif sysId == _SysId.ChatBG then
+			WindowMgr.Create("UPlayerChatHeadBG")
 		elseif sysId == _SysId.Investment then
 			WindowMgr.Create("UInvestmentPanel")
 		elseif sysId == _SysId.Futures then
@@ -316,6 +330,18 @@ function _M.Open(sysId, ...)
 			WindowMgr.Create("UEquipRotMainPanel")
 		elseif sysId == _SysId.MidAFestival then
 			WindowMgr.Create("UMidautumnActivity")
+		elseif sysId == _SysId.ConsumePoint then
+			WindowMgr.Create("UConsumePointMain")
+		elseif sysId == _SysId.MergeServer then
+			WindowMgr.Create("UMergeServerActivity", sysId, false)
+		elseif sysId == _SysId.HappyWeekend then
+			WindowMgr.Create("UMergeServerActivity", sysId, true)
+		elseif sysId == _SysId.CrossArena then
+			CCrossArena.OpenUI()
+		elseif sysId == _SysId.SuperVIP then
+			WindowMgr.Create("USuperVIP")
+		elseif sysId == _SysId.Expedition then
+			WindowMgr.Create("UExpedition", sysId) 
 		end
 	end
 end

@@ -3,6 +3,7 @@ local MBag = JRequire "Dev.Bag.MBag"
 local UBagGoods = JRequire "Dev.Bag.UBagGoods"
 local UBagSynthetic = JRequire "Dev.Bag.UBagSynthetic"
 local UBagFashion = JRequire "Dev.Bag.UBagFashion"
+local UBagEquip = JRequire "Dev.Bag.UBagEquip"
 local MMain = JRequire "Dev.Main.MMain"
 local TabGroup = JRequire "Dev.Common.TabGroup"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
@@ -19,10 +20,6 @@ function _M:Dispatch(funcName, ...)
 	if fun ~= nil then 
 		fun(self, ...)
 	end
-end
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
 end
 
 function _M:BeforeDestroy()
@@ -49,6 +46,8 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = UBagSynthetic.new(self.PageNode)
 	elseif funcId == Define.SysId.Bag_Fashion then
 		self.ChooseMoudle = UBagFashion.new(self.PageNode)
+	elseif funcId == Define.SysId.Bag_Equip then
+		self.ChooseMoudle = UBagEquip.new(self.PageNode)
 	end
 
 	MBag.LastChoose = funcId
@@ -97,8 +96,8 @@ function _M:OnCreate(chooseFuncId)
 		tabHandle:Choose(lastChoose)
 		self.tabHandle = tabHandle
 	end
-	if count < 3 then
-		for i=count + 1,3 do
+	if count < 4 then
+		for i=count + 1, 4 do
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
@@ -176,6 +175,24 @@ end
 function _R.ShowSellGeted(self)
 	if MBag.LastChoose == Define.SysId.Bag_Goods then
 		self.ChooseMoudle:ShowSellGeted()
+	end
+end
+
+function _R.ChangeEquip(self)
+	if MBag.LastChoose == Define.SysId.Bag_Equip then
+		self.ChooseMoudle:ChangeEquip()
+	end
+end
+
+function _R.ShowDecomposeView(self, data)
+	if MBag.LastChoose == Define.SysId.Bag_Equip then
+		self.ChooseMoudle:ShowDecomposeView(data)
+	end
+end
+
+function _R.RefreshEquipView(self)
+	if MBag.LastChoose == Define.SysId.Bag_Equip then
+		self.ChooseMoudle:RefreshEquipView()
 	end
 end
 

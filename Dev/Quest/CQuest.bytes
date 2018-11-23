@@ -6,6 +6,7 @@ local EventCenter = JRequire "Dev.EventCenter"
 local CMain = JRequire "Dev.Main.CMain"
 --@RefType [Dev.Player.HeartBeat.bytes#_M]
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MMain = JRequire "Dev.Main.MMain"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -17,11 +18,13 @@ local CMD_ID =
 	cQuestMainDone		=	1,--请求主线任务完成 PQuest.PDoneReq
 	cQuestDailyDone		=	2,--请求日常任务完成 PQuest.PDoneReq
 	cQuestActiveAward	=	3,--每日活跃度奖励 PQuest.CActiveAw
+	cQuestShareAward	=	5,--每日分享奖励
 
 	sQuestInit			=	1,--初始化	PQuest.SInit
 	sQuestMainUpdate	=	2,--主线任务更新状态 PQuest.PQuest
 	sQuestDailyUpdate	=	3,--日常任务更新状态 PQuest.PQuest
 	sQuestActiveAward	=	4,--活跃度奖励 PQuest.SActiveAward
+	sQuestShareAward	=	5,--每日分享奖励PQuest.SShareAward
 }
 
 function _M.ModuleClean()
@@ -35,6 +38,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cQuestMainDone] = "PQuest.CDoneReq",
 		[CMD_ID.cQuestDailyDone] = "PQuest.CDoneReq",
 		[CMD_ID.cQuestActiveAward] = "PQuest.CActiveAward",
+		[CMD_ID.cQuestShareAward] = "PQuest.CShareAward",
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -43,6 +47,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sQuestMainUpdate] = {	proto = "PQuest.PMainQuest", 	handle = _P.OnMainUpdate},
 		[CMD_ID.sQuestDailyUpdate] = {	proto = "PQuest.SDailyUpdate", 	handle = _P.OnDailyUpdate},
 		[CMD_ID.sQuestActiveAward] = {	proto = "PQuest.SActiveAward", 	handle = _P.OnActiveAward},
+		[CMD_ID.sQuestShareAward] = {	proto = "PQuest.SShareAward", 	handle = _P.OnShareTime},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Quest, func_send, func_recv, isReload)	
@@ -66,6 +71,10 @@ function _M.ActiveAwardReq(activeid)
 	_M.Send(CMD_ID.cQuestActiveAward, {activeid = activeid})
 end
 
+function _M.GetShareReward(isGetReward)
+	_M.Send(CMD_ID.cQuestShareAward, {reward = isGetReward})
+end
+
 ------------------Server -- Client----------------
 function _P.OnDayout()
 	--12点重置
@@ -77,7 +86,7 @@ function _P.OnDayout()
 	--当前活跃度
 	MQuest.ActiveAward = 0
 	WindowMgr.Call("UDailyQuest","OnDayout")
-	_P.CheckDailyRedpoint()
+	_M.CheckDailyRedpoint()
 end
 
 function _P.UpdateMain(mainQuest)
@@ -85,6 +94,11 @@ function _P.UpdateMain(mainQuest)
 	tab.questid = mainQuest.questid
 	tab.pro = mainQuest.pro
 	tab.maxval = mainQuest.maxval
+
+	--检测是否有相关引导
+	if MMain.curWeakGuide ~= nil then
+		WindowMgr.RefreshWeakGuide(MMain.curWeakGuide.funcID,MMain.curWeakGuide.eventParam)
+	end
 end
 
 function _P.UpdateDaily(dailyQuest)
@@ -100,7 +114,7 @@ function _P.UpdateDaily(dailyQuest)
 end
 
 --刷新日常任务小红点
-function _P.CheckDailyRedpoint()
+function _M.CheckDailyRedpoint()
 	--检查有没有可领取的活跃度箱子
 	local isRedpoint = false
 	if MQuest.ActiveAward > 0 then
@@ -121,6 +135,9 @@ function _P.CheckDailyRedpoint()
 			end
 		end
 	end
+	if not isRedpoint then
+		isRedpoint = MQuest.IsCanGetShareReward()
+	end
 	if isRedpoint ~= MQuest.DailyQuestRedpoint then
 		MQuest.DailyQuestRedpoint = isRedpoint
 		CMain.UpdateRedpoint(isRedpoint,Define.SysId.Quest)
@@ -136,6 +153,7 @@ function _P.OnInit(data)
 			_P.UpdateDaily(v)
 		end
 	end
+	MQuest.ActiveAwardRewards = {}
 	--当前活跃度
 	MQuest.ActiveAward = data.activeValue
 	--已经领取的活跃度奖励
@@ -144,7 +162,7 @@ function _P.OnInit(data)
 			MQuest.ActiveAwardRewards[actId] = true
 		end
 	end
-	_P.CheckDailyRedpoint()
+	_M.CheckDailyRedpoint()
 	WindowMgr.Call("UMain","OnTaskUpdate")
 	WindowMgr.Call("UMainQuest","OnTaskUpdate")
 	WindowMgr.Call("UDailyQuest","OnUpdateAll")
@@ -171,14 +189,26 @@ function _P.OnDailyUpdate(data)
 	MQuest.ActiveAward = data.activeValue
 
 	WindowMgr.Call("UDailyQuest","OnTaskUpdate", data.quest.questid)
-	_P.CheckDailyRedpoint()
+	_M.CheckDailyRedpoint()
 end
 
 function _P.OnActiveAward(data)
 	MQuest.ActiveAwardRewards[data.activeid] = true
 
 	WindowMgr.Call("UDailyQuest","OnActiveAwardUpdate", data.activeid, data.rewardList)
-	_P.CheckDailyRedpoint()
+	_M.CheckDailyRedpoint()
+end
+
+function _P.OnShareTime(data)
+	MQuest.ShareTime = data.times
+	MQuest.GotShareRewardTime = data.rewardtimes
+	if MQuest.ShareTime > MQuest.MAX_SHARE_TIME then
+		MQuest.ShareTime = MQuest.MAX_SHARE_TIME
+	end
+	if WindowMgr.IsCreated("UDailyQuest") and data.reward then
+		WindowMgr.Call("UDailyQuest", "OnRefreshShareView")
+	end
+	_M.CheckDailyRedpoint()
 end
 
 return _M

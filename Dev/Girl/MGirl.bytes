@@ -165,6 +165,20 @@ end
 
 --
 
+function _P.GetGirlSkills(skills)
+	local skillTab = {}
+	if skills ~= nil then
+		for k,v in pairs(skills)do
+			local _breakoutLv = 0
+			if v.breakoutLv ~= nil then
+				_breakoutLv = v.breakoutLv
+			end
+			table.insert(skillTab,{id = v.id,lv = v.lv,breakoutLv = _breakoutLv})
+		end
+	end
+	return skillTab
+end
+
 function _M.Init(GirlsTable)
 	--获取解锁列表
 	_M.UnlockGirls = {}
@@ -175,7 +189,7 @@ function _M.Init(GirlsTable)
 			charm = v.charm,
 			friend = v.friend,
 			children = v.children,
-			skills = v.skills,
+			skills = _P.GetGirlSkills(v.skills),
 			chat = v.chat,
 			name = _P.SetGirlName(v.id,v.name),
 		}
@@ -250,7 +264,17 @@ end
 --PGirlMsg
 function _M.NewGirl(data)
 	local unlockTab = _M.UnlockGirls
-	table.insert(unlockTab,data)
+	local _data = {
+		id = data.id,
+		intimacy = data.intimacy,
+		charm = data.charm,
+		friend = data.friend,
+		children = data.children,
+		skills = _P.GetGirlSkills(data.skills),
+		chat = data.chat,
+		name = _P.SetGirlName(data.id,data.name),
+	}
+	table.insert(unlockTab,_data)
 
 	local lockTab = {}
 	local lockGirlsID = Csv.Girl
@@ -321,8 +345,14 @@ function _M.UpdateSkill(data)
 	for k,v in pairs(unlockTab) do
 		if v.id == data.girlid then
 			for sk,sv in pairs(v.skills) do
-				if sv.key == data.skillid then
-					sv.value = data.skilllv
+				if sv.id == data.skillid then
+					sv.lv = data.skilllv
+
+					local _breakoutLv = 0 
+					if data.breakoutLv ~= nil then
+						_breakoutLv = data.breakoutLv
+					end
+					sv.breakoutLv = _breakoutLv
 				end
 			end
 		end
@@ -389,14 +419,30 @@ function _M.GetSkillLvByID(girlID,skillID)
 		for k,v in pairs(_M.UnlockGirls) do
 			if v.id == girlID then
 				for _skillID,_skillLv in pairs(v.skills) do
-					if _skillLv.key == skillID then
-						return _skillLv.value
+					if _skillLv.id == skillID then
+						return _skillLv.lv
 					end
 				end
 			end
 		end
 	end
 	return 1
+end
+
+function _M.GetSkillBreakoutLvByID(girlID,skillID)
+	local tables = _M.UnlockGirls
+	if tables ~= nil then
+		for k,v in pairs(_M.UnlockGirls) do
+			if v.id == girlID then
+				for _skillID,_skillLv in pairs(v.skills) do
+					if _skillLv.id == skillID then
+						return _skillLv.breakoutLv
+					end
+				end
+			end
+		end
+	end
+	return 0
 end
 
 function _M.GetGirlSkillAttr(type)
@@ -462,22 +508,11 @@ end
 function _M.CheckSkill()
 	local girls = _M.UnlockGirls
 
-	local skills = {}
-	local skillCost = 0
-	local level = 0
-	local Csvdata = {}
-	local Costdata = {}
 	if girls ~= nil then
 		for k,v in pairs(girls) do
-			skills = v.skills
-			for sk,sv in pairs(skills) do
-				Csvdata = Csv.GirlSkill[sv.key]
-				Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+sv.value+1]
-				skillCost = Costdata.cost
-
-				if skillCost <= v.friend and  sv.value > 0 then
-					return true
-				end
+			local isCan =  _M.CheckSkillByGirl(v.id)
+			if isCan then
+				return true
 			end
 		end
 	end
@@ -493,18 +528,55 @@ function _M.CheckSkillByGirl(girlID)
 	local level = 0
 	local Csvdata = {}
 	local Costdata = {}
+
+	local breatOutLv = 0 --突破数据
+	local CsvBreakOunt = {}
+	local nextCsvBreakOunt = {}
+
+	local maxLevel = 0
+	local level = 0
+
 	if girls ~= nil then
 		for k,v in pairs(girls) do
 			if v.id == girlID then
 				skills = v.skills
 				for sk,sv in pairs(skills) do
-					Csvdata = Csv.GirlSkill[sv.key]
-					Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+sv.value]
-					if Costdata ~= nil and Costdata.cost ~= 0 then
-						skillCost = Costdata.cost
+					Csvdata = Csv.GirlSkill[sv.id]
+					Costdata = Csv.GirlSkillCost[Csvdata.upGradeId*1000+sv.lv]
 
-						if skillCost <= v.friend and  sv.value > 0 then
-							return true
+					breatOutLv = _M.GetSkillBreakoutLvByID(girlID,sv.id) --突破数据
+					CsvBreakOunt = Csv.GirlSkillBreakout[sv.id*1000+breatOutLv]
+					nextCsvBreakOunt = Csv.GirlSkillBreakout[sv.id*1000+breatOutLv+1]
+
+					maxLevel = Csvdata.maxLevel
+					if CsvBreakOunt ~= nil then
+						maxLevel = CsvBreakOunt.maxSkillLv
+					end
+
+					level = sv.lv
+					if level >= maxLevel then
+						--有突破
+						if nextCsvBreakOunt ~= nil then
+							--未满级
+							if Costdata ~= nil and Costdata.cost ~= 0  then
+								--突破
+								if nextCsvBreakOunt ~= nil then
+									local needItemId = nextCsvBreakOunt.cost[1]
+									local needItemNum = nextCsvBreakOunt.cost[2]
+									local hasItemNum = MBag.GetItemNum(needItemId)
+				
+									if hasItemNum >= needItemNum then
+										return true
+									end
+								end
+							end
+						end
+					else
+						if Costdata ~= nil and Costdata.cost ~= 0  then
+							skillCost = Costdata.cost
+							if skillCost <= v.friend and  sv.lv > 0 then
+								return true
+							end
 						end
 					end
 				end
@@ -1279,7 +1351,7 @@ function _M.RefuseQingqiu(id)
 			table.remove(_M.MarriedQingqiu,k)
 		end
 	end
-	WindowMgr.Call("UGirlMarried","RefreshQingqiu")
+	--WindowMgr.Call("UGirlMarried","RefreshQingqiu")
 	WindowMgr.Call("UMarriedTips","RefreshQingqiu")
 	WindowMgr.Call("UMarriedQingqiu","RefreshQingqiu")
 	WindowMgr.Call("UGirlMarried","CheckTiqinRed")

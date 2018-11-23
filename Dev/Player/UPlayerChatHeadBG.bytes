@@ -1,0 +1,153 @@
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Player.CPlayer.bytes#_M]
+local CPlayer = JRequire "Dev.Player.CPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+local JGuiManager = CS.JGui.JGuiManager
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:BeforeDestroy()
+	if self.tabHandle ~= nil then
+		self.tabHandle:delete()
+		self.tabHandle = nil
+	end
+end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnChatBGPutOn(self, id)
+	_P.updateCur(self)
+end
+
+function _R.OnChatBGUpdate(self, id)
+	_P.updateCur(self)
+end
+
+function _P.updateCur(self)
+	local csvId = MPlayer.PlayerInfo.chatBg
+	local csvLine = Csv.ChatHeadBG[csvId]
+	if csvLine == nil then
+		error("ChatHeadBG error:", csvId)
+		return
+	end
+	local moudle = self.Moudle
+	moudle:Get("CurrentTitle").Text = Csv.Text("player_chatbg_4", {name = csvLine.title}) 
+	moudle:Get("OutBox").SpriteName = csvLine.headIcon
+	moudle:Get("Num").SpriteName = Csv.Vip[MPlayer.GetVip()].icon
+	moudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+	moudle:Get("talk").SpriteName = csvLine.chatIcon
+	moudle:Get("value").Text = csvLine.getedTips
+
+	if self.BoxChoose ~= nil then
+		for id,info in pairs(self.BoxChoose) do
+			if info.box ~= nil then
+				if id == csvId then
+					info.box.Activity = false
+				else
+					info.box.Activity = true
+				end
+			end
+		end
+	end
+end
+
+function _P.OnChoose(self, index)
+	local moudle = self.Moudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local btn = moudle:Get("C_Btn_a")
+	btn.IsGray = true
+	btn.RaycastTarget = false
+	self.BoxChoose = {}
+	self.LastBoxChoose = 0
+	for _,csvLine in pairs(self.CsvList) do
+		local csvId = csvLine.id
+		if (index == 1 and MPlayer.PlayerInfo.getChatBg[csvId] == true) or 
+			(index == 2 and MPlayer.PlayerInfo.getChatBg[csvId] ~= true) 
+		then
+			local oneMoudle = self:CreateMoudle(content, "M_Role_TalkBox_Item")
+			oneMoudle:Get("CurrentTitle").Text = csvLine.title
+			oneMoudle:Get("OutBox").SpriteName = csvLine.headIcon
+			oneMoudle:Get("Num").SpriteName = Csv.Vip[MPlayer.GetVip()].icon
+			oneMoudle:Get("Head").SpriteName = MPlayer.GetSHeadIcon()
+			oneMoudle:Get("talk").SpriteName = csvLine.chatIcon
+			if index == 1 then
+				oneMoudle:Get("value").Text = csvLine.getedTips
+				local gou = oneMoudle:Get("gou")
+				local box = oneMoudle:Get("box")
+				gou.Activity = false			
+				self.BoxChoose[csvId] = {box = box, gou = gou}
+				box:AddOnClick(function()
+					if self.LastBoxChoose and self.BoxChoose[self.LastBoxChoose] ~= nil and self.BoxChoose[self.LastBoxChoose].gou ~= nil then
+						self.BoxChoose[self.LastBoxChoose].gou.Activity = false
+					end
+					gou.Activity = true
+					self.LastBoxChoose = csvId
+					if csvId ~= MPlayer.PlayerInfo.chatBg then
+						btn.IsGray = false
+						btn:AddOnButton(function()
+							CPlayer.ReqChatBGPutOn(csvId)
+							btn.IsGray = true
+							btn.RaycastTarget = false
+						end)
+					else
+						btn.IsGray = true
+						btn.RaycastTarget = false
+					end
+				end)
+			else
+				oneMoudle:Get("value").Text = csvLine.noTips
+				oneMoudle:Get("box").Activity = false
+			end
+		end
+	end
+
+	_P.updateCur(self)
+end
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Role_TalkBox")
+	self.Moudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	moudle:Get("C_Text").Text = Csv.Text("player_chatbg_1")
+	moudle:Get("C_text").Text = Csv.Text("player_chatbg_5")
+	self.CsvList = {}
+	for k,_ in pairs(Csv.ChatHeadBG) do
+		table.insert(self.CsvList, Csv.ChatHeadBG[k])
+	end
+	table.sort(self.CsvList, function(a, b)
+		return a.sort < b.sort
+	end)
+	local tabHandle = TabGroup.new(function (index)
+		_P.OnChoose(self, index)
+	self.tabHandle = tabHandle
+	end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,Color(0/255,195/255,255/255,1),Color(255/255,225/255,75/255,1))
+	tabHandle:Add(1, moudle:Get("BtnMine"), moudle:Get("MineText"), Csv.Text("player_chatbg_2"))
+	tabHandle:Add(2, moudle:Get("BtnEnemy"), moudle:Get("EnemyText"), Csv.Text("player_chatbg_3"))
+	tabHandle:Choose(1)
+end
+
+return _M

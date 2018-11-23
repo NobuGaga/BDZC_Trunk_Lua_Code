@@ -48,7 +48,8 @@ end
 
 function _P.doCreate(self, id)
 	self.GuideId = id
-	CS.Utility.LogPoint.LogPost(15, id, luaUtil.TransToYearMonthDayHMS(os.time()))
+	MMain.curGuidID = id
+	GameSetting.LogPoint(15, id, luaUtil.TransToYearMonthDayHMS(os.time()))
 
 	local csvLine = Csv.Guide[id]	
 	--是不是强制
@@ -252,6 +253,7 @@ function _M:OnCreate(id, doneCall)
 	self.IsMyDestroy = false
 	self.DoneCall = doneCall
 	self:UnBlack()
+	
 	_P.doCreate(self, id)
 end
 

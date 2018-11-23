@@ -40,7 +40,17 @@ _M.SeckillBattleData = {}
 _M.IsSeckill = false
 --是否已经开启过
 _M.IsFirstOpen = true
-
+--每日已挑战BOSS次数
+_M.FightBossTimes = 0
+--当前的关卡地图
+_M.CurCityId = 0
+--关卡地图宝箱列表
+_M.BattleMapList = {}
+--关卡收菜的开始时间
+_M.BattleMapStartTime = 0
+_M.BattleMapIsInit = false
+--关卡章节表表拷贝
+_M.CsvBattleReward = {}
 
 function _M.Clean( ... )
 	_M.CurId = 0
@@ -50,8 +60,25 @@ function _M.Clean( ... )
 	_M.SeckillBattleData = {}
 	_M.IsSeckill = false
 	_M.IsReadStory = true
+	_M.CurCityId = 0
+	_M.FightBossTimes = 0
+	_M.BattleMapIsInit = false
+	_M.BattleMapList = {}
+	_M.BattleMapStartTime = 0
+	_M.CsvBattleReward = {}
 end
 
+function _M.BattleMapUpdate(data)
+	_M.BattleMapIsInit = true
+	_M.CurCityId = data.curMapId
+	_M.BattleMapStartTime = data.startTime
+	_M.BattleMapList = {}
+	if data.mapList ~= nil then
+		for k,v in pairs(data.mapList) do
+			_M.BattleMapList[v.id] = v.startTime
+		end
+	end
+end
 
 -- 一键秒杀是否全部击杀完
 function _M.IsSeckillFinished()
@@ -173,6 +200,62 @@ function _M.IsFirstBattle()
 	else
 		return false
 	end
+end
+
+function _M.HasFightBossTimes()
+	local count = Csv.Const(20168)
+	return _M.FightBossTimes < count
+end
+
+function _M.InitCsvBattleData()
+	local csvChapterCopy = {}
+	for _, csvData in pairs(Csv.Chapter) do
+		csvChapterCopy[#csvChapterCopy + 1] = { 
+			id = csvData.id, 
+			staffID = csvData.staffId
+		}
+	end
+	table.sort(csvChapterCopy, function(left, right)
+		return left.id < right.id
+	end)
+	_M.SetCsvBattleRewardData(csvChapterCopy)
+end
+
+function _M.SetCsvBattleRewardData(csvChapterCopy)
+	if #csvChapterCopy == 0 then
+		return
+	end
+	local chapter = {}
+	local count
+	local staffID
+	local maxChapter
+	for index, csvData in ipairs(csvChapterCopy) do
+		chapter[csvData.id] = index
+		if csvData.staffID then
+			count = index
+			staffID = csvData.staffID
+			maxChapter = csvData.id
+			break
+		end
+	end
+	if staffID == nil or count == nil then
+		return
+	end
+	for index = 1, count do
+		table.remove(csvChapterCopy, 1)
+	end
+	_M.CsvBattleReward[#_M.CsvBattleReward + 1] = {
+		chapter = chapter,
+		count = count,
+		staffID = staffID,
+		maxChapter = maxChapter,
+	}
+	_M.SetCsvBattleRewardData(csvChapterCopy)
+end
+
+function _M.GetCurrentCsvBattleFrameData()
+	local frameID = Csv.BattleFrameGroup[_M.CurId].frameID
+	return Csv.BattleFrame[frameID]
 end
 
 return _M

@@ -20,6 +20,8 @@ local SDKMgr = JRequire "SDK.SDKMgr"
 local VipBarUpTime = 0.3
 --Vip特权每行文字高度偏移调整纸
 local VipTextRowHeightArg = 5.5
+--特殊充值档位界限
+local SpecialRechargeLimit = Csv.Const(88)
 
 local NormalMoudleName = "M_Recharge_VIP"
 local iOSMoudleName = "M_NewRecharge"
@@ -227,13 +229,11 @@ function _P.InitChargeView(self)
 	self.ChargeView.Activity = true
 	self.listItemCharge = {}
 	self.ChargeContent = self.moudle:Get("ChargeContent")
-	if Csv.Recharge == nil then
-		error("Recharge Csv = nil")
-		return
-	end
+
 	local csvRechargeCopy = {}
-	for _, csvValue in ipairs(Csv.Recharge) do
-		if csvValue.cost and csvRechargeCopy[csvValue.cost] == nil then
+	for _, csvValue in ipairs(MRecharge.CsvRecharge) do
+		if csvValue.cost and csvRechargeCopy[csvValue.cost] == nil and (GameSetting.Platform ~= Define.PlatformType.AndroidPhone or
+			csvValue.cost <= SpecialRechargeLimit or MRecharge.VipData.exp >= SpecialRechargeLimit) then
 			csvRechargeCopy[csvValue.cost] = csvValue
 		end
 	end

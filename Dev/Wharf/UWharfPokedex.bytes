@@ -81,13 +81,18 @@ function _P.ChooseGirl(self, girlId)
 			self.mActivationBtn.RaycastTarget = true
 			self.mActivationBtn.IsGray = false
 			self.mActivationBtnText.Text = Csv.Text("Wharf_pokedex9")
+			moudle:Get("getWay").Text = ""
+			moudle:Get("getWayText").Text = ""
 		end
 	end
 	moudle:Get("Name").Text = csvLine.name
 	moudle:Get("Info").Text = csvLine.tips
+	moudle:Get("Effect2_tab").Activity = false
+	moudle:Get("Effect2_0").Activity = true
 	local effectInfo = nowChoose.effect
 	if effectInfo ~= nil then
 		moudle:Get("Effect2").Text = Csv.Text("Wharf_addStaff")
+
 		moudle:Get("Effect2_0").Text = _P.GetEffectStaffName(girlId)
 		moudle:Get("Effect").Text = Csv.Text("Wharf_pokedex1")
 		moudle:Get("Effect2_1").Text = Csv.Text("Wharf_allstaff")
@@ -121,6 +126,26 @@ function _P.ChooseGirl(self, girlId)
 				moudle:Get("EffectText2").Text = ""
 			end
 		end	
+
+		
+		--技能加成员工，标签
+		local csvGirl = Csv.Girl[girlId]
+		if  csvGirl.skills ~= nil then
+			if #csvGirl.skills > 0 then
+				local csvSkill = Csv.GirlSkill[csvGirl.skills[1]]
+				if csvSkill ~= nil then
+					if csvSkill.employeTagImg ~= nil then
+						if #csvSkill.employeTagImg > 0 then
+							moudle:Get("Effect2_tab").Activity = true
+							moudle:Get("Effect2_0").Activity = false
+
+							moudle:Get("Effect2").Text = Csv.Text("Wharf_addStaff2")
+							moudle:Get("Effect2_tab").SpriteName = csvSkill.employeTagImg[1]
+						end
+					end
+				end
+			end
+		end
 	else
 		moudle:Get("Effect").Text = ""
 		moudle:Get("EffectText").Text = ""
@@ -212,7 +237,8 @@ function _P.RefreshGirl(self)
 		maxCount = maxCount + 1
 		local girlInfo = MGirl.GetGirlData(csvLine.id)
 		local oneMoudle = self:CreateMoudle(viewContent, "M_Inquiries_UMain_Item")
-		
+		oneMoudle:Get("light").Activity = false
+
 		self.Girls[csvLine.id] = {
 			moudle = oneMoudle,
 			girlInfo = girlInfo,

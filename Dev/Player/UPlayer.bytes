@@ -13,6 +13,8 @@ local MParliament = JRequire "Dev.Parliament.MParliament"
 local CParliament = JRequire "Dev.Parliament.CParliament"
 local MMain = JRequire "Dev.Main.MMain"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CLogin = JRequire "Dev.Login.CLogin"
 
 local btnActorId = 10003
 
@@ -24,12 +26,12 @@ local _R = {}
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
 
-local SHOW_ASSET_LIST = 
+local SHOW_ASSET_LIST =
 {
 	[Define.AssetsType.Record] = 1,
 	[Define.AssetsType.Coin] = 2,
@@ -44,7 +46,7 @@ function _P.RefreshName(self)
 end
 
 function _P.RefreshLevel(self)
-	local nowLevel = MPlayer.GetLevel() 
+	local nowLevel = MPlayer.GetLevel()
 	local csv = Csv.Company[nowLevel]
 	self.Level.Text = csv.name
 	local tmp = {num = MPlayer.GetExp()}
@@ -57,7 +59,14 @@ function _P.RefreshLevel(self)
 	if self.LastLevel ~= nowLevel then
 		WindowMgr.Create("UPlayerLevelUpTips", self.LastLevel)
 		self.LastLevel = nowLevel
-	end	
+	end
+end
+
+function _P.RefreshCommerce(self)
+	self.Commerce.Activity = MCommerce.IsJoinCommerce()
+	if MCommerce.CommerceName ~= nil then
+		self.Commerce.Text = Csv.Text("commerce_detail27") .. MCommerce.CommerceName
+	end
 end
 
 function _P.RefreshAvatar(self)
@@ -80,7 +89,7 @@ function _P.RefreshAvatar(self)
     else
         self.Body.SpriteName = MPlayer.GetBodySp()
 		self.Head.SpriteName = MPlayer.GetHeadSp()
-    end	
+    end
 end
 
 function _P.RefreshAttr(self)
@@ -95,7 +104,7 @@ function _P.RefreshAssets(self)
 	for itemId,_ in pairs(SHOW_ASSET_LIST) do
 		if itemId ~= Define.AssetsType.Record then
 			self.AssetInfo[itemId].Text = tostring(MBag.GetItemNum(itemId))
-		end		
+		end
 	end
 end
 
@@ -127,10 +136,11 @@ function _P.RefreshAll(self)
 	_P.RefreshAssets(self)
 	_P.RefreshVip(self)
 	_P.RefreshTitle(self)
+	_P.RefreshCommerce(self)
 end
 
 function _M:OnCreate()
-	
+
 	local moudle = self:CreateMoudle(self._RootNode, "M_Role_UMain")
 	self.Moudle = moudle
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
@@ -156,6 +166,23 @@ function _M:OnCreate()
 	self.Vip = moudle:Get("vip")
 	self.Name = moudle:Get("name")
 	self.Level = moudle:Get("text1")
+	self.Commerce = moudle:Get("text3")
+	self.Server = moudle:Get("text4")
+
+	local playerInfo = MPlayer.PlayerInfo
+	local serverId  = playerInfo.serverId
+	if playerInfo.originServerId ~= 0 then
+		serverId = playerInfo.originServerId
+	end
+
+	local serverInfo = CLogin.GetServerInfoByID(serverId)
+	if serverInfo ~= nil and serverInfo.name ~= nil then
+		self.Server.Activity = true
+		self.Server.Text = Csv.Text("player_area", {name = serverInfo.name})
+	else
+		self.Server.Activity = false
+	end
+	
 	self.ChooseRoot = moudle:Get("scale_choose")
 	self.LastLevel = MPlayer.GetLevel()
 	self.TitleBG = moudle:Get("scaleBG")
@@ -207,6 +234,11 @@ function _M:OnCreate()
 			_P.RefreshVip(self)
 		end
 	end)
+	self:RegistCallEvent(Define.EventListenId.CommerceChange, function (eventHandle)
+		if self.Moudle ~= nil then
+			_P.RefreshCommerce(self)
+		end
+	end)
 
 	_P.RefreshDress(self)
 	self.TitleTable = {}
@@ -218,11 +250,17 @@ function _M:OnCreate()
 		WindowOpen.Open(Define.SysId.MakeUp)
 	end,nil,0.9)
 
+	local chatBg = moudle:Get("TalkBoxIcon")
+	chatBg.Activity = MMain.FuncIsOpen(Define.SysId.ChatBG)
+	chatBg:AddOnButton(function()
+		WindowOpen.Open(Define.SysId.ChatBG)
+	end,nil,0.9)
+
 	if GameSetting.IsiOSCommit then
 		local iOSBg = moudle:Get("iOSBg")
 		iOSBg.Activity = true
-		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Player"), 
-												552, 766, 
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath("iOSBg", "Player"),
+												552, 766,
 												function (sp)
 													if sp then
 														iOSBg.Sprite = sp
@@ -263,7 +301,7 @@ function _P.RefreshTitleList(self)
 	local titleList = MParliament.GetTitleList()
 	local titleTable = {}
 	if titleList ~= nil then
-		for k,v in pairs(titleList) do 
+		for k,v in pairs(titleList) do
 			local titleMoudle = JGuiManager.GetMoudle(content,"M_Role_UMain_Item")
 			local csvItem = Csv.Item[v.titleID]
 			if csvItem ~= nil then

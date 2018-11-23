@@ -1,0 +1,49 @@
+local _M = {}
+local _P = {}
+
+_M.CurID = 1
+_M.Score = 0
+_M.ResetTimes = 0
+_M.CheckPower = {}
+_M.GotRewards = {}
+
+function _M.Clean()
+
+end
+
+function _M.OnDayout()
+	--每日增加一点重置点
+	_M.ResetTimes = _M.ResetTimes +1
+end
+
+function _M.Init(data)
+	_M.CurID = data.currID
+	_M.Score = data.score
+	_M.ResetTimes = data.resetTimes
+	_M.CheckPower = data.power
+	_M.GotRewards = data.getRewards
+end
+
+function _M.SetResetTimes(data)
+	_M.ResetTimes = data.times
+end
+
+function _M.SetRewards(data)
+	if _M.GotRewards ~= nil then
+		local isGot = false
+		for k,v in pairs(_M.GotRewards)do
+			if v == data.id then
+				isGot = true
+			end
+		end
+		if not isGot then
+			table.insert(_M.GotRewards,data.id)
+		end
+	else
+		_M.GotRewards = {}
+		table.insert(_M.GotRewards,data.id)
+	end
+end
+
+
+return _M

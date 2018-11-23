@@ -5,34 +5,35 @@ local CCommon = JRequire"Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 --local CActivity = JRequire"Dev.Activity.CActivity"
 
-
 local _M = {}
 local _P = {}
 
 local ECmdId = {
-	cSign								=	1,--签到
-	cExchange							=	2,--兑换码兑换	PWelfare.CExchange
-	cGetFirstRechargeReward				=	3,--领取首充奖励	.
-	cGetMonthCardReward					=	4,--领取月卡奖励	.
-	cGetYearCardReward					=	5,--领取年卡奖励	.
-	cGetVipReward						=	6,--领取VIP奖励	PWelfare.CGetVipReward
-	cGetVipDailyGift					=	7,--领取vip每日礼包 PWelfare.CGetVipReward
-	cGookLuck							=	8,--请求机遇次数 --PWelfare.C
+	cSign					= 1,--签到
+	cExchange				= 2,--兑换码兑换 PWelfare.CExchange
+	cGetFirstRechargeReward	= 3,--领取首充奖励
+	cGetMonthCardReward		= 4,--领取月卡奖励
+	cGetYearCardReward		= 5,--领取年卡奖励
+	cGetVipReward			= 6,--领取VIP奖励 PWelfare.CGetVipReward
+	cGetVipDailyGift		= 7,--领取vip每日礼包 PWelfare.CGetVipReward
+	cGookLuck				= 8,--请求机遇次数 PWelfare.C
+	cGetSignReward			= 9,--领取每日签到好感度奖励
 
-	sWelfareInitSign						=	1,--签到	PWelfare.SInitSign
-	sWelfareSign							=	2,--签到更新	PWelfare.SSign
-	sWelfareExchange						=	3,--兑换返回	PWelfare.SExchange
-	sFirstRecharge							=	4,--首充信息	PWelfare.SFirstRecharge
-	sMonthCard								=	5,--月卡信息	PWelfare.SMonthCard
-	sYearCard								=	6,--年卡信息	PWelfare.SYearCard
-	sGetFirstRechargeReward					=	7,--领取首充奖励	
-	sGetMonthCardReward						=	8,--领取月卡奖励	.
-	sGetYearCardReward						=	9,--领取年卡奖励	.
-	sGetVipReward							=	10,--领取vip奖励	PWelfare.SGetVipReward
-	sVipRewardInfo							=	11,--vip奖励信息	PWelfare.SVipRewardInfo
-	sVipDayGiftInfo							=	12,--vip每日礼包领取信息下发 PWelfare.SVipDailyGift
-	sLifeLongCard							=	13,--终身卡信息
-	sGoodLuck								=	14,--机遇
+	sWelfareInitSign		= 1,--签到 PWelfare.SInitSign
+	sWelfareSign			= 2,--签到更新 PWelfare.SSign
+	sWelfareExchange		= 3,--兑换返回 PWelfare.SExchange
+	sFirstRecharge			= 4,--首充信息 PWelfare.SFirstRecharge
+	sMonthCard				= 5,--月卡信息 PWelfare.SMonthCard
+	sYearCard				= 6,--年卡信息 PWelfare.SYearCard
+	sGetFirstRechargeReward	= 7,--领取首充奖励
+	sGetMonthCardReward		= 8,--领取月卡奖励
+	sGetYearCardReward		= 9,--领取年卡奖励
+	sGetVipReward			= 10,--领取vip奖励 PWelfare.SGetVipReward
+	sVipRewardInfo			= 11,--vip奖励信息 PWelfare.SVipRewardInfo
+	sVipDayGiftInfo			= 12,--vip每日礼包领取信息下发 PWelfare.SVipDailyGift
+	sLifeLongCard			= 13,--终身卡信息
+	sGoodLuck				= 14,--机遇
+	sGetSignReward			= 15,--领取每日签到好感度奖励返回 PWelfare.SSignReward
 }
 
 --清空模块
@@ -42,31 +43,33 @@ end
 
 function _M.ModuleInit(isReload)
 	local send = {
-		[ECmdId.cSign] = "",
-		[ECmdId.cExchange] = "PWelfare.CExchange",
+		[ECmdId.cSign] 					 = "",
+		[ECmdId.cExchange] 				 = "PWelfare.CExchange",
 		[ECmdId.cGetFirstRechargeReward] = "",
-		[ECmdId.cGetMonthCardReward] = "",
-		[ECmdId.cGetYearCardReward] = "",
-		[ECmdId.cGetVipReward] = "PWelfare.CGetVipReward",
-		[ECmdId.cGetVipDailyGift] = "PWelfare.CGetVipReward",
-		[ECmdId.cGookLuck] = ""
+		[ECmdId.cGetMonthCardReward] 	 = "",
+		[ECmdId.cGetYearCardReward] 	 = "",
+		[ECmdId.cGetVipReward] 			 = "PWelfare.CGetVipReward",
+		[ECmdId.cGetVipDailyGift] 		 = "PWelfare.CGetVipReward",
+		[ECmdId.cGookLuck] 				 = "",
+		[ECmdId.cGetSignReward] 		 = ""
 	}
 	local recv = {
-		[ECmdId.sWelfareInitSign]		=	{proto = "PWelfare.SInitSign",		handle = _P.RepInitSign},
-		[ECmdId.sWelfareSign]			=	{proto = "PWelfare.SSign",		handle = _P.RepSign},
-		[ECmdId.sWelfareExchange]		=	{proto = "PWelfare.SExchange",		handle = _P.RepExchange},
+		[ECmdId.sWelfareInitSign]		 = { proto = "PWelfare.SInitSign",		handle = _P.RepInitSign},
+		[ECmdId.sWelfareSign]			 = { proto = "PWelfare.SSign",			handle = _P.RepSign},
+		[ECmdId.sWelfareExchange]		 = { proto = "PWelfare.SExchange",		handle = _P.RepExchange},
 		
-		[ECmdId.sFirstRecharge]				=		{proto = "PWelfare.SFirstRecharge",		handle = _P.RepFirstRecharge},
-		[ECmdId.sMonthCard]					=		{proto = "PWelfare.SMonthCard",		handle = _P.RepMonthCard},
-		[ECmdId.sYearCard]					=		{proto = "PWelfare.SYearCard",		handle = _P.RepYearCard},
-		[ECmdId.sVipRewardInfo]				=		{proto = "PWelfare.SVipRewardInfo",		handle = _P.RepVipRewardInfo},
-		[ECmdId.sGetFirstRechargeReward]	=		{handle = _P.RepGetFirstRechargeReward},
-		[ECmdId.sGetMonthCardReward]		=		{handle = _P.RepGetMonthCardReward},
-		[ECmdId.sGetYearCardReward]			=		{handle = _P.RepGetYearCardReward},
-		[ECmdId.sGetVipReward]				=		{proto = "PWelfare.SGetVipReward",		handle = _P.RepGetVipReward},
-		[ECmdId.sVipDayGiftInfo]			=		{proto = "PWelfare.SVipDailyGift",		handle = _P.RepVipDayGiftInfo},
-		[ECmdId.sLifeLongCard]				=		{proto = "PWelfare.SLifeLongCard",		handle = _P.RepLifeLongCard},
-		[ECmdId.sGoodLuck]				=		{proto = "PWelfare.SGoodLuck",		handle = _P.RepGoodLuck},
+		[ECmdId.sFirstRecharge]			 = { proto = "PWelfare.SFirstRecharge",	handle = _P.RepFirstRecharge},
+		[ECmdId.sMonthCard]				 = { proto = "PWelfare.SMonthCard",		handle = _P.RepMonthCard},
+		[ECmdId.sYearCard]				 = { proto = "PWelfare.SYearCard",		handle = _P.RepYearCard},
+		[ECmdId.sVipRewardInfo]			 = { proto = "PWelfare.SVipRewardInfo",	handle = _P.RepVipRewardInfo},
+		[ECmdId.sGetFirstRechargeReward] = { 									handle = _P.RepGetFirstRechargeReward},
+		[ECmdId.sGetMonthCardReward]	 = { 									handle = _P.RepGetMonthCardReward},
+		[ECmdId.sGetYearCardReward]		 = { 									handle = _P.RepGetYearCardReward},
+		[ECmdId.sGetVipReward]			 = { proto = "PWelfare.SGetVipReward",	handle = _P.RepGetVipReward},
+		[ECmdId.sVipDayGiftInfo]		 = { proto = "PWelfare.SVipDailyGift",	handle = _P.RepVipDayGiftInfo},
+		[ECmdId.sLifeLongCard]			 = { proto = "PWelfare.SLifeLongCard",	handle = _P.RepLifeLongCard},
+		[ECmdId.sGoodLuck]				 = { proto = "PWelfare.SGoodLuck",		handle = _P.RepGoodLuck},
+		[ECmdId.sGetSignReward]			 = { proto = "PWelfare.SSignReward",	handle = _P.RepGetSignReward},
 	}
 	
 	_M.Send = SocketMgr.Regist(Define.SysId.Welfare, send, recv, isReload)
@@ -112,11 +115,16 @@ function _M.ReqGetGoodLuckDatas()
 	_M.Send(ECmdId.cGookLuck)
 end
 
+function _M.ReqGetSignReward()
+	_M.Send(ECmdId.cGetSignReward)
+end
+
 ---------------------------------------------------
 -- Server -> Client
 ----------------------------------------------------\
 function _P.RepInitSign(data)
 	MWelfare.InitSign(data)
+	WindowMgr.Call("UWelfare", "OnRefreshView")
 	_P.RedPoint()
 end
 
@@ -192,7 +200,7 @@ end
 function _P.RedPoint()
 	local isRedpoint = false
 
-	if MWelfare.isSign == false then
+	if MWelfare.isSign == false or MWelfare.isCanGetSignReward == true then
 		isRedpoint = true
 	end
 
@@ -204,5 +212,11 @@ function _P.RepGoodLuck(data)
 	MWelfare.SetGoodLuckDatas(data)
 end
 
+function _P.RepGetSignReward(data)
+	if MWelfare.RefreshSignRewardID(data.rewardId) then
+		_P.RedPoint()
+	end
+	WindowMgr.Call("UWelfare", "OnGetSignReward")
+end
 
 return _M

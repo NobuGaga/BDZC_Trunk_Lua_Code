@@ -1,3 +1,5 @@
+--竞技场战斗结果界面，跨服竞技场战斗结果界面
+
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
@@ -34,9 +36,10 @@ function _M:OnCreate(closeCall, isSuccess, rewardList, lastInfo)
 			end, {num = v.value})
 		end
 	end
+
 	if lastInfo.rank > MArena.CurRank then
 		moudle:Get("Point").Text = Csv.Text("Arena_16")
-		moudle:Get("PointNum").Text = tostring(lastInfo.rank - MArena.CurRank) 
+		moudle:Get("PointNum").Text = tostring(lastInfo.rank - MArena.CurRank)
 		CCommon.CreateEffect(moudle:Get("UPFx"), 10191)
 	else
 		moudle:Get("Point").Activity = false

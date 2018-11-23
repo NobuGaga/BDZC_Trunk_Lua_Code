@@ -27,6 +27,71 @@ function _M.Trigger(data)
 	return {"Trigger",data},{"TriggerMap",tbl}
 end
 
+--海外版VIP特殊处理
+_CsvMap.Vip = "Vip"
+function _M.Vip(data)
+	if GameSetting.IsTaiWan then
+		for id,line in pairs(data) do
+			line.upExp = line.upExp_tw
+		end
+	end
+	return {"Vip",data}
+end
 
+--海外版单笔充值RechargeSingle特殊处理
+_CsvMap.RechargeSingle = "RechargeSingle"
+function _M.RechargeSingle(data)
+	if GameSetting.IsTaiWan then
+		for id, line in pairs(data) do
+			line.grade = line.gradetw
+		end
+	end
+	return {"RechargeSingle",data}
+end
+
+--海外版累计充值RechargeTotal特殊处理
+_CsvMap.RechargeTotal = "RechargeTotal"
+function _M.RechargeTotal(data)
+	if GameSetting.IsTaiWan then
+		for id, line in pairs(data) do
+			for k, v in pairs(line.displayNum) do
+				line.displayNum[k] = (v or 0) * 10
+			end
+			for k, v in pairs(line.grade) do 
+				line.grade[k] = (v or 0) * 10
+			end
+		end
+	end
+	return {"RechargeTotal",data}
+end
+
+_CsvMap.RechargeDay = "RechargeDay"
+function _M.RechargeDay(data)
+	if GameSetting.IsTaiWan then
+		for id, line in pairs(data) do
+			for k, v in pairs(line.displayNum) do
+				line.displayNum[k] = (v or 0) * 10
+			end
+			for k, v in pairs(line.grade) do 
+				line.grade[k] = (v or 0) * 10
+			end
+		end
+	end
+	return {"RechargeDay",data}
+end
+
+_CsvMap.MainQuestGroup = "MainQuest"
+function _M.MainQuest(data)
+	local group = {}
+	for id, line in pairs(data) do
+		local tab = group[line.group]
+		if tab == nil then
+			tab = {}
+			group[line.group] = tab
+		end
+		tab[id] = line
+	end
+	return {"MainQuest",data}, {"MainQuestGroup", group}
+end
 
 return {CsvMaker = _M, CsvMap = _CsvMap}

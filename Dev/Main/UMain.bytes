@@ -108,6 +108,9 @@ function _R.SwitchCenterBtns(self, isShowCenterBtns)
 	end
 	if GameSetting.IsiOSCommit then
 		moudle:Get('TaskBG').Activity = false
+		if GameSetting.IsMergeShowMain then
+			moudle:Get("BtnBack").Activity = false
+		end
 	end
 end
 function _R.RefreshTopBtns(self)
@@ -215,9 +218,11 @@ function _P.RefreshLevel(self, moudle)
 	local csv = Csv.Company[MPlayer.GetLevel()]
 	moudle:Get("RloeLv").Text = Csv.Text("player_level", {name = csv.name})
 
+	--[[
 	if self.TaskGuideNode ~= nil and MPlayer.GetLevel() >= 2 then
 		self.TaskGuideNode:Destroy()
 	end
+	--]]
 end
 function _P.RefreshPower(self, moudle)
 	moudle:Get("RolePower").Text = Csv.Text("player_power", {num = MPlayer.GetPower()})
@@ -500,6 +505,14 @@ function _P.RefreshTask(self)
 			text.Color = Color(1,35/255,35/255)
 		end
 		text.Text = csv.title
+
+		--特殊特效
+		if self.TaskGuideNode ~= nil then
+			self.TaskGuideNode:Destroy()
+		end
+		if csv.effectID ~= nil and not GameSetting.IsiOSCommit then
+			self.TaskGuideNode = CCommon.CreateEffect(moudle:Get('TaskBG'), csv.effectID)
+		end
 	end
 end
 
@@ -510,6 +523,58 @@ end
 
 function _R.AddSortLayerCount(self, count)
 	self._CanvasIndex = self._CanvasIndex + count + 1
+end
+
+function _R.PlayFlyFunc(self, funcId, callBack)
+	local moudle = self.Moudle
+	local funcCsv = Csv.Func[funcId]
+
+	local mainBtn = self.Btns[funcId]
+	if mainBtn ~= nil then
+		mainBtn.Activity = false
+	end
+	local mMoudle = self:CreateMoudle(moudle:Get("StoryShowRoot"), "M_FlyFunc")
+	mMoudle.SelfRect.RaycastTarget = true
+	local funcIconNode = mMoudle:Get("FuncIcon")
+	funcIconNode.SpriteNameAutoScale = funcCsv.icon
+	local effect = CCommon.CreateEffectEx(mMoudle:Get("FxCanvas"), 10120)
+	local pos = Vector2(0,0)
+	if funcCsv.fid == Define.SysId.Main or
+		funcCsv.fid == Define.SysId.Bottom or
+		funcCsv.fid == Define.SysId.Top or
+		funcCsv.fid == Define.SysId.Left or
+		funcCsv.fid == Define.SysId.Right 
+	then
+		_R.GetBtnPos(self, funcId, mMoudle.SelfRect.CachedTran, pos)
+	elseif funcCsv.fid == Define.SysId.Home then
+		WindowMgr.Call("UHomeMap","GetBtnPos",funcId, mMoudle.SelfRect.CachedTran, pos)
+	elseif funcCsv.fid == Define.SysId.World then
+		WindowMgr.Call("UWorldMap","GetBtnPos",funcId, mMoudle.SelfRect.CachedTran, pos)
+	else
+		error("get func pos error:" .. funcId)
+	end
+	local tween = funcIconNode.CachedTran:GetJTweener("T_FlyFunc")
+	tween:SetOnComplete(function()
+		if effect ~= nil then
+			effect:Destroy()
+		end
+		if funcIconNode ~= nil then
+			tween = funcIconNode.CachedTran:GetJTweener("T_FlyFuncPos")
+			local tweenData = tween:GetTweenForType(CS.JTween.JTweenerType.AnchorPos)
+			tweenData.ToPos = pos
+			tween:SetOnComplete(function()
+				if mMoudle ~= nil then
+					mMoudle:Destroy()
+				end
+				if mainBtn ~= nil then
+					mainBtn.Activity = true
+				end
+				callBack()
+			end)
+			tween:Play()
+		end
+	end)
+	tween:Play()
 end
 
 --事件派发
@@ -596,9 +661,11 @@ function _M:OnCreate()
 
 	CCommon.CreateEffect(moudle:Get('TaskFxNode'), 10112)--主线任务特效
 
+	--[[
 	if MPlayer.GetLevel() < 2 and not GameSetting.IsiOSCommit then
 		self.TaskGuideNode = CCommon.CreateEffect(moudle:Get('TaskBG'), 25)
 	end
+	--]]
 
 	_P.RefreshBottomBtns(self, moudle)
 	_P.InitAssets(moudle, self.LastAssetsNum)
@@ -618,20 +685,29 @@ function _M:OnCreate()
 		local moudle = self.Moudle
 		if moudle ~= nil then
 			local funcCsv = Csv.Func[funcId]
-			if funcCsv.fid == Define.SysId.Bottom then
-				_P.RefreshBottomBtns(self, moudle)
-			elseif self.IsShowCenterBtns then
-				if funcCsv.fid == Define.SysId.Top then
-					_P.RefreshTopBtns(self, moudle)
-				elseif funcCsv.fid == Define.SysId.Left then
-					_P.RefreshLeftBtns(self, moudle)
-				elseif funcCsv.fid == Define.SysId.Right then
-					_P.RefreshRightBtns(self, moudle)
+			if funcCsv ~= nil then
+				if funcCsv.fid == Define.SysId.Bottom then
+					_P.RefreshBottomBtns(self, moudle)
+				elseif self.IsShowCenterBtns then
+					if funcCsv.fid == Define.SysId.Top then
+						_P.RefreshTopBtns(self, moudle)
+					elseif funcCsv.fid == Define.SysId.Left then
+						_P.RefreshLeftBtns(self, moudle)
+					elseif funcCsv.fid == Define.SysId.Right then
+						_P.RefreshRightBtns(self, moudle)
+					end
 				end
 			end
 		end
 	end)
 
+	self:RegistCallEvent(Define.EventListenId.AutoReconnectEnterGame, function()
+		local moudle = self.Moudle
+		if moudle ~= nil then
+			_P.RefreshTopBtns(self, moudle)
+		end
+	end)
+	
 	--聊天
 	self.ChatText = moudle:Get("ChatText")
 	local info = MTalk.GetLastMsg()

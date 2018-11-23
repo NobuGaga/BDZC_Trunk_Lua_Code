@@ -1,0 +1,87 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(isShowRank, resultList, onClose)
+	self:Lock()
+	self._RootNode:AddOnTime(function()
+		self:Unlock()
+	end, nil, 2)
+
+	local module = self:CreateMoudle(self._RootNode, "M_Autumn_Continuity")
+	self.OnCloseCall = onClose
+	module:Get("Title").Text = Csv.Text("lottery_12")
+	module:Get("C_text").Text = Csv.Text("common_sure")
+	module:Get("C_Btn_a"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local showItem = _P.GetShowItems(resultList)
+	local listData = showItem.rewardList
+	for index,v in pairs(listData) do
+		local itemSp = module:Get("Item" .. index)
+		if itemSp ~= nil then
+			TimeDelay.DelayCall((index - 1) * 0.2, false, function( ... )
+				if module ~= nil then
+					local itemData = v.data
+					local itemCsv = Csv.Item[itemData.key]
+					itemSp.SpriteName = itemCsv.colorIcon
+					module:Get("Icon" .. index).SpriteName = itemCsv.icon
+					module:Get("Num" .. index).Text = itemData.value
+					module:Get("GJ" .. index).Activity = v.isHight
+
+					itemSp:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+						CCommon.ShowItemTips(itemData.key)
+					end)
+
+					SoundMgr.Play(11000)
+					local effectMoudle = CCommon.CreateItemLight(itemSp, Define.SysId.MidAFestival, nil, itemCsv.color)
+					if effectMoudle ~= nil then
+						effectMoudle.SelfRect.CachedTran:SetSiblingIndex(1)
+					end
+
+					CCommon.CreateEffect(module:Get("FxNode" .. index), 10121)
+				end
+			end)
+		end
+	end
+
+	if isShowRank then
+		module:Get("Tips1").Text = Csv.Text("adventure_enemy_point", {num = showItem.score})
+	end
+end
+
+
+function _P.GetShowItems(resultList)
+	local rewardList = {}
+	local score = 0
+	for resultKey,resultValue in pairs(resultList) do
+		for k,v in pairs(resultValue.itemList) do
+			rewardList[#rewardList + 1] = {data = v, isHight = resultValue.type == 2}
+		end
+		
+		if resultValue.score then
+			score = resultValue.score + score
+		end
+	end
+
+	return {rewardList = rewardList, score = score}
+end
+
+
+return _M

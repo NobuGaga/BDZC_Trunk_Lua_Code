@@ -105,10 +105,16 @@ function _M:OnCreate(...)
 					-- end
 
 					-- 当前无60级员工或60级员工已都挑战完，修改者pyh（点击人物跳转到员工界面）
-					WindowMgr.Create("UStaff", Define.SysId.Staff)
+					--20180929改为只弹提示
+					--WindowMgr.Create("UStaff", Define.SysId.Staff)
+
+					--提示
+					CCommon.ShowError(Csv.Text("relations_staff_no"))
 				end
 			else
-				WindowMgr.Create("UStaff", Define.SysId.Staff)
+				--20180929改为只弹提示
+				CCommon.ShowError(Csv.Text("relations_staff_no"))
+				--WindowMgr.Create("UStaff", Define.SysId.Staff)
 			end
 		end
 	end,nil,0.9)
@@ -201,40 +207,43 @@ function _P.SetNews(self)
 	local moudle = self.mMoudle
 	local content = moudle:Get("content")
 	content:DestroyChildren()
-	local newsTable = MRelations.NewsData.list
-	if newsTable ~= nil then
-		for k,v in ipairs(newsTable) do
-			local newsMoudle = JGuiManager.GetMoudle(content, "M_Lobby_UMain_Item")
-			newsMoudle:Get("Name_0").Text = v.name
-			newsMoudle:Get("C_text").Text = Csv.Text("relations_shangsu")
-			newsMoudle:Get("C_Btn_b"):AddOnButton(function()
-				SoundMgr.Play(10001)
-				MRelations.FightType = 3
-				MRelations.PlayerID = v.playerid
+	
+	if MRelations.NewsData ~= nil then
+		local newsTable = MRelations.NewsData.list
+		if newsTable ~= nil then
+			for k,v in ipairs(newsTable) do
+				local newsMoudle = JGuiManager.GetMoudle(content, "M_Lobby_UMain_Item")
+				newsMoudle:Get("Name_0").Text = v.name
+				newsMoudle:Get("C_text").Text = Csv.Text("relations_shangsu")
+				newsMoudle:Get("C_Btn_b"):AddOnButton(function()
+					SoundMgr.Play(10001)
+					MRelations.FightType = 3
+					MRelations.PlayerID = v.playerid
 				--WindowMgr.Create("URelationsSelectStaff")
 				--新版改为先选书再选人
-				WindowMgr.Create("URelationsCost")
+					WindowMgr.Create("URelationsCost")
 
-				moudle:Get("messageRoot").Activity = false
-			end,nil,0.9)
-			local news = Csv.RelationsNews[v.type].tips
-			local staffName = Csv.Personnel[v.staffid].name
-			if v.staffName ~= nil then
-				staffName = v.staffName
-			end
-			local strTable = {staffname = staffName,playername = v.failname,num = v.num,kill = v.times,name = v.name}
-			local strNews = LuaUtil.Format(news,strTable)
-			newsMoudle:Get("Info").Text = strNews
+					moudle:Get("messageRoot").Activity = false
+				end,nil,0.9)
+				local news = Csv.RelationsNews[v.type].tips
+				local staffName = Csv.Personnel[v.staffid].name
+				if v.staffName ~= nil then
+					staffName = v.staffName
+				end
+				local strTable = {staffname = staffName,playername = v.failname,num = v.num,kill = v.times,name = v.name}
+				local strNews = LuaUtil.Format(news,strTable)
+				newsMoudle:Get("Info").Text = strNews
 
-			local timeStr = LuaUtil.TransToYearMonthDayHMS(v.time)
-			newsMoudle:Get("TimeNum_0").Text = timeStr
-			newsMoudle:Get("TimeText").Text = Csv.Text("relations_timeT")
+				local timeStr = LuaUtil.TransToYearMonthDayHMS(v.time)
+				newsMoudle:Get("TimeNum_0").Text = timeStr
+				newsMoudle:Get("TimeText").Text = Csv.Text("relations_timeT")
 
-			newsMoudle:Get("Index").Text = k.."."
-			newsMoudle:Get("position").Text = Csv.Text("relations_tip5")
+				newsMoudle:Get("Index").Text = k.."."
+				newsMoudle:Get("position").Text = Csv.Text("relations_tip5")
 
-			if v.playerid == MPlayer.GetId() then
-				newsMoudle:Get("C_Btn_b").Activity = false
+				if v.playerid == MPlayer.GetId() then
+					newsMoudle:Get("C_Btn_b").Activity = false
+				end
 			end
 		end
 	end
@@ -251,12 +260,9 @@ function _P.RefreshView(self)
 	local ImgJy = moudle:Get("JY")
 	--local TextCost = moudle:Get("TextCost")
 	local cishu = moudle:Get("cishuNum")
-	
-
 	if data.action ~= nil then
 		cishu.Text = data.action.ncur.."/"..data.action.nmax
 	end
-
 
 	ImgBody.Activity = true
 	ImgBody.SpriteName = "npc_10017"
@@ -264,58 +270,6 @@ function _P.RefreshView(self)
 	local talkStr = _P.GetTalk(self,data.state)
 	TextTalk.Text = LuaUtil.Format(talkStr, {name = MRelations.InitData.name})--
 
-	--[[
-	local csvPersonnel
-	if data.staffid ~= nil then
-		ImgBody.Activity = true
-		csvPersonnel = Csv.Personnel[data.staffid]
-		ImgBody.SpriteName = csvPersonnel.asset
-		ImgJy.Activity = false
-	else
-		ImgBody.Activity = false
-		ImgJy.Activity = true
-	end
-	if data.state == 0 then
-		if csvPersonnel ~= nil then
-			TextTalk.Text = Csv.Text("relations_talk0",{name = MStaff.GetStaffName(csvPersonnel.id)})--csvPersonnel.name})
-			ImgBody.Activity = true
-			ImgJy.Activity = false
-			TextCost.Activity = false
-		end
-	elseif data.state == 1 then
-		self.mEvent = LuaUtil.TextAddThreePoint(TextTalk, Csv.Text("relations_talk1"))
-		ImgBody.Activity = true
-		ImgJy.Activity = false
-	elseif data.state == 2 then
-		_P.SetCDIconAndVipText(self)
-		if data.time ~= nil and data.time > 0 then
-			if not self.mIsUpdatingTime then
-				self.mIsUpdatingTime = true
-				_P.OnUpdateTime(self)
-				self.mTween = moudle.SelfRect:AddOnUpdate(function()
-				_P.OnUpdateTime(self)
-				end,nil,1)
-			end
-			ImgBody.Activity = false
-			ImgJy.Activity = true
-		end
-	elseif data.state == 3 then
-		if data.exnum ~= nil and data.maxnum ~= nil then
-			TextTalk.Text = Csv.Text("relations_talk3",{num = data.exnum,max = data.maxnum})
-		end
-		ImgBody.Activity = true
-		ImgJy.Activity = false
-		TextCost.Activity = false
-	elseif data.state == 4 then
-		TextTalk.Text = Csv.Text("relations_talk4")
-		ImgBody.Activity = false
-		ImgJy.Activity = true
-	elseif data.state == 5 then
-		TextTalk.Text = Csv.Text("relations_talk5",{num = STAFFLEVEL})
-		ImgBody.Activity = false
-		ImgJy.Activity = true
-	end
-	--]]
 	_P.SetBobyTipText(self)
 	local ImgTextBox = moudle:Get("TextBox")
 	moudle:Get("TipsText"):AddOnTime(function()
@@ -326,35 +280,48 @@ function _P.RefreshView(self)
 	_P.SetBlackMan(self)
 
 	--刷新时间
-	local isMax = (data.action.ncur == data.action.nmax)
+	local isMax = (data.action.ncur >= data.action.nmax)
 	local time = moudle:Get("TimeNum")
-
-	if data.recoveTime ~= nil then
-		--倒计时
-		if data.recoveTime > 0 then
-			local leftTimeNum = data.recoveTime - HeartBeat.ServSecond()
-			if leftTimeNum > 0 then
-				time.Text = luaUtil.GetTimeHMS(leftTimeNum)
+	if MRelations.HasLeftActionCount() then
+		if data.recoveTime ~= nil then
+			--倒计时
+			if data.recoveTime > 0 then
+				local leftTimeNum = data.recoveTime - HeartBeat.ServSecond()
+				if leftTimeNum > 0 then
+					time.Text = luaUtil.GetTimeHMS(leftTimeNum)
+				elseif isMax then
+					time.Text = Csv.Text("relations_refresh_full")
+				end
+	
+				ImgTextBox:AddOnUpdate(function()
+					if MRelations.HasLeftActionCount() then
+						local leftTime = MRelations.InitData.recoveTime - HeartBeat.ServSecond()
+						if leftTime >= 0 then
+							time.Text = luaUtil.GetTimeHMS(leftTime)
+						else
+							if not isMax then
+								CRelations.CMainInit()
+							end
+						end
+					else
+						time.Text = Csv.Text("relations_refresh_max")
+					end
+				end,nil,1)
 			elseif isMax then
 				time.Text = Csv.Text("relations_refresh_full")
 			end
-
-			ImgTextBox:AddOnUpdate(function()
-				local leftTime = MRelations.InitData.recoveTime - HeartBeat.ServSecond()
-				if leftTime >= 0 then
-					time.Text = luaUtil.GetTimeHMS(leftTime)
-				else
-					if not isMax then
-						CRelations.CMainInit()
-					end
-				end
-			end,nil,1)
-		elseif isMax then
+		else
 			time.Text = Csv.Text("relations_refresh_full")
 		end
 	else
-		time.Text = Csv.Text("relations_refresh_full")
+		time.Text = Csv.Text("relations_refresh_max")
 	end
+
+	--剩余恢复次数
+	if data.leftRecoveryCount ~= nil then
+		moudle:Get("leftCount").Text = Csv.Text("relations_leftCount",{num = data.leftRecoveryCount})
+	end
+
 end
 
 function _P.SetBlackMan(self)

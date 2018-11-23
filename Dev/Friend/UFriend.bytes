@@ -104,14 +104,8 @@ function _P.SetPlayerInfo(self, playerMoudle, playerInfo, pressMenu)
 			self.MenuPopObj = UPlayerMenuPop.new(self.PlayPopCanvas, playerInfo.id, pressMenu, playerMoudle.SelfRect.RootCanvasPos, playerInfo.name)	
 		end, nil, 0.96)
 	end
-
-	local csvVip = Csv.Vip[playerInfo.vip]
-	if csvVip ~= nil and csvVip.imgBord ~= nil then
-		playerMoudle:Get("VipBbx").SpriteName = csvVip.imgBord
-		playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
-	else
-		playerMoudle:Get("VipBbx").Activity = false
-	end
+	playerMoudle:Get("VipBbx").SpriteName = MPlayer.GetOtherHeadBG(playerInfo.chatBg, playerInfo.vip)
+	playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
 end
 
 _P.ViewUpdate =
@@ -136,6 +130,7 @@ _P.ViewUpdate =
 						MFriend.PlayerMenu.Look,
 						MFriend.PlayerMenu.Talk,
 						MFriend.PlayerMenu.Copy,
+						MFriend.PlayerMenu.Marry,
 						MFriend.PlayerMenu.DelFriend,
 						MFriend.PlayerMenu.AddBlacklist
 					})
@@ -169,6 +164,7 @@ _P.ViewUpdate =
 					_P.SetPlayerInfo(self, oneMoudle, playerInfo, {
 						MFriend.PlayerMenu.Look,
 						MFriend.PlayerMenu.Talk,
+						MFriend.PlayerMenu.Marry,
 						MFriend.PlayerMenu.Copy,
 						MFriend.PlayerMenu.DelBlacklist
 					})
@@ -200,6 +196,7 @@ _P.ViewUpdate =
 						MFriend.PlayerMenu.Look,
 						MFriend.PlayerMenu.Talk,
 						MFriend.PlayerMenu.Copy,
+						MFriend.PlayerMenu.Marry,
 						MFriend.PlayerMenu.AddFriend,
 						MFriend.PlayerMenu.DelFriend,
 						MFriend.PlayerMenu.AddBlacklist,
@@ -266,6 +263,7 @@ _P.ViewUpdate =
 								MFriend.PlayerMenu.Look,
 								MFriend.PlayerMenu.Talk,
 								MFriend.PlayerMenu.Copy,
+								MFriend.PlayerMenu.Marry,
 								MFriend.PlayerMenu.AddFriend,
 								MFriend.PlayerMenu.DelFriend,
 								MFriend.PlayerMenu.AddBlacklist,

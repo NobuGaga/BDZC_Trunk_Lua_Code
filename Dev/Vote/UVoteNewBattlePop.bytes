@@ -158,6 +158,7 @@ function _M:OnCreate(data)
 	self.mAllContent = moudle:Get("content")
 	self.mOwnInfo = moudle:Get("OwnInfo")
 
+
 	----------------------------
 	self.Enemy = 
 	{
@@ -180,13 +181,17 @@ function _M:OnCreate(data)
 	local smallTitle2 = moudle:Get("smallTitle2")
 	local smallTitleBg1 = moudle:Get("smallTitle1")
 	local smallTitleBg2 = moudle:Get("smallTitleBg")
+	local tipsText = moudle:Get("Tips")
+	local tipsBg = moudle:Get("TipsBg")
 	self.mSmallTitle1 = smallTitleBg1
 	self.mSmallTitle2 = smallTitleBg2
+	self.mTipsBg = tipsBg
 
 	diyuText.Text = Csv.Text("finance_diyuRank")
 	leftTitle1.Text = Csv.Text("finance_di")
 	rightTitle1.Text = Csv.Text("finance_bo")
 	smallTitle2.Text = Csv.Text("vote_37")
+	tipsText.Text = Csv.Text("finance_challenged2")
 	smallTitleBg1.Activity = false
 	smallTitleBg2.Activity = false
 
@@ -261,6 +266,16 @@ function _P.ReadyFight(self,data)
 
 	local buffContent = moudle:Get("BuffNow")
 	buffContent:DestroyChildren()
+
+	self.mStartBtn.Activity = true
+	self.mTipsBg.Activity = false
+
+	if data.isBattled ~= nil then
+		if data.isBattled then
+			self.mStartBtn.Activity = false
+			self.mTipsBg.Activity = true
+		end
+	end
 	
 	---------
 	local smallTitle1 = self.mSmallTitle1
@@ -292,10 +307,10 @@ function _P.ReadyFight(self,data)
 	if lineUpList ~= nil and #lineUpList > 0 then
 		for k,v in ipairs(lineUpList) do
 			local staffData = {}
-			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
-			local canvas = staffMoudle:Get("canvas")
-			canvas.SortingLayerName = "Tips1"
-			canvas.SortingOrder = 10
+			local staffMoudle = self:CreateMoudle(content, "M_NewBossPK_Item")
+			-- local canvas = staffMoudle:Get("canvas")
+			-- canvas.SortingLayerName = "Tips1"
+			-- canvas.SortingOrder = 10
 			staffMoudle:Get("battleBack").Activity = false
 			if k == self.NowRound then
 				staffMoudle.SelfRect.SizeDelta = Staff_Size1
@@ -468,7 +483,7 @@ function _P.OnFight(self, data)
 				t:Play(T_FB_Boss_blood)
 				t:Play(T_FB_Boss_Hurt)
 
-				SoundMgr.Play(10021)
+				SoundMgr.Play(10059)
 				local actorPanel = self.mMoudle:Get("ActorLightPanel")
 				local actorPanel2 = self.mMoudle:Get("ActorLightPanel2")
 				actorPanel:AddOnTime(function()

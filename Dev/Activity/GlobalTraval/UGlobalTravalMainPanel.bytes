@@ -57,10 +57,13 @@ function _M:OnCreate()
 	local vipLv = MPlayer.GetVip()
 	self.extraBuyTime = Csv.Vip[vipLv].GlobalTravalCount
 
+	self.GlobalTravalItemConf = _P.GetGridConfData(self)
+
 	local closeBtn = module:Get("BackBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
+		--WindowMgr.Create("ULimitActivity") 
 	end, nil, 1.2)
 
 	local helpBtn = module:Get("C_Full_Help_Btn")
@@ -125,7 +128,7 @@ function _M:OnCreate()
 		self.AutoGouImg.Activity = MActivity.IsTravalAutoBuy
 	end, nil, 0.9)
 
-	self.MaxGridNum = #Csv.GlobalTravalItem - 1
+	self.MaxGridNum = #self.ActInfo.posReward - 1
 	_P.SetGridDetail(self, self.ActInfo.curPosId)
 
 	local diceNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
@@ -143,6 +146,7 @@ function _M:OnCreate()
 	module:Get("Head").SpriteName = MPlayer.GetHeadIcon()
 	CCommon.CreateEffect(module:Get("IconActorPanel"), HeadBoxEffectId)
 	self.HeadBox = module:Get("IconRect")
+	module:Get("Map").SpriteName = travalConf.bgName
 
 	_P.SetMapData(self)
 	_P.SetAutoData(self)
@@ -155,8 +159,8 @@ end
 
 
 function _P.SetGridDetail(self, curPosId)
-	local gridConf = Csv.GlobalTravalItem[curPosId]
-	if gridConf then
+	local gridConf = self.GlobalTravalItemConf[curPosId]
+	if gridConf and self.ActInfo.posReward then
 		local curItemId = 0
 		for k,v in pairs(self.ActInfo.posReward) do
 			if v.posId == curPosId then
@@ -179,6 +183,18 @@ function _P.SetGridDetail(self, curPosId)
 			tipText.Text = Csv.Text("global_tips")
 		end
 	end
+end
+
+
+function _P.GetGridConfData(self)
+	local gridConfList = {}
+	for k,v in pairs(Csv.GlobalTravalItem) do
+		if v.actId == self.ActId then
+			gridConfList[v.posId] = v
+		end
+	end
+
+	return gridConfList
 end
 
 
@@ -641,7 +657,7 @@ end
 -- 更新特效状态
 function _P.UpdateExchangeEffect(self, exchangeShop, numberCount)
 	local exchangeActorPanel = self.mModule:Get("ExActorPanel")
-	local isShowBtnEffect = MActivity.CheckHasExchange(exchangeShop, numberCount)
+	local isShowBtnEffect = MActivity.CheckHasExchange(self.ActId, exchangeShop, numberCount)
 	exchangeActorPanel.Activity = isShowBtnEffect
 end
 

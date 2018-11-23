@@ -18,11 +18,13 @@ local _R = {}
 
 local winActorId = 10019
 
-function _M:OnCreate(data)
+function _M:OnCreate(data,fightData)
 	self._EventNode:AddOnClick(function ()
 		SoundMgr.Play(10001)
 		self:Destroy()
-		WindowMgr.Call("UFinanceBattle","RefreshFight")
+
+		WindowMgr.Create("UFinanceBattle",fightData.data,fightData.type)
+		--WindowMgr.Call("UFinanceBattle","RefreshFight")
 	end)
 
 	local moudle = self:CreateMoudle(self._RootNode, "M_FB_PKSuccess")

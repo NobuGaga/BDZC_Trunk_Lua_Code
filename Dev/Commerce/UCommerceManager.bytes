@@ -52,11 +52,12 @@ function _P.UpdateBtns(self)
 			local info = MCommerce.MyCommerceInfo
 			if info ~= nil then
 				local csv = Csv.Commerce[info.level]
+				local time = Csv.Const(20166)
 				CCommon.CheckTips(function (isSure)
 					if isSure then
-						WindowMgr.Create("UCommerceDisbandInput")
+						CCommerce.DisbandReq("123456")
 					end
-				end, {content = Csv.Text("commerce_manager5", {leavePer = csv.leavePer})})
+				end, {content = Csv.Text("commerce_manager5", {leavePer = csv.leavePer, time = time})})
 			end
 		end)
 	else
@@ -69,7 +70,7 @@ end
 --外部调用派发器
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -81,13 +82,13 @@ function _M:OnCreate()
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
-	
+
 	self.Moudle = moudle
-	if MCommerce.MyCommerceInfo ~= nil then	
+	if MCommerce.MyCommerceInfo ~= nil then
 		local myInfo = MCommerce.MyCommerceInfo.myInfo
 		self.Job = myInfo.job
 		moudle:Get("title").Text = Csv.Text("commerce_manager1")
-		
+
 		--商会信息
 		moudle:Get("BtnText1").Text = Csv.Text("commerce_detail1")
 		moudle:Get("Btn1"):AddOnButton(function ()

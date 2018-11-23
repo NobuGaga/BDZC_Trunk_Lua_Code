@@ -2,6 +2,7 @@
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
 local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
@@ -12,24 +13,26 @@ local _M = Class(WindowBase)
 local _P = {}
 
 local CanGetActorId = 10178
+local EFFECTID = 24
+local MOVE_TWEEN = "T_EquipRob_MoveTween"
 
 
 function _M:ctor(parent, actId)
+	local loginConf = Csv.ActivityMidLogin[actId]
+	if loginConf == nil then return end
+	self.LoginConf = loginConf
+
 	self._RootNode = parent
-	local module = JGuiManager.Getmodule(self._RootNode, "M_Autumn_Sign", WindowType.UI, 0)
+	local module = JGuiManager.GetMoudle(self._RootNode, loginConf.prefName, WindowType.UI, 0)
 	self.mModule = module
 
 	if actId ~= nil then
 		self.ActInfo = MActivity.GetFromId(actId)
 		self.ActId = actId
 	end
-	
-	local loginConf = Csv.ActivityMidLogin[actId]
-	if loginConf == nil then return end
-	self.LoginConf = loginConf
 
-	module:Get("Time").Text = Csv.Text("chargeaward_T6", {day1 = LuaUtil.TransToMD(self.ActInfo.state.startTime), 
-						   day2 = LuaUtil.TransToMD(self.ActInfo.state.endTime) .. " " .. LuaUtil.TransToHM(self.ActInfo.state.endTime)})
+	module:Get("Time2").Text = Csv.Text("charitable_dataInfo")
+	module:Get("Time").Text = os.date("%Y/%m/%d", self.ActInfo.state.startTime) .. '-' .. os.date("%Y/%m/%d", self.ActInfo.state.endTime)
 	module:Get("Sence").SpriteName = loginConf.viewBg
 
 	local getBtn = module:Get("GetBtn")
@@ -39,31 +42,89 @@ function _M:ctor(parent, actId)
 	end, nil, 0.9)
 	self.GetBtn = getBtn
 
-	_P.SetLanternData(self)
+	local lookBtn = module:Get("Yulan")
+	lookBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UMidautunnLookPanel", self.ActId)
+	end, nil, 0.9)
 
-	self.CurSelectIndex = _P.GetFirstShowIndex(self)
-	_P.SetShowData(self, self.CurSelectIndex)
+	if loginConf.effectActorId ~= nil and loginConf.effectActorId ~= 0 then
+		CCommon.CreateEffect(module:Get("ActorPanel"), loginConf.effectActorId)
+	end
+
+	_P.SetLanternData(self)
+	_P.OnSelectLantern(self, _P.GetFirstShowIndex(self))
+end
+
+
+function _P.OnPlatLanternAnim(self)
+	-- 当天灯笼需要播放动画
+	if self.UpMoveTween ~= nil then
+		self.UpMoveTween:DOKill()
+		self.UpMoveTween = nil
+	end
+
+	local lanternIcon = self.mModule:Get("lantern" .. self.ActInfo.day)
+	local upMoveTween = lanternIcon.CachedTran:GetJTweener(MOVE_TWEEN)
+	local tweenData = upMoveTween:GetTweenForType(CS.JTween.JTweenerType.AnchorPos)
+	if tweenData ~= nil then
+		local posX = self.LoginConf.moveTweenPos[1]
+		if self.LoginConf.moveTweenPos[3] == 1 then
+			tweenData.ToPos = Vector2(-posX, self.LoginConf.moveTweenPos[2])
+		else
+			tweenData.ToPos = Vector2((self.ActInfo.day % 2 == 0 and posX) or -posX, self.LoginConf.moveTweenPos[2])
+		end
+	end
+	upMoveTween:Play()
+	self.UpMoveTween = upMoveTween
 end
 
 
 function _P.SetLanternData(self)
 	local module = self.mModule
-	if self.ActInfo.lanyernList ~= nil then
+	if self.ActInfo and self.ActInfo.lanyernList ~= nil then
 		for k,v in pairs(self.ActInfo.lanyernList) do
 			local dayImg = module:Get("Day" .. k)
-			dayImg.SpriteName = self.LoginConf.icon[k]
-			module:Get("DayTitle" .. k).Text = self.LoginConf.title[k]
+			dayImg.SpriteName = self.LoginConf.descBg[1]
 
-			local actorPanel = module:Get("ActorPanel" .. k)
-			if actorPanel.childCount <= 0 and v.isGeted == 1 then
-				CCommon.CreateEffect(actorPanel, CanGetActorId)
-			end
+			module:Get("DayTitle" .. k).Text = self.LoginConf.title[k]
+			_P.SetOneLanternData(self, k, v.isGeted)
 
 			dayImg:AddOnButton(function(...)
 				SoundMgr.Play(10001)
 				_P.OnSelectLantern(self, k)
 			end, nil, 0.9)
 		end
+	end
+
+	_P.OnPlatLanternAnim(self)
+end
+
+
+function _P.SetOneLanternData(self, index, isGeted)
+	local dayImg = self.mModule:Get("lantern" .. index)
+	local getImg = self.mModule:Get("YLQ" .. index)
+	local descText = self.mModule:Get("DayTitle" .. index)
+	local iconData = self.LoginConf.icon[index]
+	
+	if isGeted then
+		descText.Activity = false
+		getImg.Activity = true
+		getImg.SpriteName = iconData[3] -- 已领
+		dayImg.SpriteName = iconData[5]
+	elseif index == self.ActInfo.day then
+		getImg.Activity = false
+		descText.Activity = true
+		dayImg.SpriteName = iconData[2] -- 可领
+	elseif index < self.ActInfo.day then
+		descText.Activity = false
+		getImg.Activity = true
+		getImg.SpriteName = iconData[4] -- 失效
+		dayImg.SpriteName = iconData[1]
+	else
+		getImg.Activity = false
+		descText.Activity = true
+		dayImg.SpriteName = iconData[1] -- 不可领
 	end
 end
 
@@ -75,26 +136,30 @@ function _P.SetShowData(self, index)
 	end
 
 	local module = self.mModule
-	local startTime = self.ActInfo.state.startTime + index * 86400
+	local startTime = self.ActInfo.state.startTime + (index - 1) * 86400
 	module:Get("ShowTitle").Text = self.LoginConf.title[index]
-	module:Get("ShowTime").Text = Csv.Text("chargeaward_T6", {day1 = LuaUtil.TransToMD(startTime), 
-	day2 = LuaUtil.TransToMD(self.ActInfo.state.endTime) .. " " .. LuaUtil.TransToHM(self.ActInfo.state.endTime)})
+	module:Get("ShowTime").Text = Csv.Text("midAutumn_getTip", {start = os.date("%Y/%m/%d", startTime),
+									endTime = os.date("%Y/%m/%d", startTime) .. " 23:59"})
 	
 	local btnText = module:Get("GetText")
 	local getImg = module:Get("yilingqu")
-	if lanternData.isGeted == 0 then
-		btnText.Text = Csv.Text("sevendaytarget_overdue")
+	if not lanternData.isGeted and index ~= self.ActInfo.day then -- 不可以领
+		if index < self.ActInfo.day then
+			btnText.Text = Csv.Text("midAutumn_notGet")
+		else
+			btnText.Text = Csv.Text("sevendaytarget_overdue")
+		end
 		getImg.Activity = false
 		self.GetBtn.Activity = true
 		self.GetBtn.IsGray = true
 		self.GetBtn.RaycastTarget = false
-	elseif lanternData.isGeted == 1 then
+	elseif not lanternData.isGeted and index == self.ActInfo.day then -- 当天可以领
 		btnText.Text = Csv.Text("welfare_sign_get")
 		getImg.Activity = false
 		self.GetBtn.Activity = true
 		self.GetBtn.IsGray = false
 		self.GetBtn.RaycastTarget = true
-	elseif lanternData.isGeted == 2 then
+	elseif lanternData.isGeted then --已领取
 		getImg.Activity = true
 		self.GetBtn.Activity = false
 		self.GetBtn.IsGray = false
@@ -105,14 +170,14 @@ function _P.SetShowData(self, index)
 	itemGrid:DestroyChildren()
 
 	for k,v in pairs(self.LoginConf.reward[index]) do
-		CCommon.CreateItem(itemGrid, v[1], CCommon.ShowItemTips, {num = v[2], scale = 0.8}, Define.SysId.Activity)
+		CCommon.CreateItem(itemGrid, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.MidAFestival)
 	end
 end
 
 
 function _P.GetFirstShowIndex(self)
 	for k,v in pairs(self.ActInfo.lanyernList) do
-		if v.isGeted == 1 then
+		if v.id == self.ActInfo.day then
 			return k
 		end
 	end
@@ -122,9 +187,9 @@ end
 
 
 function _P.OnGetTodayReward(self)
-	local isGeted = self.ActInfo.lanyernList[self.CurSelectIndex]
-	if isGeted == 1 then
-		
+	local isGeted = self.ActInfo.lanyernList[self.CurSelectIndex].isGeted
+	if self.CurSelectIndex == self.ActInfo.day and (not isGeted) then
+		CActivity.GetRewardReq(self.ActId, self.CurSelectIndex)
 	else
 		CCommon.ShowError(Csv.Text("err_lottery_no_reward"))
 	end
@@ -136,8 +201,69 @@ function _P.OnSelectLantern(self, index)
 		return
 	end
 
+	if self.CurSelectIndex ~= nil then
+		self.mModule:Get("Day" .. self.CurSelectIndex).SpriteName = self.LoginConf.descBg[1]
+	end
+
+	if index ~= nil then
+		self.mModule:Get("Day" .. index).SpriteName = self.LoginConf.descBg[2]
+	end
+
 	self.CurSelectIndex = index
 	_P.SetShowData(self, index)
+end
+
+
+function _M:GetRewardBack(data)
+	self.ActInfo.lanyernList[data.index].isGeted = true
+	self.GetBtn.Activity = false
+
+	local effectNode = self.mModule:Get("EffectNode")
+	local effectmodule = CCommon.CreateEffect(effectNode, EFFECTID, nil, function( ... )
+		self.mModule:Get("yilingqu").Activity = true
+	end, {M_Effect_Achieve_Get = "fl_030"})
+	effectmodule.SelfRect.SizeDelta = Vector2(138, 138)
+	SoundMgr.PlaySystem(10004)
+
+	local rewardList = self.LoginConf.reward[data.index]
+	if rewardList ~= nil then
+		for k,v in pairs(rewardList) do
+			CCommon.ShowFlyItem(self._RootNode, v[1], v[2], k*0.3, effectNode.RootCanvasPos)
+		end
+	end
+
+	_P.SetOneLanternData(self, data.index, true)
+end
+
+
+-- 界面更新
+function _M:UpdateViewData(data)
+	self.ActInfo = MActivity.GetFromId(self.ActId)
+	self.CurSelectIndex = nil
+	_P.SetLanternData(self)
+	_P.OnSelectLantern(self, _P.GetFirstShowIndex(self))
+end
+
+
+-- 活动状态更新
+function _M:OnUpdateViewState(data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+		self.CurSelectIndex = nil
+		_P.SetLanternData(self)
+		_P.OnSelectLantern(self, _P.GetFirstShowIndex(self))
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
 end
 
 

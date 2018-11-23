@@ -1,5 +1,8 @@
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MMain = JRequire "Dev.Main.MMain"
+local SDKMgr = JRequire "SDK.SDKMgr"
+local SDKShareType = JRequire "SDK.SDKShareType"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class()
@@ -29,8 +32,12 @@ function _M:ctor(parent,id,storyType)
 	else
 		if showSysID == Define.SysId.VIPWelfare then
 			WindowMgr.Call("UVipWelfare", "GetSortLayer", mainLayerInfo)
+		elseif showSysID == Define.SysId.Welfare then
+			WindowMgr.Call("UWelfare", "GetSortLayer", mainLayerInfo)
 		elseif showSysID == Define.SysId.FirstRecharge then
 			WindowMgr.Call("UFirstRecharge", "GetSortLayer", mainLayerInfo)
+		elseif showSysID == Define.SysId.SuperGirl then
+			WindowMgr.Call("USuperGirlActivity", "GetSortLayer", mainLayerInfo)
 		else
 			WindowMgr.Call("UMain", "GetSortLayer", mainLayerInfo)
 		end
@@ -76,6 +83,17 @@ function _M:ctor(parent,id,storyType)
 		WindowMgr.Call("UVipWelfare", "AddSortLayerCount", mainLayerInfo.index - startIndex)
 	else
 		WindowMgr.Call("UMain", "AddSortLayerCount", mainLayerInfo.index - startIndex)
+	end
+
+	local FxBtn = moudle:Get("FxBtn")
+	if MMain.FuncIsOpen(Define.SysId.Share) then
+		FxBtn.Activity = true
+		FxBtn:AddOnButton(function()
+			SDKMgr.ReqShare(SDKShareType.GotGirl)
+		end)
+		moudle:Get("FxBtnText").Text = Csv.Text("quest_share_btn")
+	else
+		FxBtn.Activity = false
 	end
 end
 

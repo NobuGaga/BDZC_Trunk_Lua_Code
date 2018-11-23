@@ -1,0 +1,520 @@
+-- 超级员工界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local CCommon = JRequire "Dev.Common.CCommon"
+local luaUtil = JRequire"Libs.LuaUtil"
+local MBag = JRequire "Dev.Bag.MBag"
+local MGirl = JRequire"Dev.Girl.MGirl"
+--@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+
+local GTE_EFFECT_ID = 5
+local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
+local COLOR_RED = Color(255 / 255, 76 / 255, 76 / 255, 1)
+local RecuitVec = Vector2(94, 70)
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:BeforeDestroy()
+	if self.StoryMoudle ~= nil then
+		self.StoryMoudle:Destroy()
+		self.StoryMoudle:delete()
+		self.StoryMoudle = nil
+	end
+	if self.TabHandle ~= nil then
+		self.TabHandle:delete()
+		self.TabHandle = nil
+	end
+end 
+
+
+-- 事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Activity_Sdmn")
+	self.mModule = module
+
+	module:Get("title").Text = Csv.Text("super_girl_title")
+	local closeBtn = module:Get("backBtn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local pageData = _P.GetListData()
+	local count = pageData.listCount
+	local contentTransform = self.mModule:Get("PageContent")
+	self.mData = pageData.listData
+	self.PageModules = {}
+
+	local index = 1
+	for k,v in pairs(self.mData) do
+		self.PageModules[v.actId] = _P.CreatePageItem(self, contentTransform, index, v)
+		index = index + 1
+	end
+	
+	if count > 0 then
+		local colorLight = Color(255/255, 225/255, 75/255, 1)
+		local colorDefault = Color(0/255, 195/255, 255/255, 1)
+		local tabHandle = TabGroup.new(function(funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023", nil, nil, nil, nil, nil, nil, colorDefault, colorLight)
+	
+		local index = 1
+		for k,v in pairs(self.mData) do
+			local activityConf = Csv.SuperGirl[v.actId]
+			local onePageModule = self.PageModules[v.actId]
+			if activityConf and onePageModule then
+				tabHandle:Add(v.actId, onePageModule.imageWidget, onePageModule.textWidget, activityConf.title)
+			end
+
+			index = index + 1
+		end
+
+		-- 取第一个数据
+		local curActId = next(self.mData)
+		local curData = self.mData[curActId]
+		if curData ~= nil then
+			tabHandle:Choose(curData.actId)
+		end
+		self.TabHandle = tabHandle
+	end
+end
+
+
+function _P.CreatePageItem(self, itemGrid, index, data)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, 'M_Activity_SuperStaff_Item', WindowType.UI, 0)
+	if itemModule == nil then return end
+
+	itemModule.name = 'Btn_c' .. index
+	local nameText = itemModule:Get("Name")
+	nameText.name = "C_text" .. index
+
+	self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.SuperGirl, data.actId)
+
+	return {imageWidget = itemModule.SelfRect, textWidget = nameText}
+end
+
+
+function _P.GetListData()
+	local superGirlList = MActivity.GetListFromType(Define.ActivityType.Super_Girl)
+	local listData = {}
+	local listCount = 0
+	if superGirlList ~= nil then
+		for k,v in pairs(superGirlList) do
+			listData[#listData + 1] = v
+			listCount = listCount + 1
+		end
+	end
+
+	table.sort(listData, function(a, b)
+		local activityConf1 = Csv.SuperGirl[a.actId]
+		local activityConf2 = Csv.SuperGirl[b.actId]
+
+		return activityConf1.sortId < activityConf2.sortId
+	end)
+
+	return {listData = listData, listCount = listCount}
+end
+
+
+function _P.OnChoose(self, funcId)
+	local curData = _P.GetCurDataById(self, funcId)
+	if curData == nil then return end
+
+	self.CurSelectData = curData
+	_P.SetListData(self, curData.list, true)
+end
+
+
+function _P.SetListData(self, peopleList, isTimer)
+	if peopleList == nil or #peopleList == 0 then return end
+
+	local listData = _P.GetSortList(peopleList)
+	if listData == nil then return end
+
+	local itemContent = self.mModule:Get("content")
+	itemContent:DestroyChildren()
+	itemContent.LocalPosition = Vector2.zero
+
+	self.mAllListData = {}
+	for i,v in ipairs(listData) do
+		self.mAllListData[v.index] = _P.OnCreateItem(self, v, itemContent)
+	end
+
+	if isTimer then
+		_P.OnStartTimer(self)
+	end
+end
+
+
+-- 排序
+function _P.GetSortList(listData)
+	local sortList = {}
+	for k, v in pairs(listData) do
+		table.insert(sortList, v)
+	end
+
+	table.sort(sortList, function (a, b)
+		return a.index < b.index
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateItem(self, data, itemGrid)
+	local item = {}
+	local itemName = self.CurSelectData.itemPrefabName
+	local itemModule = JGuiManager.GetMoudle(itemGrid, itemName)
+	local countTime = 0
+
+	if itemModule ~= nil then
+		local activityState = self.CurSelectData.state
+		local time = itemModule:Get("ActiveTime")
+		local downTime = itemModule:Get("DownTime")
+		local bgImg = itemModule:Get("BsxBg")
+		local icon = itemModule:Get("Bsx")
+		local name = itemModule:Get("NameText")
+		local desc = itemModule:Get("JJtext")
+		local intimacy = itemModule:Get("intimacy")
+		local charm = itemModule:Get("charm")
+		local attrTitle = itemModule:Get("attr")
+		local skillAdd = itemModule:Get("skillAdd")
+		local TabImg = itemModule:Get("IMG")
+		TabImg.Activity = false
+		
+		local girlId = data.attrid
+		local csvGirl = Csv.Girl[girlId]
+
+		time.Text = Csv.Text("super_girl_opentime",{time = data.ActivityTime})
+	
+		if data.icon ~= nil then
+			--立绘
+			icon.SpriteName = data.icon
+			name.Text = csvGirl.name
+			intimacy.Text = Csv.Text("super_girl_intimacy",{num = csvGirl.intimacy})
+			charm.Text = Csv.Text("super_girl_charm",{num = csvGirl.charm})
+
+			attrTitle.Text = Csv.Text("super_girl_staffAdd")
+			skillAdd.Text = Csv.Text("super_girl_skillAdd")
+
+			local index = 0
+			for attrK,attrV in pairs(csvGirl.pictorialEffect)do
+				index = index +1
+				local attrText = itemModule:Get("attr"..index)
+
+				if attrText ~= nil then
+					if #attrV >= 3 then
+						local type = attrV[1]
+						local attr = attrV[2]
+						local value = attrV[3]
+						if type == 1 then
+							attrText.Text = Csv.Text("super_girl_attrAdd1",{name = MGirl.GetGirlSkillAttr(attr),num = value})
+						else
+							attrText.Text = Csv.Text("super_girl_attrAdd2",{name = MGirl.GetGirlSkillAttr(attr),num = value/100})
+						end
+					end
+				end
+			end
+		end
+
+		--技能绑定标签
+		if  csvGirl.skills ~= nil then
+			if #csvGirl.skills > 0 then
+				local csvSkill = Csv.GirlSkill[csvGirl.skills[1]]
+				if csvSkill ~= nil then
+					if csvSkill.employeTagImg ~= nil then
+						if #csvSkill.employeTagImg > 0 then
+							TabImg.Activity = true
+							TabImg.SpriteName = csvSkill.employeTagImg[1]
+						end
+					end
+				end
+			end
+		end
+
+		if data.tips ~= nil then
+			--描述
+			desc.Text = data.tips
+		end
+
+		local costRect = itemModule:Get("costRect")
+		local costImg = itemModule:Get("costImg")
+		local costNumText = itemModule:Get("costNum")
+		local gotImg = itemModule:Get("Ylq")
+		local costBtn = itemModule:Get("costBtn")
+		local redImg = itemModule:Get("redpoint")
+		redImg.Activity = false
+
+		itemModule:Get("text").Text = Csv.Text("jianchen_5")
+
+		if MGirl.GetGirlData(girlId) ~= nil then
+			gotImg.Activity = true
+			costRect.Activity = false
+		else
+			gotImg.Activity = false
+			costRect.Activity = true
+		end
+
+		-- 设置按钮数据
+		_P.OnSetBtnData(self, itemModule, data)
+
+		local iconBox = itemModule:Get("costBtn")
+		local itemConf = Csv.Item[data.cost.id]
+		iconBox:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			local costIconNum = MBag.GetItemNum(itemConf.id)
+			CCommon.CheckTips(function(isSure, arg)
+				if isSure then
+					_P.OnClickRecruit(self, data)
+				end
+			end, {items = {[itemConf.id] = costIconNum} ,content = Csv.Text("super_girl_recruit_tip", {name = itemConf.name, num = data.cost.num})})
+		end, nil, 0.9)
+
+		local countText = itemModule:Get("DownTime")
+		local activeTimeText = itemModule:Get("ActiveTime")
+		if activityState == nil or activityState.endTime == nil or activityState.endTime <= 0 then
+			activeTimeText.Text = Csv.Text("jianchen_timeOpenDay")
+			countText.Activity = false
+		else
+			activeTimeText.Text = Csv.Text("jianchen_timeInfo", {startTime = luaUtil.TransToYMD(activityState.startTime), 
+			endTime = luaUtil.TransToYMD(activityState.endTime)})
+			countText.Activity = true
+			countTime = activityState.endTime
+			_P.OnSetItemTime(itemModule, countTime)
+		end
+
+		-- 设置每个item红点
+		self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.SuperGirl, self.CurSelectData.actId, data.index)
+	end
+
+	item.module = itemModule
+	item.countTime = countTime
+	item.data = data
+	return item
+end
+
+
+function _P.OnSetItemTime(itemModule, countTime)
+	if itemModule == nil then return end
+
+	local time = countTime - HeartBeat.ServSecond()
+	local downTimeText = itemModule:Get("DownTime")
+	if time <= 0 then
+		downTimeText.Text = Csv.Text("jianchen_timeOutInfo", {time = LuaUtil.GetTimeHMS(0)})
+	else
+		downTimeText.Text = Csv.Text("jianchen_timeOutInfo", {time = LuaUtil.GetTimeHMS(time)})
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	if _P.IsHasTimeOut(self) then
+		self.UpdateComp = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local hasCountNum = 0
+	for k,v in pairs(self.mAllListData) do
+		local time = v.countTime - HeartBeat.ServSecond()
+		if time > 0 then
+			hasCountNum = hasCountNum + 1
+			_P.OnSetItemTime(v.module, v.countTime)
+		end
+	end
+
+	if hasCountNum == 0 then
+		_P.OnClearTimer(self)
+	end
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateComp ~= nil then
+		self.UpdateComp:Destroy()
+		self.UpdateComp = nil
+	end
+end
+
+
+-- 是否有倒计时
+function _P.IsHasTimeOut(self)
+	for k,v in pairs(self.mAllListData) do
+		local time = v.countTime - HeartBeat.ServSecond()
+		if time > 0 then
+			return true
+		end
+	end
+
+	return false
+end
+
+-- 后面兑换成功后，直接调用更改数据
+function _P.OnSetBtnData(self, itemModule, data, isShowAnim)
+	local costRect = itemModule:Get("costRect")
+	local costImg = itemModule:Get("costImg")
+	local costNumText = itemModule:Get("costNum")
+	local gotImg = itemModule:Get("Ylq")
+	local costBtn = itemModule:Get("costBtn")
+
+	costRect.Activity = not data.isGeted
+	if isShowAnim == nil then
+		gotImg.Activity = data.isGeted
+	else
+		self.mModule.SelfRect:AddOnTime(function()
+			SoundMgr.Play(10004)
+			local effect = CCommon.CreateEffect(itemModule:Get("Effect"), GTE_EFFECT_ID, gotImg.LocalPosition, function( ... )
+				if effect ~= nil then
+					effect:Destroy()
+				end
+				gotImg.Activity = data.isGeted
+			end, {M_Effect_Get = "fl_030"})
+		end, nil, 0.2)
+	end
+	if not data.isGeted then
+		local itemConf = Csv.Item[data.cost.id]
+		local costIconNum = MBag.GetItemNum(itemConf.id)
+
+		costImg.SpriteName = itemConf.icon
+
+		costNumText.Text = costIconNum .. '/' .. data.cost.num
+		costNumText.Color = (costIconNum >= data.cost.num and COLOR_GREEN) or COLOR_RED
+	end
+end
+
+
+-- 点击招募员工
+function _P.OnClickRecruit(self, data)
+	if data.isGeted then
+		CCommon.ShowError(Csv.Text("super_girl_hasRecuit_error"))
+		return
+	end
+
+	if not MBag.CheckItemEnough(data.cost.id, data.cost.num) then
+		return
+	end
+
+	CActivity.GetRewardReq(self.CurSelectData.actId, data.index)
+end
+
+
+-- 兑换成功回调
+function _R.OnRecuitCallBack(self, data)
+	local recuitItem = self.mAllListData[data.index]
+	if recuitItem == nil then return end
+	recuitItem.data.isGeted = true
+	_P.OnSetBtnData(self, recuitItem.module, recuitItem.data, true)
+
+	-- 更新所有item的数量
+	_P.OnUpdateItemNum(self)
+end
+
+
+function _P.OnUpdateItemNum(self)
+	for k,v in pairs(self.mAllListData) do
+		local hasNum = MBag.GetItemNum(v.data.cost.id)
+		local iconNumText = v.module:Get("costNum")
+		iconNumText.Text = hasNum .. '/' .. v.data.cost.num
+		iconNumText.Color = (hasNum >= v.data.cost.num and COLOR_GREEN) or COLOR_RED
+	end
+end
+
+
+-- 数据变化，更新界面
+function _R.OnUpdateViewData(self, actType, actId)
+	local typeList = MActivity.GetListFromType(actType)
+	if typeList == nil then 
+		self:Destroy()
+		CCommon.ShowRight(Csv.Text("err_finance_not_open"))
+		return
+	end
+
+	for k,v in pairs(self.mData) do
+		if v.actId == actId then
+			self.mData[k] = typeList[actId]
+			break
+		end
+	end
+
+	if self.CurSelectData.actId == actId then
+		self.CurSelectData = typeList[actId]
+		if self.CurSelectData == nil or self.CurSelectData.list == nil or next(self.CurSelectData.list) == nil then
+			self:Destroy()
+			CCommon.ShowRight(Csv.Text("err_finance_not_open"))
+		else
+			_P.SetListData(self, self.CurSelectData.list, false)
+		end
+	else
+		local curUpdateData = typeList[actId]
+		if curUpdateData == nil or curUpdateData.list == nil or next(curUpdateData.list) == nil then
+			self:Destroy()
+			CCommon.ShowRight(Csv.Text("err_finance_not_open"))
+		end
+	end
+end
+
+
+function _P.GetCurDataById(self, id)
+	for k,v in pairs(self.mData) do
+		if v.actId == id then
+			return v
+		end
+	end
+end
+
+function _R.ShowMoudle(self,info)
+	if self.mModule == nil then
+		return
+	end
+	if self.StoryMoudle ~= nil and self.StoryMoudle._Root ~= nil then
+		return
+	end
+	
+	if info ~= nil then
+		if info.storyType == 7 then
+			self.StoryMoudle = UStoryMoudle.new(self.mModule:Get("StoryShowRoot"), info.storyId, function ()
+				_R.ShowMoudle(self)
+			end, info,info.data)
+		else
+			self.StoryMoudle = UStoryMoudle.new(self.mModule:Get("StoryShowRoot"), info.storyId, function ()
+				_R.ShowMoudle(self)
+			end, info)
+		end		
+	end	
+end
+
+function _R.GetSortLayer(self, refTab)
+	refTab.type = self._Type
+	refTab.index = self._CanvasIndex
+end
+
+function _R.AddSortLayerCount(self, count)
+	self._CanvasIndex = self._CanvasIndex + count + 1
+end
+
+
+return _M

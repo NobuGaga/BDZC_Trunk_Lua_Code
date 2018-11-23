@@ -44,14 +44,8 @@ function _R.OnTransferList(self, data)
 				oneMoudle:Get("build").Text = buildCsv.name
 			end
 			oneMoudle:Get("head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
-			local vipConf = Csv.Vip[player.vip]
-			if vipConf.imgBord ~= nil then
-				oneMoudle:Get("OutBox").SpriteName = vipConf.imgBord
-				oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_" .. player.vip
-			else
-				oneMoudle:Get("OutBox").Activity = false
-			end
-
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(player.chatBg, player.vip)
+			oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_" .. player.vip
 			oneMoudle:Get("SLText").Text = Csv.Text("club_info_force")
 			oneMoudle:Get("SLNum").Text = tostring(player.power)
 			oneMoudle:Get("Company").Text = Csv.Text("club_info_company")

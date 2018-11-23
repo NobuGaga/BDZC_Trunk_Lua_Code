@@ -63,6 +63,18 @@ function _M:OnCreate()
 		self:Destroy()
 	end, nil, 1.2)
 
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
 	local title = moudle:Get("Title")
 	title.Text=Csv.Text("finance_title")
 

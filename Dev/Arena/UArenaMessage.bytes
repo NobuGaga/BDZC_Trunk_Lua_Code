@@ -5,6 +5,7 @@ local MArena = JRequire "Dev.Arena.MArena"
 local CArena = JRequire "Dev.Arena.CArena"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local MBag = JRequire "Dev.Bag.MBag"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -38,16 +39,20 @@ function _P.pressRevenge(self, id)
 				end, 
 				{
 					items = {[Define.AssetsType.Gold] = haveGode},
-					content = Csv.Text("Arena_19",{num = needCost})
+					content = Csv.Text("Arena_19",{num = needCost, max = (buyMax - buyTimes)})
 				}
 			)
 		else
 			CCommon.ShowError(Csv.Text("Arena_18"))
 		end		
 	else
-		WindowMgr.Create("ULineUpCheck",function()
+		if MLineUp.CheckIsFull() then
 			CArena.ReqRevenge(id)
-		end)		
+		else
+			WindowMgr.Create("ULineUpCheck",function()
+				CArena.ReqRevenge(id)
+			end)	
+		end	
 	end
 end
 
@@ -76,11 +81,8 @@ function _R.OnArenaMessage(self, msg)
 				_P.pressRevenge(self, playerId)
 			end)
 			oneMoudle:Get("head").SpriteName = MPlayer.GetOtherHeadIcon(messageInfo.head,messageInfo.sex)
-			if messageInfo.vip > 0 then
-				local csvVip = Csv.Vip[messageInfo.vip]
-				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-				oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..messageInfo.vip
-			end
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(messageInfo.chatBg, messageInfo.vip)
+			oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..messageInfo.vip
 		end
 	else
 		local noneNode = moudle:Get("None")

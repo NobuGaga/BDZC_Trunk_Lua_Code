@@ -35,10 +35,12 @@ function _R.UpdateData(self)
 				if v.id == self.mEquipInfo.id then
 					if v.level > self.mEquipInfo.level then
 						--升级
+						SoundMgr.PlayNonStopUI(10062)
 						CCommon.CreateEffect(self.mActorCanvas, LevelUpAtorId)
 					end
 					if v.star > self.mEquipInfo.star then
 						--升阶
+						SoundMgr.PlayNonStopUI(10063)
 						CCommon.CreateEffect(self.mActorCanvas, StarUpAtorId)
 					end
 					data = v
@@ -139,7 +141,7 @@ function _P.RefreshEquip(self,data)
 	levelUpBtn.RaycastTarget = true
 
 	if csvEquipLevelnext ~= nil then
-		if csvEquipLevelnext.star == data.star then
+		if csvEquipLevelnext.star <= data.star then
 			levelUpText.Text = Csv.Text("equip_staffinfo_levelup")
 		else
 			levelUpText.Text = Csv.Text("equip_staffinfo_starup")

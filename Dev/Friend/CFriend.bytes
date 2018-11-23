@@ -79,12 +79,15 @@ end
 --注册进入游戏监听
 EventCenter.RegistCallEvent(Define.EventListenId.EnterGame,function( ... )
 	--聊天气泡刷新
+	--[[
+	--20180310改为新增好友不冒泡提示
 	if MFriend.IsHaveNewReq then
 		if not WindowMgr.IsCreated("UMessage") then
 			WindowMgr.Create("UMessage")
 		end
 		WindowMgr.Call("UMessage","ShowMsgTips",{funcId = Define.SysId.Friend_Friend})
 	end
+	--]]
 end, true)
 
 --Client --> Server
@@ -218,7 +221,7 @@ end, true)
 		WindowMgr.Call("UFriend", "OnRecvFriendAddNum")
 		--小红点
 		if MFriend.RecvAddFriendNum > 0 then
-			--MFriend.IsHaveNewReq = true
+			MFriend.IsHaveNewReq = true
 		else
 			MFriend.IsHaveNewReq = false
 		end
@@ -274,10 +277,10 @@ end, true)
 		local lastNum = MFriend.RecvAddFriendNum
 		MFriend.RecvAddFriendNum = msg.num
 		if lastNum < MFriend.RecvAddFriendNum then
-			--MFriend.IsHaveNewReq = true
+			MFriend.IsHaveNewReq = true
 			local tipsData= {}
 			tipsData.funcId = Define.SysId.Friend_Friend
-			_P.ShowMsgTips(tipsData)
+			--_P.ShowMsgTips(tipsData)
 		end
 		--小红点
 		if MFriend.RecvAddFriendNum > 0 then
@@ -293,6 +296,7 @@ end, true)
 			name = info.name,
 			power = info.power,
 			vip = info.vip,
+			chatBg = info.chatBg,
 			level = info.level,
 			headId = info.headId,
 			sex = info.sex,

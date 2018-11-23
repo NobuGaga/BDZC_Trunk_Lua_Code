@@ -103,15 +103,8 @@ function _R.OnRecommend(self, ids)
 						self.Btn2.RaycastTarget = false
 					end
 				end)
-
-				local csvVip = Csv.Vip[playerInfo.vip]
-				if csvVip ~= nil and csvVip.imgBord ~= nil then
-					playerMoudle:Get("VipBox").SpriteName = csvVip.imgBord
-					playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
-				else
-					playerMoudle:Get("VipBox").Activity = false
-				end
-
+				playerMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(playerInfo.chatBg, playerInfo.vip)
+				playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
 				playerMoudle:Get("inline").Text = LuaUtil.BeforeXTime(HeartBeat.ServSecond() - playerInfo.leaveTime)
 			end
 		else

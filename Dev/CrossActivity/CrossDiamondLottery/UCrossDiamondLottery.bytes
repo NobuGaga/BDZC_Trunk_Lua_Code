@@ -1,0 +1,727 @@
+-- 钻石转盘界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.CCrossLotteryActivity"
+local MCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.MCrossLotteryActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+local Linear = CS.DG.Tweening.Ease.Linear
+local FLY_TYPE = CS.JTween.JTweenerType.LocalAngleZ
+local TimeDelay = CS.Utility.TimeDelay
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ITEM_COUNT = 12
+local GTE_EFFECT_ID = 5
+local SHOW_REWARD_NUM = 4
+local ItemSize = 130
+local DiffItemSize = 123
+local GoldImageName = 'xf_tb_003'
+
+
+--删除界面前调用
+function _M:BeforeDestroy( ... )
+	CCrossLotteryActivity.OnLotteryCloseReq()
+
+	if self.TenWindowPopHandle ~= 0 then
+		TimeDelay.SetValid(self.TenWindowPopHandle, false)
+	end
+	if self.GoodItemFxHandle ~= 0 then
+		TimeDelay.SetValid(self.GoodItemFxHandle, false)
+	end
+end
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	self.TenWindowPopHandle = 0
+	self.GoodItemFxHandle = 0
+	local module = self:CreateMoudle(self._RootNode, "M_Turntable")
+	self.mModule = module
+
+	self.ActId = MCrossLotteryActivity.ActTypeCached[Define.CrossActivityType.CrossDiamondLottery]
+	if self.ActId then
+		self.ActInfo = MCrossLotteryActivity.LotteryData[self.ActId]
+		self.LotteryConf = Csv.CrossLottery[self.ActId]
+	end
+
+	if self.ActInfo == nil or self.LotteryConf == nil then
+		self:Destroy()
+		return
+	end
+
+	self.RewardNums = #self.LotteryConf.num
+	module:Get("C_Text").Text = self.LotteryConf.title
+	module:Get("Banner").SpriteName = self.LotteryConf.image
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("Time").Text = Csv.Text("timelimit_last_time", {startTime = LuaUtil.TransToMD(self.ActInfo.state.startTime),
+								endTime = LuaUtil.TransToMD(self.ActInfo.state.endTime) .. " " .. LuaUtil.TransToHMS(self.ActInfo.state.endTime)})
+	self.AssetText = module:Get("AssetNum_2")
+	self.AssetNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	self.AssetText.Text = tostring(self.AssetNum)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd)
+		if itemId == Define.AssetsType.Gold and self.AssetText ~= nil then
+			local nowNum = MBag.GetItemNum(Define.AssetsType.Gold)
+			if self.AssetNum ~= nowNum then
+				local lastNum = self.AssetNum
+				self.AssetNum = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if self.AssetText ~= nil then self.AssetText.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if self.AssetText ~= nil then self.AssetText.Text = LuaUtil.NumberFormat(MBag.GetItemNum(Define.AssetsType.Gold)) end
+					end)
+					t:SetTarget(self.AssetText.CachedTran)
+				else
+					self.AssetText.Text = LuaUtil.NumberFormat(nowNum)
+				end
+			end
+		end
+	end)
+
+	module:Get("Record").Text = Csv.Text("lottery_3")
+	local moreBtn = module:Get("More")
+	moreBtn.Text = Csv.Text("lottery_4")
+	moreBtn:AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("ULotteryMsg", MCrossLotteryActivity.LotteryMessage)
+	end, nil, 1.2)
+	self.MsgIndex = 0
+	self.MsgStop = false
+	self.MsgText = module:Get("MsgText")
+
+	self.TimeTips = module:Get("TimeTips")
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.DoUpdateTime(self)
+	end)
+	self.LeftBtn = module:Get("C_Btn_a_0")
+	local oneClickCall = function(  )
+		SoundMgr.Play(10001)
+		_P.ToReqLottery(self, 1)
+	end
+	self.LeftBtn:AddOnPress(function(obj, arg, data)
+		_P.OnPressFunc(self.LeftBtn, data, true, oneClickCall)
+	end)
+	
+	self.RightBtn = module:Get("C_Btn_b_0")
+	local tenClickCall = function(  )
+		SoundMgr.Play(10001)
+		_P.ToReqLottery(self, 10)
+	end
+	self.RightBtn:AddOnPress(function(obj, arg, data)
+		_P.OnPressFunc(self.RightBtn, data, false, tenClickCall)
+	end)
+
+	module:Get("Title").Text = Csv.Text("DLottery_count")
+	self.TotalNumText = module:Get("TitleNum")
+
+	module:Get("Num_BtnText1").Text = Csv.Text("quest_get")
+	self.GetBtn = module:Get("Num_Btn1")
+	self.GetBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CCrossLotteryActivity.LotteryNumGetReq(10)
+	end)
+
+	self.ChooseNode = module:Get("RedBG")
+	self.ChooseNode.Activity = false
+	self.RewardRect = module:Get("BG3")
+	self.ContentRect = module:Get("content")
+	self.ChooseIndex = 1
+
+	_P.CreateRewardItem(self)
+
+	module:Get("ZsText").Text = Csv.Text("DLottery_gold")
+	self.GoldPoolText = module:Get("ZsNum")
+	_P.ChangeActID(self)
+
+	-- 请求打开界面
+	self.GoodItemFx = nil
+	CCrossLotteryActivity.OnLotteryOpenReq()
+end
+
+
+function _P.CreateRewardItem(self)
+	self.NumGetList = {}
+	if self.LotteryConf and self.LotteryConf.num ~= nil then
+		for k,v in pairs(self.LotteryConf.num) do
+			local productModule = JGuiManager.GetMoudle(self.ContentRect, "M_Turntable_Item", WindowType.UI, 0)
+			if productModule ~= nil then
+				table.insert(self.NumGetList, {
+					itemBG = productModule.SelfRect,
+					proText = productModule:Get("frequency"),
+					getedSp = productModule:Get("Get"),
+					iconSp = productModule:Get("Icon"),
+					numText = productModule:Get("Num"),
+				})
+			end
+		end
+	end
+end
+
+
+-- 获取获奖记录返回
+function _R.OnLotteryMsg(self)
+	local msgs = MCrossLotteryActivity.LotteryMessage
+	if msgs == nil or #msgs < 1 then
+		if self.MsgText ~= nil and self.MsgStop then
+			self.MsgText:DOKill()
+			self.MsgIndex = 0
+			self.MsgText.Text = ""
+		end
+	elseif #msgs > self.MsgIndex then
+		if self.MsgText ~= nil and (self.MsgIndex == 0 or self.MsgStop) then
+			_P.DoMessage(self)
+		end
+	end
+end
+
+
+function _P.DoMessage(self)
+	local msgs = MCrossLotteryActivity.LotteryMessage
+	if msgs == nil or #msgs < 1 then
+		self.MsgIndex = 0
+		if self.MsgText ~= nil then
+			self.MsgText.Text = ""
+			self.MsgText:DOKill()
+		end
+		return
+	end
+	if msgs ~= nil and #msgs > self.MsgIndex and self.MsgText ~= nil then
+		self.MsgText:DOKill()
+		if self.MsgStop then
+			self.MsgStop = false
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 200, 0)
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 400, 3)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				_P.DoMessage(self)
+			end)
+		else
+			self.MsgText.LocalPosition = Vector2.zero
+			self.MsgIndex = self.MsgIndex + 1
+			local msgInfo = msgs[self.MsgIndex]
+			local itemCsv = Csv.Item[msgInfo.itemId]
+			if msgInfo.itemId == Define.AssetsType.Gold and msgInfo.itemCount ~= nil and msgInfo.itemCount > 0 then
+				self.MsgText.Text = Csv.Text("DLottery_getGold", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
+			else
+				self.MsgText.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
+			end
+			
+			if self.MsgIndex == #msgs then
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth / 2 - 200, 3)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					self.MsgStop = true
+					_P.DoMessage(self)
+				end)
+			else
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 400, 6)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					_P.DoMessage(self)
+				end)
+			end
+		end
+	elseif self.MsgText ~= nil then
+		self.MsgStop = true
+		self.MsgText:DOKill()
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 200, 0)
+	end
+end
+
+
+-- 请求抽奖
+function _P.ToReqLottery(self, num)
+	if self.ActId > 0 then
+		if self.LotteryConf ~= nil then
+			if num == 1 then
+				if self.ActInfo ~= nil then
+					if self.ActInfo.isFree then
+						_P.DoToReqLottery(self, num)
+					elseif MBag.CheckItemEnough(self.LotteryConf.oneCost[1], self.LotteryConf.oneCost[2]) then
+						_P.DoToReqLottery(self, num)
+					end
+				end
+			else
+				if MBag.CheckItemEnough(self.LotteryConf.tenCost[1], self.LotteryConf.tenCost[2]) then
+					_P.DoToReqLottery(self, num)
+				end
+			end
+		end
+	end
+end
+
+
+function _P.DoToReqLottery(self, num)
+	CCrossLotteryActivity.OnLotteryReq(num)
+	
+	if self.LeftBtn ~= nil then
+		self.LeftBtn.IsGray = true
+		self.LeftBtn.RaycastTarget = false
+		self.RightBtn.IsGray = true
+		self.RightBtn.RaycastTarget = false
+	end
+end
+
+
+-- 免费倒计时
+function _P.DoUpdateTime(self)
+	if self.ActId > 0 and self.ActInfo ~= nil then
+		if self.TimeTips ~= nil then
+			if self.ActInfo.isFree then
+				self.TimeTips.Text = Csv.Text("lottery_11")
+			else
+				local now = HeartBeat.ServSecond()
+				self.TimeTips.Text = CS.Utility.Utils.FormatSeconds(math.max(0, LuaUtil.NextDayTime(now) - now), Csv.Text("lottery_7"))
+			end
+		end
+	end
+end
+
+
+-- 更新界面数据
+function _R.OnUpdateInfo(self, actId)
+	self.ActInfo = MCrossLotteryActivity.LotteryData[actId]
+	if self.ActInfo ~= nil and self.ActInfo.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_lottery_activity_close"))
+		self:Destroy()
+		return
+	end
+	
+	if self.ActInfo == nil or self.ActInfo.state.state ~= MActivity.ActivityState.Doing then
+		self.LeftBtn.IsGray = true
+		self.LeftBtn.RaycastTarget = false
+		self.RightBtn.IsGray = true
+		self.RightBtn.RaycastTarget = false
+	end
+
+	if self.ActInfo == nil or self.ActInfo.state.state == MActivity.ActivityState.Finish then
+		local isHaveCanGet = false
+		for index = 1, self.RewardNums do
+			local widgetInfo = self.NumGetList[index]
+			if widgetInfo.getedSp ~= nil then
+				widgetInfo.getedSp.Activity = false
+			end
+		end
+		if isHaveCanGet then
+			self.GetBtn.IsGray = false
+			self.GetBtn.RaycastTarget = true
+		else
+			self.GetBtn.IsGray = true
+			self.GetBtn.RaycastTarget = false
+		end
+	end
+
+	if self.ActInfo ~= nil and actId > 0 then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+			if self.ActInfo.state.state == MActivity.ActivityState.Doing then
+				self.LeftBtn.IsGray = false
+				self.LeftBtn.RaycastTarget = true
+				self.RightBtn.IsGray = false
+				self.RightBtn.RaycastTarget = true
+			end
+		else
+			_P.DoUpdateTotalNum(self)
+		end
+	end
+end
+
+
+local ITEM_LIGHT_SIZE = Vector2(140, 140)
+local ITEM_LIGHT_SIZE2 = Vector2(150, 150)
+function _P.ChangeActID(self)
+	if self.LotteryConf ~= nil then
+		local module = self.mModule
+		_P.DoUpdateTime(self)
+		if self.LotteryConf.oneCost[1] ~= Define.AssetsType.Gold then
+			module:Get("Price1").SpriteName = Csv.Item[self.LotteryConf.oneCost[1]].miniIcon
+		end
+		if self.LotteryConf.tenCost[1] ~= Define.AssetsType.Gold then
+			module:Get("Price2").SpriteName = Csv.Item[self.LotteryConf.tenCost[1]].miniIcon
+		end
+		module:Get("PriceNum1").Text = tostring(self.LotteryConf.oneCost[2])
+		module:Get("PriceNum2").Text = tostring(self.LotteryConf.tenCost[2])
+		if self.ItemLight ~= nil then
+			for k,v in pairs(self.ItemLight) do
+				if v ~= nil then
+					v:Destroy()
+				end
+			end
+		end
+		self.ItemLight = {}
+		for index = 1,self.RewardNums do
+			local num = self.LotteryConf.num[index]
+			local reward = self.LotteryConf.reward[index]
+			local itemId = reward[1]
+			local itemCsv = Csv.Item[itemId]
+			local widgetInfo = self.NumGetList[index]
+			local itemSp = widgetInfo.itemBG
+			itemSp.SpriteName = itemCsv.colorIcon
+			widgetInfo.iconSp.SpriteName = itemCsv.icon
+			widgetInfo.numText.Text = tostring(reward[2])
+			itemSp:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				CCommon.ShowItemTips(itemId)
+			end)
+			local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
+			if itemLightSp ~= nil then
+				itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE2
+				itemLightSp.SelfRect.CachedTran:SetSiblingIndex(1)
+				table.insert(self.ItemLight, itemLightSp)
+			end
+		end
+		local itemIndex = self.LotteryConf.items
+		for index=1,ITEM_COUNT do
+			local lotterItemCsv = Csv.CrossLotteryItem[itemIndex[index]]
+			local itemId = lotterItemCsv.item
+			local itemCsv = Csv.Item[itemId]
+			local itemSp = module:Get("IconBox"..index)
+			itemSp.SpriteName = itemCsv.colorIcon
+			if itemId == Define.AssetsType.Gold and lotterItemCsv.poolGoldRatio ~= nil then
+				module:Get("Icon"..index).SpriteName = GoldImageName
+				module:Get("Num"..index).Text = math.ceil(lotterItemCsv.poolGoldRatio / 100) .. '%'
+			else
+				module:Get("Icon"..index).SpriteName = itemCsv.icon
+				module:Get("Num"..index).Text = "x" .. lotterItemCsv.num
+			end
+
+			itemSp:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				CCommon.ShowItemTips(itemId)
+			end)
+			if lotterItemCsv.broadcast == 1 or lotterItemCsv.broadcast == 2 then
+				local itemLightSp = CCommon.CreateItemLight(itemSp, Define.SysId.Lottery, itemId)
+				if itemLightSp ~= nil then
+					itemLightSp.SelfRect.SizeDelta = ITEM_LIGHT_SIZE
+					itemLightSp.SelfRect.CachedTran:SetSiblingIndex(1)
+					table.insert(self.ItemLight, itemLightSp)
+				end
+			end
+		end
+
+		_R.OnUpdateInfo(self, self.ActId)
+		_P.MoveRewardContent(self, false)
+	else
+		error("lotteryCsv error!!", self.ActId)
+	end
+end
+
+
+function _P.OnPressFunc(btn, data, isOne, clickCall)
+	if data.isPress then
+		btn.SpriteName = (isOne and 'ZP_003') or 'ZP_001_2'
+	else
+		btn.SpriteName = (isOne and 'ZP_002') or 'ZP_001'
+		if clickCall then
+			clickCall()
+		end
+	end
+end
+
+
+function _P.DoUpdateTotalNum(self)
+	if self.GetBtn ~= nil then
+		local isHaveCanGet = false
+		if self.ActId > 0 and self.ActInfo ~= nil then
+			self.TotalNumText.Text = tostring(self.ActInfo.totalNum)
+			self.GoldPoolText.Text = tostring(self.ActInfo.poolGold)
+			self.mModule:Get("Fill").FillAmount = self.ActInfo.poolGold / self.LotteryConf.maxGold
+
+			if self.LotteryConf ~= nil then
+				for index = 1,self.RewardNums do
+					local widgetInfo = self.NumGetList[index]
+					local num = self.LotteryConf.num[index]
+					if self.ActInfo.totalNum >= num then
+						widgetInfo.proText.Text = Csv.Text("lottery_8", {cur = self.ActInfo.totalNum, max = num})
+						if self.ActInfo.numGets[num] then 
+							widgetInfo.getedSp.Activity = true
+						else
+							isHaveCanGet = true
+							widgetInfo.getedSp.Activity = false
+						end
+					else
+						widgetInfo.proText.Text = Csv.Text("lottery_13", {cur = self.ActInfo.totalNum, max = num})
+						isHaveCanGet = true
+						widgetInfo.getedSp.Activity = false
+					end
+				end
+			else
+				error("lotteryCsv error!!",self.ActId )
+			end
+		end
+
+		if isHaveCanGet then
+			self.GetBtn.IsGray = false
+			self.GetBtn.RaycastTarget = true
+		else
+			self.GetBtn.IsGray = true
+			self.GetBtn.RaycastTarget = false
+		end
+	end
+end
+
+
+-- 领取累计奖励返回
+function _R.OnLotteryNumGet(self, actId, getNum, getRewards)
+	if self.ActInfo ~= nil then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+		elseif getNum > 0 then
+			local isHaveCanGet = false
+			if self.LotteryConf ~= nil then
+				for index=1,self.RewardNums do
+					local num = self.LotteryConf.num[index]
+					if num == getNum then
+						local widgetInfo = self.NumGetList[index]
+						local effect
+						SoundMgr.PlaySystem(10004)
+						SoundMgr.Play(11000)
+						effect = CCommon.CreateEffect(widgetInfo.itemBG, GTE_EFFECT_ID, widgetInfo.getedSp.LocalPosition, function( ... )
+							if effect ~= nil then
+								effect:Destroy()
+							end
+							
+							_P.DoUpdateTotalNum(self)
+						end)
+						effect.SelfRect.SizeDelta = Vector2(100, 100)
+
+						self.mModule.SelfRect:AddOnTime(function()
+							_P.MoveRewardContent(self, true)
+						end, nil, 1)
+
+						if getRewards ~= nil then
+							for index,item in pairs(getRewards) do
+								CCommon.ShowFlyItem(self._RootNode, item.key, item.value, index * 0.3, widgetInfo.itemBG.RootCanvasPos + Vector2(0, 60))
+							end
+						end
+
+						break
+					end
+				end
+			end
+		end
+	end 
+end
+
+
+-- 抽奖返回
+local LightImgPos = 
+{
+	[1] = {posX = 0, posY = 150},
+	[2] = {posX = 75, posY = 132},
+	[3] = {posX = 132, posY = 75},
+	[4] = {posX = 150, posY = 0},
+	[5] = {posX = 132, posY = -75},
+	[6] = {posX = 75, posY = -132},
+	[7] = {posX = 0, posY = -150},
+	[8] = {posX = -75, posY = -132},
+	[9] = {posX = -132, posY = -75},
+	[10] = {posX = -150, posY = 0},
+	[11] = {posX = -132, posY = 75},
+	[12] = {posX = -75, posY = 132},
+}
+function _R.OnLottery(self, actId, itemList)
+	if self.ActInfo ~= nil then
+		if actId ~= self.ActId then
+			self.ActId = actId
+			_P.ChangeActID(self)
+		else
+			_P.DoUpdateTotalNum(self)
+
+			if self.LotteryConf ~= nil then
+				if itemList ~= nil and #itemList > 0 then
+					if self.TenWindowPopHandle ~= 0 then
+						TimeDelay.SetValid(self.TenWindowPopHandle, false)
+						self.TenWindowPopHandle = 0
+					end
+					if self.GoodItemFxHandle ~= 0 then
+						TimeDelay.SetValid(self.GoodItemFxHandle, false)
+						self.GoodItemFxHandle = 0
+					end
+					if self.GoodItemFx ~= nil then
+						self.GoodItemFx:Destroy()
+						self.GoodItemFx = nil
+					end
+					local module = self.mModule
+					local lastData = itemList[#itemList]
+					local last = lastData.id
+					for index=1,ITEM_COUNT do
+						if last == self.LotteryConf.items[index] then
+							if self.FlyTweener ~= nil then
+								self.FlyTweener:DOKill()
+							end
+							self.ChooseNode.Activity = false
+							local toRot = self.RewardRect.LocalEulerAngles
+							toRot.z = toRot.z % -360
+							self.RewardRect.LocalEulerAngles = toRot
+							toRot.z = -360 * 12 + (index - 1) * 30
+							self.FlyTweener = self.RewardRect.CachedTran:GetJTweener("T_DiamondLottery_Fly")
+							local tween = self.FlyTweener:GetTweenForType(FLY_TYPE)
+							tween.ToAngleZ = toRot.z
+							if #itemList > 1 then -- 十连抽
+								tween.Duration = 0.6
+							end
+							self.FlyTweener:SetOnComplete(function ( ... )
+								if self.RewardRect ~= nil then
+									toRot.z = toRot.z % -360
+									self.RewardRect.LocalEulerAngles = toRot
+									self.ChooseNode.LocalEulerAngles = -toRot
+									self.ChooseNode.LocalPosition = Vector2(LightImgPos[index].posX, LightImgPos[index].posY)
+									self.ChooseNode.Activity = true
+
+									if self.ActInfo.state.state == MActivity.ActivityState.Doing then
+										self.LeftBtn.IsGray = false
+										self.LeftBtn.RaycastTarget = true
+										self.RightBtn.IsGray = false
+										self.RightBtn.RaycastTarget = true
+									end
+
+									if #itemList == 1 then
+										_P.PlayGoodItemFx(self, itemList, function( ... )
+											if self._RootNode ~= nil then
+												CCommon.ShowFlyItem(self._RootNode, lastData.item.key, lastData.item.value, 0, module:Get("IconBox" .. index).RootCanvasPos)
+											end
+										end)
+									end
+								end
+							end)
+							self.FlyTweener:Play()
+							break
+						end
+					end
+
+					if #itemList > 1 then
+						self.TenWindowPopHandle = TimeDelay.DelayCall(0.6, false, function( ... )
+							self.TenWindowPopHandle = 0
+							if self.RewardRect ~= nil then
+								_P.PlayGoodItemFx(self, itemList, function( ... )
+									WindowMgr.Create("ULotteryTenReward", itemList, true)
+								end)
+							end
+						end)
+					end
+				else
+					if self.ActInfo.state.state == MActivity.ActivityState.Doing then
+						self.LeftBtn.IsGray = false
+						self.LeftBtn.RaycastTarget = true
+						self.RightBtn.IsGray = false
+						self.RightBtn.RaycastTarget = true
+					end
+				end
+			else
+				if self.ActInfo.state.state == MActivity.ActivityState.Doing then
+					self.LeftBtn.IsGray = false
+					self.LeftBtn.RaycastTarget = true
+					self.RightBtn.IsGray = false
+					self.RightBtn.RaycastTarget = true
+				end
+			end
+		end
+	end
+end
+
+
+-- 超级大奖特效
+function _P.PlayGoodItemFx(self, itemList, callBack)
+	local isNeedShow = false
+	for k,v in pairs(itemList) do
+		local csv = Csv.CrossLotteryItem[v.id]
+		if csv ~= nil and csv.type == 1 then
+			isNeedShow = true
+			break
+		end
+	end
+	if isNeedShow then
+		self.GoodItemFx = CCommon.CreateEffectEx(self._RootNode, 10150)
+		self.GoodItemFxHandle = TimeDelay.DelayCall(1.4, false, function( ... )
+			self.GoodItemFxHandle = 0
+			callBack()
+			if self.GoodItemFx ~= nil then
+				self.GoodItemFx:Destroy()
+				self.GoodItemFx = nil
+			end
+		end)
+	else
+		callBack()
+	end
+end
+
+
+-- 获取奖励后，移动物品列表
+function _P.MoveRewardContent(self, isPlayAnim)
+	local getNum = 0
+	if self.ActInfo and self.ActInfo.numGets ~= nil then
+		for k,v in pairs(self.ActInfo.numGets) do
+			getNum = getNum + 1
+		end
+	end
+
+	local posX = -(getNum * ItemSize)
+	local moveMaxX = -((self.RewardNums - SHOW_REWARD_NUM - 1) * ItemSize + DiffItemSize)
+	if posX < moveMaxX then
+		posX = moveMaxX
+	end
+	
+	if isPlayAnim then
+		self.ContentRect:DOAnchorPosX(posX, 0.15)
+	else
+		self.ContentRect.LocalPosition = Vector2(posX, 8)
+	end
+end
+
+
+-- 奖池钻石更新
+function _R.OnLotteryPoolGoldPush(self, data)
+	local lastNum = tonumber(self.GoldPoolText.Text)
+	local t = JTweenerManager.IntTween(lastNum, data.gold, 0.5, function(value)
+		if self.GoldPoolText ~= nil then self.GoldPoolText.Text = LuaUtil.NumberFormat(value) end
+	end, function()
+		if self.GoldPoolText ~= nil then self.GoldPoolText.Text = LuaUtil.NumberFormat(data.gold) end
+	end)
+
+	self.mModule:Get("Fill"):DOFillAmount(data.gold / self.LotteryConf.maxGold, 0.5)
+end
+
+
+return _M

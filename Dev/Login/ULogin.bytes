@@ -11,6 +11,9 @@ local MLogin = JRequire "Dev.Login.MLogin"
 local SDKMgr = JRequire "SDK.SDKMgr"
 --@RefType [SDK.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
+local CNotice = JRequire "Dev.Notice.CNotice"
+local MNotice = JRequire "Dev.Notice.MNotice"
+local ULoginNotice = JRequire "Dev.Notice.ULoginNotice"
 
 ----------------------CS类引用--------------------------
 
@@ -90,7 +93,7 @@ function _M:OnCreate(reloginType)
 	
 	local moudle = self:CreateMoudle(self._RootNode, "M_Login_UMain")
 	self.mMoudle = moudle
-	
+	moudle:Get("versionText").Text = Csv.Text('service_Version') .. "1." .. GameSetting.ClientVersion .. "." .. GameSetting.CdnVersion
 	self.LoginBtnCtrl = moudle:Get("LoginBtnCtrl")
 	self.Btn_SelectSrv = moudle:Get("Btn_SelectSrv")
 	self.Btn_SelectSrv:AddOnButton(function ()
@@ -137,6 +140,18 @@ function _M:OnCreate(reloginType)
 	moudle:Get("text_a").Text = Csv.Text("login_switch_acc")
 	moudle:Get("text_b").Text = Csv.Text("login_call_gm")
 
+	-- 登陆公告相关
+	CNotice.ShowLoginNoticeReq()
+
+	local noticeBtn = moudle:Get("Btn_Notice")
+	noticeBtn:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		CNotice.ShowLoginNoticeByBtn()
+	end, nil, 0.9)
+	noticeBtn.Activity = (MNotice.LoginData ~= nil)
+	self.NoticeBtn = noticeBtn
+	moudle:Get("text_c").Text = Csv.Text("notice_title")
+
 	--获取&刷新服务器信息
 	self.SrvStatus = moudle:Get("SrvStatus")
 	self.RedStatus = moudle:Get("red")
@@ -146,12 +161,17 @@ function _M:OnCreate(reloginType)
 	moudle:Get("text3").Text = Csv.Text("login_change_srv")
 	--防沉迷
 	moudle:Get("FangCM").Text = Csv.Text("login_FangCM")
+	if GameSetting.IsTaiWan then
+		moudle:Get("blackBG").Activity = false
+	end
 	_R.RefreshLoginState(self)
 
 	if reloginType == GameSetting.ReLoginType.ChangeAccount then
 		SDKMgr.ReqSwitchAccount()
 	elseif reloginType == GameSetting.ReLoginType.ToLogin then
 		SDKMgr.ReqLogin()
+	elseif reloginType == GameSetting.ReLoginType.ChangeServerList then
+		SDKMgr.GetServerList()
 	end
 
 	CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, "logo.png", 
@@ -174,6 +194,17 @@ function _M:OnCreate(reloginType)
 													end
 												end)
 	end
+end
+
+function _R.OnGetNoticeBack(self)
+	self.NoticeBtn.Activity = (MNotice.LoginData ~= nil)
+
+	if self.NoticePanel ~= nil then
+		self.NoticePanel:delete()
+		self.NoticePanel = nil
+	end
+	local noticeNode = self.mMoudle:Get("NoticeNode")
+	self.NoticePanel = ULoginNotice.new(noticeNode)
 end
 
 return _M

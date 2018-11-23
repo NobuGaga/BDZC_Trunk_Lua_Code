@@ -83,7 +83,6 @@ end
 ----获取更新副本信息
 --------------
 function _R.RefreshInvade(self,_data)
-	print("RefreshInvade!!!")
 	local _type = MFinance.FinaceType.FinaceRank_1
 
 	local fightData = self.mFightData
@@ -104,6 +103,8 @@ function _R.RefreshResist(self,_data)
 
 	fightData = {data = _data,type = _type}
 	self.mFightData = fightData
+
+	_P.RefreshBox(self,_data.itemBoxNum)
 end
 ---------------------------------
 --初始化抵御列表
@@ -183,24 +184,15 @@ function _R.GetResistFight(self,data)
 	self:Lock()
 	self.mMoudle:Get("BackBtn").RaycastTarget = false
 	self.mData = data
-	--self.IsWin = data.isWin
 	self.StaffEffectTable = {}
 	self.BuffTable = {}
 	self.ReportTable = _P.GetBattleReport(_P.GetSortReport(data.fight.fight))
 	self.PkRoot.Activity = false
 	_P.PlayNext(self)
 	self.mMoudle:Get("passBtn").Activity = true
-	--[[
-	_P.IsFighting(self)
+	self.boxRect.Activity = false
 
-	self:Lock()
-	_P.ShowFightResist(self, data, function()
-		if self.mMoudle ~= nil then
-			self:Unlock()
-			WindowMgr.Create("UFinanceResult",data)
-		end
-	end)
-	--]]	
+	_P.RefreshBox(self,data.itemBoxNum)	
 end
 -------------------------------------
 -------------------------------------
@@ -224,7 +216,6 @@ function _M:OnCreate(data,type)
 	local closeBtn = moudle:Get("BackBtn")
 	closeBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		print("BackBtn!!!")
 		MFinance.isBattle = false
 		self:Destroy()
 	end, nil, 1.2)
@@ -267,13 +258,17 @@ function _M:OnCreate(data,type)
 	local smallTitle2 = moudle:Get("smallTitle2")
 	local smallTitleBg1 = moudle:Get("smallTitle1")
 	local smallTitleBg2 = moudle:Get("smallTitleBg")
+	local tipsText = moudle:Get("Tips")
+	local tipsBg = moudle:Get("TipsBg")
 	self.mSmallTitle1 = smallTitleBg1
 	self.mSmallTitle2 = smallTitleBg2
+	self.mTipsBg = tipsBg
 
 	diyuText.Text = Csv.Text("finance_diyuRank")
 	leftTitle1.Text = Csv.Text("finance_di")
 	rightTitle1.Text = Csv.Text("finance_bo")
 	smallTitle2.Text = Csv.Text("finance_smallTitle2")
+	tipsText.Text = Csv.Text("finance_challenged")
 	smallTitleBg1.Activity = false
 	smallTitleBg2.Activity = false
 
@@ -324,20 +319,36 @@ function _M:OnCreate(data,type)
 	pkRoot.Activity = true
 	self.PkRoot = pkRoot
 
+	--宝箱
+	self.boxRect = moudle:Get("Box")
+	self.boxIcon = moudle:Get("boxIcon")
+	self.boxNum = moudle:Get("boxNum")
+	self.boxRect.Activity = false
+
+	moudle:Get("boxTips").Text = Csv.Text("finance_boxTips")
+	_P.RefreshBox(self,data.itemBoxNum)
+
+	self.boxRect:AddOnButton(function()
+		local csvData = Csv.Const(142)
+		local csvItem = nil
+		if csvData ~= nil then
+			CCommon.ShowItemTips(csvData[1])
+		end
+	end)
+	
 	--已结束
 	if type == MFinance.FinaceType.FinaceRank_2 then
 		if data.isEnd then
 			WindowMgr.Create("UFinanceResistEnd",data)
 		end
+		self.boxRect.Activity = true
 	end
-
 	_P.ReadyFight(self,data,type)--等待返回调用
 	---------------------
 	self.mRefreshTime = 0
 end
 
 function _P.ReadyFight(self,data,type)
-	print("ReadyFight!!!")
 	local moudle = self.mMoudle
 
 	self.mBossTalkBox.Activity = false
@@ -364,14 +375,16 @@ function _P.ReadyFight(self,data,type)
 	local buffContent = moudle:Get("BuffNow")
 	buffContent:DestroyChildren()
 
-	self.mStartBtn.RaycastTarget = true
-	self.mStartBtn.IsGray = false
+	self.mStartBtn.Activity = true
+	self.mTipsBg.Activity = false
+
 	if data.isBattled ~= nil then
 		if data.isBattled then
-			self.mStartBtn.RaycastTarget = false
-			self.mStartBtn.IsGray = true
+			self.mStartBtn.Activity = false
+			self.mTipsBg.Activity = true
 		end
 	end
+
 	---------
 	local smallTitle1 = self.mSmallTitle1
 	local smallTitle2 = self.mSmallTitle2
@@ -406,10 +419,10 @@ function _P.ReadyFight(self,data,type)
 	if lineUpList ~= nil and #lineUpList > 0 then
 		for k,v in ipairs(lineUpList) do
 			local staffData = {}
-			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
-			local canvas = staffMoudle:Get("canvas")
-			canvas.SortingLayerName = "Tips1"
-			canvas.SortingOrder = 10
+			local staffMoudle = self:CreateMoudle(content, "M_NewBossPK_Item")
+			-- local canvas = staffMoudle:Get("canvas")
+			-- canvas.SortingLayerName = "Tips1"
+			-- canvas.SortingOrder = 10
 			staffMoudle:Get("battleBack").Activity = false
 			if k == self.NowRound then
 				staffMoudle.SelfRect.SizeDelta = Staff_Size1
@@ -583,7 +596,7 @@ function _P.OnFight(self, data)
 				t:Play(T_FB_Boss_blood)
 				t:Play(T_FB_Boss_Hurt)
 
-				SoundMgr.Play(10021)
+				SoundMgr.Play(10059)
 				local actorPanel = self.mMoudle:Get("ActorLightPanel")
 				local actorPanel2 = self.mMoudle:Get("ActorLightPanel2")
 				actorPanel:AddOnTime(function()
@@ -831,7 +844,7 @@ function _P.PlayEnd(self)
 	--结束
 	if MFinance.fightType == MFinance.FinaceType.FinaceRank_1 then
 		if self.IsWin then
-			WindowMgr.Create("UFinanceWin",self.mData)
+			WindowMgr.Create("UFinanceWin",self.mData,self.mFightData)
 		else
 			WindowMgr.Create("UFinanceFail",self.mData)
 		end
@@ -907,31 +920,6 @@ function _R.RefreshEffectAndNowSkillIcon(self)
 		self.mMoudle:Get("zdlNum2").Text = reportData.initblood
 	end
 end
-
------------------------------------------------------------------
-
---[[
-function _P.IsFighting(self)
-	local changeBtn = self.mChangeBtn 
-	local startBtn =  self.mStartBtn 
-	local heroPowerBox = self.mHeroPowerBox
-
-	if MFinance.isFighting then
-		startBtn.Activity = false
-	else
-		startBtn.Activity = true
-	end
-end
-
-function _P.GetBossTalk()
-	if MFinance.fightType == MFinance.FinaceType.FinaceRank_1 then
-		return LuaUtil.Shuffle(Csv.WaveBoss[MFinance.Waves].talk)
-	elseif MFinance.fightType == MFinance.FinaceType.FinaceRank_2 then
-		return LuaUtil.Shuffle(Csv.Const(15002))
-	end
-end
---]]
----------------------------------------------------------------------
 
 function _P.ShowRankView(self,listData,type)
 	local rankView = self.mRankView
@@ -1014,6 +1002,23 @@ function _P.CreatRankItem(type,content,data)
 	end
 	itemMoudle.SelfRect.CachedTran:SetSiblingIndex(0)
 	return itemMoudle
+end
+
+function _P.RefreshBox(self,num)
+	local boxRect = self.boxRect
+	local boxIcon = self.boxIcon
+	local boxNum = self.boxNum
+
+	local csvData = Csv.Const(142)
+	local csvItem = nil
+	if csvData ~= nil then
+		csvItem = Csv.Item[csvData[1]]
+	end
+
+	if num ~= nil and csvItem ~= nil then
+		boxIcon.SpriteName = csvItem.icon
+		boxNum.Text = "x"..num
+	end
 end
 
 return _M

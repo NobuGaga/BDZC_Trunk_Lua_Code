@@ -1,0 +1,47 @@
+----------------------文件引用--------------------------
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CBattle = JRequire "Dev.Battle.CBattle"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+
+--界面构建
+function _M:OnCreate(cityId)
+	self.CityID = cityId
+	local moudle = self:CreateMoudle(self._RootNode, "M_Word_Map_Tips")
+	self.mMoudle = moudle
+	moudle:Get("Back_Btn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)	
+	local cityCsv = Csv.BattleCity[cityId]
+	if cityCsv == nil then
+		error("BattleCity csv error!!! ", cityId)
+		return
+	end
+	moudle:Get("Title").Text = cityCsv.title
+	moudle:Get("Icon").SpriteName = cityCsv.icon
+	if cityCsv.reward ~= nil then
+		local tmpStr = Csv.Text("battle_map_13")
+		for index,v in pairs(cityCsv.reward) do
+			local itemText = moudle:Get("item"..index)
+			if itemText ~= nil then
+				local itemCsv = Csv.Item[v[1]]
+				itemText.Text = itemCsv.name .. tmpStr .. v[2]
+			else
+				break
+			end
+		end
+	end
+	moudle:Get("Time").Text = Csv.Text("battle_map_14") .. cityCsv.boxSpaceTimeTitle
+end
+
+return _M

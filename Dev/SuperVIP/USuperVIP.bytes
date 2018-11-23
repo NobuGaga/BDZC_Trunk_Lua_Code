@@ -1,0 +1,53 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.SuperVIP.MSuperVIP.bytes#_M]
+local MSuperVIP = JRequire "Dev.SuperVIP.MSuperVIP"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate()
+	self.moudle = self:CreateMoudle(self._RootNode, "M_SuperVIP")
+	self.moudle:Get("btnClose"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	local count = 3
+	for index = 1, count do
+		self.moudle:Get("textTitleDesc" .. index).Text = Csv.Text("supervip_title" .. index)
+	end
+	self.moudle:Get("textServiceTitle").Text = Csv.Text("supervip_head")
+	self.moudle:Get("textTips").Text = Csv.Text("supervip_tips")
+	self.moudle:Get("textDesc").Text = MSuperVIP.Data.description
+	
+	if MSuperVIP.Data.reward then
+		local content = self.moudle:Get("content")
+		for _, itemData in ipairs(MSuperVIP.Data.reward) do
+			CCommon.CreateItem(content, itemData.itemID, CCommon.ShowItemTips, {num = itemData.itemNum})
+		end
+	end
+
+	self.moudle:Get("textNum").Text = Csv.Text("supervip_type" .. MSuperVIP.Data.contactType) .. MSuperVIP.Data.contactInfo
+	self.moudle:Get("textBtnCopy").Text = Csv.Text("supervip_copy")
+	self.moudle:Get("btnCopy"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		SDKMgr.CopyText(MSuperVIP.Data.contactInfo)
+		CCommon.ShowRight(Csv.Text("welfare_copySuccess"))
+	end)
+end
+
+return _M

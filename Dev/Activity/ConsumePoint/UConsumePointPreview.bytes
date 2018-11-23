@@ -1,0 +1,145 @@
+-- 消费积分-下一期预览界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local TagSpriteName = {"XFJF_001", "XFJF_002"}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(proType, leaveTime, stageId)
+	local module = self:CreateMoudle(self._RootNode, "M_Integral_Preview")
+	self.mModule = module
+
+	module:Get("Title1").Text = Csv.Text("consume_preview" .. proType)
+	local closeBtn = module:Get("Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	self.ProType = proType
+	_P.SetListData(self, proType, leaveTime, stageId, false)
+end
+
+
+function _P.SetListData(self, proType, leaveTime, stageId, isUpdate)
+	local consumeConf = Csv.ConsumeScore[stageId]
+	local listData = _P.GetListData(consumeConf)
+	if listData and next(listData) ~= nil then
+		local itemContent = self.mModule:Get("ItemRect1")
+		itemContent:DestroyChildren()
+		
+		for k,v in pairs(listData) do
+			_P.OnCreateItem(self, itemContent, v, proType)
+		end
+	end
+
+	local time = leaveTime - HeartBeat.ServSecond()
+	if time > 0 then
+		self.LeaveTime = leaveTime
+
+		if not isUpdate then
+			_P.OnStartTimer(self)
+		end
+	end
+end
+
+
+function _P.GetListData(consumeConf)
+	local itemData = {}
+	for k,v in pairs(consumeConf.items) do
+		local maxNum = (consumeConf.consumeType == 3 and -1) or v[3]
+		itemData[k] = {itemId = v[1], itemCount = v[2], maxNum = maxNum, needPoint = v[4]}
+	end
+
+	return itemData
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, proType)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Integral_UMain_Item", WindowType.Tip1, 0)
+	if itemModule ~= nil then
+		local itemConf = Csv.Item[data.itemId]
+		if itemConf then
+			itemModule:Get("Icon").SpriteName = itemConf.icon
+
+			local qualityImg = itemModule:Get("IconBox")
+			qualityImg.SpriteName = itemConf.colorIcon
+			qualityImg:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				if data.itemId and data.itemId > 0 then
+					CCommon.ShowItemTips(data.itemId)
+				end
+			end)
+
+			local strColor = Csv.ItemColor[itemConf.color].str
+			itemModule:Get("GoodName").Text = Csv.Text("common_color", {num = strColor, name = itemConf.name})
+		end
+
+		local countText = itemModule:Get("ItemCount")
+		countText.Text = 'X' .. data.itemCount
+		countText.Activity = data.itemCount > 1
+
+		local tagImg = itemModule:Get("Corner")
+		local totalText = itemModule:Get("Total")
+		if data.maxNum ~= -1 then
+			tagImg.Activity = true
+			tagImg.SpriteName = TagSpriteName[proType]
+			totalText.Text = Csv.Text("consume_total", {num = data.maxNum})
+		else
+			tagImg.Activity = false
+			totalText.Text = Csv.Text("consume_limit")
+		end
+
+		itemModule:Get("C_Btn_b").Activity = false
+		itemModule:Get("Score").Text = Csv.Text("consume_point", {num = data.needPoint})
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	local leftTime = self.LeaveTime - HeartBeat.ServSecond()
+	if leftTime < 0 then
+		leftTime = 0
+	end
+	self.mModule:Get("TimeText").Text = Csv.Text("consume_refresh", {time = LuaUtil.GetTimeHMS(leftTime)})
+	
+	if leftTime > 0 then
+		self.UpdateTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local time = self.LeaveTime - HeartBeat.ServSecond()
+	if self.mModule then
+		self.mModule:Get("TimeText").Text = Csv.Text("consume_refresh", {time = LuaUtil.GetTimeHMS(time)})
+	end
+
+	if time < 0 then
+		self:Destroy()
+	end
+end
+
+
+return _M

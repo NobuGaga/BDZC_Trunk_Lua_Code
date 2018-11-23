@@ -4,15 +4,18 @@ local MCommerce = JRequire "Dev.Commerce.MCommerce"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local CMain = JRequire "Dev.Main.CMain"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
 --私有函数模块 *** 只放置私有函数, 禁止放变量
 local _P = {}
 
-local CMD_ID = 
+local CMD_ID =
 {
-	--Client -> Server	
+	--Client -> Server
 	--会长操作:
 	cCreate = 1,		--创建		PCommerce.CCreate
 	cUpdateInfo = 2,	--修改商会信息PCommerce.CUpdateInfo
@@ -22,16 +25,16 @@ local CMD_ID =
 	cDisband = 6,		--解散商会	  PCommerce.CDisband
 	cOut = 7,			--踢出成员	  PCommerce.PID
 	cAppoint = 8,		--职位任免    PCommerce.CAppoint
-	cLevelUp = 9,		--商会升级	
+	cLevelUp = 9,		--商会升级
 	cAllowAutoJoin = 10,--自动加入状态变更 PCommerce.CAllowAutoJoin
 	cApplyList = 11,	--入会申请列表获取
 	cTransferList = 12,	--可以转让的会员列表
 
-	--会员操作		
-	cAutoJoin = 13,		--随机入会	
+	--会员操作
+	cAutoJoin = 13,		--随机入会
 	cApplyJoin = 14,	--申请加入    PCommerce.PID
 	cQuit = 15,			--退出商会
-	cQuery = 16,		--查询商会 	  PCommerce.PID	
+	cQuery = 16,		--查询商会 	  PCommerce.PID
 	cRank = 17,			--排行榜	   PCommerce.CRankReq
 	cBuild = 18,		--商会建设 	  PCommerce.PID
 	cExchange = 19, 	--兑换物品 	  PCommerce.PID
@@ -41,14 +44,16 @@ local CMD_ID =
 	cOpenBattle = 21,	--开启副本 	  PCommerce.COpenBattle
 	cBattle = 22,		--副本对战    PCommerce.CBattle
 	cUnlock = 23,		--使用出战令解锁员工 PCommerce.PID
-	cBattleInfo = 24,	--打开副本时初始化副本信息 
+	cBattleInfo = 24,	--打开副本时初始化副本信息
 	cBattleReport = 25,	--已经打过的查看副本的战报 PCommerce.PID
 	cBattleBattle = 26,	--没有打完的点击挑战按钮 PCommerce.PID
-	
+
 	--刷新操作
 	cOpen = 27,			--进入商会界面(接受商会内动态的广播)
 	cClose = 28,		--退出商会界面
+	cBattleLeave = 29,	--退出商会副本
 
+	cCancelDisband = 30,	--取消解散商会
 
 	--Server -> Client
 	--初始化 --> 只发商会id(用来标识有没有商会)
@@ -92,7 +97,9 @@ local CMD_ID =
 	--转让会长成功
 	sTransfer = 20,	--PCOmmerce.STransfer
 	--关闭副本
-	sCloseBattle = 21, 
+	sCloseBattle = 21,
+	--刷新商会修学状态
+	sUpdateStudyRed = 22,	--PCOmmerce.SUpdateStudyRed
 }
 
 function _M.ModuleClean()
@@ -101,7 +108,7 @@ end
 
 function _M.ModuleInit(isReload)
 	--发送消息协议注册
-	local func_send = 
+	local func_send =
 	{
 		--会长操作:
 		[CMD_ID.cCreate] = "PCommerce.CCreate",
@@ -117,7 +124,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cApplyList] = "",
 		[CMD_ID.cTransferList] = "",
 
-		--会员操作		
+		--会员操作
 		[CMD_ID.cAutoJoin] = "",
 		[CMD_ID.cApplyJoin] = "PCommerce.PID",
 		[CMD_ID.cQuit] = "",
@@ -134,13 +141,16 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cBattleInfo] = "",
 		[CMD_ID.cBattleReport] = "PCommerce.PID",
 		[CMD_ID.cBattleBattle] = "PCommerce.PID",
-	
+
 		--界面监听
 		[CMD_ID.cOpen] = "",
 		[CMD_ID.cClose] = "",
+
+		--取消解散
+		[CMD_ID.cCancelDisband] = "",
 	}
 	--接收消息协议注册
-	local func_recv = 
+	local func_recv =
 	{
 		[CMD_ID.sInit] = {		proto = "PCommerce.SInit",		handle = _P.OnInit},
 		[CMD_ID.sCreate] = {	proto = "PCommerce.PID",		handle = _P.OnCreate},
@@ -163,9 +173,10 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sApplyJoin] =  {proto = "PCommerce.PID",	handle = _P.OnApplySuccess},
 		[CMD_ID.sTransfer] =  {proto = "PCommerce.STransfer",	handle = _P.OnTransferSuccess},
 		[CMD_ID.sCloseBattle] =  {handle = _P.OnBattleClosePush},
+		[CMD_ID.sUpdateStudyRed] =  {proto = "PCommerce.SUpdateStudyRed",	handle = _P.OnUpdateStudyRed},
 	}
 	--调用注册接口, 用获得发送函数
-	_M.Send = SocketMgr.Regist(Define.SysId.Commerce, func_send, func_recv, isReload)	
+	_M.Send = SocketMgr.Regist(Define.SysId.Commerce, func_send, func_recv, isReload)
 end
 
 --注册12点重置监听
@@ -189,10 +200,10 @@ end
 	function _M.CreateReq(name, password, isAuto, weixin, qq, declaration)
 		_M.Send(CMD_ID.cCreate, {
 			name = name,
-			password = password, 
-			isAuto = isAuto, 
-			weixin = weixin, 
-			qq = qq, 
+			password = password,
+			isAuto = isAuto,
+			weixin = weixin,
+			qq = qq,
 			declaration = declaration
 		})
 	end
@@ -200,8 +211,8 @@ end
 	function _M.UpdateReq(name, weixin, qq, declaration, notice)
 		_M.Send(CMD_ID.cUpdateInfo, {
 			name = name,
-			weixin = weixin, 
-			qq = qq, 
+			weixin = weixin,
+			qq = qq,
 			declaration = declaration,
 			notice = notice
 		})
@@ -321,6 +332,10 @@ end
 		_M.Send(CMD_ID.cClose)
 	end
 
+	--取消解散商会
+	function _M.CancelDisbandReq()
+		_M.Send(CMD_ID.cCancelDisband)
+	end
 ---------------------Server -> Client----------------------
 
 --初始化
@@ -328,17 +343,29 @@ function _P.OnInit(data)
 	MCommerce.MyCommerceId = data.id
 	MCommerce.NextJoinTime = data.joinTime
 	MCommerce.CommerceName = data.name
+	MCommerce.StudyRedState = data.studyRed or 0
+
+	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1,Define.SysId.Commerce)
+	WindowMgr.Call("UCommerce","OnUpdateCommerceStudyRed")
 end
+
+function _P.OnUpdateStudyRed(data)
+	MCommerce.StudyRedState = data.studyRed
+
+	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1,Define.SysId.Commerce)
+	WindowMgr.Call("UCommerce","OnUpdateCommerceStudyRed")
+end
+
 --创建成功
 function _P.OnCreate(data)
 	MCommerce.MyCommerceId = data.id
-
 	if MCommerce.MyCommerceId > 0 then
 		if WindowMgr.IsCreated("UCommerceNoJoin") then
 			_M.EnterCommerce()
 			WindowMgr.Call("UCommerce", "WaitCreateSuccess")
 		end
 	end
+	EventCenter.CallEventTrigger(Define.EventListenId.CommerceChange)
 end
 --加入商会成功
 function _P.OnJoin(data)
@@ -349,6 +376,8 @@ function _P.OnJoin(data)
 			_M.EnterCommerce()
 		end
 	end
+
+	EventCenter.CallEventTrigger(Define.EventListenId.CommerceChange)
 end
 --退出商会
 function _P.OnOut(data)
@@ -359,7 +388,7 @@ function _P.OnOut(data)
 	if data.outType == 1 then
 		--被人踢出商会
 		CCommon.ShowError(Csv.Text("commerce_out1",{
-			leaderName = data.leaderName, 
+			leaderName = data.leaderName,
 			leaderJob = MCommerce.GetJobStr(data.leaderJob),
 			coName = data.coName
 			}))
@@ -369,7 +398,7 @@ function _P.OnOut(data)
 	elseif data.outType == 3 then
 		--商会被解散
 		CCommon.ShowError(Csv.Text("commerce_out4",{
-			leaderName = data.leaderName, 
+			leaderName = data.leaderName,
 			leaderJob = MCommerce.GetJobStr(data.leaderJob),
 			coName = data.coName
 			}))
@@ -383,39 +412,42 @@ function _P.OnOut(data)
 	if WindowMgr.IsCreated("UCommerce") then
 		_M.EnterCommerce()
 	end
+
+	EventCenter.CallEventTrigger(Define.EventListenId.CommerceChange)
 end
 --打开界面
 function _P.OnOpen(data)
-	MCommerce.MyCommerceInfo = 
+
+	MCommerce.MyCommerceInfo =
 	{
 		--商会编号
-		id = data.id,	
+		id = data.id,
 		--商会名
-		name = data.name,	
+		name = data.name,
 		--商会等级
-		level = data.level,	
+		level = data.level,
 		--商会经验
-		exp = data.exp,	
+		exp = data.exp,
 		--商会财富
-		money = data.money,	
+		money = data.money,
 		--对内公告
-		notice = data.notice,	
+		notice = data.notice,
 		--成员数
-		memberNum = data.memberNum,	
+		memberNum = data.memberNum,
 		--副本是不是可以打(用于副本小红点 1可打, 0不可以打)
 		canFight = data.canFight,
 		--管理界面是不是有操作true有申请(用于管理按钮的小红点)
 		haveApply = data.haveApply,
 		--势力
-		power = data.power,	
+		power = data.power,
 		--QQ
-		qq = data.qq,	
+		qq = data.qq,
 		--微信
 		weixin = data.weixin,
 		--对外宣言
-		declaration = data.declaration,	
+		declaration = data.declaration,
 		--会长名
-		leader = data.leader,	
+		leader = data.leader,
 		--排名
 		rank = data.rank,
 		--是不是可以自动加入
@@ -425,7 +457,9 @@ function _P.OnOpen(data)
 		--商会总建设次数
 		buildTimes = data.buildTimes,
 		--是否开启商会学习
-		isOpenStudy = data.isOpenStudy
+		isOpenStudy = data.isOpenStudy,
+		--商会解散cd
+		disbandTime = data.disbandTime or 0
 	}
 	if MCommerce.MyCommerceInfo.notice == nil or MCommerce.MyCommerceInfo.notice == "" then
 		MCommerce.MyCommerceInfo.notice = Csv.Text("commerce_create15")
@@ -495,6 +529,8 @@ function _P.OnOpen(data)
 		WindowMgr.Call("UCommerceExchange","RefreshItems")
 	end
 
+	EventCenter.CallEventTrigger(Define.EventListenId.CommerceChange)
+
 	_P.CheckBattleRedPoint()
 end
 --界面刷新
@@ -506,6 +542,7 @@ function _P.OnUpdate(data)
 		WindowMgr.Call("UCommerce","OnUpdateName")
 	end
 	local isNeedUpdateExp = false
+	local isNeedUpdateDisband = false
 	if data.level ~= nil then
 		cachedInfo.level = data.level
 		isNeedUpdateExp = true
@@ -569,6 +606,7 @@ function _P.OnUpdate(data)
 	end
 	if data.myInfo ~= nil then
 		local myInfo = data.myInfo
+		local preJob = myInfo.job
 		local tmpMyInfo = {
 			--我的职位(0普通会员, 1会长, 2副会长, 3精英)
 			job = myInfo.job,
@@ -607,6 +645,10 @@ function _P.OnUpdate(data)
 			end
 		end
 
+		if preJob ~= myInfo.job and MCommerce.IsCommerceHuiZhang() then
+			isNeedUpdateDisband = true
+		end
+
 		WindowMgr.Call("UCommerce","OnUpdatemeMyInfo")
 		WindowMgr.Call("UCommerceBuild","OnUpdatemeMyInfo")
 		WindowMgr.Call("UCommerceExchange","OnUpdateMyInfo")
@@ -633,6 +675,16 @@ function _P.OnUpdate(data)
 	end
 	if WindowMgr.IsCreated("UCommerceMembers") then
 		WindowMgr.Call("UCommerceMembers", "RefreshMemberNum")
+	end
+	if data.disbandTime ~= nil then
+		cachedInfo.disbandTime = data.disbandTime
+		isNeedUpdateDisband = true
+		if MCommerce.IsDissolution() and WindowMgr.IsCreated("UCommerceManager") then
+			WindowMgr.Destroy("UCommerceManager")
+		end
+	end
+	if isNeedUpdateDisband then
+		WindowMgr.Call("UCommerce", "OnRefreshDissolutionTime")
 	end
 
 	_P.CheckBattleRedPoint()
@@ -767,10 +819,10 @@ function _P.OnDayout()
 		myInfo.lockedStaffs = {}
 		myInfo.staffLifeNum = {}
 		myInfo.build = 0
-		myInfo.isBeat = false
+		myInfo.hasBattled = false
 		_P.OnUpdate({myInfo = myInfo})
 		_P.CheckBattleRedPoint()
-	end	
+	end
 end
 
 function _P.OnApplySuccess(data)
@@ -791,7 +843,7 @@ end
 -- 商会副本结束后端推送
 function _P.OnBattleClosePush(data)
 	-- 关闭副本战斗界面
-	if WindowMgr.IsCreated("UCommerceBattle") then 
+	if WindowMgr.IsCreated("UCommerceBattle") then
 		WindowMgr.Destroy("UCommerceBattle")
 		CCommon.ShowError(Csv.Text("err_commerce_battle_closed"))
 	end
@@ -813,7 +865,7 @@ function _P.CheckBattleRedPoint()
 		end
 	else
 		MCommerce.BattleRedPoint = false
-	end	
+	end
 	WindowMgr.Call("UCommerce","OnUpdatemeCanFight")
 end
 

@@ -115,7 +115,7 @@ end
 --私有函数, 验证消息回调函数
 function _P.OnLoginRet(data)
 	if data.errorCode == nil or data.errorCode == 0 then
-		CS.Utility.LogPoint.LogPost(7, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
+		GameSetting.LogPoint(7, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 		_M.Send(ECmdId.cQueryCharList)
 	else
 		local switch = {
@@ -148,7 +148,7 @@ function _P.OnCharList(data)
 		WindowMgr.Call('ULogin', 'Close')
 		WindowMgr.Create('ULoginEstablish')
 	else
-		CS.Utility.LogPoint.LogPost(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
+		GameSetting.LogPoint(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
 		_M.Send(ECmdId.cEnterGame, {playerid = data.charList[1].id, playername = data.charList[1].name,
 		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
 		sbid = GameSetting.Sbid, appid = GameSetting.AppID, cdnVersion = GameSetting.CdnVersion, clientip = GameSetting.EncryptIP})
@@ -157,7 +157,7 @@ end
 
 function _P.OnCreateCharRet(data)
 	if data.errorCode == 0 then
-		CS.Utility.LogPoint.LogPost(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
+		GameSetting.LogPoint(7, 4, luaUtil.TransToYearMonthDayHMS(os.time()))
 		SDKMgr.ReqCollectData(SDKCollectType.CreateRole, data.chardesc.id, data.chardesc.name, data.chardesc.level)
 		_M.Send(ECmdId.cEnterGame, {playerid = data.chardesc.id, playername = data.chardesc.name, 
 		netmode = GameSetting.Netmode, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName,
@@ -189,7 +189,7 @@ function _P.OnCreateCharRet(data)
 end
 
 function _P.OnDeleteCharRet(data)
-	CS.Utility.LogPoint.LogPost(7, 6, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(7, 6, luaUtil.TransToYearMonthDayHMS(os.time()))
 	print("delete char")
 end
 
@@ -226,11 +226,11 @@ end
 function _P.OnReadyForRun(data)
 	print("Clogin.OnReadyForRun", _M.isAutoReconnect)
 	GameSetting.IsOnGame = true
-	CS.Utility.LogPoint.LogPost(7, 7, luaUtil.TransToYearMonthDayHMS(os.time()))
-	GameSetting.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "1", ipAddress = GameSetting.PublicIP, eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
+	GameSetting.LogPoint(7, 7, luaUtil.TransToYearMonthDayHMS(os.time()))
 	GameSetting.isFirst = data.isFirst
 	GameSetting.isFirstCopy = data.isFirst
 	HeartBeat.Start()
+	GameSetting.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "1", ipAddress = GameSetting.PublicIP, eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 	CCommon.HideLoading(10)
 	LuaConnect.AutoReconnect = true
 	if _M.isAutoReconnect and WindowMgr.IsCreated("UMain") then
@@ -320,7 +320,7 @@ function _P.SendLogin()
 		account = MLogin.GetAccount()
 	end
 
-	CS.Utility.LogPoint.LogPost(7, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(7, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	
 	if GameSetting.IpUrl ~= nil and GameSetting.IpUrl ~= "" then
 		print(GameSetting.IpUrl)
@@ -395,6 +395,7 @@ function _M.FindServerListByGroupName(groupName)
 	return list
 end
 
+-- 通过服务器id来查找服务器信息
 function _M.GetServerInfoByID(serverid)
 	for k,v in ipairs(MLogin.ServerList) do
 		if v.server then
@@ -439,12 +440,12 @@ function _M.DoLogin(account, password)
 end
 
 function _M.SendRandomName(gender)
-	CS.Utility.LogPoint.LogPost(7, 5, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(7, 5, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.Send(ECmdId.cGetCharName, {gender=gender})
 end
 
 function _M.SendCreateChar(name, headid, genber)
-	CS.Utility.LogPoint.LogPost(7, 3, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(7, 3, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.Send(ECmdId.cCreateChar, {playername = name, job = 1, genber = genber, headid = headid, 
 	sbid = GameSetting.Sbid, mac = GameSetting.DeviceMac, equipmentid = GameSetting.DeviceID, moblie = GameSetting.DeviceName})
 end

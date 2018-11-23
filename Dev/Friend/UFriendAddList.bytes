@@ -122,14 +122,8 @@ function _R.OnAddFriendList(self, ids)
 					self:Destroy()
 				end
 			end)
-
-			local csvVip = Csv.Vip[playerInfo.vip]
-			if csvVip ~= nil and csvVip.imgBord ~= nil then
-				playerMoudle:Get("VipBox").SpriteName = csvVip.imgBord
-				playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
-			else
-				playerMoudle:Get("VipBox").Activity = false
-			end
+			playerMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(playerInfo.chatBg, playerInfo.vip)
+			playerMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
 		end
 	end
 	self.Btn1:AddOnButton(function ( ... )

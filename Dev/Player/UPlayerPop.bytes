@@ -44,11 +44,24 @@ function _M:OnCreate(data)
 	local levelCsv = Csv.Company[data.level]
 	moudle:Get("text1").Text = levelCsv.name
 	moudle:Get("text2").Text = Csv.Text("player_ID", {id = data.id})
-	local serverInfo = CLogin.GetServerInfoByID(data.serverId)
+	if data.commerceId and data.commerceId > 0 and data.commerceName then
+		moudle:Get("text3").Activity = true
+		moudle:Get("text3").Text = Csv.Text("parliament_tip14",{str = data.commerceName})
+	else
+		moudle:Get("text3").Activity = false
+	end
+	
+	local serverId  = data.serverId
+	if data.originServerId ~= 0 then
+		serverId = data.originServerId
+	end
+	local serverInfo = CLogin.GetServerInfoByID(serverId)
 	if serverInfo ~= nil and serverInfo.name ~= nil then
-		moudle:Get("text3").Text = Csv.Text("player_area", {name = serverInfo.name})
+		moudle:Get("text4").Activity = true
+		moudle:Get("text4").Text = Csv.Text("player_area", {name = serverInfo.name})
 		moudle:Get("scale").SizeDelta = Vector2(300,130)
 	else
+		moudle:Get("text4").Activity = false
 		moudle:Get("scale").SizeDelta = Vector2(300,90)
 	end
 	local chenghaoText = moudle:Get("scaleText")

@@ -67,7 +67,7 @@ function _M.Clean( ... )
 	_M.isWaitingReport = false
 
 	_M.isRedPoint = false
-	_M.isRefreshTime = false 
+	_M.isRefreshTime = false
 	_M.RewardList = {}
 	_M.OnekeyPoint = 0 --一键总积分
 end
@@ -146,6 +146,10 @@ function _M.SetInitData(data)
 	if data.info.action ~= nil then
 		initData.action = {ncur = data.info.action.ncur,nmax = data.info.action.nmax}
 	end
+	--最后剩余刷新体力次数
+	if data.info.leftRecoveryCount ~= nil then
+		initData.leftRecoveryCount = data.info.leftRecoveryCount
+	end
 	--已用过员工列表
 	initData.staffs = {}
 	if data.info.staffs ~= nil then
@@ -189,7 +193,7 @@ function _M.SetFightData(data)
 			table.insert(adds,add)
 		end
 	end
-	
+
 	fightData.adds = adds
 
 	_M.FightData = fightData
@@ -197,7 +201,7 @@ end
 
 function _M.SetReportData(data)
 	local reportData = {}
-	
+
 	reportData.state = data.state
 	reportData.point = data.point
 	reportData.liansheng = data.liansheng
@@ -209,7 +213,7 @@ function _M.SetReportData(data)
 	reportData.oblood = {blood = data.oblood.blood,maxblood = data.oblood.maxblood}
 	reportData.mstaffinfo = {staffid = data.mstaffinfo.staffid,color = data.mstaffinfo.color,level = data.mstaffinfo.level,staffattr = data.mstaffinfo.staffattr}
 	reportData.ostaffinfo = {staffid = data.ostaffinfo.staffid,color = data.ostaffinfo.color,level = data.ostaffinfo.level,staffattr = data.ostaffinfo.staffattr}
-	
+
 	if data.award ~= nil then
 		local awards = {}
 		for k,v in pairs(data.award) do
@@ -254,7 +258,7 @@ function _M.SetReportData(data)
 
 	_M.ReportData = reportData
 
-	return _M.ReportData 
+	return _M.ReportData
 end
 
 function _M.SetAdverData(data)
@@ -426,30 +430,43 @@ function _M.AddShopPoint(num)
 end
 
 ----------
+function _M.HasLeftActionCount()
+	if _M.InitData == nil then
+		return false
+	end
+	local leftRecoveryCount = _M.InitData.leftRecoveryCount
+	if leftRecoveryCount == nil or leftRecoveryCount > 0 then
+		return true
+	end
+	return false
+end
+
 function _M.RefreshTime()
 	local tick = _M.InitData.recoveTime
-
 	if _M.isRefreshTime == false then
-		if _M.InitData.action.ncur < _M.InitData.action.nmax and  tick>0 then
+		if _M.InitData.action.ncur < _M.InitData.action.nmax and tick > 0 and _M.HasLeftActionCount() then
 			_M.isRefreshTime = true
 
 			_M.RefreshHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function (eventHandle, now)
-
 				local tick = _M.InitData.recoveTime - HeartBeat.ServSecond()
 				_M.InitData.recoveTime = HeartBeat.ServSecond() + tick
-				
-				if tick <= 0 then
-					if _M.InitData.action.ncur <  _M.InitData.action.nmax then
-						_M.InitData.action.ncur = _M.InitData.action.ncur +1
-						--刷新体力
-					end
-					if _M.InitData.action.ncur >= _M.InitData.action.nmax then
-						EventCenter.UnRegistCallEvent(eventHandle)
-						_M.isRefreshTime = false
-					-- else
-					-- 	_M.InitData.recoveTime =  1800 + HeartBeat.ServSecond()
+
+				if not _M.HasLeftActionCount() then
+					EventCenter.UnRegistCallEvent(eventHandle)
+					_M.isRefreshTime = false
+				else
+					if tick <= 0 then
+						if _M.InitData.action.ncur <  _M.InitData.action.nmax then
+							_M.InitData.action.ncur = _M.InitData.action.ncur +1
+							--刷新体力
+						end
+						if _M.InitData.action.ncur >= _M.InitData.action.nmax then
+							EventCenter.UnRegistCallEvent(eventHandle)
+							_M.isRefreshTime = false
+						end
 					end
 				end
+		
 			end)
 		end
 	end

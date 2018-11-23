@@ -1,0 +1,481 @@
+--跨服竞技场-淘汰赛直播界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CLogin = JRequire "Dev.Login.CLogin"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local EventCenter = JRequire "Dev.EventCenter"
+local CCommon = JRequire "Dev.Common.CCommon"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+local Linear = CS.DG.Tweening.Ease.Linear
+
+function _M:BeforeDestroy()
+	-- _P.HideBattleRslt(self)
+	_P.StopDialogue(self)
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+function _R.RefreshCUArenaMyChip(self)
+	self.IsNeedRefreshData = true
+end
+
+function _P.DoMessage(self)
+	local msgs = self.MessageList
+	if msgs == nil or #msgs < 1 then
+		self.MsgIndex = 0
+		if self.MsgText ~= nil then
+			self.MsgText.Text = ""
+			self.MsgText:DOKill()
+		end
+		return
+	end
+	if msgs ~= nil and #msgs > self.MsgIndex and self.MsgText ~= nil then
+		self.MsgText:DOKill()
+		if self.MsgStop then
+			self.MsgStop = false
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 375, 0)
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 750, 4)
+			t:SetEase(Linear)
+			t:OnComplete(function()
+				_P.DoMessage(self)
+			end)
+		else
+			self.MsgText.LocalPosition = Vector2.zero
+			self.MsgIndex = self.MsgIndex + 1
+			self.MsgText.Text = msgs[self.MsgIndex]
+			if self.MsgIndex == #msgs then
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth/2 - 375, 4)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					self.MsgStop = true
+					_P.DoMessage(self)
+				end)
+			else
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 750,8)
+				t:SetEase(Linear)
+				t:OnComplete(function()
+					_P.DoMessage(self)
+				end)
+			end
+		end		
+	elseif self.MsgText ~= nil then
+		self.MsgStop = true
+		self.MsgText:DOKill()
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth/2 - 375, 0)
+	end
+end
+
+function _P.RefreshMsg(self)
+	local msgs = self.MessageList
+	if msgs == nil or #msgs < 1 then
+		if self.MsgText ~= nil and self.MsgStop then
+			self.MsgText:DOKill()
+			self.MsgIndex = 0
+			self.MsgText.Text = ""
+		end
+	elseif #msgs > self.MsgIndex then
+		if self.MsgText ~= nil and (self.MsgIndex == 0 or self.MsgStop) then
+			_P.DoMessage(self)
+		end
+	end	
+end
+
+function _P.GetMessageList(fightdetail, index)
+	local ret = {}
+	local curData = fightdetail[index]
+
+	table.insert(ret, Csv.Text("cross_arena_notice1", {player1 = curData.player1.name, player2 = curData.player2.name}))
+	if index > 1 then
+		for i = index, 1, -1 do
+			if curData.player1.vsresult then
+				table.insert(ret, Csv.Text("cross_arena_notice2", {player1 = curData.player1.name, player2 = curData.player2.name}))
+			else
+				table.insert(ret, Csv.Text("cross_arena_notice2", {player2 = curData.player1.name, player1 = curData.player2.name}))
+			end
+		end
+	end
+	table.insert(ret, Csv.Text("cross_arena_notice1", {player1 = curData.player1.name, player2 = curData.player2.name}))
+	return ret
+end
+
+function _P.CheckPk(self)
+	self.PKTime = self.PKTime + 1
+	if self.PKIndex == 0 or self.LastPKTime + 4 < self.PKTime then
+		self.LastPKTime = self.PKTime
+		self.PKIndex = self.PKIndex + 1
+		if self.PKIndex > 3 then
+			self.PKIndex = 1
+		end
+		local info = self.PKList[self.PKIndex]
+
+		if info.leftTween ~= nil then
+			info.leftTween:Restore()
+		end
+		if info.rightTween ~= nil then
+			info.rightTween:Restore()
+		end
+		info.leftTween = info.left.CachedTran:GetJTweener("T_CrossArena_LivePK")
+		info.leftTween:Play()
+		info.rightTween = info.right.CachedTran:GetJTweener("T_CrossArena_LivePK")
+		info.rightTween:Play()
+	end
+end
+
+--界面构建
+function _M:OnCreate(stage)
+	--当前播放的对话index
+	self.CurDialogueIndex = 1
+	--当前展示对话的时间
+	self.CurDialogueTime = 0
+	--当前的活动阶段
+	self.CurStage = stage
+	self.IsNeedRefreshData = false
+	--当前应该播放第几场直播的Index
+	--16强，直播：一共播放8场比赛，轮流直播
+	self.CurBattleIndex = -1
+	self.isShowBattleRslt = false
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Live")
+	self.Moudle = moudle
+
+	CCommon.CreateEffectEx(moudle:Get("canvas"), 10221)
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title8")
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	moudle:Get("H1text").Text = Csv.Text("cross_arena_voteMyTitle")
+	moudle:Get("H2text").Text = Csv.Text("cross_arena_voteMyTitle")
+
+	self.MessageList = nil
+	self.MsgText = moudle:Get("Tips")
+	self.MsgIndex = 0
+	self.MsgStop = false
+
+	self.PKList = {
+		{left = moudle:Get("Img1"), right = moudle:Get("Img33")},
+		{left = moudle:Get("Img2"), right = moudle:Get("Img22")},
+		{left = moudle:Get("Img3"), right = moudle:Get("Img11")},
+	}
+	self.PKIndex = 0
+	self.PKTime = 0
+	self.LastPKTime = 0
+
+	self.ChooseInput = moudle:Get('ChooseInput')
+	self.ChooseContent = moudle:Get("InputContent")
+	self.ChooseList = nil
+	self.ChooseIndex = 1
+	self.DanmuNodes = {
+		moudle:Get("Danmu1"),
+		moudle:Get("Danmu2"),
+		moudle:Get("Danmu3"),
+	}
+	self.InputBg = moudle:Get("InputBg")
+	self.InputBg:AddOnClick(function()
+		self.ChooseInput.Activity = not self.ChooseInput.Activity
+	end)
+	self.InputBg.RaycastTarget = false
+	moudle:Get("InputText").Text = Csv.Text("cross_arena_chooseInput")
+
+	local blood1 = moudle:Get('bold1')
+	local blood2 = moudle:Get("bold2")
+	local bloodText1 = moudle:Get("boldText1")
+	local bloodText2 = moudle:Get("boldText2")
+	self.randomAddBlood = math.random(1, 9) * 0.03
+	local update = function()
+		local index, isShow, blood = MCrossArena.GetBattleIndex(self.CurStage)
+		local fightdetail = MCrossArena.GetCurFightDetail(self.CurStage)
+		_P.CheckPk(self)
+
+		--print("-----------", index, isShow, blood, fightdetail, self.CurStage)
+
+		if fightdetail and fightdetail[index] then
+			local data = fightdetail[index]
+			if blood < 0.5 then
+				if data.player1.vsresult == true then
+					blood2:DOFillAmount(blood - self.randomAddBlood, 0.1)
+					tmp = math.ceil((blood - self.randomAddBlood) * 100)
+					tmp = math.min(100,tmp)
+					tmp = math.max(0, tmp)
+					bloodText2.Text = tmp .. "%"
+
+					if tmp > 0 then
+						blood1:DOFillAmount(blood, 0.1)
+						local tmp = math.ceil(blood * 100)
+						tmp = math.min(100,tmp)
+						tmp = math.max(0, tmp)
+						bloodText1.Text = tmp .. "%"
+					end
+				else
+					blood1:DOFillAmount(blood - self.randomAddBlood, 0.1)
+					local tmp = math.ceil((blood - self.randomAddBlood) * 100)
+					tmp = math.min(100,tmp)
+					tmp = math.max(0, tmp)
+					bloodText1.Text = tmp .. "%"
+					if tmp > 0 then
+						blood2:DOFillAmount(blood, 0.1)
+						tmp = math.ceil(blood * 100)
+						tmp = math.min(100,tmp)
+						tmp = math.max(0, tmp)
+						bloodText2.Text = tmp .. "%"
+					end
+				end
+			else
+				blood1:DOFillAmount(blood, 0.1)
+				blood2:DOFillAmount(blood, 0.1)
+				local tmp = math.ceil(blood * 100)
+				tmp = math.min(100,tmp)
+				tmp = math.max(0, tmp)
+				bloodText1.Text = tmp .. "%"				
+				bloodText2.Text = tmp .. "%"
+			end			
+
+			local isBattleIndexChange = false
+			local isBattleRsltChange = false
+			if index ~= self.CurBattleIndex then
+				self.CurBattleIndex = index
+				isBattleIndexChange = true
+			end
+			if isShow ~= self.isShowBattleRslt then
+				self.isShowBattleRslt = isShow
+				isBattleRsltChange = true
+			end
+
+			if isBattleIndexChange then
+				self.randomAddBlood = math.random(1, 9) * 0.03
+				_P.RefreshData(self, data)
+				_P.ShowDialogue(self)
+				self.MessageList = _P.GetMessageList(fightdetail, index)
+				_P.RefreshMsg(self)
+			end
+			if isBattleRsltChange then
+				if isShow then
+					_P.ShowBattleRslt(self, data)
+					_P.StopDialogue(self)
+				else
+					_P.HideBattleRslt(self)
+				end
+			end
+			_P.DoDanmu(self)
+			if self.IsNeedRefreshData then
+				_P.RefreshData(self, data)
+			end
+		end
+	end
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		update()
+	end)
+	update()
+end
+
+function _P.RefreshData(self, onedetail)
+	if onedetail == nil then
+		return
+	end
+	
+	local moudle = self.Moudle
+	local player1 = onedetail.player1
+	local player2 = onedetail.player2
+	self.IsNeedRefreshData = false
+	local serverInfo = CLogin.GetServerInfoByID(player1.serverid)
+	moudle:Get("name1").Text = MCrossArena.GetPlayerName(player1.name)
+	moudle:Get("qufu1").Text = Csv.Text("cross_arena_matchtext2", {num = serverInfo ~= nil and serverInfo.name or ""})
+	moudle:Get("zhanli1").Text = Csv.Text("cross_arena_matchtext5", {num = player1.power})
+	moudle:Get("Title").Text = MCrossArena.GetLiveTitle(self.CurStage, self.CurBattleIndex)
+	moudle:Get("H1").Activity = MCrossArena.IsMyChip(player1.playerid)
+	moudle:Get("H2").Activity = MCrossArena.IsMyChip(player2.playerid)
+	moudle:Get("piaoshu1").Text = Csv.Text("cross_arena_vote3", {num = player1.chip})
+	moudle:Get("piaoshu2").Text = Csv.Text("cross_arena_vote3", {num = player2.chip})
+	-- local title = moudle:Get("chIMG1")
+	-- if player1.title ~= nil and player1.title > 0 then
+	-- 	--兼容没有配置称号图标, 使用文本称号显示
+	-- 	local fashionData = Csv.Title[player1.title]
+	-- 	if fashionData and fashionData.rankIcon then
+	-- 		title.Activity = true
+	-- 		title.SpriteName = fashionData.rankIcon
+	-- 	else
+	-- 		title.Activity = false
+	-- 	end
+	-- else
+	-- 	title.Activity = false
+	-- end
+
+	local serverInfo = CLogin.GetServerInfoByID(player2.serverid)
+	moudle:Get("name2").Text = MCrossArena.GetPlayerName(player2.name)
+	moudle:Get("qufu2").Text = Csv.Text("cross_arena_matchtext2", {num = serverInfo ~= nil and serverInfo.name or ""})
+	moudle:Get("zhanli2").Text = Csv.Text("cross_arena_matchtext5", {num = player2.power})
+	-- local title2 = moudle:Get("chIMG2")
+	-- if player2.title ~= nil and player2.title > 0 then
+	-- 	--兼容没有配置称号图标, 使用文本称号显示
+	-- 	local fashionData = Csv.Title[player2.title]
+	-- 	if fashionData and fashionData.rankIcon then
+	-- 		title2.Activity = true
+	-- 		title2.SpriteName = fashionData.rankIcon
+	-- 	else
+	-- 		title2.Activity = false
+	-- 	end
+	-- else
+	-- 	title2.Activity = false
+	-- end
+end
+
+function _P.DoShowText(self, dialogueCsv, index)
+	local leftOrRight = dialogueCsv.leftOrRight
+	local text = dialogueCsv.text[index]
+	local face = dialogueCsv.face[index]
+	if text == nil then
+		_P.StopDialogue(self)
+		return
+	end
+
+	local isLeftText = false
+	if leftOrRight == 1 then
+		if index%2 == 0 then
+			isLeftText = false
+		else
+			isLeftText = true
+		end
+	else
+		if index%2 == 0 then
+			isLeftText = true
+		else
+			isLeftText = false
+		end
+	end
+
+	local moudle = self.Moudle
+	if isLeftText then
+		moudle:Get("DHK1").Activity = true
+		moudle:Get("DHK2").Activity = false
+		moudle:Get("dhkText1").Text = text
+		if face and face ~= "" then
+			moudle:Get("BSX1").SpriteName = face
+		end
+	else
+		moudle:Get("DHK1").Activity = false
+		moudle:Get("DHK2").Activity = true
+		moudle:Get("dhkText2").Text = text
+		if face and face ~= "" then
+			moudle:Get("BSX2").SpriteName = face
+		end
+	end
+end
+
+function _P.ShowDialogue(self)
+	local moudle = self.Moudle
+	_P.StopDialogue(self)
+
+	self.ChooseContent:DestroyChildren()
+	self.ChooseInput.Activity = false
+	self.InputBg.RaycastTarget = false
+	self.ChooseList = nil
+	self.ChooseIndex = 1
+
+	self.CurDialogueIndex = 1
+	local constCsv = Csv.Const(149)
+	local duration = constCsv[1] or 1
+	local maxRand = constCsv[2] or 1
+	local id = math.random(1, maxRand)
+	local dialogueCsv = Csv.CrossArenaDialogue[id]
+	if dialogueCsv then
+		moudle:Get("BSX1").SpriteName = dialogueCsv.leftFace
+		moudle:Get("BSX2").SpriteName = dialogueCsv.rightFace
+		self.CurDialogueTime = HeartBeat.ServSecond()
+		_P.DoShowText(self, dialogueCsv, self.CurDialogueIndex)
+		self.HandleDialogue = self:RegistCallEvent(Define.EventListenId.SecondUpdate, function (eventHandle, now)
+			local curTime = HeartBeat.ServSecond()
+			if curTime - self.CurDialogueTime >= duration then
+				self.CurDialogueTime = HeartBeat.ServSecond()
+				self.CurDialogueIndex = self.CurDialogueIndex + 1
+				_P.DoShowText(self, dialogueCsv, self.CurDialogueIndex)
+			end
+		end)
+		self.ChooseList = {}
+		if dialogueCsv.barrage ~= nil and #dialogueCsv.barrage > 0 then
+			self.InputBg.RaycastTarget = true
+			for i = 1, #dialogueCsv.barrage do
+				local str = dialogueCsv.barrage[i]
+				local imputMoudle = self:CreateMoudle(self.ChooseContent, "M_CrossSports_Live_Input")
+				imputMoudle:Get("value").Text = str
+
+				imputMoudle.SelfRect:AddOnButton(function()
+					if #self.ChooseList < 40 then
+						table.insert(self.ChooseList, self.ChooseIndex, "<color=#ffc35b>" .. str .."</color>")
+					end
+					self.ChooseInput.Activity = false
+				end)
+			end
+			for i = 1, 30 do
+				table.insert(self.ChooseList, dialogueCsv.barrage[math.random(1, #dialogueCsv.barrage)])
+			end
+		end
+	end
+end
+
+function _P.DoDanmu(self)
+	if self.ChooseList ~= nil and #self.ChooseList > 0 then
+		local index = self.ChooseIndex
+		if index > 3 then
+			index = index % 3
+			if index == 0 then
+				index = 3
+			end
+		end
+		local node = self.DanmuNodes[index]
+		node:DOKill()
+		node.LocalPositionX = 0
+		node.Text = self.ChooseList[self.ChooseIndex]
+		node:DOAnchorPosX(-node.PreferredWidth - 750,3)
+
+		self.ChooseIndex = self.ChooseIndex + 1
+		if self.ChooseIndex > #self.ChooseList then
+			self.ChooseIndex = 1
+		end
+	end
+end
+
+function _P.StopDialogue(self)
+	if self.HandleDialogue then
+		self:UnRegistCallEvent(self.HandleDialogue)
+	end
+end
+
+function _P.ShowBattleRslt(self, onedetail)
+	WindowMgr.Create("UCrossArenaKnockoutBattleRslt", self.CurStage, self.CurBattleIndex, onedetail)
+end
+
+function _P.HideBattleRslt(self)
+	WindowMgr.Destroy("UCrossArenaKnockoutBattleRslt")
+end
+
+return _M

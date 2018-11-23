@@ -22,6 +22,7 @@ local CFriend = JRequire "Dev.Friend.CFriend"
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MBag = JRequire "Dev.Bag.MBag"
 local UPlayerMenuPop = JRequire"Dev.Friend.UPlayerMenuPop"
+local CClub = JRequire"Dev.Club.CClub"
 
 ----------------------CS类引用--------------------------
 local VoiceChat = CS.Speaker.VoiceChat
@@ -133,10 +134,6 @@ function _R.RefreshCrossChoose(self)
 		self.CrossHorn.SpriteName = itemData.icon
 		self.hornNum.Text = LuaUtil.NumberFormat(MBag.GetItemNum(crossId))
 	end
-end
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
 end
 
 function _M:OnCreate(chooseFuncId)
@@ -539,18 +536,9 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 	voiceSp.SpriteName = "friend_020_2"
 	JobImg.Activity = false
 
+	itemMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(_data.chatBg, _data.viplv)
+	itemMoudle:Get("talk").SpriteName = MPlayer.GetOtherChatBG(_data.chatBg, _data.viplv)
 	vipText.SpriteNameAutoScale = "friend_num_".._data.viplv
-
-	local csvVip = Csv.Vip[_data.viplv]
-	if csvVip.imgBord ~= nil then
-		itemMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-	else
-		itemMoudle:Get("OutBox").Activity = false
-	end
-
-	if csvVip.imgTalk ~= nil then
-		itemMoudle:Get("talk").SpriteName = csvVip.imgTalk
-	end
 
 	if _isShowTime then
 		timeImg.Activity = true
@@ -610,14 +598,14 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 	end
 	
 	--------------------------------------------------------------------------------------------
-	if _data.value ~= nil and _data.value ~= "" then
+	if talkValue.Text ~= nil and talkValue.Text ~= "" then
 		talkBg.Activity = true
 		voiceValue.Activity = false
 		redPacket.Activity = false
 		packGot.Activity = false
 
 		local width = talkValue.PreferredWidth
-		local BgH = talkValue.PreferredHeight + 40
+		local BgH = talkValue.PreferredHeight + 92
 
 		local BgW = width 
 		if BgW > 400 then
@@ -627,7 +615,7 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 			BgW = BgW +30
 		end
 		talkValue.SizeDelta = Vector2(BgW,BgH - 40)
-		talkBg.SizeDelta = Vector2(BgW + 80,BgH)
+		talkBg.SizeDelta = Vector2(BgW + 100,BgH)
 		local valueHeight = 0
 		if BgH  >= 90 then
 			valueHeight = BgH - 100
@@ -708,6 +696,38 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 		packGot.SizeDelta = Vector2(gotMsg.PreferredWidth + 80,packGot.SizeDelta.y)
 
 		itemMoudle.SelfRect.SizeDelta = Vector2(730,200)
+	end
+
+	if _data.clubtype ~= nil then
+		print("clubtype___________",_data.clubtype)
+		talkBg.Activity = false
+
+		local inviteBg = itemMoudle:Get("invite")
+		local clubType = itemMoudle:Get("clubType")
+		local clubNum = itemMoudle:Get("clubNum")
+
+		inviteBg.Activity = true
+		local csvInvite = Csv.TalkInvite[_data.clubtype]
+
+		if csvInvite ~= nil then
+			if _data.sender == MPlayer.GetId() then
+				inviteBg.SpriteName = csvInvite.bg1
+			else
+				inviteBg.SpriteName = csvInvite.bg2
+			end
+
+			clubType.Text = csvInvite.title
+			clubNum.Text = Csv.Text(csvInvite.num,{num = _data.sender})
+
+			inviteBg:AddOnClick(function()
+				if MMain.FuncIsOpen(Define.SysId.Club) then
+					CClub.OnEnterReq(_data.sender)
+				else
+					CCommon.ShowError(Csv.Text("club_no_enough"))
+				end
+			end)
+		end
+		itemMoudle.SelfRect.SizeDelta = Vector2(730,300)
 	end
 
 	itemMoudle.SelfRect:SetAnchor(CS.JGui.JGuiManager.AnchorType.Bottom)
@@ -804,12 +824,11 @@ function _P.OnValueChanged(self,value)
 
 	if changedTime > 0.5 then
 		local content = self.mToggelContent
-
 		if content.SizeDelta.y < 1100 then
 			if content.LocalPosition.y <-100 then
 				_P.IsShowLoading(self,true)
 				self.mLoading.Activity = true
-			elseif content.LocalPosition.y <-10 then
+			elseif content.LocalPosition.y < 1 then --content变动有1~-1之前的误差，这个问题导致第一个聊天转菊花不消失
 				--下拉
 				--先从M拿数据，返回空才请求
 				self.mLoading.Activity = false
@@ -874,8 +893,6 @@ function _P.GetTalkData(self,type)
 					table.insert(itemsTable,{posY = _item.SelfRect.LocalPosition.y,item = _item,data = v,isShow = true,isShowTime = _isShowTime})
 				end
 			end
-
-			
 		end
 		content.SizeDelta = Vector2(640,(content.SizeDelta.y + MTalk.ContentTop))
 	else

@@ -7,6 +7,7 @@ local CCommon = JRequire"Dev.Common.CCommon"
 local CWharf = JRequire "Dev.Wharf.CWharf"
 local MAircraft = JRequire "Dev.Aircraft.MAircraft"
 local MCar = JRequire "Dev.Car.MCar"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 
 local EffectID = 16
 
@@ -110,9 +111,13 @@ end
 
 function _M:OnNoCar(isSure, arg)
 	if isSure == true then
-		--进入别墅，进入车界面
-		WindowMgr.Call("UMain","SwitchCenterBtns",false)
-		WindowMgr.Create("UHomeMap")
+		if GameSetting.IsiOSCommit and GameSetting.IsMergeShowMain then
+			WindowOpen.Open(Define.SysId.World)
+		else
+			--进入别墅，进入车界面
+			WindowMgr.Call("UMain","SwitchCenterBtns",false)
+			WindowMgr.Create("UHomeMap")
+		end
 		WindowMgr.Create("UCarMainPanel")
 	end
 end

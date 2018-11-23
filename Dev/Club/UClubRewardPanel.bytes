@@ -37,7 +37,8 @@ function _M:OnCreate(data)
 	module:Get("ranking").Text = Csv.Text("club_reward_xuhao")
 	module:Get("name").Text = Csv.Text("club_rank_name")
 	module:Get("Fraction").Text = Csv.Text("club_reward_fenshu")
-	module:Get("C_text").Text = Csv.Text("common_sure")
+	module:Get("C_text").Text = Csv.Text("rankreward_get")
+	module:Get("C_text11").Text = Csv.Text("club_main_hostmore")
 
 	_P.SetMsgList(self, data.msgList)
 
@@ -46,7 +47,15 @@ function _M:OnCreate(data)
 		SoundMgr.Play(10001)
 		CClub.OnGetRewardReq()
 		self:Destroy()
-	end)
+	end, nil, 0.9)
+
+	local confirmBtn = module:Get("C_Btn_b1")
+	confirmBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CClub.OnGetRewardReq()
+		WindowMgr.Create("UClubChoosePanel")
+		self:Destroy()
+	end, nil, 0.9)
 
 	CCommon.CreateEffect(module:Get("ActorPanel"), ACTORID)
 end

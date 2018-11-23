@@ -1,0 +1,246 @@
+local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MGirl = JRequire"Dev.Girl.MGirl"
+local CGirl = JRequire"Dev.Girl.CGirl"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+local GuidePhone_ID = 1 --引导聊天id
+
+function _M:OnCreate(callBack)
+	local moudle = self:CreateMoudle(self._RootNode,"M_Talk_Story")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+		callBack()
+	end)
+
+	self.mGuidePhoneID = GuidePhone_ID
+	self.IsInput = false
+	self.IsDone = false
+
+	moudle:Get("C_Text").Text = Csv.Text("guide_phone_title")
+	moudle:Get("BottomText").Text = Csv.Text("guide_phone_clickTotalk")
+
+	local bottomBg = moudle:Get("bottombg")
+	local inputRect = moudle:Get("ChooseInput")
+	local inputCancel	= moudle:Get("bottombg2")
+	local talkContent = moudle:Get("content")
+	local inputContent = moudle:Get("InputContent")
+	local talkScroll = moudle:Get("scrollView")
+	self.mBottomText = moudle:Get("BottomText")
+	self.mTalkContent = talkContent
+	self.mInputContent = inputContent
+	self.mTalkScroll = talkScroll
+
+	bottomBg.Activity = true
+	inputRect.Activity = false
+
+	self.mBottomBg = bottomBg
+	self.mInputRect = inputRect
+
+	bottomBg:AddOnClick(function()
+		if self.IsDone then
+			self:Destroy()
+			callBack()
+		end
+
+		if self.IsInput then
+			bottomBg.Activity = false
+			inputRect.Activity = true
+			self.mFingerEffect.Activity = false
+	
+			talkScroll.LocalPosition = Vector2(0, 160)
+			talkScroll.SizeDelta = Vector2(750,1017)
+			talkContent.LocalPosition = Vector2(0, 1095)
+			--刷新回复选项
+			_P.ShowInput(self)
+		end
+
+	end)
+
+	inputCancel:AddOnClick(function()
+		bottomBg.Activity = true
+		inputRect.Activity = false
+
+		talkScroll.LocalPosition = Vector2(0, 59)
+		talkScroll.SizeDelta = Vector2(750,1204)
+	end)
+
+	_P.ShowView(self)
+end
+
+function _P.ShowView(self)
+	local talkContent = self.mTalkContent
+	local csvGuidePhone = Csv.GuidePhone[self.mGuidePhoneID]
+
+	self.mTalkContentY = talkContent.SizeDelta.y
+	local nextID = 0
+	self.IsInput = false
+	if csvGuidePhone ~= nil then
+		if csvGuidePhone.speaker == 1 then
+			SoundMgr.Play(10038)
+			_P.CreateTalkItem(self,csvGuidePhone,talkContent,"M_Talk_Story_Item2")
+		else
+			SoundMgr.Play(10039)
+			if csvGuidePhone.type == 2 then
+				--简历
+				local talkMoudle = _P.CreateResume(self,csvGuidePhone,talkContent,"M_Talk_Story_Item")
+				talkMoudle:Get("manName").Text = Csv.Text("guide_phone_name")
+			else
+				local talkMoudle = _P.CreateTalkItem(self,csvGuidePhone,talkContent,"M_Talk_Story_Item1")
+				talkMoudle:Get("manName").Text = Csv.Text("guide_phone_name")
+			end
+		end
+
+		--next 与 replyID 不能同时存在 若同时存在，就是配置表的错
+		if csvGuidePhone.next ~= nil then
+			nextID = csvGuidePhone.next
+		end
+
+		if csvGuidePhone.replyID ~= nil then
+			nextID = csvGuidePhone.replyID
+		end
+
+		if csvGuidePhone.reply ~= nil and #csvGuidePhone.reply > 0 then
+			self.IsInput = true
+
+			--特效
+			local effectActor = self.mMoudle:Get("EffectActor")
+			effectActor.LocalEulerAngles = Vector3(0, 0, 90)
+			self.mFingerEffect = CCommon.CreateEffect(effectActor, 10138)
+		end
+		if #csvGuidePhone.reply <= 0 and nextID == 0 then
+			self.mBottomText.Text = Csv.Text("guide_phone_clickTotalk2")
+			self.IsDone = true
+		end
+	end
+	
+
+	if nextID ~= 0 then
+		self.mMoudle.SelfRect:AddOnTime(function()
+			self.mGuidePhoneID = nextID
+			_P.ShowView(self)
+		end,nil,1)
+	end
+end
+
+function _P.CreateTalkItem(self,data,content,MoudleName)
+	local _moudle = JGuiManager.GetMoudle(content,MoudleName, WindowType.UI, 10)
+
+	local headBg = _moudle:Get("HeadBg")
+	local headIcon = _moudle:Get("Head")
+	local talkBg = _moudle:Get("talk")
+	local value = _moudle:Get("value")
+
+	headBg.SpriteName = data.headBg
+	talkBg.SpriteName = data.talkBg
+	if data.speaker == 1 then
+		headIcon.SpriteName = MPlayer.GetSHeadIcon()
+	else
+		headIcon.SpriteName = data.head
+	end
+	value.Text = data.value
+
+	local width = value.PreferredWidth
+	if width >= 450 then
+		width = 450
+	end 
+	talkBg.SizeDelta = Vector2(width + 100,value.PreferredHeight + 70)
+
+	_moudle.SelfRect.SizeDelta = Vector2(730,value.PreferredHeight + 150)
+
+	local contentY = self.mTalkContentY + _moudle.SelfRect.SizeDelta.y
+	if contentY > self.mTalkScroll.SizeDelta.y then
+		self.mTalkContent:DOAnchorPosY(contentY - self.mTalkScroll.SizeDelta.y,0.2)
+	end
+
+	return _moudle
+end
+
+function _P.CreateResume(self,data,content,MoudleName)
+	local _moudle = JGuiManager.GetMoudle(content,MoudleName, WindowType.UI, 10)
+
+	local headBg = _moudle:Get("HeadBg")
+	local headIcon = _moudle:Get("Head")
+	local talkBg = _moudle:Get("talk")
+	local staffIcon = _moudle:Get("StaffIcon")
+	local staffName = _moudle:Get("Name")
+	local skill = _moudle:Get("Techang")
+	local info = _moudle:Get("InfoText")
+
+	headBg.SpriteName = data.headBg
+	headIcon.SpriteName = data.head
+	talkBg.SpriteName = data.talkBg
+	staffIcon.SpriteName = data.valueImg
+	staffName.Text = data.valueName
+	skill.Text = data.valueSkill
+	info.Text = data.valueDesc
+
+	_moudle.SelfRect.SizeDelta = Vector2(730,400)
+
+	local contentY = self.mTalkContentY + 400
+	if contentY > self.mTalkScroll.SizeDelta.y then
+		self.mTalkContent:DOAnchorPosY(contentY - self.mTalkScroll.SizeDelta.y,0.2)
+	end
+
+	return _moudle
+end
+
+function _P.ShowInput(self)
+	local inputContent = self.mInputContent
+	inputContent:DestroyChildren()
+
+	local csvGuidePhone = Csv.GuidePhone[self.mGuidePhoneID]
+	if csvGuidePhone ~= nil then
+		if csvGuidePhone.reply ~= nil and #csvGuidePhone.reply >0 then
+			
+			for k,v in pairs(csvGuidePhone.reply)do
+				_P.CreateInputItem(self,v,inputContent,"M_M_Talk_Story_Input")
+			end
+
+			if #csvGuidePhone.reply > 1 then
+				self.mMoudle:Get("ChooseInput").SizeDelta = Vector2(750,200)
+			else
+				self.mMoudle:Get("ChooseInput").SizeDelta = Vector2(750,130)
+			end
+		end
+	end
+end
+
+function _P.CreateInputItem(self,id,content,MoudleName)
+	local _moudle = JGuiManager.GetMoudle(content,MoudleName, WindowType.UI, 10)
+
+	local value = _moudle:Get("value")
+
+	local csvGuidePhone = Csv.GuidePhone[id]
+	if csvGuidePhone ~= nil then
+		value.Text = csvGuidePhone.title
+
+		value:AddOnClick(function()
+			self.mGuidePhoneID = id
+
+			self.mBottomBg.Activity = true
+			self.mInputRect.Activity = false
+
+			self.mTalkScroll.LocalPosition = Vector2(0, 59)
+			self.mTalkScroll.SizeDelta = Vector2(750,1204)
+			_P.ShowView(self)
+		end)
+	end
+end
+
+return _M

@@ -1,0 +1,242 @@
+--跨服竞技场-积分赛匹配界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
+local CLogin = JRequire "Dev.Login.CLogin"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CCommon = JRequire "Dev.Common.CCommon"
+local TimeDelay = CS.Utility.TimeDelay
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+local Event_CrossArene_Matching_OpenUI = "Event_CrossArene_Matching_OpenUI"
+
+function _M:BeforeDestroy()
+end
+
+function _M:EndDestroy( ... )
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Matching")
+	self.Moudle = moudle
+
+	local topBg = moudle:Get("BG2")
+	local topStaff = moudle:Get("ViewBg_0")
+	local topBody = moudle:Get("Mask1")
+	self.topBgTween = topBg.CachedTran:GetJTweener("T_CrossArena_MatchingTop")
+	self.topStaffTween = topStaff.CachedTran:GetJTweener("T_CrossArena_MatchingStaffTop")
+	self.topBodyTween = topBody.CachedTran:GetJTweener("T_CrossArena_MatchingBodyTop")
+
+	local botBg = moudle:Get("BG3")
+	local botStaff = moudle:Get("ViewBg")
+	local botBody = moudle:Get("Mask2")
+	self.botBgTween = botBg.CachedTran:GetJTweener("T_CrossArena_MatchingBot")
+	self.botStaffTween = botStaff.CachedTran:GetJTweener("T_CrossArena_MatchingStaffBot")
+	self.botBodyTween = botBody.CachedTran:GetJTweener("T_CrossArena_MatchingBodyBot")
+	local btnNode = moudle:Get("C_Btn_a_0")
+	self.pipeiTweener = btnNode.CachedTran:GetJTweener("T_CrossMatchStart")
+	self.pipeiTweener:Play()
+	moudle:Get("TopBg").Activity = false
+	moudle:Get("Front").Activity = false
+	moudle:Get("After").Activity = true
+	btnNode.Activity = false
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title5")
+	moudle:Get("C_text_0").Text = Csv.Text("cross_arena_match")
+	moudle:Get("AdjustmentBtnText_0").Text = Csv.Text("cross_arena_tx6")
+	self.canvas = moudle:Get("canvas")
+	btnNode:AddOnButton(function(obj, arg, data)
+		btnNode.Activity = false
+		self:Lock()
+		--匹配
+		self.pipeiFx = CCommon.CreateEffectEx(self.canvas, 10223, Vector2(0, 45))
+		self.canvas:AddOnTime(function()
+			self:Unlock()
+			if self.pipeiFx then
+				self.pipeiFx:Destroy()
+				self.pipeiFx = nil
+			end
+			CCrossArena.CCUArenaFight()
+		end, nil, 1)
+	end,nil,1.1)
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	moudle:Get("AdjustmentBtn"):AddOnButton(function(...)
+		WindowOpen.Open(Define.SysId.LineUp)
+	end,nil, 1.2)
+
+	local content = moudle:Get("Content")
+	local list = MLineUp.LineUpList
+	if list then
+		for k, v in pairs(list) do
+			local itemMoudle = JGuiManager.GetMoudle(content,"M_CrossSports_Matching_Item")
+			local csvStaff = Csv.Personnel[v]
+			local dataStaff = MStaff.StaffTable[v]
+			if csvStaff ~= nil then 
+				itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+			end
+			if dataStaff ~= nil then
+				itemMoudle:Get("BG1").SpriteName = MStaff.Color2Image[dataStaff.color]
+			end
+		end
+	end
+	
+	self:Lock()
+	self.effect = CCommon.CreateEffectEx(self.canvas, 10224, Vector2(0, 45))
+	self.canvas:AddOnTime(function()
+		self:Unlock()
+		if self.effect then
+			self.effect:Destroy()
+			self.effect = nil
+		end
+		if btnNode ~= nil then
+			btnNode.Activity = true
+		end
+	end, nil, 1.2)
+
+	_P.OpenTween(self)
+	_R.RefreshData(self)
+	self:RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
+		CCrossArena.CCUMatchInfo()
+	end)
+end
+
+function _P.OpenTween(self)
+	self.topBgTween:SetWaitEventOnComplete(Event_CrossArene_Matching_OpenUI,function()
+		self.topStaffTween:Play(Event_CrossArene_Matching_OpenUI)
+		self.topBodyTween:Play(Event_CrossArene_Matching_OpenUI)
+		self.botStaffTween:Play(Event_CrossArene_Matching_OpenUI)
+		self.botBodyTween:Play(Event_CrossArene_Matching_OpenUI)
+	end)
+	self.topBgTween:Play(Event_CrossArene_Matching_OpenUI)
+	self.botBgTween:Play(Event_CrossArene_Matching_OpenUI)
+end
+
+function _R.OnArenaFight(self, msg)
+	local vote = 1
+	if msg.result then
+		vote = 3
+	end
+	WindowMgr.Create("UBattlePvp", msg.fightInfo, function()
+		if self.Moudle ~= nil then
+			WindowMgr.Create("UCrossArenaResult", function()
+				WindowMgr.Destroy("UBattlePvp")
+				WindowMgr.Destroy("UCrossArenaScoreBattle", true)
+				-- WindowMgr.Create("UCrossArenaScoreReady")
+				WindowOpen.Open(Define.SysId.CrossArena)
+			end, msg.result, vote)
+		end
+	end, true)
+end
+
+function _R.RefreshData(self)
+	local moudle = self.Moudle
+	local data1 = MCrossArena.GetMatchInfo()
+	if not data1 then
+		return
+	end
+	local serverInfo = CLogin.GetServerInfoByID(MPlayer.GetServerId())
+	moudle:Get("NumText").Text = Csv.Text("cross_arena_matchtext0", {num=data1.matchCount})
+
+	local commerceName = ""
+	if MCommerce.MyCommerceInfo then
+		commerceName = MCommerce.MyCommerceInfo.name
+	else
+		commerceName = MCommerce.CommerceName
+	end
+	if commerceName == nil or commerceName == "" then
+		commerceName = Csv.Text("staff_none")
+	end
+	local rank = data1.rank
+	if rank == nil or rank == 0 then
+		rank = "-"
+	end
+
+	moudle:Get("text1").Text = Csv.Text("cross_arena_matchtext1", {num = commerceName})
+	moudle:Get("text2").Text = Csv.Text("cross_arena_matchtext3", {num = rank})
+	moudle:Get("text3").Text = Csv.Text("cross_arena_matchtext2", {num = serverInfo ~= nil and serverInfo.name or ""})
+	moudle:Get("text4").Text = Csv.Text("cross_arena_matchtext4", {num = data1.score})
+	moudle:Get("text5").Text = Csv.Text("cross_arena_matchtext5", {num = MLineUp.GetLineAllPower()})
+	moudle:Get("text6").Text = data1.selfname or MPlayer.GetName()
+	moudle:Get("BSX2").SpriteName = MPlayer.GetBodySp()
+	moudle:Get("head2").SpriteName = MPlayer.GetHeadSp()
+
+	local data = data1.other
+	if data then
+		commerceName = data.commercename
+		if commerceName == nil or commerceName == "" then
+			commerceName = Csv.Text("staff_none")
+		end
+		rank = data.rank
+		if rank == nil or rank == 0 then
+			rank = "-"
+		end
+
+		moudle:Get("text11").Text = Csv.Text("cross_arena_matchtext1", {num = commerceName})
+		moudle:Get("text22").Text = Csv.Text("cross_arena_matchtext3", {num = rank})
+		local serverName = ""
+		local serverData = CLogin.GetServerInfoByID(data.serverid)
+		if serverData then
+			serverName = serverData.name
+		end
+		moudle:Get("text33").Text = Csv.Text("cross_arena_matchtext2", {num = serverName})
+		moudle:Get("text44").Text = Csv.Text("cross_arena_matchtext4", {num = data.score})
+		moudle:Get("text55").Text = Csv.Text("cross_arena_matchtext5", {num = data.power})
+		moudle:Get("text66").Text = data.name 
+		
+		moudle:Get("BodyIcon").SpriteName = MPlayer.GetOtherHeadAsset(data.body, data.sex)
+		moudle:Get("HeadIcon").SpriteName = MPlayer.GetOtherHeadAsset(data.headid, data.sex)
+
+		local Content_0 = moudle:Get("Content_0")
+		Content_0:DestroyChildren()
+		if data.staffs then
+			for k, v in pairs(data.staffs) do
+				local itemMoudle = JGuiManager.GetMoudle(Content_0,"M_CrossSports_Matching_Item")
+				local csvStaff = Csv.Personnel[v.staffid]
+				if csvStaff ~= nil then 
+					itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+				end
+				itemMoudle:Get("BG1").SpriteName = MStaff.Color2Image[v.color]
+			end
+		end
+	end
+end
+
+return _M

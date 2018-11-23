@@ -40,9 +40,9 @@ function _P.OnCreateList(self)
 			local csvShop = Csv.ShopLimitBuy[v.index]
 			local csvItem = Csv.Item[csvShop.itemid]
 			local ImgVip = shopMoudle:Get("Label1")
-			if csvShop.viplevel > 0 then
+			if csvShop.lableText ~= nil then
 				ImgVip.Activity = true
-				shopMoudle:Get("vip1").Text = Csv.Text("shop_vip",{num = csvShop.viplevel})
+				shopMoudle:Get("vip1").Text = csvShop.lableText
 			else
 				ImgVip.Activity = false
 			end

@@ -1,5 +1,7 @@
 --@RefType [Dev.Login.MLogin.bytes#_M]
 local MLogin = JRequire "Dev.Login.MLogin"
+--@RefType [Dev.Quest.MQuest.bytes#_M]
+local MQuest = JRequire "Dev.Quest.MQuest"
 --@RefType [SDK.SDKMgr.bytes#_M]
 local SDKMgr = JRequire "SDK.SDKMgr"
 --@RefType [SDK.SDKFuncName.bytes#_M]
@@ -43,16 +45,29 @@ function _M.ReqPay(csvID, sdkProductId, price, gold, productName, num, roleID, r
 	ISDKManager.Call(dataString)
 end
 
+function _M.ReqEnterUserCenter()
+	-- body
+end
+
+function _M.ReqShare(type)
+	local data = {}
+	data.func = "OnSDKShareSuccess"
+	SDKMgr.OnSdkCallBack(rapidjson.encode(data))
+end
+
 function _M.ReqExit()
 	-- body
 end
 
 ------------------------------回调接口------------------------------
-
 function _M.OnLogin(jsonStr)
 	local jsonTab = rapidjson.decode(jsonStr)
 	MLogin.Account = jsonTab.account
 	MLogin.Password = jsonTab.password
+end
+
+function _M.OnSDKLoginHttpRequest(jsonStr)
+	-- body
 end
 
 function _M.OnSwitchAccount(jsonStr)
@@ -65,8 +80,11 @@ function _M.OnPay(jsonStr)
 	-- body
 end
 
-------------------------------通用接口------------------------------
+function _M.OnSDKShareSuccess(jsonStr)
+	-- body
+end
 
+------------------------------通用接口------------------------------
 --复制文本到粘贴板
 function _M.CopyText(text)
 	CS.Utility.Utils.SystemCopyBuffer = text

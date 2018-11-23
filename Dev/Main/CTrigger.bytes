@@ -21,6 +21,7 @@ local MWelfare = JRequire"Dev.Welfare.MWelfare"
 local MStaff = JRequire "Dev.Staff.MStaff"
 --@RefType [Libs.LuaUtil.bytes#_M]
 local luaUtil = JRequire "Libs.LuaUtil"
+local MBattle = JRequire "Dev.Battle.MBattle"
 
 local TimeDelay = CS.Utility.TimeDelay
 
@@ -113,12 +114,16 @@ _M.EventType =
 	LockInput = 11,
 	--等待一段时间进行下一步 **等待完成 (等待的时间)
 	Delay = 12,
-
 	--打开战斗的起航界面 (Part表的id)
 	BattleStart = 13,
-
 	--等待界面关闭 **等待完成 (Func表id)
 	WaitUiClose = 15,
+	--执行弱引导
+	WeakGuide = 16,
+	--执行播放功能开放动画
+	FlyFunc = 17,
+	--播放功能片段(1飞机飞行, 2辞退, 3摇色子, 4豪车飞奔)
+	FuncPart = 18,
 }
 
 _M.EventFunc = 
@@ -131,6 +136,21 @@ _M.EventFunc =
 		WindowMgr.Create("UGuide", csvLine.eventParam, function( ... )
 			_M.OnEventDone(csvLine)
 		end)
+	end,
+	[_M.EventType.WeakGuide] = function (csvLine)
+		if GameSetting.IsiOSCommit then
+			return
+		end
+		--listenParam = 功能开放id，eventParam = 弱引导id
+		if not MMain.IsWeakGuideDone(csvLine.eventParam) then
+			local csvWeakGuide = Csv.WeakGuide[csvLine.eventParam]
+			if csvWeakGuide ~= nil then
+				MMain.curWeakGuide = csvWeakGuide
+				WindowMgr.ShowWeakGuide(csvWeakGuide.funcID,csvLine.eventParam, function( ... )
+					_M.OnEventDone(csvLine)
+				end)
+			end
+		end
 	end,
 	--对话
 	[_M.EventType.Story] = function (csvLine)
@@ -200,10 +220,16 @@ _M.EventFunc =
 			end
 			WindowMgr.Call("UWorldMap","LookAtFunc",csvLine.eventParam)
 		elseif fid == Define.SysId.Home then
-			if not WindowMgr.IsCreated("UHomeMap") then
-				WindowMgr.Create("UHomeMap")
+			if GameSetting.IsiOSCommit and GameSetting.IsMergeShowMain then
+				if not WindowMgr.IsCreated("UWorldMap") then
+					WindowMgr.Create("UWorldMap")
+				end
+			else
+				if not WindowMgr.IsCreated("UHomeMap") then
+					WindowMgr.Create("UHomeMap")
+				end
+				WindowMgr.Call("UHomeMap","LookAtFunc",csvLine.eventParam)
 			end
-			WindowMgr.Call("UHomeMap","LookAtFunc",csvLine.eventParam)
 		else
 			error(string.format( "CTrigger do LookAtFunc error, id:%d, funcId:%d", csvLine.id, csvLine.eventParam ))
 		end
@@ -247,6 +273,58 @@ _M.EventFunc =
 			TriggerId = csvLine.id
 		}
 	end,
+	--执行播放功能开放动画
+	[_M.EventType.FlyFunc] = function(csvLine)
+		WindowMgr.Call("UMain", "PlayFlyFunc", csvLine.eventParam, function()
+			_M.OnEventDone(csvLine)
+		end)
+	end,
+	--播放功能片段(1飞机飞行, 2辞退, 3摇色子, 4豪车飞奔)
+	[_M.EventType.FuncPart] = function(csvLine)
+		if csvLine.eventParam == 1 then
+			--飞机飞行
+			WindowMgr.Create("UStoryAircraft", function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 2 then
+			--辞退
+			WindowMgr.Create("UGuideBattle", function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 3 then
+			--摇色子
+			WindowMgr.Create("UGuideGirlDrink",function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 4 then
+			--摇骰子胜利
+			WindowMgr.Create("UGuideGameWin",function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 5 then
+			--开房
+			WindowMgr.Create("UGuideDate",function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 6 then
+			--手机响
+			WindowMgr.Create("UGuidePhone",function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 7 then
+			--秘书发简历对话
+			WindowMgr.Create("UGuidePhoneTalk",function()
+				_M.OnEventDone(csvLine)
+			end)
+		elseif csvLine.eventParam == 8 then
+			--豪车动画
+			WindowMgr.Create("UCarGuide", function()
+				_M.OnEventDone(csvLine)
+			end)
+		else
+			_M.OnEventDone(csvLine)
+		end
+	end,
 }
 
 --条件类型
@@ -278,6 +356,10 @@ _M.ConditionType =
 	StaffNum = 12,
 	--最大的员工等级>= (等级)
 	StaffMaxLv = 13,
+	--弱引导完成（WeakGuideID）
+	WeakGuideDone = 14,
+	--关卡开通
+	BattleId = 15,
 }
 _M.ConditionFunc = 
 {
@@ -372,6 +454,20 @@ _M.ConditionFunc =
 		end
 		return true
 	end,
+	--弱引导已完成
+	[_M.ConditionType.WeakGuideDone] = function (condParam)
+		if not MMain.IsWeakGuideDone(condParam) then
+			return false
+		end
+		return true
+	end,
+	--关卡开通
+	[_M.ConditionType.BattleId] = function (condParam)
+		if MBattle.CurId < condParam then
+			return false
+		end
+		return true
+	end,
 }
 
 --触发类型
@@ -419,6 +515,13 @@ _M.TriggerFunc =
 		end
 		return true
 	end,
+	--认识美女 (grilId)
+	[EventListenId.KnowGirl] = function (line, grilId)
+		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam ~= grilId then
+			return false
+		end
+		return true
+	end,
 	--获得新员工 (staffId)
 	[EventListenId.GetStaff] = function (line, staffId)
 		--print(line.id, "!!!!!!!!!!!!!!!!!!  EventListenId.GetStaff", staffId, line.listenParam)
@@ -456,6 +559,22 @@ _M.TriggerFunc =
 		end
 		return true
 	end,
+	--关卡开通触发
+	[EventListenId.CurBattleID] = function (line, battleID)
+		if line.listenParam ~= nil and line.listenParam > 0 and line.listenParam > battleID then
+			return false
+		end
+		return true
+	end,
+	--关卡失败触发
+	--[[
+	[EventListenId.BattleFail] = function (line, battleId)
+		if line.listenParam ~= battleId then
+			return false
+		end
+		return true
+	end,
+	--]]
 }
 
 function _M.OnEventDone(csvLine)
@@ -479,7 +598,7 @@ function _M.ExecEvent(csvLine, isGM)
 				_M.OverGuideId = csvLine.isGuideStage
 			end
 			if csvLine.event ~= nil then
-				CS.Utility.LogPoint.LogPost(14, csvLine.id, luaUtil.TransToYearMonthDayHMS(os.time()))
+				GameSetting.LogPoint(14, csvLine.id, luaUtil.TransToYearMonthDayHMS(os.time()))
 				local eventFunc = _M.EventFunc[csvLine.event]
 				if eventFunc ~= nil then
 					eventFunc(csvLine)
@@ -548,6 +667,7 @@ function _M.Listen(eventId, ...)
 	local csvLines = Csv.TriggerMap[eventId]
 	if csvLines ~= nil and #csvLines > 0 then
 		local triggerFunc = _M.TriggerFunc[eventId]
+		
 		local execLines = {}
 		for _,line in pairs(csvLines) do
 			if triggerFunc == nil or triggerFunc(line, ...) then
@@ -579,17 +699,25 @@ function _M.OnGetKnownGirl(girlId)
 	local csv = Csv.Girl[girlId]
 	if csv.knownStory ~= nil then
 		
-		if csv.showSysid == Define.SysId.VIPWelfare then
+		if csv.showSysid == Define.SysId.Welfare then
+			MWelfare.EnqueueWaitShow(6, girlId,csv.knownStory)
+			WindowMgr.Call("UWelfare", "ShowStory")
+		elseif csv.showSysid == Define.SysId.VIPWelfare then
 			MVipWelfare.EnqueueWaitShow(6,girlId,csv.knownStory)
 			WindowMgr.Call("UVipWelfare","ShowMoudle")
 		elseif csv.showSysid == Define.SysId.FirstRecharge then
 			MWelfare.EnqueueWaitShow(6,girlId,csv.knownStory)
 			WindowMgr.Call("UFirstRecharge","ShowMoudle")
+		elseif csv.showSysid == Define.SysId.SuperGirl then
+			local waitStoryData = {storyType = 6, objId = girlId,storyId = csv.knownStory,callBack = nil,data = nil} 
+			WindowMgr.Call("USuperGirlActivity","ShowMoudle",waitStoryData)
 		else
+			--普通美女认识时不需要弹展示
 			MMain.EnqueueWaitStory(5,girlId,csv.knownStory)
 			WindowMgr.Call("UMain","ShowStory")
 		end
-		
+	else
+		EventCenter.CallEventTrigger(Define.EventListenId.KnowGirl, girlId)
 	end	
 end
 
@@ -602,7 +730,10 @@ function _M.OnGetNewStaff(staffId)
 			return
 		end
 
-		if csv.showSysid == Define.SysId.VIPWelfare then
+		if csv.showSysid == Define.SysId.Welfare then
+			MWelfare.EnqueueWaitShow(2, staffId,csv.story)
+			WindowMgr.Call("UWelfare", "ShowStory")
+		elseif csv.showSysid == Define.SysId.VIPWelfare then
 			MVipWelfare.EnqueueWaitShow(2,staffId,csv.story)
 			WindowMgr.Call("UVipWelfare","ShowMoudle")
 		elseif csv.showSysid == Define.SysId.FirstRecharge then

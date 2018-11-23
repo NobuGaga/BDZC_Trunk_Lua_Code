@@ -48,14 +48,9 @@ function _R.OnApplyList(self, data)
 			oneMoudle:Get("C_text_1").Text = Csv.Text("commerce_op5")
 			oneMoudle:Get("C_text_2").Text = Csv.Text("commerce_op6")
 			oneMoudle:Get("head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
-			-- oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex)
-			local csvVip = Csv.Vip[player.vip]
-			if csvVip.imgBord ~= nil then
-				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-				oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..player.vip
-			else
-				oneMoudle:Get("OutBox").Activity = false
-			end
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(player.chatBg, player.vip)
+			oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..player.vip
+			
 			oneMoudle:Get("Btn1"):AddOnButton(function()
 				SoundMgr.Play(10001)
 				-- 同意

@@ -11,6 +11,7 @@ local _P = {}
 local _R = {}
 
 local MONTHCARD_ID = 1
+local TaiWan_MONTHCARD_ID = 1001
 local CARD_ACTORID = 10066
 
 function _M:ctor(parent)
@@ -56,7 +57,12 @@ function _M:ctor(parent)
 
 	local buyBtn = moudle:Get("Btn")
 	buyBtn:AddOnButton(function(...)
-		local monthData = Csv.Recharge[MONTHCARD_ID]
+		local monthData 
+		if GameSetting.IsTaiWan then
+			monthData = Csv.Recharge[TaiWan_MONTHCARD_ID]
+		else
+			monthData = Csv.Recharge[MONTHCARD_ID]
+		end
 		local cardName = Csv.Text("welfare_monthCard")
 		SDKMgr.ReqPay(monthData.id,monthData.sdkProductId,monthData.cost,monthData.diamond,cardName) 
 	end)

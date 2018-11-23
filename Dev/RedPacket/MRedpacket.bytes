@@ -101,7 +101,7 @@ function _P.OnRedpacketInfo(data)
 end
 
 function _P.GetReceiverList(data)
-	receiverList = {}
+	local receiverList = {}
 	if data.receiverList ~= nil then
 		for k,v in pairs(data.receiverList)do
 			local RedPacketReceiver = {
@@ -121,7 +121,7 @@ end
 --已领完，已过期
 function _P.CheckIsRedPacket()
 	_M.isRedPackets = false
-	if _M.redPacketList ~= nil and #_M.redPacketList > 0 and _M.isShowTicks then
+	if _M.redPacketList ~= nil and #_M.redPacketList > 0 then
 		_M.isRedPackets = true
 	end
 	--

@@ -6,6 +6,7 @@ local MArena = JRequire "Dev.Arena.MArena"
 local CArena = JRequire "Dev.Arena.CArena"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -61,35 +62,43 @@ function _P.playFight(self, fightInfo, fightDoneCall)
 	WindowMgr.Create("UBattlePvp", fightInfo, fightDoneCall)
 end
 
+function _P.toBuyCount(self, maxStr)
+	local buyTimes,buyMax = MArena.GetFightBuyCount()
+	if buyTimes < buyMax then
+		local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+		local needCost = MArena.GetFightBuyCost()
+		CCommon.CheckTips(
+			function(isSure, arg)
+				if isSure then
+					if needCost > haveGode then
+						CCommon.ShowError(Csv.Text("err_club_no_gold"))
+					else
+						CArena.ReqFightBuy()
+					end
+				end
+			end, 
+			{
+				items = {[Define.AssetsType.Gold] = haveGode},
+				content = Csv.Text("Arena_19",{num = needCost, max = (buyMax - buyTimes)})
+			}
+		)
+	else
+		CCommon.ShowError(maxStr)
+	end	
+end
+
 function _P.pressFight(self, id, rank)
 	local fightTimes = MArena.GetFightTimes()
 	if fightTimes <= 0 then
-		local buyTimes,buyMax = MArena.GetFightBuyCount()
-		if buyTimes < buyMax then
-			local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
-			local needCost = MArena.GetFightBuyCost()
-			CCommon.CheckTips(
-				function(isSure, arg)
-					if isSure then
-						if needCost > haveGode then
-							CCommon.ShowError(Csv.Text("err_club_no_gold"))
-						else
-							CArena.ReqFightBuy()
-						end
-					end
-				end, 
-				{
-					items = {[Define.AssetsType.Gold] = haveGode},
-					content = Csv.Text("Arena_19",{num = needCost})
-				}
-			)
-		else
-			CCommon.ShowError(Csv.Text("Arena_18"))
-		end		
+		_P.toBuyCount(self, Csv.Text("Arena_18"))
 	else
-		WindowMgr.Create("ULineUpCheck",function()
+		if MLineUp.CheckIsFull() then
 			CArena.ReqFight(id, rank)
-		end)		
+		else
+			WindowMgr.Create("ULineUpCheck",function()
+				CArena.ReqFight(id, rank)
+			end)
+		end				
 	end	
 end
 
@@ -212,14 +221,27 @@ end
 
 function _P.refreshFightCount(self)
 	local fightTimes = MArena.GetFightTimes()
-	if fightTimes <= 0 or self.LastFightTimes ~= fightTimes then
-		self.LastFightTimes = fightTimes
-		if fightTimes <= 0 then
-			self.FightCountText.Text = Csv.Text("Arena_15", {time = LuaUtil.GetTimeHMS(MArena.GetRefreshTime())})
-		else
-			self.FightCountText.Text = Csv.Text("Arena_14", {cur = fightTimes, max = MArena.FightTotal})
-		end
-	end	
+	self.FightCountText.Text = Csv.Text("Arena_14", {cur = fightTimes, max = MArena.FightTotal})
+	if fightTimes < MArena.FightTotal then
+		self.AddBtn.Activity = true
+	else
+		self.AddBtn.Activity = false
+	end
+
+	-- if fightTimes <= 0 or self.LastFightTimes ~= fightTimes then
+	-- 	self.LastFightTimes = fightTimes
+	-- 	if fightTimes <= 0 then
+	-- 		self.FightCountText.Text = Csv.Text("Arena_15", {time = LuaUtil.GetTimeHMS(MArena.GetRefreshTime())})
+	-- 		self.AddBtn.Activity = true
+	-- 	else
+	-- 		self.FightCountText.Text = Csv.Text("Arena_14", {cur = fightTimes, max = MArena.FightTotal})
+	-- 		if fightTimes < MArena.FightTotal then
+	-- 			self.AddBtn.Activity = true
+	-- 		else
+	-- 			self.AddBtn.Activity = false
+	-- 		end		
+	-- 	end
+	-- end	
 end
 
 --界面构建
@@ -252,15 +274,18 @@ function _M:OnCreate(data)
 	moudle:Get("Icon3"):AddOnButton(function( ... )
 		WindowMgr.Create("UArenaRank")
 	end)
-
+	self.AddBtn = moudle:Get("add")
 	self.CurRankText = moudle:Get("Title")
 	self.FightCountText = moudle:Get("text2")
 	self.View = moudle:Get("scrollView")
 	self.BG = moudle:Get("Bg")
 	self.Content = moudle:Get("content")
-	moudle.SelfRect:AddOnUpdate(function()
-		_P.refreshFightCount(self)
-	end, nil, 1)
+	self.AddBtn:AddOnButton(function()
+		_P.toBuyCount(self, Csv.Text("Arena_23"))
+	end, nil, 1.2)
+	-- moudle.SelfRect:AddOnUpdate(function()
+	-- 	_P.refreshFightCount(self)
+	-- end, nil, 1)
 	_P.refreshList(self, data)	
 	_P.refreshRank(self)
 	_P.refreshFightCount(self)

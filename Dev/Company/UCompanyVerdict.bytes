@@ -129,8 +129,11 @@ function _M:OnCreate(...)
 		self:Destroy()
 		end, nil, 1.2)
 
-	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount, isAdd )
-		_P.UpdateAsset(self, itemid, itemcount, isAdd)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (handle , itemid, itemcount )
+		if itemid == CostItemID then
+			local csvItem = Csv.Item[CostItemID]
+			self.mMoudle:Get("textLing").Text = Csv.Text("company_verNNum",{name = csvItem.name,num = MBag.GetItemNum(CostItemID)})
+		end
 	end)
 
 	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
@@ -165,7 +168,6 @@ function _P.SetSlider(self,moudle)
 		moudle:Get("textExp").Text = Csv.Text("staff_max")
 		moudle:Get("rect").transform.sizeDelta = Vector2(540,21)
 	end
-	self.mLastExp = MPlayer.GetExp()
 end
 
 function _P.SetVerdict(self,moudle)
@@ -203,7 +205,7 @@ function _P.SetVerdict(self,moudle)
 	GoAnswer2.RaycastTarget = true
 end
 
-function _P.UpdateAsset(self,itemid, itemcount, isAdd)
+function _P.UpdateAsset(self,itemid, itemcount)
 	local TextUpdate = self.mMoudle:Get("text"..itemid)
 	if TextUpdate ~= nil then
 		TextUpdate:DOKill()
@@ -245,7 +247,16 @@ function _P.UpdateTime(self)
 	end
 end
 
-function _R.UpdateUI(self)
+-- 决策回调
+function _R.UpdateUI(self, data)
+	if data and data.reward ~= nil then
+		if data.reward.key == Define.AssetsType.Record then
+			_P.UpdateSlider(self, data.reward.value)
+		else
+			_P.UpdateAsset(self, data.reward.key, data.reward.value)
+		end
+	end
+
 	local moudle = self.mMoudle
 	if self.mNowNum <= 0 then
 		_P.SetVerdict(self,moudle)
@@ -270,11 +281,12 @@ function _R.UpdateCount(self,count)
 	end
 end
 
-function _P.UpdateSlider(self)
-	local getZhengji = MPlayer.GetExp() - self.mLastExp
-	local trans = self.mMoudle:Get("decision2")
-	local csvItem = Csv.Item[Define.AssetsType.Record]
-	CCommon.ShowFlyItem(trans,Define.AssetsType.Record,getZhengji)
+function _P.UpdateSlider(self, getExp)
+	if getExp then
+		local trans = self.mMoudle:Get("decision2")
+		CCommon.ShowFlyItem(trans, Define.AssetsType.Record, getExp)
+	end
+
 	_P.SetSlider(self,self.mMoudle)
 end
 

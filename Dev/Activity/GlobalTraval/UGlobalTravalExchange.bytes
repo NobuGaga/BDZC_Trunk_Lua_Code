@@ -57,7 +57,7 @@ function _P.OnSetListData(self)
 	local itemGrid = self.mModule:Get("content")
 	itemGrid:DestroyChildren()
 
-	local shopList = _P.GetSortList(self, Csv.GlobalTravalExchange)
+	local shopList = _P.GetSortList(self)
 	if shopList == nil then return end
 
 	self.mRawTableItems = {}
@@ -67,7 +67,20 @@ function _P.OnSetListData(self)
 end
 
 
-function _P.GetSortList(self, shopList)
+function _P.OnGetExchangeData(self)
+	local exchangeList = {}
+	for k,v in pairs(Csv.GlobalTravalExchange) do
+		if v.actId == self.mData.actId then
+			exchangeList[#exchangeList + 1] = v
+		end
+	end
+
+	return exchangeList
+end
+
+
+function _P.GetSortList(self)
+	local shopList = _P.OnGetExchangeData(self)
 	local sortList = {}
 	for k,v in pairs(shopList) do
 		sortList[#sortList + 1] = {data = v, isGray = MActivity.CheckThisItemIsLight(v, self.mData.exchangeShop, self.mData.numberCount, v.id)}

@@ -81,6 +81,7 @@ function _M:OnCreate(bossMsg,startCall,onDoneCall,param,rankCall)
 	local moudle = self:CreateMoudle(self._RootNode, "M_NewBossPK")
 	self.Moudle = moudle
 	self.NowRound = 1
+	self.StartCall = startCall
 	moudle:Get("Btn_back"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
@@ -108,6 +109,10 @@ function _M:OnCreate(bossMsg,startCall,onDoneCall,param,rankCall)
 	moudle:Get("XueTiao").FillAmount = bossMsg.bossBlood/bossMsg.bossFullBlood
 	self.BossBlood = bossMsg.bossBlood
 
+	local tipsText = moudle:Get("Tips")
+	local tipsBg = moudle:Get("TipsBg")
+	tipsText.Text = Csv.Text("finance_challenged2")
+
 	if bossMsg.bossName ~= nil then
 		moudle:Get("FBBG").Activity = true
 		moudle:Get("NameText").Text = bossMsg.bossName
@@ -121,10 +126,10 @@ function _M:OnCreate(bossMsg,startCall,onDoneCall,param,rankCall)
 		local content = moudle:Get("Content")
 		for k,v in ipairs(lineUpList) do
 			local staffData = {}
-			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
-			local canvas = staffMoudle:Get("canvas")
-			canvas.SortingLayerName = "Tips1"
-			canvas.SortingOrder = 10
+			local staffMoudle = self:CreateMoudle(content, "M_NewBossPK_Item")
+			-- local canvas = staffMoudle:Get("canvas")
+			-- canvas.SortingLayerName = "Tips1"
+			-- canvas.SortingOrder = 10
 			staffMoudle:Get("battleBack").Activity = false
 			if k == self.NowRound then
 				staffMoudle.SelfRect.LocalScale = Vector3.one
@@ -172,6 +177,21 @@ function _M:OnCreate(bossMsg,startCall,onDoneCall,param,rankCall)
 	self.PkRoot = pkRoot
 	local btnPK = moudle:Get("beginPK")
 	btnPK:AddOnButton(function()
+		if self.mParam and self.mParam.isGuanKaBoss then
+			if not MBattle.HasFightBossTimes() then
+				CCommon.CheckTips(function(isSure, arg)
+					if isSure then
+						local itemData = Csv.Const(20170)[2]
+						if not MBag.CheckItemEnough(itemData[1], itemData[2]) then
+							return
+						end
+
+						CBattle.BossResetReq(MBattle.CurId)
+					end
+				end, {content = Csv.Text("lineup_34")})
+				return
+			end
+		end
 		if startCall ~= nil then
 			startCall()
 		end
@@ -201,9 +221,15 @@ function _M:OnCreate(bossMsg,startCall,onDoneCall,param,rankCall)
 	if bossMsg.isBeat then
 		btnPK.IsGray = true
 		btnPK.RaycastTarget = false
+
+		btnPK.Activity = false
+		tipsBg.Activity = true
 	else
+		btnPK.Activity = true
 		btnPK.IsGray = false
 		btnPK.RaycastTarget = true
+
+		tipsBg.Activity = false
 	end
 end
 
@@ -333,7 +359,7 @@ function _P.OnFight(self, data)
 				t:Play(T_FB_Boss_blood)
 				t:Play(T_FB_Boss_Hurt)
 
-				SoundMgr.Play(10021)
+				SoundMgr.Play(10059)
 				local actorPanel = self.Moudle:Get("ActorLightPanel")
 				local actorPanel2 = self.Moudle:Get("ActorLightPanel2")
 				actorPanel:AddOnTime(function()
@@ -641,6 +667,17 @@ function _R.RefreshEffectAndNowSkillIcon(self)
 	local reportData = self.ReportTable[1]
 	if reportData ~= nil then
 		self.Moudle:Get("zdlNum2").Text = reportData.initblood
+	end
+end
+
+-- 关卡boss重置返回
+function _R.OnBossResetBack(self, data)
+	self.BossBlood = data.blood
+	self.Enemy.BloodBar.FillAmount = self.BossBlood / self.FullBlood
+	self.Enemy.Blood.Text = tostring(self.BossBlood or 0)
+
+	if self.StartCall then
+		self.StartCall()
 	end
 end
 

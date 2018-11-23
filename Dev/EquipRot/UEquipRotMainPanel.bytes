@@ -123,7 +123,7 @@ function _P.GetListData(self)
 			local needItems = {}
 			local satisfyCount = 0 -- 符合要求的个数
 			local equipConf = Csv.EquipRobItem[itemValue]
-			if equipConf.needItems ~= nil and next(equipConf.needItems) ~= nil then
+			if equipConf and equipConf.needItems ~= nil and next(equipConf.needItems) ~= nil then
 				for needKey,needValue in pairs(equipConf.needItems) do
 					local itemId = needValue[1]
 					local itemNum = MBag.GetItemNum(itemId)
@@ -499,9 +499,22 @@ function _R.OnComposeBack(self, data)
 	self:Lock()
 	local actorRect = self.mModule:Get("ActorPanel")
 	CCommon.CreateEffect(actorRect, ComposeActorId)
+	
+	local lineActorPanels = {}
+	for i=1,6 do
+		local oneActorRect = self.mModule:Get("ActorPanel" .. i)
+		CCommon.CreateEffect(oneActorRect, 10225)
+		lineActorPanels[i] = oneActorRect
+	end
 
 	self.mModule.SelfRect:AddOnTime(function()
 		actorRect:DestroyChildren()
+		if lineActorPanels and next(lineActorPanels) ~= nil then
+			for k,v in pairs(lineActorPanels) do
+				v:DestroyChildren()
+			end
+		end
+
 		WindowMgr.Create("UEquipRotGetPanel", self.CurSelectData.itemId)
 		local equipItemConf = Csv.EquipRobItem[data.itemId]
 		local updateItemData = nil
@@ -535,7 +548,7 @@ function _R.OnComposeBack(self, data)
 			end
 		end
 		self:Unlock()
-	end, nil, 2.4)
+	end, nil, 1.3)
 end
 
 

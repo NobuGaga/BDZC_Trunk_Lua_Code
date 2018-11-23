@@ -1,0 +1,42 @@
+--竞技场战斗结果界面，跨服竞技场战斗结果界面
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+--传入美女数据
+function _M:OnCreate(closeCall, isSuccess, num)
+	self.OnCloseCall = closeCall
+	self._EventNode:AddOnClick(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode,"M_CrossSports_Success")
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	moudle:Get("Score").Text = Csv.Text("cross_arena_vote4")
+	moudle:Get("ScoreNum").Text = "+"..num
+	moudle:Get("Tips").Text = Csv.Text("charitable_donate_close")
+
+	if isSuccess then
+		SoundMgr.PlayNonStopUI(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10179)		
+	else
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10180)
+	end
+end
+
+return _M

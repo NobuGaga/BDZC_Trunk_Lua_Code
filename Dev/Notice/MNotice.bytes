@@ -8,6 +8,8 @@ _M.ThemeType = {
 
 _M.Data = nil
 _M.IsOpened = false
+_M.LoginData = nil
+_M.IsOpenLogin = false
 
 function _M.SetData(data)
 	if nil ~= data then
@@ -37,9 +39,28 @@ function _M.SetData(data)
 	end
 end
 
+-- 设置登陆公告数据
+function _M.SetLoginData(data)
+	if data == nil then 
+		_M.LoginData = nil
+		return
+	end
+	if _M.LoginData == nil then
+		_M.LoginData = {}
+	end
+
+	if data.title then
+		_M.LoginData.title = data.title
+	end
+	if data.content then
+		_M.LoginData.content = data.content
+	end
+end
+
 function _M.Clean()
 	_M.Data = nil
 	_M.IsOpened = false
+	_M.LoginData = nil
 end
 
 return _M

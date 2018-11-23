@@ -9,12 +9,19 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local UMidautumnLogin = JRequire "Dev.Activity.Midautumn.UMidautumnLogin"
 --@RefType [Dev.Activity.Midautumn.UMidautumnFireworks.bytes#_M]
 local UMidautumnFireworks = JRequire "Dev.Activity.Midautumn.UMidautumnFireworks"
+--@RefType [Dev.Activity.Midautumn.UMidautumnPayPanel.bytes#_M]
+local UMidautumnPayPanel = JRequire "Dev.Activity.Midautumn.UMidautumnPayPanel"
+--@RefType [Dev.Activity.Midautumn.UMidautumnShop.bytes#_M]
+local UMidautumnShop = JRequire "Dev.Activity.Midautumn.UMidautumnShop"
+--@RefType [Dev.Activity.FlopCard.UFlopCardMain.bytes#_M]
+local UFlopCardMain = JRequire "Dev.Activity.FlopCard.UFlopCardMain"
 --@RefType [Dev.Activity.MActivity.bytes#_M]
 local MActivity = JRequire "Dev.Activity.MActivity"
--- @RefType [Dev.Main.MMain.bytes#_M]
-local MMain = JRequire "Dev.Main.MMain"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
 --@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
+local CMain = JRequire "Dev.Main.CMain"
 
 ----------------------CS类引用--------------------------
 
@@ -23,11 +30,6 @@ local MoudleName = "M_Autumn_Main"
 local btnClose = "C_Back_Btn"
 local PageItemName = "M_Autumn_Main_Item"
 
-local RechargeIDForType = {}
-RechargeIDForType[Define.ActivityType.RechargeReward_Day] = Define.SysId.RechargeReward_Day
-RechargeIDForType[Define.ActivityType.RechargeReward_Total] = Define.SysId.RechargeReward_Total
-RechargeIDForType[Define.ActivityType.RechargeReward_TotalDay] = Define.SysId.RechargeReward_TotalDay
-
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
 --私有函数模块 *** 只放置私有函数, 禁止放变量
@@ -35,14 +37,18 @@ local _P = {}
 --外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
 local _R = {}
 
-function _M:OnPopCreate(...)
-	self:OnCreate(...)
-end
-
 function _M:BeforeDestroy()
-	if self.ChooseMoudle then
-		self.ChooseMoudle:delete()
-		self.ChooseMoudle = nil
+	if self.curActType and self.curActType == Define.ActivityType.FlopCard then
+		local flopData = self.actPageDataCache[Define.ActivityType.FlopCard]
+		if flopData ~= nil and MActivity.FlopCardRed and MActivity.FlopCardRed[flopData.actId] == true then
+			CMain.UpdateRedpoint(false, self._SysId, flopData.actId)
+			MActivity.FlopCardRed[flopData.actId] = false
+		end
+	end
+
+	if self.curMoudle then
+		self.curMoudle:delete()
+		self.curMoudle = nil
 	end
 	if self.tabGroup then
 		self.tabGroup:delete()
@@ -59,9 +65,21 @@ function _M:Dispatch(funcName, ...)
 end
 
 --界面构建
-function _M:OnCreate(openFunc)
+function _M:OnCreate()
 	_P.InitMoudleTopInfo(self)
 	_P.InitPageView(self)
+
+	-- 首次进入活动打开预览界面
+	local loginData = self.actPageDataCache[Define.ActivityType.MidAutumn_Login]
+	if loginData ~= nil and loginData.isHasShow == true then
+		local isShowTag = Csv.Const(20165)[1] == 1
+		if isShowTag then
+			WindowMgr.Create("UMidautunnLookPanel", loginData.actId)
+			loginData.isHasShow = false
+			CActivity.SetShowViewTag()
+		end
+	end
+	self.isFirst = false
 end
 
 --初始化模块顶部信息
@@ -69,23 +87,51 @@ function _P.InitMoudleTopInfo(self)
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	self.moudle:Get(btnClose):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		if self.ChooseMoudle then
-			self.ChooseMoudle:Destroy()
+		if self.curMoudle then
+			self.curMoudle:Destroy()
 		end
 		self:Destroy()
 	end, nil, 1.2)
+
+	local helpBtn = self.moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
 end	
 
 --初始化页签界面
 function _P.InitPageView(self)
 	_P.InitActivityTypeGroup(self)
-	self.tabGroup = TabGroup.new(function (actID) _P.OnClickPage(self, actID) end)
+	self.tabGroup = TabGroup.new(function (actType) _P.OnClickPage(self, actType) end)
 	self.pageTabNode = self.moudle:Get("pageContent")
 	self.pageItemCache = {}
 	self.pageNode = self.moudle.SelfRect
-	self.actIDListCache = {}
-	self.pageIDCache = {}
-	self.selectIndex = 1
+	for index, actType in ipairs(self.actTypeGroup) do
+		local actDataList = MActivity.GetListFromType(actType)
+		if actDataList then
+			for _, actData in pairs(actDataList) do
+				if self.curActType == nil then
+					self.curActType = actType
+				end
+				self.actPageDataCache[actType] = actData
+				local itemMoudle = JGuiManager.GetMoudle(self.pageTabNode, PageItemName)
+				self.tabGroup:Add(actData.actType, itemMoudle.SelfRect, itemMoudle:Get("textTitle"), actData.title)
+				self:RegistRedpoint(itemMoudle:Get("redpoint"), Define.SysId.MidAFestival, actData.actId)
+				self.pageItemCache[actData.actType] = itemMoudle.SelfRect
+				-- 一种活动类型只显示一个活动
+				break
+			end
+		end
+	end
+	self.isFirst = true
+	self.tabGroup:Choose(self.curActType)
 end
 
 --初始化中秋活动类型
@@ -99,117 +145,179 @@ function _P.InitActivityTypeGroup(self)
 	for index, actType in ipairs(csvFuncValue.actType) do
 		self.actTypeGroup[index] = actType
 	end
+	self.actPageDataCache = {}
+	self.moudle:Get("C_Text").Text = csvFuncValue.name
 end
 
-function _P.RefreshPageView(self)
-	local actID = nil
-	for index, actType in ipairs(self.actTypeGroup) do
-		local actDataList = MActivity.GetListFromType(actType)
-		if actDataList then
-			for actID, actData in pairs(actDataList) do
-				local index = #self.actIDListCache + 1
-				if actID == nil then
-					actID = actData.id
-				end
-				self.actIDListCache[index] = actData
-				self.pageIDCache[actID] = index
-			end
-		end
+--点击页签事件
+function _P.OnClickPage(self, actType)
+	if actType == self.curActType and not self.isFirst then
+		return
 	end
-	for index, actData in ipairs(self.actIDListCache) do
-		local itemMoudle = JGuiManager.GetMoudle(self.pageTabNode, PageItemName)
-		self.tabGroup:Add(actData.id, itemMoudle.SelfRect, itemMoudle:Get("textTitle"), actData.title)
-		-- self:RegistRedpoint(itemMoudle:Get("redpoint"), Define.SysId.MidAFestival, actData.id)
-	end
-	if actID then
-		self.tabGroup:Choose(actID)
-	end
-end
-
-function _P.OnClickPage(self, actID)
-	if self.ChooseMoudle then
-		self.ChooseMoudle:Destroy()
-		self.ChooseMoudle:delete()
-		self.ChooseMoudle = nil
+	local actData = self.actPageDataCache[actType]
+	if actData ==  nil then
+		return
 	end
 	local loginActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Login)
 	local fireworkActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Firework)
-	if loginActList[actID] then
-		self.ChooseMoudle = UMidautumnLogin.new(self.pageNode, actID)
-	elseif fireworkActList[actID] then
-		self.ChooseMoudle = UMidautumnFireworks.new(self.pageNode, actID)
+	local payActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Recharge)
+	local shopActList = MActivity.GetListFromType(Define.ActivityType.MidAutumn_Shop)
+	local flopCardList = MActivity.GetListFromType(Define.ActivityType.FlopCard)
+	if loginActList and loginActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMidautumnLogin.new(self.pageNode, actData.actId)
+	elseif fireworkActList and fireworkActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMidautumnFireworks.new(self.pageNode, actData.actId, self._LockNode)
+	elseif payActList and payActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMidautumnPayPanel.new(self.pageNode, actData.actId)
+	elseif shopActList and shopActList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UMidautumnShop.new(self.pageNode, actData.actId)
+	elseif flopCardList and flopCardList[actData.actId] then
+		_P.RefreshCurrentView(self, actType)
+		self.curMoudle = UFlopCardMain.new(self.pageNode, actData.actId, self._LockNode)
+
+		-- 清除翻牌活动红点
+		if MActivity.FlopCardRed and MActivity.FlopCardRed[actData.actId] == true then
+			CMain.UpdateRedpoint(false, self._SysId, actData.actId)
+			MActivity.FlopCardRed[actData.actId] = false
+		end
 	end
 end
 
---刷新页签
-function _P.RefreshPage(self, actType)
-	local isClosePage = _P.JudgeToRemovePage(self, RechargeIDForType[actType], actType)
+function _P.RefreshCurrentView(self, actType)
+	if self.curMoudle then
+		self.curMoudle:Destroy()
+		self.curMoudle:delete()
+		self.curMoudle = nil
+	end
+	self.curActType = actType
+end
+
+--判断关闭界面及活动关闭提示
+function _P.JudgeToCloseActivity(self, actType)
+	local isClosePage = _P.JudgeToRemovePage(self, actType)
 	if isClosePage and not self.isShowCloseTips then
 		self.isShowCloseTips = true
 		CCommon.ShowError(Csv.Text("err_lottery_activity_close"))
 		self.moudle.SelfRect:AddOnTime(function ()
 			self.isShowCloseTips = false
-		end, nil, 10)
+		end, nil, 5)
 	end
-	if #self.pageIDCache == 0 then
+	if next(self.pageItemCache) == nil then
 		self:Destroy()
 	end
 end
 
 --判断移除页签
-function _P.JudgeToRemovePage(self, sysID, actType)
-	local typeData = MActivity.GetListFromType(actType)
-	if nil == typeData then
-		self.tabGroup:Remove(sysID).image:Destroy()
-		local pageIDCache = {}
-		local removeIndex
-		for index, value in ipairs(self.pageIDCache) do
-			if value == sysID then
-				removeIndex = index
-			else
-				table.insert(pageIDCache, value)
+function _P.JudgeToRemovePage(self, actType)
+	local typeDataList = MActivity.GetListFromType(actType)
+	if typeDataList == nil then
+		self.tabGroup:Remove(actType)
+		local itemMoudle = self.pageItemCache[actType]
+		if itemMoudle then
+			itemMoudle:Destroy()
+			self.pageItemCache[actType] = nil
+		end
+		if self.curActType == actType then
+			local showActType
+			for _, type in ipairs(self.actTypeGroup) do
+				if actType ~= type and self.pageItemCache[type] ~= nil then
+					showActType = type
+					break
+				end
+			end
+			if showActType ~= nil then
+				self.tabGroup:Choose(showActType)
 			end
 		end
-		if removeIndex then
-			self.moudle:Get("btn" .. removeIndex).Activity = false
-		end
-		self.pageIDCache = pageIDCache
-		if self.mFuncId == sysID and #self.pageIDCache ~= 0 then
-			self.tabGroup:Choose(self.pageIDCache[1])
-		end
 		return true
-	else
-		return false
+	end
+	return false
+end
+
+---------------------------------------中秋活动通用接口---------------------------------------
+function _R.OnUpdateViewData(self, data, actType)
+	if self.curActType == actType and self.curMoudle ~= nil then
+		self.curMoudle:UpdateViewData(data)
 	end
 end
 
-function _R.RefreshItemState(self,data,actType)
-	if self.ChooseMoudle then
-		if (self.mFuncId == Define.SysId.RechargeReward_DailyGift and actType == Define.ActivityType.RechargeReward_DailyGift) then
-			self.ChooseMoudle:RefreshItemState(data)
-		end
+function _R.OnUpdateViewState(self, data, actType)
+	_P.JudgeToCloseActivity(self, actType)
+	if self.curActType == actType and self.curMoudle ~= nil then
+		self.curMoudle:OnUpdateViewState(data)
 	end
 end
 
-function _R.RefreshItemGetState(self,data,actType)
-	if self.ChooseMoudle then
-		if actType == Define.ActivityType.RechargeReward_Day
-		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
-		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay) then
-			self.ChooseMoudle:RefreshItemGetState(data)
-		end
+function _R.GetRewardBack(self, data, actType)
+	if self.curActType == actType and data and self.curMoudle ~= nil then
+		self.curMoudle:GetRewardBack(data)
 	end
 end
 
-function _R.RefreshView(self, actType)
-	_P.RefreshPage(self, actType)
-	if self.ChooseMoudle then
-		if actType == Define.ActivityType.RechargeReward_Day
-		or (self.mFuncId == Define.SysId.RechargeReward_Total and actType == Define.ActivityType.RechargeReward_Total)
-		or (self.mFuncId == Define.SysId.RechargeReward_TotalDay and actType == Define.ActivityType.RechargeReward_TotalDay) then
-			self.ChooseMoudle:RefreshView()
-		end
+function _R.OnUpdatePro(self, data, actType)
+	if self.curActType == actType and data and self.curMoudle ~= nil then
+		self.curMoudle:OnUpdatePro(data)
 	end
 end
+
+---------------------------------------中秋活动烟花接口---------------------------------------
+function _R.OnIngniteFireBack(self, data)
+	if data and self.curActType == Define.ActivityType.MidAutumn_Firework and self.curMoudle ~= nil then
+		self.curMoudle:OnIngniteFireBack(data)
+	end
+end
+
+---------------------------------------中秋充值接口---------------------------------------
+function _R.OnGetPayDayBack(self, data)
+	if data and self.curActType == Define.ActivityType.MidAutumn_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:GetDayRewardBack(data)
+	end
+end
+
+function _R.UpdatePayNumData(self, data)
+	if data and self.curActType == Define.ActivityType.MidAutumn_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:UpdatePayNumData(data)
+	end
+end
+
+function _R.OnDayUpdatePush(self, data)
+	if data and self.curActType == Define.ActivityType.MidAutumn_Recharge and self.curMoudle ~= nil then
+		self.curMoudle:OnDayUpdatePush(data)
+	end
+end
+
+
+---------------------------------------中秋活动烟花接口---------------------------------------
+function _R.OnFlopCardStart(self)
+	if self.curActType == Define.ActivityType.FlopCard and self.curMoudle ~= nil then
+		self.curMoudle:OnFlopCardStart()
+	end
+end
+
+
+function _R.OnOpenCardBack(self, data)
+	if data and self.curActType == Define.ActivityType.FlopCard and self.curMoudle ~= nil then
+		self.curMoudle:OnOpenCardBack(data)
+	end
+end
+
+
+function _R.OnOpenAllCardBack(self, data)
+	if data and self.curActType == Define.ActivityType.FlopCard and self.curMoudle ~= nil then
+		self.curMoudle:OnOpenAllCardBack(data)
+	end
+end
+
+
+function _R.OnRefreshCardBack(self, data)
+	if data and self.curActType == Define.ActivityType.FlopCard and self.curMoudle ~= nil then
+		self.curMoudle:OnRefreshCardBack(data)
+	end
+end
+
 
 return _M

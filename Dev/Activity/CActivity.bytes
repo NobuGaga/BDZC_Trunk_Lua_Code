@@ -6,6 +6,7 @@ local MVipWelfare = JRequire"Dev.VIPWelfare.MVipWelfare"
 local MBag = JRequire "Dev.Bag.MBag"
 --@RefType [Dev.Staff.MStaff.bytes#_M]
 local MStaff = JRequire "Dev.Staff.MStaff"
+local MGirl = JRequire"Dev.Girl.MGirl"
 --@RefType [Dev.Activity.RankReward.CRankReward.bytes#_M]
 local CRankReward = JRequire "Dev.Activity.RankReward.CRankReward"
 --@RefType [Dev.Activity.SevenDayTarget.CSevenDayTarget.bytes#_M]
@@ -17,6 +18,9 @@ local HeartBeat = JRequire "Dev.Player.HeartBeat"
 -- @RefType [Dev.EventCenter.bytes#_M]
 local EventCenter = JRequire "Dev.EventCenter"
 local MPlayer = JRequire "Dev.Player.MPlayer"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MMain = JRequire "Dev.Main.MMain"
+local MSiege = JRequire "Dev.SiegeWall.MSiege"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -151,6 +155,24 @@ local CMD_ID =
 	cIgniteFireworks = 47,			-- (烟花)点燃烟花 PActivity.CIgniteFireworks
 	cFireworksSrvReward = 48,		-- (烟花)进入全服祈福界面
 	cGetFireworksSrvReward = 49,	-- (烟花)领取每日奖励 PActivity.CGetFireworksSrvReward
+	cGetFireworksRankReward = 50,	-- (烟花)领取排行版奖励 PActivity.CGet
+	cFestivalLoginSetShowTag = 51,	-- (中秋-累计登陆)设置打开预览界面标记
+	cFestivalRechargeDaysGet = 52,	-- (中秋-累计充值)领取累充天数奖励 PActivity.CGet
+	cAdventureFirstOpen = 53,		-- (奇遇)初次打开奇遇界面
+	cConsumeOpenUI = 54,			-- (消费积分)打开购买界面
+	cConsumeCloseUI = 55,			-- (消费积分)关闭购买界面
+	cConsumeRefresh = 56,			-- (消费积分)刷新商品 PActivity.CConsumeRefresh
+	cConsumeBuy = 57,				-- (消费积分)购买商品 PActivity.CConsumeBuy
+	cCommIgniteFireworks = 58,		 -- (合服活动烟花) PActivity.CIgniteFireworks
+	cCommFireworksSrvReward = 59,	 -- (合服活动烟花)进入全服祈福界面 PActivity.CFireworksSrvReward
+	cCommGetFireworksSrvReward = 60, -- (合服活动烟花)领取每日奖励 PActivity.CGetFireworksSrvReward
+	cCommGetFireworksRankReward = 61,-- (合服活动烟花)领取排行版奖励 PActivity.CGet
+	cCommLoginSetShowTag = 62,		 -- (合服活动-累计登陆)设置打开预览界面标记 PActivity.CLoginSetShowTag
+	cCommRechargeDaysGet = 63,		 -- (合服活动-累计充值)领取累充天数奖励 PActivity.CGet
+	cFlopStart = 64,				 -- (翻牌活动)开局 PActivity.CFlopStart
+	cOpenCard = 65,					 -- (翻牌活动)开牌 PActivity.COpenCard
+	cOpenAllCard = 66,				 -- (翻牌活动)全开 PActivity.COpenAllCard
+	cRefreshCards = 67,				 -- (翻牌活动)刷新卡牌 PActivity.CRefreshCards
 
 	sInit = 1,						--初始化 PActivity.SActivity
 	sUpdate = 2,					--更新 PActivity.SActivity
@@ -207,6 +229,24 @@ local CMD_ID =
 	sIgniteFireworks  = 55,			--(烟花)点燃烟花 PActivity.SIgniteFireworks
 	sFireworksSrvReward = 56,		--(烟花)进入全服祈福回调 PActivity.SFireworksSrvReward
 	sGetFireworksSrvReward = 57,	--(烟花)领取每日奖励回调 PActivity.SGetFireworksSrvReward
+	sGetFireworksRankReward = 58,	--(烟花)领取排行版奖励PActivity.SActivityGeted
+	sFestivalRechargeDaysGet = 59,	--(中秋累计充值) 领取累充天数奖励 PActivity.SRechargeDaysGet
+	sFestivalRechargeUpdateDays = 60,--(中秋累计充值) 更新累计天数 PActivity.SRechargeUpdateDays
+	sConsumeOpenUI = 61,			 -- (消费积分)打开购买界面返回 PActivity.SConsumeShopUpdate
+	sConsumeRefresh = 62,			 -- (消费积分)刷新商品返回 PActivity.SConsumeShopUpdate
+	sConsumeBuy = 63,				 -- (消费积分)购买商品返回 PActivity.SConsumeShopBuy
+	sConsumeSocreUpdate = 64,		 -- (消费积分)积分更新 PActivity.SConsumeScoreUpdate
+	sCommIgniteFireworks = 65,		  --(合服活动烟花)点燃烟花 PActivity.SIgniteFireworks
+	sCommFireworksSrvReward = 66,	  --(合服活动烟花)进入全服祈福回调 PActivity.SFireworksSrvReward
+	sCommGetFireworksSrvReward = 67,  --(合服活动烟花)领取每日奖励回调 PActivity.SGetFireworksSrvReward
+	sCommGetFireworksRankReward = 68, --(合服活动烟花)领取排行版奖励 PActivity.SActivityGeted
+	sCommRechargeDaysGet = 69,	 	  --(合服活动-累计充值) 领取累充天数奖励 PActivity.SRechargeDaysGet
+	sCommRechargeUpdateDays = 70,	  --(合服活动-累计充值) 更新累计天数 PActivity.SRechargeUpdateDays
+	sFlopStart = 71,				  --(翻牌活动)开局 PActivity.SFlopStart
+	sOpenCard = 72,					  --(翻牌活动)开牌 PActivity.SOpenCard
+	sOpenAllCard = 73,				  --(翻牌活动)全开 PActivity.SOpenAllCard
+	sRefreshCards = 74,				  --(翻牌活动)刷新卡牌 PActivity.SRefreshCards
+	sRandomDrop = 75,				  --随机掉落 PActivity.SRandomDrop
 }
 
 function _M.ModuleClean()
@@ -261,6 +301,24 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cIgniteFireworks]	 	 = "PActivity.CIgniteFireworks",
 		[CMD_ID.cFireworksSrvReward]	 = "",
 		[CMD_ID.cGetFireworksSrvReward]	 = "PActivity.CGetFireworksSrvReward",
+		[CMD_ID.cGetFireworksRankReward] = "PActivity.CGet",
+		[CMD_ID.cFestivalLoginSetShowTag] = "",
+		[CMD_ID.cFestivalRechargeDaysGet]= "PActivity.CGet",
+		[CMD_ID.cAdventureFirstOpen]	 = "",
+		[CMD_ID.cConsumeOpenUI]			 = "",
+		[CMD_ID.cConsumeCloseUI]		 = "",
+		[CMD_ID.cConsumeRefresh]	 	 = "PActivity.CConsumeRefresh",
+		[CMD_ID.cConsumeBuy]	  		 = "PActivity.CConsumeBuy",
+		[CMD_ID.cCommIgniteFireworks]	 	 = "PActivity.CIgniteFireworks",
+		[CMD_ID.cCommFireworksSrvReward]	 = "PActivity.CFireworksSrvReward",
+		[CMD_ID.cCommGetFireworksSrvReward]	 = "PActivity.CGetFireworksSrvReward",
+		[CMD_ID.cCommGetFireworksRankReward] = "PActivity.CGet",
+		[CMD_ID.cCommLoginSetShowTag] 		 = "PActivity.CLoginSetShowTag",
+		[CMD_ID.cCommRechargeDaysGet]		 = "PActivity.CGet",
+		[CMD_ID.cFlopStart]					 = "PActivity.CFlopStart",
+		[CMD_ID.cOpenCard]					 = "PActivity.COpenCard",
+		[CMD_ID.cOpenAllCard]				 = "PActivity.COpenAllCard",
+		[CMD_ID.cRefreshCards]				 = "PActivity.CRefreshCards",
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -318,8 +376,26 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sGlobalTravalAdventureTen]  = {proto = "PActivity.sGlobalTravalAdventure",	handle = _P.OnTenTravalEnterCallBack}, -- (全球环行)十连前进返回
 		[CMD_ID.sAdventureRemoveComBoss] = {proto = "PActivity.PCommerceBoss",			handle = _P.OnDelectGangBoss},	-- (奇遇)删除商会BOSS PActivity.PCommerceBoss
 		[CMD_ID.sIgniteFireworks] 		 = {proto = "PActivity.SIgniteFireworks",		handle = _P.OnIngniteFireBack},	-- (烟花)点燃烟花 PActivity.SIgniteFireworks
-		[CMD_ID.sFireworksSrvReward] 	 = {proto = "PActivity.SFireworksSrvReward",	handle = _P.OnEnterSrvReward},	-- (奇遇)进入全服祈福回调 PActivity.SFireworksSrvReward
-		[CMD_ID.sGetFireworksSrvReward]  = {proto = "PActivity.SGetFireworksSrvReward",	handle = _P.OnGetFireRewardBack},-- (奇遇)领取每日奖励回调 PActivity.SGetFireworksSrvReward
+		[CMD_ID.sFireworksSrvReward] 	 = {proto = "PActivity.SFireworksSrvReward",	handle = _P.OnEnterSrvReward},	-- (烟花)进入全服祈福回调 PActivity.SFireworksSrvReward
+		[CMD_ID.sGetFireworksSrvReward]  = {proto = "PActivity.SGetFireworksSrvReward",	handle = _P.OnGetFireRewardBack},-- (烟花)领取每日奖励回调 PActivity.SGetFireworksSrvReward
+		[CMD_ID.sGetFireworksRankReward] = {proto = "PActivity.SActivityGeted",			handle = _P.OnGetRankRewardBack},-- (烟花)领取排行版奖励PActivity.SActivityGeted
+		[CMD_ID.sFestivalRechargeDaysGet]= {proto = "PActivity.SRechargeDaysGet",handle = _P.OnGetPayDayBack},-- (中秋累计充值) 领取累充天数奖励 PActivity.SFestivalPayDayGet
+		[CMD_ID.sFestivalRechargeUpdateDays]= {proto = "PActivity.SRechargeUpdateDays",handle = _P.OnDayUpdatePush},-- (中秋累计充值) 更新累计天数 PActivity.SRechargeUpdateDays
+		[CMD_ID.sConsumeOpenUI]			 = {proto = "PActivity.SConsumeShopUpdate",		handle = _P.OnConsumeOpenUIBack},-- (消费积分)打开购买界面返回
+		[CMD_ID.sConsumeRefresh]		 = {proto = "PActivity.SConsumeShopUpdate",		handle = _P.OnConsumeRefreshBack},-- (消费积分)刷新商品返回
+		[CMD_ID.sConsumeBuy] 			 = {proto = "PActivity.SConsumeShopBuy",		handle = _P.OnConsumeBuyBack},-- (消费积分)购买商品返回
+		[CMD_ID.sConsumeSocreUpdate] 	 = {proto = "PActivity.SConsumeScoreUpdate",	handle = _P.OnConsumeSocreUpdatePush},-- (消费积分)积分更新
+		[CMD_ID.sCommIgniteFireworks]		 = {proto = "PActivity.SIgniteFireworks",		handle = _P.OnSerIngniteFireBack},	-- (烟花)点燃烟花 PActivity.SIgniteFireworks
+		[CMD_ID.sCommFireworksSrvReward] 	 = {proto = "PActivity.SFireworksSrvReward",	handle = _P.OnEnterMergeSerSrvReward},	-- (烟花)进入全服祈福回调 PActivity.SFireworksSrvReward
+		[CMD_ID.sCommGetFireworksSrvReward]	 = {proto = "PActivity.SGetFireworksSrvReward",	handle = _P.OnGetSerFireRewardBack},-- (烟花)领取每日奖励回调 PActivity.SGetFireworksSrvReward
+		[CMD_ID.sCommGetFireworksRankReward] = {proto = "PActivity.SActivityGeted",			handle = _P.OnGetSerRankRewardBack},-- (烟花)领取排行版奖励PActivity.SActivityGeted
+		[CMD_ID.sCommRechargeDaysGet]		 = {proto = "PActivity.SRechargeDaysGet",		handle = _P.OnSerGetPayDayBack},-- (中秋累计充值) 领取累充天数奖励 PActivity.SRechargeDaysGet
+		[CMD_ID.sCommRechargeUpdateDays]	 = {proto = "PActivity.SRechargeUpdateDays", 	handle = _P.OnSerDayUpdatePush},-- (中秋累计充值) 更新累计天数 PActivity.SRechargeUpdateDays
+		[CMD_ID.sFlopStart]	 	= {proto = "PActivity.SFlopStart", 		handle = _P.OnFlopCardStart},	-- (翻牌活动)开局 PActivity.SFlopStart
+		[CMD_ID.sOpenCard]	 	= {proto = "PActivity.SOpenCard", 		handle = _P.OnOpenCardBack},	-- (翻牌活动)开牌 PActivity.SOpenCard
+		[CMD_ID.sOpenAllCard]	= {proto = "PActivity.SOpenAllCard", 	handle = _P.OnOpenAllCardBack},	-- (翻牌活动)全开 PActivity.SOpenAllCard
+		[CMD_ID.sRefreshCards]	= {proto = "PActivity.SRefreshCards", 	handle = _P.OnRefreshCardBack},	-- (翻牌活动)刷新卡牌 PActivity.SRefreshCards
+		[CMD_ID.sRandomDrop]	= {proto = "PActivity.SRandomDrop", 	handle = _P.OnRandomDropBack},	-- 随机掉落 PActivity.SRandomDrop
 	}
 
 	func_send, func_recv = _P.SetRegist(func_send, func_recv)
@@ -330,6 +406,24 @@ end
 --注册12点重置监听
 EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
 	_P.OnDayout()
+end, true)
+
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function(eventHandle)
+	if MActivity.FlopCardRefreshData ~= nil then
+		for k,v in pairs(MActivity.FlopCardRefreshData) do
+			if v.time ~= nil then
+				local isRefresh = (v.time - HeartBeat.ServSecond()) <= 0
+				if isRefresh and not MActivity.FlopCardRed[v.actId] then
+					CMain.UpdateRedpoint(true, v.sysId, v.actId)
+					MActivity.FlopCardRed[v.actId] = true
+				end
+
+				if isRefresh then
+					_M.OnRefreshCards(v.actId)
+				end
+			end
+		end
+	end
 end, true)
 
 --领取奖励
@@ -547,6 +641,24 @@ end
 		end
 	end
 
+	--绝世美人小红点检查
+	function _P.CheckSuperGirlRepoint(actId, actType)
+		local data = MActivity.GetListFromType(actType)
+		if data == nil then return end
+		local sysId = Define.SysId.SuperGirl
+		if data[actId] ~= nil and data[actId].list ~= nil then
+			for k,v in pairs(data[actId].list) do
+				local ownNum = MBag.GetItemNum(v.cost.id)
+				local isListItemRed = (ownNum ~= nil and ownNum >= v.cost.num and (not v.isGeted))
+
+				-- if MActivity.ActRedpoint(actId, v.index, isListItemRed) then
+					CMain.UpdateRedpoint(isListItemRed, sysId, v.index)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.SuperGirl, actId, v.index)
+				-- end
+			end
+		end
+	end
+
 	--四大奸臣数据更新
 	function _P.DoUpdateJianChen(actType, data)
 		if data == nil then return end
@@ -573,6 +685,33 @@ end
 		--刷新界面
 		WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", actType)
 		WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", actType, info.actId)
+	end
+
+	--绝世美人数据更新
+	function _P.DoUpdateSuperGirl(actType, data)
+		if data == nil then return end
+		local info = _P.StateInfo(data, actType)
+		info.mainPrefabName = data.mainPrefabName
+		info.itemPrefabName = data.itemPrefabName
+		info.title = data.title
+		info.list = {}
+		for k,v in pairs(data.list) do
+			local one = {
+				index = v.index,
+				attrid = v.attrid,
+				icon = v.icon,
+				tips = v.tips,
+				cost = {id = v.cost.id, num = v.cost.num},
+				isGeted = v.isGeted,
+			}
+			info.list[v.index] = one
+		end
+		--更新数据层
+		MActivity.UpdateAct(info.actId, actType, info)
+		--检查小红点
+		_P.CheckSuperGirlRepoint(info.actId, actType)
+		--刷新界面
+		WindowMgr.Call("USuperGirlActivity", "OnUpdateViewData", actType, info.actId)
 	end
 
 --新官上任
@@ -715,6 +854,7 @@ end
 		info.exp = data.exp or 0
 		info.isSelectDown = data.isSelectDown or false
 		info.todayLucky = data.todayLucky or 0 -- 今日获得幸运值
+		info.isFirstOpen = data.isFirstOpen
 
 		-- 商会BOSS列表
 		info.commerBossList = {}
@@ -816,11 +956,11 @@ end
 				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
 				--if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
 					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
-					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_Day,actId,v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Day,actId,v.id)
 				--end
 			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Day)
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Day)
 		end
 	end
 	--每日充值数据更新
@@ -858,11 +998,11 @@ end
 				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
 				--if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
 					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
-					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_Total,actId,v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Total,actId,v.id)
 				--end
 			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Total)
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Total)
 		end
 	end
 	--累计充值数据更新
@@ -900,11 +1040,11 @@ end
 				local isListItemRed = (v.isGeted == false and info.num >= csvRecharge.grade[v.id])
 				--if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
 					--CMain.UpdateRedpoint(isListItemRed, actType, v.id)
-					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward_TotalDay,actId,v.id)
+					CMain.UpdateRedpoint(isListItemRed, Define.SysId.RechargeReward, Define.SysId.RechargeReward_TotalDay,actId,v.id)
 				--end
 			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_TotalDay)
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_TotalDay)
 		end
 	end
 --累天充值数据更新
@@ -943,7 +1083,7 @@ end
 				if MActivity.ActivityState.Doing == info.state.state then
 					local isUpdateRedpoint = MActivity.RewardGetState.CanGet == data.getState
 					--if MActivity.ActRedpoint(actId, data.index, isUpdateRedpoint) then
-						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward_DailyGift, actId, data.index)
+						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward, Define.SysId.RechargeReward_DailyGift, actId, data.index)
 						if isUpdateRedpoint then
 							isHaveRed = true
 						end
@@ -954,7 +1094,7 @@ end
 				end
 			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_DailyGift)
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_DailyGift)
 		end
 		CMain.UpdateRedpoint(isHaveRed, Define.SysId.OneRecharge)
 		if MActivity.IsShowsOneRecharge and not IsShowsOneRecharge then
@@ -973,14 +1113,26 @@ end
 				if csvDailyGift and csvDailyGift.award and csvDailyGift.award[value.index] then
 					local productID = 0
 					local maxTime = 1
-					if nil ~= csvDailyGift.productID and nil ~= csvDailyGift.productID[value.index] then
-						local productIDData = csvDailyGift.productID[value.index]
-						productID = productIDData[1] or 0
-						maxTime = productIDData[2] or 1
+					if GameSetting.IsTaiWan then
+						if nil ~= csvDailyGift.productID2 and nil ~= csvDailyGift.productID2[value.index] then
+							local productIDData = csvDailyGift.productID2[value.index]
+							productID = productIDData[1] or 0
+							maxTime = productIDData[2] or 1
+						end
+					else
+						if nil ~= csvDailyGift.productID and nil ~= csvDailyGift.productID[value.index] then
+							local productIDData = csvDailyGift.productID[value.index]
+							productID = productIDData[1] or 0
+							maxTime = productIDData[2] or 1
+						end
 					end
 					local desc = ""
-					if nil ~= csvDailyGift.desc and nil ~= csvDailyGift.desc[value.index] then
-						desc = csvDailyGift.desc[value.index]
+					local key = "desc"
+					if GameSetting.IsTaiWan then
+						key = "desc2"
+					end
+					if csvDailyGift[key] and csvDailyGift[key][value.index] then
+						desc = csvDailyGift[key][value.index]
 					end
 					local award = {}
 					if nil ~= csvDailyGift.award and nil ~= csvDailyGift.award[value.index] then
@@ -1005,6 +1157,7 @@ end
 						time = value.time,
 						maxTime = maxTime,
 						productID = productID,
+						productID2 = productID,
 						desc = desc,
 						award = award,
 						titleBg = titleBg,
@@ -1051,12 +1204,12 @@ end
 				if MActivity.ActivityState.Doing == info.state.state then
 					local isUpdateRedpoint = data.canGetTimes > 0
 					--if MActivity.ActRedpoint(actId, data.index, isUpdateRedpoint) then
-						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward_Single, actId, data.index)
+						CMain.UpdateRedpoint(isUpdateRedpoint, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Single, actId, data.index)
 					--end
 				end
 			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Single)
+			CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Single)
 		end
 	end
 	--单笔充值数据更新
@@ -1286,6 +1439,12 @@ function _P.DoUpdate(data, isInit)
 			_P.DoUpdateJianChen(Define.ActivityType.JianChen, _P.InitJianChengData(v))
 		end
 	end
+	--绝世美人
+	if data.superGirls ~= nil then
+		for k,v in pairs(data.superGirls) do
+			_P.DoUpdateSuperGirl(Define.ActivityType.Super_Girl, _P.InitSuperGirlData(v))
+		end
+	end
 	if data.xinguan1 ~= nil then
 		-- 新官上任活动1
 		_P.DoUpdateXinGuan(Define.ActivityType.XinGuan1, data.xinguan1)
@@ -1339,6 +1498,11 @@ function _P.DoUpdate(data, isInit)
 		MActivity.ClearForType(actType)
 		local info = _P.StateInfo(data.headChange, actType)
 		MActivity.UpdateAct(info.actId, actType, info)
+
+		if WindowMgr.IsCreated("UPlayerChangeHead") then
+			WindowMgr.Destroy("UPlayerChangeHead")
+			WindowMgr.Create("UPlayerChangeHead")
+		end
 	end
 	if data.adventure ~= nil then
 		--奇遇活动
@@ -1372,6 +1536,38 @@ function _P.DoUpdate(data, isInit)
 	end
 	if data.fireworks ~= nil then
 		_P.DoUpdateFirework(Define.ActivityType.MidAutumn_Firework, data.fireworks)
+	end
+	if data.festivalLogins ~= nil then
+		_P.DoUpdateFestivalLogin(Define.ActivityType.MidAutumn_Login, data.festivalLogins)
+	end
+	if data.festivalRecharge ~= nil then
+		_P.DoUpdateFestivalPay(Define.ActivityType.MidAutumn_Recharge, data.festivalRecharge)
+	end
+	if data.specialOffer ~= nil then
+		_P.DoUpdateFestivalShop(Define.ActivityType.MidAutumn_Shop, data.specialOffer)
+	end
+	if data.consumeScore ~= nil then
+		_P.DoUpdateConsumePoint(Define.ActivityType.ConsumePoint, data.consumeScore)
+	end
+	if data.commFireworks ~= nil then
+		for k,v in pairs(data.commFireworks) do
+			_P.DoUpdateMergeSerFirework(Define.ActivityType.MergeSrv_Firework, v)
+		end
+	end
+	if data.commLogins ~= nil then
+		for k,v in pairs(data.commLogins) do
+			_P.DoUpdateMergeSerLogin(Define.ActivityType.MergeSrv_Login, v)
+		end
+	end
+	if data.commRecharge ~= nil then
+		for k,v in pairs(data.commRecharge) do
+			_P.DoUpdateMergeSerPay(Define.ActivityType.MergeSrv_Recharge, v)
+		end
+	end
+	if data.flop ~= nil then
+		for k,v in pairs(data.flop) do
+			_P.DoUpdateFlopCard(Define.ActivityType.FlopCard, v)
+		end
 	end
 end
 
@@ -1413,6 +1609,15 @@ function _P.OnGetSuccess(data)
 				WindowMgr.Call("USuperStaffPanel", "OnRecuitCallBack", data)
 				WindowMgr.Call("USuperStaffDetail", "OnRecuitCallBack", data)
 			--end
+		elseif info.actType == Define.ActivityType.Super_Girl then
+			--绝世美女
+			local one = info.list[data.index]
+				one.isGeted = data.isGeted
+				-- 检查小红点
+				_P.CheckSuperGirlRepoint(actId, info.actType)
+
+				-- 界面表现(招募员工返回)
+				WindowMgr.Call("USuperGirlActivity", "OnRecuitCallBack", data)
 		elseif info.actType == Define.ActivityType.RechargeReward_Day then
 			local one = info.list[data.index]
 			if one.isGeted ~= data.isGeted then
@@ -1420,6 +1625,7 @@ function _P.OnGetSuccess(data)
 				--检查小红点
 				_P.CheckRechargeDayRepoint(actId,info.actType)
 				--界面表现
+				WindowMgr.Call("UFourTraitorsActivity", "OnRecuitCallBack", data)
 				WindowMgr.Call("URechargeAward","RefreshItemGetState", data, info.actType)
 		end
 		elseif info.actType == Define.ActivityType.RechargeReward_Total then
@@ -1443,6 +1649,7 @@ function _P.OnGetSuccess(data)
 		elseif info.actType == Define.ActivityType.RechargeReward_DailyGift then
 			local one = info.list[data.index]
 			if data.isGeted and MActivity.RewardGetState.CanGet == one.getState then
+				one.getState = MActivity.RewardGetState.Geted
 				--检查小红点
 				_P.CheckDailyGiftRepoint(actId)
 				--界面表现
@@ -1557,12 +1764,95 @@ function _P.OnGetSuccess(data)
 					WindowMgr.Call("UFundPanel", "GetRewardBack", data)
 				end
 			end
-		elseif info.actType == Define.ActivityType.MidAutumn_Login or
-			   info.actType == Define.ActivityType.MidAutumn_Firework or
-			   info.actType == Define.ActivityType.MidAutumn_Reward then
+		elseif info.actType == Define.ActivityType.MidAutumn_Firework then
+			local isHas = false -- 下方的每日奖励
+			for k,v in pairs(info.rewardedList) do
+				if v == data.index then
+					isHas = true
+					break
+				end
+			end
 
-			if WindowMgr.IsCreated("UMidautumnPary") then
-				WindowMgr.Call("UMidautumnPary", "GetRewardBack", data)
+			if not isHas and info.rewardedList[data.index] ~= nil then
+				info.rewardedList[data.index].isGeted = true
+			end
+
+			_P.CheckFireworkRedPoint(data.actId)
+			if WindowMgr.IsCreated("UMidautumnActivity") then
+				WindowMgr.Call("UMidautumnActivity", "GetRewardBack", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.MidAutumn_Login then
+			local one = info.lanyernList[data.index] -- 每天灯笼奖励
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				_P.CheckLoginRedPoint(actId)
+
+				if WindowMgr.IsCreated("UMidautumnActivity") then
+					WindowMgr.Call("UMidautumnActivity", "GetRewardBack", data, info.actType)
+				end
+			end
+		elseif info.actType == Define.ActivityType.MidAutumn_Recharge then
+			local one = info.dailylist[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+				_P.CheckPayRedPoint(actId)
+
+				if WindowMgr.IsCreated("UMidautumnActivity") then
+					WindowMgr.Call("UMidautumnActivity", "GetRewardBack", data, info.actType)
+				end
+			end
+		elseif info.actType == Define.ActivityType.MidAutumn_Shop then
+			if data.isGeted and WindowMgr.IsCreated("UMidautumnActivity") then
+				WindowMgr.Call("UMidautumnActivity", "GetRewardBack", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.MergeSrv_Firework then
+			local isHas = false -- 下方的每日奖励
+			for k,v in pairs(info.rewardedList) do
+				if v == data.index then
+					isHas = true
+					break
+				end
+			end
+
+			if not isHas and info.rewardedList[data.index] ~= nil then
+				info.rewardedList[data.index].isGeted = true
+			end
+
+			local fireworkConf = Csv.ActivityFireworks[data.actId]
+			if fireworkConf then
+				_P.CheckMergeSerFireworkRedPoint(data.actId, fireworkConf.sysId)
+			end
+
+			if WindowMgr.IsCreated("UMergeServerActivity") then
+				WindowMgr.Call("UMergeServerActivity", "GetRewardBack", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.MergeSrv_Login then
+			local one = info.lanyernList[data.index] -- 每天灯笼奖励
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+
+				local loginConf = Csv.ActivityMidLogin[actId]
+				if loginConf then
+					_P.CheckMergeSerLoginRedPoint(actId, loginConf.sysId)
+				end
+
+				if WindowMgr.IsCreated("UMergeServerActivity") then
+					WindowMgr.Call("UMergeServerActivity", "GetRewardBack", data, info.actType)
+				end
+			end
+		elseif info.actType == Define.ActivityType.MergeSrv_Recharge then
+			local one = info.dailylist[data.index]
+			if one.isGeted ~= data.isGeted then
+				one.isGeted = data.isGeted
+
+				local payConf = Csv.ActivityMidPay[actId]
+				if payConf then
+					_P.CheckMergeSerPayRedPoint(actId, payConf.sysId)
+				end
+
+				if WindowMgr.IsCreated("UMergeServerActivity") then
+					WindowMgr.Call("UMergeServerActivity", "GetRewardBack", data, info.actType)
+				end
 			end
 		end
 	end
@@ -1584,8 +1874,7 @@ function _P.OnUpdateState(data)
 		end
 
 		if info.actType == Define.ActivityType.JianChen or
-			info.actType == Define.ActivityType.JinGuo
-		then
+			info.actType == Define.ActivityType.JinGuo then
 			--四大奸臣状态更新
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
@@ -1607,11 +1896,31 @@ function _P.OnUpdateState(data)
 			-- 界面刷新
 			WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", info.actType)
 			WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", info.actType, actId)
+		elseif info.actType == Define.ActivityType.Super_Girl then
+			--绝世美人
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForId(actId)
+				isNeedUpdateMainBtn = true
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			-- 检查小红点
+			_P.CheckSuperGirlRepoint(actId, info.actType)
+			-- 界面刷新
+			WindowMgr.Call("USuperGirlActivity", "OnUpdateViewData", info.actType, actId)
 		elseif info.actType == Define.ActivityType.RechargeReward_Day then
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
 				MActivity.ClearForId(data.actId)
-				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Day)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Day)
 				if MActivity.GetListFromType(info.actType) == nil then
 					isNeedUpdateMainBtn = true
 				end
@@ -1638,7 +1947,7 @@ function _P.OnUpdateState(data)
 				if nil == MActivity.GetListFromType(info.actType) then
 					isNeedUpdateMainBtn = true
 				end
-
+				CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.Charitable)
 			else
 				local lastState = info.state
 				local newState = data.state
@@ -1659,6 +1968,7 @@ function _P.OnUpdateState(data)
 				if nil == MActivity.GetListFromType(info.actType) then
 					isNeedUpdateMainBtn = true
 				end
+				CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.Adventure)
 			else
 				local lastState = info.state
 				local newState = data.state
@@ -1676,7 +1986,7 @@ function _P.OnUpdateState(data)
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
 				MActivity.ClearForId(data.actId)
-				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Total)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Total)
 				if MActivity.GetListFromType(info.actType) == nil then
 					isNeedUpdateMainBtn = true
 				end
@@ -1698,7 +2008,7 @@ function _P.OnUpdateState(data)
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
 				MActivity.ClearForId(data.actId)
-				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_TotalDay)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_TotalDay)
 				if MActivity.GetListFromType(info.actType) == nil then
 					isNeedUpdateMainBtn = true
 				end
@@ -1720,7 +2030,7 @@ function _P.OnUpdateState(data)
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
 				MActivity.ClearForId(data.actId)
-				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_DailyGift)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_DailyGift)
 				CMain.UpdateRedpoint(false, Define.SysId.OneRecharge)
 				if MActivity.GetListFromType(info.actType) == nil then
 					isNeedUpdateMainBtn = true
@@ -1742,7 +2052,7 @@ function _P.OnUpdateState(data)
 		elseif info.actType == Define.ActivityType.RechargeReward_Single then
 			if data.state.state == MActivity.ActivityState.Close then
 				MActivity.ClearForId(data.actId)
-				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward_Single)
+				CMain.UpdateRedpoint(false, Define.SysId.RechargeReward, Define.SysId.RechargeReward_Single)
 				if MActivity.GetListFromType(info.actType) == nil then
 					isNeedUpdateMainBtn = true
 				end
@@ -1760,8 +2070,7 @@ function _P.OnUpdateState(data)
 			--界面刷新
 			WindowMgr.Call("URechargeAward", "OnRefreshView", info.actType)
 		elseif info.actType == Define.ActivityType.XinGuan1 or
-			info.actType == Define.ActivityType.XinGuan2
-		then
+			info.actType == Define.ActivityType.XinGuan2 then
 			--新官上任活动更新
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
@@ -1769,6 +2078,7 @@ function _P.OnUpdateState(data)
 				if nil == MActivity.GetListFromType(info.actType) then
 					isNeedUpdateMainBtn = true
 				end
+				CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.XinGuan1)
 			else
 				local lastState = info.state
 				local newState = data.state
@@ -1788,7 +2098,7 @@ function _P.OnUpdateState(data)
 			if MActivity.IsUpdateTime2 then
 				MActivity.IsUpdateTime2 = false
 			end
-			
+
 			--界面刷新
 			WindowMgr.Call("UXinGuanRank", "OnUpdateData", data.actId)
 			WindowMgr.Call("UXinGuanMain", "UpdateTime", info.actType)
@@ -1869,10 +2179,13 @@ function _P.OnUpdateState(data)
 
 			WindowMgr.Call("UInvestmentPanel", "OnUpdateViewState", data)
 		elseif info.actType == Define.ActivityType.GlobalTraval then
+			--环球旅行入口关闭
 			if data.state.state == MActivity.ActivityState.Close then
 				MActivity.ClearForId(data.actId)
 				MActivity.ClearForType(Define.ActivityType.GlobalTraval)
 				isNeedUpdateMainBtn = true
+
+				CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.GlobalTraval)
 			else
 				local newState = data.state
 				info.state = 
@@ -1881,10 +2194,9 @@ function _P.OnUpdateState(data)
 					startTime = newState.startTime,
 					endTime = newState.endTime,
 				}
-
-				_P.CheckTravalRedPoint(data.actId, data)
 			end
-
+			
+			_P.CheckTravalRedPoint(data.actId, data)
 			WindowMgr.Call("UGlobalTravalMainPanel", "OnUpdateViewState", data)
 		elseif info.actType == Define.ActivityType.Fund then
 			if data.state.state == MActivity.ActivityState.Close then
@@ -1905,7 +2217,11 @@ function _P.OnUpdateState(data)
 			if WindowMgr.IsCreated("UFundPanel") then
 				WindowMgr.Call("UFundPanel", "OnUpdateViewState", data)
 			end
-		elseif info.actType == Define.ActivityType.MidAFestival then
+		elseif info.actType == Define.ActivityType.MidAutumn_Login or
+				info.actType == Define.ActivityType.MidAutumn_Firework or
+				info.actType == Define.ActivityType.MidAutumn_Recharge or
+				info.actType == Define.ActivityType.MidAutumn_Shop or
+				info.actType == Define.ActivityType.FlopCard then
 			if data.state.state == MActivity.ActivityState.Close then
 				MActivity.ClearForId(data.actId)
 				isNeedUpdateMainBtn = true
@@ -1918,11 +2234,81 @@ function _P.OnUpdateState(data)
 					endTime = newState.endTime,
 				}
 
-				_P.CheckFireworkRedPoint(data.actId)
+				if info.actType == Define.ActivityType.MidAutumn_Firework then
+					_P.CheckFireworkRedPoint(data.actId)
+				end
 			end
 
-			if WindowMgr.IsCreated("UMidautumnFireworks") then
-				WindowMgr.Call("UMidautumnFireworks", "OnUpdateViewState", data)
+			if WindowMgr.IsCreated("UMidautumnActivity") then
+				WindowMgr.Call("UMidautumnActivity", "OnUpdateViewState", data, info.actType)
+			end
+
+			if WindowMgr.IsCreated("UMidautumnRankPanel") then
+				WindowMgr.Call("UMidautumnRankPanel", "OnUpdateData", data.actId)
+			end
+		elseif info.actType == Define.ActivityType.Head_Change then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForType(Define.ActivityType.Head_Change)
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			if WindowMgr.IsCreated("UPlayerChangeHead") then
+				WindowMgr.Destroy("UPlayerChangeHead")
+				WindowMgr.Create("UPlayerChangeHead")
+			end
+		elseif info.actType == Define.ActivityType.ConsumePoint then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForType(Define.ActivityType.ConsumePoint)
+				MActivity.ConsumePointReqState = MActivity.GetConsumePointRefreshState()
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			if WindowMgr.IsCreated("UConsumePointMain") then
+				WindowMgr.Call("UConsumePointMain", "OnUpdateActState", data)
+			end
+		elseif info.actType == Define.ActivityType.MergeSrv_Login or
+				info.actType == Define.ActivityType.MergeSrv_Firework or
+				info.actType == Define.ActivityType.MergeSrv_Recharge then
+			if data.state.state == MActivity.ActivityState.Close then
+				MActivity.ClearForId(data.actId)
+				isNeedUpdateMainBtn = true
+			else
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+
+				local fireworkConf = Csv.ActivityFireworks[data.actId]
+				if fireworkConf then
+					_P.CheckMergeSerFireworkRedPoint(data.actId, fireworkConf.sysId)
+				end
+			end
+
+			if WindowMgr.IsCreated("UMergeServerActivity") then
+				WindowMgr.Call("UMergeServerActivity", "OnUpdateViewState", data, info.actType)
+			end
+
+			if WindowMgr.IsCreated("UMergeServerRankPanel") then
+				WindowMgr.Call("UMergeServerRankPanel", "OnUpdateData", data.actId)
 			end
 		end
 	end
@@ -1954,6 +2340,17 @@ function _P.OnUpdatePro(data)
 					-- 界面刷新
 					WindowMgr.Call("UFourTraitorsActivity", "OnUpdateViewData", info.actType)
 					WindowMgr.Call("USuperStaffPanel", "OnUpdateViewData", info.actType, actId)
+				end
+			end
+		elseif info.actType == Define.ActivityType.Super_Girl then
+			--绝世美人
+			if data.index then
+				local one = info.list[data.index]
+				if data.pro >= one.cost.num then
+					-- 检查小红点
+					_P.CheckSuperGirlRepoint(actId, info.actType)
+					-- 界面刷新
+					WindowMgr.Call("USuperGirlActivity", "OnUpdateViewData", info.actType, actId)
 				end
 			end
 		elseif info.actType == Define.ActivityType.RechargeReward_Day then
@@ -1999,6 +2396,34 @@ function _P.OnUpdatePro(data)
 			--界面刷新
 			WindowMgr.Call("UXinGuanRank", "OnUpdateData", data.actId)
 			WindowMgr.Call("UXinGuanMain", "UpdateTime", info.actType)
+		elseif info.actType == Define.ActivityType.MidAutumn_Recharge then
+			info.num = data.pro
+			_P.CheckPayRedPoint(actId)
+			
+			if WindowMgr.IsCreated("UMidautumnActivity") then
+				WindowMgr.Call("UMidautumnActivity", "UpdatePayNumData", data)
+			end
+		elseif info.actType == Define.ActivityType.MidAutumn_Shop then
+			for _, productData in ipairs(info.giftList) do
+				if productData.giftId == data.index then
+					local csvValue = Csv.SpecialOfferGift[productData.giftId]
+					productData.buyCount = csvValue.limit - data.pro
+				end
+			end
+			
+			if WindowMgr.IsCreated("UMidautumnActivity") then
+				WindowMgr.Call("UMidautumnActivity", "OnUpdatePro", data, info.actType)
+			end
+		elseif info.actType == Define.ActivityType.MergeSrv_Recharge then
+			info.num = data.pro
+			local payConf = Csv.ActivityMidPay[actId]
+			if payConf then
+				_P.CheckMergeSerPayRedPoint(actId, payConf.sysId)
+			end
+			
+			if WindowMgr.IsCreated("UMergeServerActivity") then
+				WindowMgr.Call("UMergeServerActivity", "UpdatePayNumData", data)
+			end
 		end
 	end
 end
@@ -2038,6 +2463,42 @@ function _P.InitJianChengData(data)
 	return activityData
 end
 
+-- 绝世美女
+function _P.InitSuperGirlData(data)
+	
+	local activityConf = Csv.Activity[data.actId]
+	if activityConf == nil then return end
+
+	local traitorConf = Csv.SuperGirl[activityConf.id]
+	if traitorConf == nil then return end
+	
+	local activityData = data
+	activityData.actType = activityConf.type
+	activityData.mainPrefabName = traitorConf.mainPrefabName
+	activityData.itemPrefabName = traitorConf.itemPrefabName
+	activityData.title = traitorConf.title
+	activityData.list = {}
+
+	for i=1, #traitorConf.attrid do
+		local playerId = traitorConf.attrid[i]
+		local playerData = MGirl.GetKnowGirlData(playerId)
+		local isGet = (playerData ~= nil and true) or false
+		
+		local itemData = {
+			index = i,
+			attrid = playerId,
+			icon = traitorConf.icon[i],
+			tips = traitorConf.tips[i],
+			cost = {id = traitorConf.cost[i][1], num = traitorConf.cost[i][2]},
+			isGeted = isGet
+		}
+
+		table.insert(activityData.list, itemData)
+	end
+
+	return activityData
+end
+
 
 function _M.UpdateRecuitStaffRed(itemId)
 	for k,v in pairs(Csv.ActivityJaonChen) do
@@ -2050,10 +2511,29 @@ function _M.UpdateRecuitStaffRed(itemId)
 	end
 end
 
+function _M.UpdateRecuitGirlRed(itemId)
+	for k,v in pairs(Csv.SuperGirl) do
+		local costTab = v.cost
+		local costIDs = {}
+
+		if costTab ~= nil then
+			for k2,v2 in pairs(costTab) do
+				if v2 ~= nil and #v2 >= 2 then
+					table.insert(costIDs,v2[1])
+				end
+			end
+		end
+		if _P.CheckItemIdInList(costIDs, itemId) then
+			local activityConf = Csv.Activity[v.id]
+			if activityConf then
+				_P.CheckSuperGirlRepoint(v.id, activityConf.type)
+			end
+		end
+	end
+end
 
 function _P.CheckItemIdInList(list, itemId)
 	if list == nil then return false end
-
 	for k,v in pairs(list) do
 		if v == itemId then
 			return true
@@ -2062,7 +2542,6 @@ function _P.CheckItemIdInList(list, itemId)
 
 	return false
 end
-
 
 -- 获得该员工后，数据刷新
 function _M.UpdateStaffData(staffId)
@@ -2102,6 +2581,8 @@ function _P.OnNewBuyGoods(data)
 	if WindowMgr.IsCreated("UXinGuanBattle") then
 		WindowMgr.Call("UXinGuanBattle", "UpdateItemData", nil)
 	end
+
+	_P.CheckXinGuanRedPoint(data.actId, activityData.actType)
 end
 
 -- (新官上任)兑换道具
@@ -2128,6 +2609,7 @@ function _P.OnNewUseGoods(data)
 	end
 
 	WindowMgr.Call("UXinGuanBattle", "OnUseItemBack", data)
+	_P.CheckXinGuanRedPoint(data.actId, activityData.actType)
 end
 
 -- (新官上任)送去休息
@@ -2150,6 +2632,10 @@ function _P.OnNewStatus(data)
 		MActivity.XinGuanStatus[data.actId] = nil
 	end
 
+	local activityData = MActivity.GetFromId(data.actId)
+	if activityData then
+		_P.CheckXinGuanRedPoint(data.actId, activityData.actType)
+	end
 	WindowMgr.Call("UXinGuanMain", "UpdateTime", data.actId, true)
 end
 
@@ -2480,6 +2966,11 @@ function _P.OnDelectGangBoss(data)
 	end
 end
 
+-- 初次打开奇遇界面,设置标记
+function _M.OnSetAdvNewLookTag()
+	_M.Send(CMD_ID.cAdventureFirstOpen)
+end
+
 -- 每日12点重置
 function _P.OnDayout()
 	-- 重置活动次数
@@ -2540,25 +3031,42 @@ function _P.OnDayout()
 		globalActData.buyCount = 0
 	end
 
+	--限时活动刷新
+	WindowMgr.Call("ULimitActivity","RefreshActivity")
+
 	CRankReward.OnDayout()
 	CSevenDayTarget.OnDayout()
 end
 
 -- 新官上任获取奖励红点
 function _P.CheckXinGuanRedPoint(actId, actType)
-	local isShowRed = false
+	local isCanGet = false
+	local isHasShopItem = false
 	local activityData = MActivity.GetFromId(actId)
-
 	if activityData.selfGetState == 0 or activityData.gangGetState == 0 then
-		isShowRed = true
+		isCanGet = true
+	end
+	MActivity.XinGuanRankRed = isCanGet
+
+	for k,v in pairs(activityData.shopList) do
+		local hasNum = MBag.GetItemNum(v.itemId)
+		if hasNum > 0 then
+			-- 先判断是否在活动时间内
+			local isInTime = MActivity.XinGuanStatus[actId]
+			isHasShopItem = (isInTime and activityData.state.state ~= MActivity.ActivityState.Finish and activityData.state.state ~= MActivity.ActivityState.Close)
+			break
+		end
 	end
 
-	if isShowRed ~= MActivity.XinGuanRed then
-		MActivity.XinGuanRed = isShowRed
+	local isShowRed = isCanGet or isHasShopItem
+	MActivity.XinGuanRed = isShowRed
 
-		local sysId = (actType == Define.ActivityType.XinGuan1 and Define.SysId.XinGuan1) or Define.SysId.XinGuan2
-		CMain.UpdateRedpoint(isShowRed, sysId)
+	local sysId = (actType == Define.ActivityType.XinGuan1 and Define.SysId.XinGuan1) or Define.SysId.XinGuan2
+
+	if not MMain.FuncIsOpen(sysId) then
+		isShowRed = false
 	end
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.LimitActivity,sysId)
 
 	if WindowMgr.IsCreated("UXinGuanMain") then
 		WindowMgr.Call("UXinGuanMain","UpdateRed")
@@ -2577,7 +3085,11 @@ function  _P.CheckCharityRedPoint(actId, actType)
 
 	MActivity.CharitableRed = isShowRed
 	local sysId = Define.SysId.Charitable
-	CMain.UpdateRedpoint(isShowRed, sysId)
+	--如果功能未开放，红点关闭
+	if not MMain.FuncIsOpen(sysId) then
+		isShowRed = false
+	end
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.LimitActivity,sysId)
 
 	if WindowMgr.IsCreated("UCharitableMainPanel") then
 		WindowMgr.Call("UCharitableMainPanel", "UpdateRed")
@@ -2637,7 +3149,14 @@ function _P.CheckAdventureRedPoint(actId, actType)
 	MActivity.AdventureMainRed = isShowMainBtnRed
 	MActivity.AdventureAchieveRed = hasCanGet
 	MActivity.AdventureRankRed = activityData.personalRewardState == MActivity.RewardGetState.CanGet or activityData.gangrewardState == MActivity.RewardGetState.CanGet
-	CMain.UpdateRedpoint(MActivity.AdventureMainRed, Define.SysId.Adventure)
+
+	--如果功能未开放，红点关闭
+	if not MMain.FuncIsOpen(Define.SysId.Adventure) then
+		CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.Adventure)
+	else
+		CMain.UpdateRedpoint(MActivity.AdventureMainRed,Define.SysId.LimitActivity, Define.SysId.Adventure)
+	end
+	
 	--界面刷新
 	if WindowMgr.IsCreated("UAdventureMain") then
 		WindowMgr.Call("UAdventureMain", "UpdateRed")
@@ -2685,7 +3204,11 @@ function _P.CheckFuturesRedPoint(actId, data)
 	elseif count == Csv.Futures[actId].dailyTimes and info.futuresState ~= MActivity.FuturesState.DEF then
 		isShowRed = true
 	else
-		local needAmount = ((info.resetNeedAmount == nil and Csv.Const(108)[4]) or info.resetNeedAmount)
+		local needMaxNum = Csv.Const(108)[4]
+		if GameSetting.IsTaiWan then
+			needMaxNum = Csv.Const(141)
+		end
+		local needAmount = ((info.resetNeedAmount == nil and needMaxNum) or info.resetNeedAmount)
 		if info.rechargeAmount >= needAmount then
 			isShowRed = true
 		end
@@ -2959,19 +3482,25 @@ function _P.DoUpdateTraval(actType, data)
 	_P.CheckTravalRedPoint(info.actId)
 end
 
+--环球旅行红点
 function _P.CheckTravalRedPoint(actId)
 	local isShowRed = false
 
 	local actInfo = MActivity.GetFromId(actId)
 	local hasNum = MBag.GetItemNum(MActivity.TravalDicsItemId)
 	if actInfo ~= nil then
-		isShowRed = MActivity.CheckHasExchange(actInfo.exchangeShop, actInfo.numberCount) or hasNum > 0
+		isShowRed = MActivity.CheckHasExchange(actId, actInfo.exchangeShop, actInfo.numberCount) or hasNum > 0
 	end
 
-	--if isShowRed ~= MActivity.GloalTravalRed then
-		MActivity.GloalTravalRed = isShowRed
-		CMain.UpdateRedpoint(isShowRed, Define.SysId.GlobalTraval)
-	--end
+	MActivity.GloalTravalRed = isShowRed
+	--如果功能未开放，红点关闭
+	if not MMain.FuncIsOpen(Define.SysId.GlobalTraval) then
+		isShowRed = false
+	end
+	--在限时活动中
+	--CMain.UpdateRedpoint(isShowRed, Define.SysId.LimitActivity,Define.SysId.GlobalTraval)
+	--在主界面中
+	CMain.UpdateRedpoint(isShowRed,Define.SysId.GlobalTraval)
 end
 
 function _M.UpdateTravalRed(actId)
@@ -3022,9 +3551,15 @@ end
 ------------------------------------------中秋烟花--------------------------------------------------
 function _P.DoUpdateFirework(actType, data)
 	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
 	info.leftFreeTimes = data.leftFreeTimes
 	info.igniteTimes = data.igniteTimes
-	info.leftBuyTimes = data.leftBuyTimes
+	info.buyTimes = data.buyTimes
 
 	if data.fireworksList ~= nil and next(data.fireworksList) ~= nil then
 		info.fireworksList = {}
@@ -3048,22 +3583,28 @@ function _P.DoUpdateFirework(actType, data)
 				end
 			end
 
-			info.rewardedList[i] = {needNum = fireworkConf.needNum[i], isGeted = isGeted}
+			info.rewardedList[i] = {index = i, needNum = fireworkConf.needNum[i], isGeted = isGeted}
 		end
 	end
 	info.title = fireworkConf.title
+	info.selfGetState = data.rankRewardState
 
 	MActivity.UpdateAct(info.actId, actType, info)
 	_P.CheckFireworkRedPoint(info.actId)
 
-	if WindowMgr.IsCreated("UMidautumnFireworks") then
-		WindowMgr.Call("UMidautumnFireworks", "UpdateViewData", info)
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnUpdateViewData", info, actType)
+	end
+
+	if WindowMgr.IsCreated("UMidautumnRankPanel") then
+		WindowMgr.Call("UMidautumnRankPanel", "UpdateRed")
 	end
 end
 
 
 function _P.CheckFireworkRedPoint(actId)
 	local isShowRed = false
+	local isShowRankRed = false
 
 	local actInfo = MActivity.GetFromId(actId)
 	if actInfo ~= nil and actInfo.rewardedList ~= nil then
@@ -3074,14 +3615,19 @@ function _P.CheckFireworkRedPoint(actId)
 				break
 			end
 		end
+
+		if actInfo.selfGetState == MActivity.RewardGetState.CanGet then
+			isShowRankRed = true
+		end
 	end
 
-	CMain.UpdateRedpoint(isShowRed, Define.SysId.MidAFestival, actId)
+	local isRed = isShowRankRed or isShowRed
+	CMain.UpdateRedpoint(isRed, Define.SysId.MidAFestival, actId)
 end
 
 
-function _M.IngniteFireReq(index)
-	_M.Send(CMD_ID.cIgniteFireworks, {index = index})
+function _M.IngniteFireReq(actId, isTen, index)
+	_M.Send(CMD_ID.cIgniteFireworks, {actId = actId, isTen = isTen, index = index})
 end
 
 
@@ -3090,8 +3636,13 @@ function _M.EnterSrvRewardReq()
 end
 
 
-function _M.GetFireRewardReq(index)
-	_M.Send(CMD_ID.cGetFireworksSrvReward, {index = index})
+function _M.GetFireRewardReq(actId, index)
+	_M.Send(CMD_ID.cGetFireworksSrvReward, {actId = actId, index = index})
+end
+
+
+function _M.GetFireRankRewardReq(actId, index)
+	_M.Send(CMD_ID.cGetFireworksRankReward, {actId = actId, index = index})
 end
 
 
@@ -3099,20 +3650,20 @@ end
 function _P.OnIngniteFireBack(data)
 	local actInfo = MActivity.GetFromId(data.actId)
 	if actInfo ~= nil then
-		for k,v in pairs(actInfo.fireworksList) do
-			if v.index == data.index then	--已点燃
-				v.isIgnite = 1
-				break
+		if data.fireworksList ~= nil and next(data.fireworksList) ~= nil then
+			actInfo.fireworksList = {}
+			for k,v in pairs(data.fireworksList) do
+				actInfo.fireworksList[k] = v
 			end
 		end
 
 		actInfo.leftFreeTimes = data.leftFreeTimes
 		actInfo.igniteTimes = data.igniteTimes
-		actInfo.leftBuyTimes = data.leftBuyTimes
+		actInfo.buyTimes = data.buyTimes
 	end
 
-	if WindowMgr.IsCreated("UMidautumnFireworks") then
-		WindowMgr.Call("UMidautumnFireworks", "OnIngniteFireBack", data)
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnIngniteFireBack", data)
 	end
 
 	_P.CheckFireworkRedPoint(data.actId)
@@ -3127,23 +3678,811 @@ function _P.OnEnterSrvReward(data)
 end
 
 
--- 领取每日点燃奖励返回
+-- 领取全服返回
 function _P.OnGetFireRewardBack(data)
-	local actInfo = MActivity.GetFromId(data.actId)
-	if actInfo ~= nil then
-		for k,v in pairs(actInfo.rewardedList) do
-			if v.index == data.index then
-				v.isGeted = true
+	if WindowMgr.IsCreated("UMidautumnPary") then
+		WindowMgr.Call("UMidautumnPary", "GetRewardBack", data)
+	end
+end
+
+
+-- 领取排行版奖励返回
+function _P.OnGetRankRewardBack(data)
+	if data.isGeted then
+		local actInfo = MActivity.GetFromId(data.actId)
+		if actInfo ~= nil then
+			actInfo.selfGetState = MActivity.RewardGetState.Geted
+		end
+
+		if WindowMgr.IsCreated("UMidautumnRankPanel") then
+			WindowMgr.Call("UMidautumnRankPanel", "OnGetRewardBack", data)
+		end
+
+		_P.CheckFireworkRedPoint(data.actId)
+	end
+end
+
+
+------------------------------------------中秋累计登陆--------------------------------------------------
+function _P.DoUpdateFestivalLogin(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.day = data.day
+	info.lanyernList = {}
+	info.isHasShow = data.isHasShow
+
+	local loginConf = Csv.ActivityMidLogin[info.actId]
+	if loginConf == nil then return end
+	
+	info.title = loginConf.toggleTitle
+
+	for k,v in pairs(data.lanyernList) do
+		if loginConf.title[k] ~= nil then
+			info.lanyernList[k] = v
+		end
+	end
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckLoginRedPoint(info.actId)
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnUpdateViewData", info, actType)
+	end
+end
+
+
+function _P.CheckLoginRedPoint(actId)
+	local isShowRed = false
+
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil and actInfo.lanyernList ~= nil then
+		for k,v in pairs(actInfo.lanyernList) do
+			if v.id == actInfo.day and v.isGeted == false then
+				isShowRed = true
 				break
+			end
+		end
+
+	end
+
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.MidAFestival, actId)
+end
+
+
+function _M.SetShowViewTag()
+	_M.Send(CMD_ID.cFestivalLoginSetShowTag)
+end
+
+
+------------------------------------------中秋累计充值--------------------------------------------------
+function _P.DoUpdateFestivalPay(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.day = data.day
+	info.totalDays = data.totalDays
+	info.totalDaysList = data.totalDaysList
+	info.num = data.num
+	info.dailylist = data.dailylist
+
+	local payConf = Csv.ActivityMidPay[info.actId]
+	info.title = payConf.toggleTitle
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckPayRedPoint(info.actId)
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnUpdateViewData", info, actType)
+	end
+end
+
+
+function _P.CheckPayRedPoint(actId)
+	local isShowDayRed = false
+	local isShowRewardRed = false
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil then
+		local payConf = Csv.ActivityMidPay[actId]
+		if payConf ~= nil and payConf.needDay ~= nil then
+			for k,v in pairs(payConf.needDay) do
+				if k <= actInfo.totalDays then
+					local isGeted = actInfo.totalDaysList[k].isGeted
+					if not isGeted then
+						isShowDayRed = true
+						break
+					end
+				end
+			end
+		end
+
+		if actInfo.dailylist ~= nil then
+			for k,v in pairs(actInfo.dailylist) do
+				local curNeedNum = MActivity.GetTodayData(payConf.payNeedNum[v.id], actInfo.day)
+				if actInfo.num >= curNeedNum and not v.isGeted then
+					isShowRewardRed = true
+					break
+				end
 			end
 		end
 	end
 
-	if WindowMgr.IsCreated("UMidautumnFireworks") then
-		WindowMgr.Call("UMidautumnFireworks", "GetRewardBack", data)
+	local isShowRed = isShowDayRed or isShowRewardRed
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.MidAFestival, actId)
+end
+
+
+function _P.OnGetPayDayBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil and actInfo.totalDaysList ~= nil then
+		local curData = actInfo.totalDaysList[data.index]
+		if curData ~= nil then
+			actInfo.totalDaysList[data.index].isGeted = true
+		end
+
+		_P.CheckPayRedPoint(actInfo.actId)
 	end
 
-	_P.CheckFireworkRedPoint(data.actId)
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnGetPayDayBack", data)
+	end
+end
+
+
+function _M.GetPayDayResBack(actId, index)
+	_M.Send(CMD_ID.cFestivalRechargeDaysGet, {actId = actId, index = index})
+end
+
+
+function _P.OnDayUpdatePush(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.totalDays = data.totalDays
+		_P.CheckPayRedPoint(actInfo.actId)
+	end
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnDayUpdatePush", data)
+	end
+end
+
+------------------------------------------万圣节限时商店--------------------------------------------------
+function _P.DoUpdateFestivalShop(actType, dataList)
+	if dataList == nil then
+		return
+	end
+	for _, data in ipairs(dataList) do
+		local info = _P.StateInfo(data, actType)
+		if info.state.lefttime then
+			info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+		else
+			info.state.lefttime = HeartBeat.ServSecond()
+		end
+		
+		info.refreshTime = data.refreshTime
+		info.giftList = {}
+		local csvActSpecOffer = Csv.ActivitySpecialOffer[data.actId]
+		info.sysId = csvActSpecOffer.sysId
+		info.viewBg = csvActSpecOffer.viewBg
+		info.title = csvActSpecOffer.toggleTitle
+		for index, productData in ipairs(data.giftList) do
+			info.giftList[index] = {}
+			info.giftList[index].giftId = productData.giftId
+			local csvValue = Csv.SpecialOfferGift[productData.giftId]
+			info.giftList[index].name = csvValue.name
+			info.giftList[index].sort = csvValue.sort
+			info.giftList[index].original = csvValue.original
+			info.giftList[index].price = csvValue.price
+			info.giftList[index].limit = csvValue.limit
+			info.giftList[index].buyCount = csvValue.limit - productData.buyCount
+			info.giftList[index].itemList = {}
+			for _, itemData in ipairs(csvValue.itemList) do
+				local itemDataCopy = {}
+				itemDataCopy.itemID = itemData[1]
+				itemDataCopy.itemNum = itemData[2]
+				table.insert(info.giftList[index].itemList, itemDataCopy)
+			end
+		end
+		table.sort(info.giftList, function (left, right)
+			return left.sort < right.sort
+		end)
+		MActivity.UpdateAct(info.actId, actType, info)
+	end
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnUpdateViewData", info, actType)
+	end
+end
+
+------------------------------------------消费积分返利--------------------------------------------------
+function _P.DoUpdateConsumePoint(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.score = data.score
+	MActivity.UpdateAct(info.actId, actType, info)
+	MActivity.ConsumePointRed = true
+	CMain.UpdateRedpoint(true, Define.SysId.ConsumePoint)
+end
+
+
+function _P.OnConsumeOpenUIBack(data)
+	if WindowMgr.IsCreated("UConsumePointMain") then
+		WindowMgr.Call("UConsumePointMain", "OnGetDataBack", data)
+	end
+end
+
+
+function _P.OnConsumeRefreshBack(data)
+	if WindowMgr.IsCreated("UConsumePointMain") then
+		WindowMgr.Call("UConsumePointMain", "OnRefreshViewBack", data)
+	else
+		MActivity.ConsumePointRed = true
+		CMain.UpdateRedpoint(true, Define.SysId.ConsumePoint)
+	end
+end
+
+
+function _P.OnConsumeBuyBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.score = data.socre
+	end
+	if WindowMgr.IsCreated("UConsumePointMain") then
+		WindowMgr.Call("UConsumePointMain", "OnBuyCallBack", data)
+	end
+end
+
+
+function _P.OnConsumeSocreUpdatePush(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.score = data.socre
+	end
+
+	if WindowMgr.IsCreated("UConsumePointMain") then
+		WindowMgr.Call("UConsumePointMain", "OnUpdateScoreNum", data)
+	end
+end
+
+
+function _M.OnConsumeOpenUIReq()
+	_M.Send(CMD_ID.cConsumeOpenUI)
+end
+
+
+function _M.OnConsumeCloseUIReq()
+	_M.Send(CMD_ID.cConsumeCloseUI)
+end
+
+
+function _M.OnConsumeRefreshReq(type)
+	_M.Send(CMD_ID.cConsumeRefresh, {type = type})
+end
+
+
+function _M.OnConsumeBuyReq(type, itemId)
+	_M.Send(CMD_ID.cConsumeBuy, {type = type, itemId = itemId})
+end
+
+
+------------------------------------------合服活动烟花--------------------------------------------------
+function _P.DoUpdateMergeSerFirework(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.leftFreeTimes = data.leftFreeTimes
+	info.igniteTimes = data.igniteTimes
+	info.buyTimes = data.buyTimes
+
+	if data.fireworksList ~= nil and next(data.fireworksList) ~= nil then
+		info.fireworksList = {}
+		for k,v in pairs(data.fireworksList) do
+			info.fireworksList[k] = v
+		end
+	end
+
+	info.rewardedList = {}
+	local fireworkConf = Csv.ActivityFireworks[info.actId]
+	if fireworkConf ~= nil then
+		for i=1,#fireworkConf.needNum do
+			local isGeted = false
+
+			if data.rewardedList ~= nil then
+				for k,v in pairs(data.rewardedList) do
+					if v == i then
+						isGeted = true
+						break
+					end
+				end
+			end
+
+			info.rewardedList[i] = {index = i, needNum = fireworkConf.needNum[i], isGeted = isGeted}
+		end
+	end
+	info.title = fireworkConf.title
+	info.selfGetState = data.rankRewardState
+	info.sysId = fireworkConf.sysId
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckMergeSerFireworkRedPoint(info.actId, fireworkConf.sysId)
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnUpdateViewData", info, actType)
+	end
+
+	if WindowMgr.IsCreated("UMergeServerRankPanel") then
+		WindowMgr.Call("UMergeServerRankPanel", "UpdateRed")
+	end
+end
+
+
+function _P.CheckMergeSerFireworkRedPoint(actId, sysId)
+	local isShowRed = false
+	local isShowRankRed = false
+
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil and actInfo.rewardedList ~= nil then
+		local hasIgniteNum = actInfo.igniteTimes
+		for k,v in pairs(actInfo.rewardedList) do
+			if v.isGeted == false and hasIgniteNum >= v.needNum then
+				isShowRed = true
+				break
+			end
+		end
+
+		if actInfo.selfGetState == MActivity.RewardGetState.CanGet then
+			isShowRankRed = true
+		end
+	end
+
+	local isRed = isShowRankRed or isShowRed
+	CMain.UpdateRedpoint(isRed, sysId, actId)
+end
+
+
+function _M.SerIngniteFireReq(actId, isTen, index)
+	_M.Send(CMD_ID.cCommIgniteFireworks, {actId = actId, isTen = isTen, index = index})
+end
+
+
+function _M.SerEnterSrvRewardReq(actId)
+	_M.Send(CMD_ID.cCommFireworksSrvReward, {actId = actId})
+end
+
+
+function _M.GetSerFireRewardReq(actId, index)
+	_M.Send(CMD_ID.cCommGetFireworksSrvReward, {actId = actId, index = index})
+end
+
+
+function _M.GetSerFireRankRewardReq(actId, index)
+	_M.Send(CMD_ID.cCommGetFireworksRankReward, {actId = actId, index = index})
+end
+
+
+-- 点燃烟花返回
+function _P.OnSerIngniteFireBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		if data.fireworksList ~= nil and next(data.fireworksList) ~= nil then
+			actInfo.fireworksList = {}
+			for k,v in pairs(data.fireworksList) do
+				actInfo.fireworksList[k] = v
+			end
+		end
+
+		actInfo.leftFreeTimes = data.leftFreeTimes
+		actInfo.igniteTimes = data.igniteTimes
+		actInfo.buyTimes = data.buyTimes
+	end
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnIngniteFireBack", data)
+	end
+
+	local fireworkConf = Csv.ActivityFireworks[data.actId]
+	if fireworkConf then
+		_P.CheckMergeSerFireworkRedPoint(data.actId, fireworkConf.sysId)
+	end
+end
+
+
+-- 进入祈福活动界面
+function _P.OnEnterMergeSerSrvReward(data)
+	if WindowMgr.IsCreated("UMergeServerPary") then
+		WindowMgr.Call("UMergeServerPary", "OnEnterSrvReward", data)
+	end
+end
+
+
+-- 领取全服返回
+function _P.OnGetSerFireRewardBack(data)
+	if WindowMgr.IsCreated("UMergeServerPary") then
+		WindowMgr.Call("UMergeServerPary", "GetRewardBack", data)
+	end
+end
+
+
+-- 领取排行版奖励返回
+function _P.OnGetSerRankRewardBack(data)
+	if data.isGeted then
+		local actInfo = MActivity.GetFromId(data.actId)
+		if actInfo ~= nil then
+			actInfo.selfGetState = MActivity.RewardGetState.Geted
+		end
+
+		if WindowMgr.IsCreated("UMergeServerRankPanel") then
+			WindowMgr.Call("UMergeServerRankPanel", "OnGetRewardBack", data)
+		end
+
+		local fireworkConf = Csv.ActivityFireworks[data.actId]
+		if fireworkConf then
+			_P.CheckMergeSerFireworkRedPoint(data.actId, fireworkConf.sysId)
+		end
+	end
+end
+
+
+------------------------------------------合服活动累计登陆--------------------------------------------------
+function _P.DoUpdateMergeSerLogin(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.day = data.day
+	info.lanyernList = {}
+	info.isHasShow = data.isHasShow
+
+	local loginConf = Csv.ActivityMidLogin[info.actId]
+	info.title = loginConf.toggleTitle
+	info.sysId = loginConf.sysId
+
+	for k,v in pairs(data.lanyernList) do
+		if loginConf.title[k] ~= nil then
+			info.lanyernList[k] = v
+		end
+	end
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckMergeSerLoginRedPoint(info.actId, loginConf.sysId)
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnUpdateViewData", info, actType)
+	end
+end
+
+
+function _P.CheckMergeSerLoginRedPoint(actId, sysId)
+	local isShowRed = false
+
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil and actInfo.lanyernList ~= nil then
+		for k,v in pairs(actInfo.lanyernList) do
+			if v.id == actInfo.day and v.isGeted == false then
+				isShowRed = true
+				break
+			end
+		end
+
+	end
+
+	CMain.UpdateRedpoint(isShowRed, sysId, actId)
+end
+
+
+function _M.SetSerShowViewTag(actId)
+	_M.Send(CMD_ID.cCommLoginSetShowTag, {actId = actId})
+end
+
+
+------------------------------------------合服活动累计充值--------------------------------------------------
+function _P.DoUpdateMergeSerPay(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+	
+	info.day = data.day
+	info.totalDays = data.totalDays
+	info.totalDaysList = data.totalDaysList
+	info.num = data.num
+	info.dailylist = data.dailylist
+
+	local payConf = Csv.ActivityMidPay[info.actId]
+	info.title = payConf.toggleTitle
+	info.sysId = payConf.sysId
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckMergeSerPayRedPoint(info.actId, payConf.sysId)
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnUpdateViewData", info, actType)
+	end
+end
+
+
+function _P.CheckMergeSerPayRedPoint(actId, sysId)
+	local isShowDayRed = false
+	local isShowRewardRed = false
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil then
+		local payConf = Csv.ActivityMidPay[actId]
+		if payConf ~= nil and payConf.needDay ~= nil then
+			for k,v in pairs(payConf.needDay) do
+				if k <= actInfo.totalDays then
+					local isGeted = actInfo.totalDaysList[k].isGeted
+					if not isGeted then
+						isShowDayRed = true
+						break
+					end
+				end
+			end
+		end
+
+		if actInfo.dailylist ~= nil then
+			for k,v in pairs(actInfo.dailylist) do
+				local curNeedNum = MActivity.GetTodayData(payConf.payNeedNum[v.id], actInfo.day)
+				if actInfo.num >= curNeedNum and not v.isGeted then
+					isShowRewardRed = true
+					break
+				end
+			end
+		end
+	end
+
+	local isShowRed = isShowDayRed or isShowRewardRed
+	CMain.UpdateRedpoint(isShowRed, sysId, actId)
+end
+
+
+function _P.OnSerGetPayDayBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil and actInfo.totalDaysList ~= nil then
+		local curData = actInfo.totalDaysList[data.index]
+		if curData ~= nil then
+			actInfo.totalDaysList[data.index].isGeted = true
+		end
+
+		local payConf = Csv.ActivityMidPay[actInfo.actId]
+		if payConf then
+			_P.CheckMergeSerPayRedPoint(actInfo.actId, payConf.sysId)
+		end
+	end
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnGetPayDayBack", data)
+	end
+end
+
+
+function _M.GetSerPayDayResBack(actId, index)
+	_M.Send(CMD_ID.cCommRechargeDaysGet, {actId = actId, index = index})
+end
+
+
+function _P.OnSerDayUpdatePush(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.totalDays = data.totalDays
+
+		local payConf = Csv.ActivityMidPay[actInfo.actId]
+		if payConf then
+			_P.CheckMergeSerPayRedPoint(actInfo.actId, payConf.sysId)
+		end
+	end
+
+	if WindowMgr.IsCreated("UMergeServerActivity") then
+		WindowMgr.Call("UMergeServerActivity", "OnDayUpdatePush", data)
+	end
+end
+
+------------------------------限时活动红点----------------
+function _M.CheckLimitRed(_sysId,isOpen)
+	if _sysId == Define.SysId.XinGuan1 then
+		if isOpen then
+			CMain.UpdateRedpoint(MActivity.XinGuanRankRed, Define.SysId.LimitActivity,Define.SysId.XinGuan1)
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.XinGuan1)
+		end
+	elseif _sysId == Define.SysId.Charitable then
+		if isOpen then
+			CMain.UpdateRedpoint(MActivity.CharitableRed, Define.SysId.LimitActivity,Define.SysId.Charitable)
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.Charitable)
+		end
+	elseif _sysId == Define.SysId.Adventure then
+		if isOpen then
+			CMain.UpdateRedpoint(MActivity.AdventureMainRed,Define.SysId.LimitActivity, Define.SysId.Adventure)
+		else
+			CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.Adventure)
+		end
+	elseif _sysId == Define.SysId.SiegeWall then
+		if not isOpen then
+			CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.SiegeWall)
+		else
+			CMain.UpdateRedpoint(MSiege.SiegeRed,Define.SysId.LimitActivity, Define.SysId.SiegeWall)
+		end
+	elseif _sysId == Define.SysId.GlobalTraval then
+		if isOpen then
+			CMain.UpdateRedpoint(MActivity.GloalTravalRed,Define.SysId.LimitActivity, Define.SysId.GlobalTraval)
+		else
+			CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.GlobalTraval)
+		end
+	end
+	_P.RefreshMainBtn()
+end
+
+
+------------------------------------------翻牌活动--------------------------------------------------
+function _P.DoUpdateFlopCard(actType, data)
+	local info = _P.StateInfo(data, actType)
+	info.previewCardList = {}
+	if data.previewCardList then
+		for k,v in pairs(data.previewCardList) do
+			info.previewCardList[k] = v
+		end
+	end
+
+	info.openedCardList = {}
+	if data.openedCardList then
+		for k,v in pairs(data.openedCardList) do
+			info.openedCardList[k] = v
+		end
+	end
+	
+	info.refreshTime = data.refreshTime
+	info.started = data.started
+
+	local flopConf = Csv.ActivityFlop[info.actId]
+	if flopConf then
+		info.flopConf = flopConf
+		info.title = flopConf.toggleTitle
+		info.sysId = flopConf.sysId
+		MActivity.FlopCardRed[info.actId] = true
+		CMain.UpdateRedpoint(true, flopConf.sysId, info.actId)
+		MActivity.FlopCardRefreshData[info.actId] = {sysId = flopConf.sysId, time = data.refreshTime, actId = info.actId}
+	end
+
+	MActivity.UpdateAct(info.actId, actType, info)
+end
+
+
+-- 开局请求
+function _M.OnFlopStartReq(actId)
+	_M.Send(CMD_ID.cFlopStart, {actId = actId})
+end
+
+
+-- 开局返回
+function _P.OnFlopCardStart(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.started = true
+		actInfo.openedCardList = {}
+	end
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnFlopCardStart")
+	end
+end
+
+
+-- 单张开牌请求
+function _M.OnOpenCardReq(actId, cardId)
+	_M.Send(CMD_ID.cOpenCard, {actId = actId, cardId = cardId})
+end
+
+
+-- 单张开牌返回
+function _P.OnOpenCardBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		if data.previewCardList and next(data.previewCardList) ~= nil then -- 已翻到最后一张
+			actInfo.previewCardList = {}
+			for k,v in pairs(data.previewCardList) do
+				actInfo.previewCardList[k] = v
+			end
+			actInfo.started = false
+			actInfo.openedCardList = {}
+		else
+			actInfo.openedCardList[#actInfo.openedCardList + 1] = data.card
+		end
+	end
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnOpenCardBack", data)
+	end
+end
+
+
+-- 全开卡牌请求
+function _M.OnOpenAllReq(actId)
+	_M.Send(CMD_ID.cOpenAllCard, {actId = actId})
+end
+
+
+-- 全开卡牌返回
+function _P.OnOpenAllCardBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		if data.previewCardList ~= nil then
+			actInfo.previewCardList = {}
+			for previewKey,previreValue in pairs(data.previewCardList) do
+				actInfo.previewCardList[previewKey] = previreValue
+			end
+		end
+		actInfo.started = false
+		actInfo.openedCardList = {}
+	end
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnOpenAllCardBack", data)
+	end
+end
+
+
+-- 刷新卡牌
+function _M.OnRefreshCards(actId)
+	_M.Send(CMD_ID.cRefreshCards, {actId = actId})
+end
+
+
+-- 刷新卡牌返回
+function _P.OnRefreshCardBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.started = false
+		actInfo.openedCardList = {}
+		if data.previewCardList ~= nil then
+			actInfo.previewCardList = {}
+			for previewKey,previreValue in pairs(data.previewCardList) do
+				actInfo.previewCardList[previewKey] = previreValue
+			end
+		end
+
+		if data.refreshTime then
+			actInfo.refreshTime = data.refreshTime
+			MActivity.FlopCardRefreshData[data.actId] = {sysId = actInfo.flopConf.sysId, time = data.refreshTime, actId = data.actId}
+		end
+	end
+
+	if WindowMgr.IsCreated("UMidautumnActivity") then
+		WindowMgr.Call("UMidautumnActivity", "OnRefreshCardBack", data)
+	end
+end
+
+
+-- 随机掉落返回
+function _P.OnRandomDropBack(data)
+	if data ~= nil and data.itemList ~= nil then
+		for k,v in pairs(data.itemList) do
+			local itemConf = Csv.Item[v.key]
+			if itemConf then
+				CCommon.ShowError(Csv.Text("flop_randomDropTip", {name = itemConf.name, num = v.value}))
+			end
+		end
+	end
 end
 
 

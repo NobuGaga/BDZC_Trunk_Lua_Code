@@ -87,7 +87,7 @@ function _M.CreateItem(parent, itemId, onBtnCall, params, sysId)
 			onBtnCall(itemId, params)
 		end, nil, btnClickScale)
 	end
-	
+
 	local effectMoudle = _M.CreateItemLight(one.SelfRect, sysId, nil, csvLine.color)
 	return one, effectMoudle
 end
@@ -122,7 +122,7 @@ end
 	--content: 提示内容 	--> 默认: 确认惊醒此操作?  common_content
 	--sureText: 左边按钮文字	--> 默认: 确定 common_sure
 	--cancelText: 右边按钮文字 --> 默认: 取消 common_cancel
-	--isNoCancel: 是否没有右边按钮 (true:没有右边按钮, 且左边按钮居中) 	--> 默认: false	
+	--isNoCancel: 是否没有右边按钮 (true:没有右边按钮, 且左边按钮居中) 	--> 默认: false
 --可选: noTipsAgainId: 本次登录不再提示所对应的id, 如果玩家勾选, 下次再使用此id进入这个函数将直接回调true (不传没有<本次登录不再提示选项>)
 function _M.CheckTips(onChooseCall, params, noTipsAgainId, winName)
 	if not winName then
@@ -164,7 +164,7 @@ local T_Fly_Text = "T_Fly_Text"
 local M_Fly_ArtFont = "M_Fly_ArtFont"
 --飘物品和数量
 --[[
-    @desc: 
+    @desc:
     author:{author}
     time:2017-11-16 13:18:40
     --@parent: 挂载点
@@ -227,7 +227,7 @@ end
 
 --飘字
 --[[
-    @desc: 
+    @desc:
     author:{author}
     time:2017-11-16 13:19:13
     --@parent: 挂载点
@@ -277,7 +277,7 @@ end
 
 --飘美术字
 --[[
-    @desc: 
+    @desc:
     author:{author}
     time:2017-11-16 13:19:13
 	--@parent: 挂载点
@@ -314,8 +314,8 @@ end
 	--@effectId: Effect表的id
 	--@pos: 位置 (可选)
 	--@doneCall: 结束回调 (可选)
-	--@spMap: 替换的图片列表 (可选) {节点名:图片名} --> 覆盖表中的spMap字段中对应节点的值 
-	--@textMap: 文字列表 (可选) {节点名:文字内容} --> 覆盖表中的textMap字段中对应节点的值  
+	--@spMap: 替换的图片列表 (可选) {节点名:图片名} --> 覆盖表中的spMap字段中对应节点的值
+	--@textMap: 文字列表 (可选) {节点名:文字内容} --> 覆盖表中的textMap字段中对应节点的值
 	--@dura:  持续时间 (可选) 替换表的dura字段
 	--@delay: 播放延迟
 	--@scale: 缩放值
@@ -420,7 +420,7 @@ function _M.CreateTweenEffect(parent, effectId, pos, doneCall, spMap, textMap, d
 				doneCall(...)
 			end
 		end, nil, dura)
-	end	
+	end
 	return moudle
 end
 
@@ -453,11 +453,12 @@ function _M.LoadPrefabEffect(parent, effectId, pos, doneCall, dura, scale)
 	elseif csv.scale ~= nil then
 		parent.LocalScale = Vector3(csv.scale, csv.scale, csv.scale)
 	end
-	if dura ~= nil and dura > 0 then
-		parent:LoadEffect(csv.prefab,dura)
-	else
-		parent:LoadEffect(csv.prefab,0)
-	end
+	-- if dura ~= nil and dura > 0 then
+	-- 	parent:LoadEffect(csv.prefab,dura)
+	-- else
+	-- 	parent:LoadEffect(csv.prefab,0)
+	-- end
+	parent:LoadEffect(csv.prefab,0)
 end
 
 function _M.CreateEffect(parent, effectId, pos, doneCall, spMap, textMap, dura, delay, scale)
@@ -480,7 +481,7 @@ function _M.CreateEffectEx(parent, effectId, pos, doneCall, spMap, textMap, dura
 	end
 end
 
-_M.ActorFieldMap = 
+_M.ActorFieldMap =
 {
 	login = "login",
 	player = "player",

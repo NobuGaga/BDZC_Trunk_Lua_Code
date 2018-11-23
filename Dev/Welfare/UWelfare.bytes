@@ -4,7 +4,7 @@ local CCommon = JRequire"Dev.Common.CCommon"
 local MMain = JRequire "Dev.Main.MMain"
 local TabGroup = JRequire "Dev.Common.TabGroup"
 local MWelfare = JRequire"Dev.Welfare.MWelfare"
-local USign = JRequire"Dev.Welfare.USign"
+local USign = JRequire"Dev.Welfare.USignNew"
 local ULockSys = JRequire"Dev.Welfare.ULockSys"
 local UWelfareGod = JRequire"Dev.Welfare.UWelfareGod"
 local UWelfareQQ = JRequire"Dev.Welfare.UWelfareQQ"
@@ -14,15 +14,21 @@ local UMonthAndYear = JRequire"Dev.Welfare.UMonthAndYear"
 local UYearCard = JRequire"Dev.Welfare.UYearCard"
 local UFirstRecharge = JRequire"Dev.Welfare.UFirstRecharge"
 local UWelfareVip = JRequire"Dev.Welfare.UWelfareVip"
-local UInvitation = JRequire"Dev.Welfare.UInvitation"
+local UInvitation = JRequire"Dev.Invitation.UInvitation"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MPlayer = JRequire "Dev.Player.MPlayer"
+local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
 
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
 function _M:BeforeDestroy()
+	if self.storyMoudle then
+		self.storyMoudle:Destroy()
+		self.storyMoudle:delete()
+		self.storyMoudle = nil
+	end
 	if self.mTabHandle ~= nil then
 		self.mTabHandle:delete()
 		self.mTabHandle = nil
@@ -49,6 +55,7 @@ function _M:OnCreate(chooseFuncId)
 	self.Moudle = moudle
 	local node = moudle:Get("ValueRect")
 	self.mEffectRect = moudle:Get("effectRect")
+	self.storyShowNode = moudle:Get("storyShowNode")
 	self.PageNode = node
 
 	local closeBtn = moudle:Get("closeBtn")
@@ -92,22 +99,24 @@ function _M:OnCreate(chooseFuncId)
 		end, "fl_007", "fl_008", nil, WhiteColor, nil, nil, nil, nil, WhiteColor)
 	
 		for k,v in pairs(funcs) do
-			local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item", WindowType.UI, 10)
-			local sheetRect = sheetMoudle.SelfRect
-			sheetRect.Activity = true
-
-			sheetMoudle:Get("C_text_11").Text = v.name
-			local sheetNameText =  sheetMoudle:Get("nameText_1")
-			sheetNameText.Activity = true
-
-			tabHandle:Add(v.id, sheetRect, sheetNameText, v.name, sheetMoudle:Get("select_1"))
-		
-			if lastChoose == v.id then
-				isHave = true
+			if v.id ~= Define.SysId.Invitation or not GameSetting.IsiOSCommit then
+				local sheetMoudle = JGuiManager.GetMoudle(content,"M_Welfare_Item", WindowType.UI, 10)
+				local sheetRect = sheetMoudle.SelfRect
+				sheetRect.Activity = true
+	
+				sheetMoudle:Get("C_text_11").Text = v.name
+				local sheetNameText =  sheetMoudle:Get("nameText_1")
+				sheetNameText.Activity = true
+	
+				tabHandle:Add(v.id, sheetRect, sheetNameText, v.name, sheetMoudle:Get("select_1"))
+			
+				if lastChoose == v.id then
+					isHave = true
+				end
+	
+				--注册小红点
+				self:RegistRedpoint(sheetMoudle:Get("redPoint_1"),self._SysId,v.id)
 			end
-
-			--注册小红点
-			self:RegistRedpoint(sheetMoudle:Get("redPoint_1"), v.id)
 		end
 
 		if not isHave then
@@ -307,8 +316,8 @@ function _P.OnChoose(self, funcId)
 		self.ChooseMoudle = UWelfareQQ.new(self.PageNode)
 	elseif funcId == Define.SysId.Welfare_WeiXin then
 		self.ChooseMoudle = UWelfareWeixin.new(self.PageNode)
-	elseif funcId == Define.SysId.Welfare_Invitation then
-		self.ChooseMoudle = UInvitation.new(self.PageNode)
+	elseif funcId == Define.SysId.Invitation then
+		self.ChooseMoudle = UInvitation.new(self.PageNode,self.mEffectRect)
 	else
 
 	end
@@ -331,7 +340,7 @@ function _R.RefreshMonthCard(self)
 end
 
 function _R.RefreshYearCard(self)
-	if MWelfare.selectToggle == Define.SysId.Welfare_Year then
+	if MWelfare.selectToggle == Define.SysId.Welfare_Month then
 		self.ChooseMoudle:RefreshYearState()
 	end
 end
@@ -340,6 +349,58 @@ function _R.RefreshGodDatas(self)
 	if MWelfare.selectToggle == Define.SysId.Welfare_God then
 		self.ChooseMoudle:RefreshGodDatas()
 	end
+end
+
+function _R.InPutSuccess(self,data)
+	if MWelfare.selectToggle == Define.SysId.Invitation then
+		self.ChooseMoudle:OnInPutSuccess(data)
+	end
+end
+
+function _R.GetReward(self,data)
+	if MWelfare.selectToggle == Define.SysId.Invitation then
+		self.ChooseMoudle:GetReward(data)
+	end
+end
+
+function _R.RefreshInvitationRed(self)
+	if MWelfare.selectToggle == Define.SysId.Invitation then
+		self.ChooseMoudle:RefreshRed()
+	end
+end
+
+function _R.OnGetSignReward(self,data)
+	if MWelfare.selectToggle == Define.SysId.Welfare_Sign then
+		self.ChooseMoudle:OnGetSignReward(data)
+	end
+end
+
+function _R.OnRefreshView(self)
+	if MWelfare.selectToggle == Define.SysId.Welfare_Sign then
+		self.ChooseMoudle:RefreshView(data)
+	end
+end
+
+function _R.ShowStory(self)
+	if self.storyMoudle and self.storyMoudle._Root then
+		return
+	end
+	local data = MWelfare.DequeueWaitShow()
+	if data == nil then
+		return
+	end
+	local typeArg
+	if data.storyType == 7 then
+		typeArg = data.data
+	end
+	self.storyMoudle = UStoryMoudle.new(self.storyShowNode, data.storyId, function ()
+		_R.ShowStory(self)
+	end, data, typeArg)
+end
+
+function _R.GetSortLayer(self, refTab)
+	refTab.type = self._Type
+	refTab.index = self._CanvasIndex
 end
 
 return _M

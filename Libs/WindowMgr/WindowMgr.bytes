@@ -11,8 +11,8 @@ local SDKCollectType = JRequire "SDK.SDKCollectType"
 --@RefType [Libs.LuaUtil.bytes#_M]
 local luaUtil = JRequire "Libs.LuaUtil"
 
-local profiler = require("Libs.xlua.profiler")
-local memory = require("Libs.xlua.memory")
+-- local profiler = require("Libs.xlua.profiler")
+-- local memory = require("Libs.xlua.memory")
 
 local _M = {WindowGCCollect = false}
 local _P = {}
@@ -263,7 +263,7 @@ function _P.execDestroy(winType, isCover, noPop, ...)
 			end
 
 			_P.OpenedWindow[winType] = nil
-			local r, err = pcall(delWin.BeforeDestroy, delWin, ...)
+			local r, err = pcall(delWin.BaseBeforeDestroy, delWin, ...)
 			if not r then
 				error("BeforeDestroy Window error::", delWin._Name, "error info: ", err)
 			end
@@ -287,7 +287,7 @@ function _P.execDestroy(winType, isCover, noPop, ...)
 			_P.SendLogPoint(false, delWin._Name)
 			
 			local winName = delWin._Name
-			local beginMem = delWin._BeginMemory or 0
+			-- local beginMem = delWin._BeginMemory or 0
 
 			delWin:delete()
 			delWin = nil
@@ -295,19 +295,28 @@ function _P.execDestroy(winType, isCover, noPop, ...)
 			if uiType == WindowType.UI or uiType == WindowType.Scene or uiType == WindowType.Tips1 then
 				CS.GameManager.Inst:GC()
 			end
-			if _M.WindowGCCollect then
-				local _memory = memory.total()
-				print(winName, "DestroyedWindow Memory:" .. _memory, "notGC:" ..(_memory - beginMem))
+			-- if _M.WindowGCCollect then
+			-- 	local _memory = memory.total()
+			-- 	print(winName, "DestroyedWindow Memory:" .. _memory, "notGC:" ..(_memory - beginMem))
 				
-				CS.Loader.LoadAccessor.AppendText("debug/profiler.txt","\nDESTORY --------------------- " .. winName .. ": " .. _memory .. "notGC:" ..(_memory - beginMem))
-				local tmp = memory.snapshot()
-				for k,v in pairs(tmp) do
-					CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
-				end	
-			end
+			-- 	CS.Loader.LoadAccessor.AppendText("debug/profiler.txt","\nDESTORY --------------------- " .. winName .. ": " .. _memory .. "notGC:" ..(_memory - beginMem))
+			-- 	local tmp = memory.snapshot()
+			-- 	for k,v in pairs(tmp) do
+			-- 		CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
+			-- 	end	
+			-- end
 			if popWindowName ~= nil and _P.OpenedWindow[winType] == nil then
 				--这里可能在别的地方又打开了界面
-				_P.DoCreate(popWindowName, true)
+				local winInfo = WindowRegist[popWindowName]
+				if winInfo ~= nil then
+					if winInfo.PopFunc ~= nil then
+						winInfo.PopFunc()
+					else
+						_P.DoCreate(popWindowName)
+					end
+				else
+					_P.OpenedWindow[winType] = nil
+				end
 			end
 
 			-- if winType == WindowType.UI then
@@ -326,7 +335,7 @@ function _P.SendLogPoint(isOpen, winName)
 		local oepnKey = "open_logpoint_" .. winName
 		if not CS.UnityEngine.PlayerPrefs.HasKey(oepnKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(oepnKey, 1)
-			CS.Utility.LogPoint.LogPost(8, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
+			GameSetting.LogPoint(8, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
 		end	
 		if GameSetting.IsiOSCommit then
 			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_0")
@@ -335,7 +344,7 @@ function _P.SendLogPoint(isOpen, winName)
 		local closeKey = "close_logpoint_" .. winName
 		if not CS.UnityEngine.PlayerPrefs.HasKey(closeKey) then
 			CS.UnityEngine.PlayerPrefs.SetInt(closeKey, 1)
-			CS.Utility.LogPoint.LogPost(9, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
+			GameSetting.LogPoint(9, 1, winName, luaUtil.TransToYearMonthDayHMS(os.time()))
 		end		
 		if GameSetting.IsiOSCommit then
 			SDKMgr.ReqCollectData(SDKCollectType.iOSCommitData, nil, winName .. "_1")
@@ -387,7 +396,7 @@ function _P.DoDestroy(winType, isCover, noPop, ...)
 	_P.execDestroy(winType, isCover, noPop, ...)
 end
 
-function _P.DoCreate(winName, isPop, ... )
+function _P.DoCreate(winName, ... )
 	local winInfo = WindowRegist[winName]
 	if winInfo ~= nil then
 		local inst = JRequire(winInfo.Moudle)
@@ -402,18 +411,18 @@ function _P.DoCreate(winName, isPop, ... )
 		
 		_P.SendLogPoint(true, winName)
 
-		if _M.WindowGCCollect then
-			CS.GameManager.Inst:GC()
-			local _memory = memory.total()
-			win._BeginMemory = _memory
-			print(winName, "StartCreateWindow Memory:" .. _memory)		
-			-- print("memory.snapshot:", memory.snapshot())		
-			CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\nSTART --------------------- " .. winName .. ": " .. _memory)
-			local tmp = memory.snapshot()
-			for k,v in pairs(tmp) do
-				CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
-			end			
-		end		
+		-- if _M.WindowGCCollect then
+		-- 	CS.GameManager.Inst:GC()
+		-- 	local _memory = memory.total()
+		-- 	win._BeginMemory = _memory
+		-- 	print(winName, "StartCreateWindow Memory:" .. _memory)		
+		-- 	-- print("memory.snapshot:", memory.snapshot())		
+		-- 	CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\nSTART --------------------- " .. winName .. ": " .. _memory)
+		-- 	local tmp = memory.snapshot()
+		-- 	for k,v in pairs(tmp) do
+		-- 		CS.Loader.LoadAccessor.AppendText("debug/profiler.txt", "\n\t" .. tostring(k) .. "-->" .. v)
+		-- 	end			
+		-- end		
 		if win._Type == WindowType.UI then
 			for i=1,#_P.UICoveredWindow do
 				if _P.UICoveredWindow[i] == win._Name then
@@ -439,16 +448,9 @@ function _P.DoCreate(winName, isPop, ... )
 			SoundMgr.PlayMusic(win._MusicID)
 		end
 
-		if isPop then
-			local r, err = pcall(win.OnPopCreate, win, ...)
-			if not r then
-				error("Create Window<OnPopCreate> error::", winName, "error info: ", err)
-			end
-		else
-			local r, err = pcall(win.OnCreate, win, ...)
-			if not r then
-				error("Create Window<OnCreate> error::", winName, "error info: ", err)
-			end
+		local r, err = pcall(win.OnCreate, win, ...)
+		if not r then
+			error("Create Window<OnCreate> error::", winName, "error info: ", err)
 		end
 
 		-- if win._CreateTweenInfo ~= nil then
@@ -474,11 +476,12 @@ function _P.DoCreate(winName, isPop, ... )
 	end	
 end
 
+
 function _M.Create(winName, ...)
 	local winInfo = WindowRegist[winName]
 	if winInfo ~= nil then
 		_P.DoDestroy(winInfo.WinType, true)
-		_P.DoCreate(winName, false, ... )
+		_P.DoCreate(winName, ... )
 	else
 		error(string.format("Create Window %s error, please to regist first!!!", winName))
 	end
@@ -496,6 +499,66 @@ function _M.Call(winName, funName, ...)
 		end
 	else
 		error("Dispatch Window error::", winName, " not regist")
+	end
+end
+
+function _M.RegistRedpoint(winName, redpointWidget, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		if win ~= nil and win._Name == winName and win._CanvasNode ~= nil then
+			local r, err = pcall(win.RegistRedpoint, win, redpointWidget, ...)
+			if not r then
+				error("WindowMgr:RegistRedpoint Window error::", win._Name, redpointWidget, "error info: ", err)
+			end			
+		end
+	else
+		error("WindowMgr:RegistRedpoint error:", winName, " not regist")
+	end
+end
+
+function _M.UnRegistRedpointForPath(winName, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		if win ~= nil and win._Name == winName and win._CanvasNode ~= nil then
+			local r, err = pcall(win.UnRegistRedpointForPath, win, ...)
+			if not r then
+				error("WindowMgr:UnRegistRedpointForPath Window error::", win._Name, "error info: ", err)
+			end			
+		end
+	else
+		error("WindowMgr:UnRegistRedpointForPath error:", winName, " not regist")
+	end
+end
+
+function _M.UnRegistChildrenRedpointForPath(winName, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		if win ~= nil and win._Name == winName and win._CanvasNode ~= nil then
+			local r, err = pcall(win.UnRegistChildrenRedpointForPath, win, ...)
+			if not r then
+				error("WindowMgr:UnRegistChildrenRedpointForPath Window error::", win._Name, "error info: ", err)
+			end			
+		end
+	else
+		error("WindowMgr:UnRegistChildrenRedpointForPath error:", winName, " not regist")
+	end
+end
+
+function _M.UnRegistRedpointForNode(winName, redpointWidget, ...)
+	local winInfo = WindowRegist[winName]
+	if winInfo ~= nil then
+		local win = _P.OpenedWindow[winInfo.WinType]
+		if win ~= nil and win._Name == winName and win._CanvasNode ~= nil then
+			local r, err = pcall(win.UnRegistRedpointForNode, win, redpointWidget, ...)
+			if not r then
+				error("WindowMgr:UnRegistRedpointForNode Window error::", win._Name, "error info: ", err)
+			end			
+		end
+	else
+		error("WindowMgr:UnRegistRedpointForNode error:", winName, " not regist")
 	end
 end
 
@@ -534,6 +597,24 @@ function _M.OnRedpointUpdate(isActive, ... )
 				k == WindowType.Tips4 then
 			win:OnRedpointUpdate(isActive, ... )
 			end 
+		end
+	end
+end
+
+function _M.ShowWeakGuide(funcID,param,doneBlack)
+	for k,win in pairs(_P.OpenedWindow) do
+		if win ~= nil and win._SysId == funcID then
+			win:CreateWakeGuide(param,doneBlack)
+			break
+		end
+	end
+end
+
+function _M.RefreshWeakGuide(funcID,param)
+	for k,win in pairs(_P.OpenedWindow) do
+		if win ~= nil and win._SysId == funcID then
+			win:RefreshWeakGuide(param)
+			break
 		end
 	end
 end

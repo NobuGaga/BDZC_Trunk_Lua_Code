@@ -1,0 +1,590 @@
+-- 翻牌活动主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local TimeDelay = CS.Utility.TimeDelay
+local MBag = JRequire "Dev.Bag.MBag"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+local CardNum = 9
+local CardQualityBg = {"gej_001", "gej_002", "gej_003"}
+local OpenTween = 'T_FlopCard_BeginTween'
+local RefreshTween = 'T_FlopCard_RefreshTween'
+local BOXTIP_POSY = "T_Club_Host_PosY"
+local RefreshCardDataTag = 'RefreshCardData'
+local RewardEffectId = 10227
+local SuperPrizeEffectId = 10226
+local SuperCardEffectId = 10234
+local RewardEffectPos = {
+	[1] = {-5,392},
+	[2] = {98,392},
+	[3] = {200,392},
+	[4] = {300,392},
+	[5] = {-5,292},
+	[6] = {98,292},
+	[7] = {200,292},
+	[8] = {300,292},
+}
+
+
+function _M:ctor(parent, actId, lockNode)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Thanksgiving", WindowType.UI, 0)
+	self.mModule = module
+	self.LockNode = lockNode
+
+	if actId ~= nil then
+		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
+	end
+
+	if self.ActInfo == nil then
+		return
+	end
+
+	module:Get("TimeText").Text = Csv.Text("investment_time", {startYMD = LuaUtil.TransToMD(self.ActInfo.state.startTime),
+										endYMD = LuaUtil.TransToMD(self.ActInfo.state.endTime)})
+
+	local flopConf = self.ActInfo.flopConf
+	if flopConf == nil then return end
+
+	if flopConf.superRewardPreview then
+		local itemGrid = module:Get("JackpotBg")
+		self.RewardTable = {}
+		for k,v in pairs(flopConf.superRewardPreview) do
+			local itemRect = CCommon.CreateItem(itemGrid, v[1], CCommon.ShowItemTips, {num = v[2]})
+			itemRect:Get("Icon").SizeDelta = Vector2(80, 80)
+
+			self.RewardTable[k] = {posId = k, id = v[1], itemCount = v[2]}
+		end
+	end
+	CCommon.CreateEffect(module:Get("RewardActorPanel"), RewardEffectId)
+
+	local superCardEffect = module:Get("CardActorPanel")
+	CCommon.CreateEffect(superCardEffect, SuperPrizeEffectId)
+	self.SuperCardEffect = superCardEffect
+	superCardEffect.Activity = false
+
+	local itemLightRect = module:Get("SuperLightRect")
+	itemLightRect.Activity = false
+	local itemLight = CCommon.CreateItemLight(itemLightRect, Define.SysId.MidAFestival, Define.AssetsType.Gold)
+	if itemLight ~= nil then
+		itemLight.SelfRect.LocalScale = Vector3(0.75, 0.75, 0.75)
+	end
+	self.ItemLightRect = itemLightRect
+	_P.SetSuperPrizeData(self)
+
+	local randomTalkText = module:Get("DHKText")
+	randomTalkText:AddOnUpdate(function()
+		_P.SetRandomTalk(self)
+	end, nil, flopConf.talkTime)
+	self.RandomTalkText = randomTalkText
+
+	local talkRect = module:Get("DHK")
+	local moveTween = talkRect.CachedTran:GetJTweener(BOXTIP_POSY)
+	local moveTweenData = moveTween:GetTweenForType(CS.JTween.JTweenerType.AnchorPosY)
+	moveTweenData.ToPosY = 240
+	moveTween:Play()
+	_P.SetRandomTalk(self)
+
+	-- 刷新相关
+	local refreshBtn = module:Get("Refresh")
+	refreshBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, flopConf.refreshCost) then
+			return
+		end
+
+		CActivity.OnRefreshCards(self.ActId)
+	end, nil, 0.9)
+	module:Get("RefreshText").Text = Csv.Text("flop_refresh")
+	module:Get("RefreshCost").Text = flopConf.refreshCost
+	self.RefreshTimeText = module:Get("RefreshTime")
+	_P.OnStartTimer(self)
+
+	local startBtn = module:Get("BeginBtn")
+	startBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CActivity.OnFlopStartReq(self.ActId)
+	end, nil, 0.9)
+	self.StartBtn = startBtn
+	self.AllOpenRect = module:Get("AllOpenRect")
+
+	local allOpenBtn = module:Get("AllOpen")
+	allOpenBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		if not self.ActInfo.started then
+			CCommon.ShowError(Csv.Text("flop_pleaseOpen"))
+			return
+		end
+		
+		local needNum = tonumber(self.AllCostText.Text)
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needNum) then
+			return
+		end
+
+		CActivity.OnOpenAllReq(self.ActId)
+	end, nil, 0.9)
+	module:Get("AllOpenText").Text = Csv.Text("flop_allOpen")
+	module:Get("Tips").Text = Csv.Text("flop_oneCost")
+	self.OneCostText = module:Get("zuansNum")
+	self.AllCostText = module:Get("AllOpenCost")
+
+	_P.SetCardData(self, true)
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateTimer ~= nil then
+		self.UpdateTimer:Destroy()
+		self.UpdateTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	_P.OnClearTimer(self)
+
+	local leftTime = self.ActInfo.refreshTime - HeartBeat.ServSecond()
+	if leftTime < 0 then
+		leftTime = 0
+	end
+	self.RefreshTimeText.Text = Csv.Text("relations_refresh_time") .. LuaUtil.GetTimeHMS(leftTime)
+	
+	if leftTime > 0 then
+		self.UpdateTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	if self.ActInfo == nil then return end
+
+	local time = self.ActInfo.refreshTime - HeartBeat.ServSecond()
+	if time < 0 then
+		_P.OnClearTimer(self)
+	else
+		self.RefreshTimeText.Text = Csv.Text("relations_refresh_time") .. LuaUtil.GetTimeHMS(time)
+	end
+end
+
+
+-- 设置当前大奖数据
+function _P.SetSuperPrizeData(self)
+	if self.RewardTable then
+		local curSuperId = _P.GetCurSuperPrizeId(self)
+		for k,v in pairs(self.RewardTable) do
+			if v.id == curSuperId then
+				local pos = RewardEffectPos[v.posId]
+				self.ItemLightRect.LocalPosition = Vector2(pos[1], pos[2])
+				self.ItemLightRect.Activity = true
+				break
+			end
+		end
+	end
+end
+
+
+-- 获取当前大奖id
+function _P.GetCurSuperPrizeId(self)
+	if self.ActInfo.previewCardList then
+		for k,v in pairs(self.ActInfo.previewCardList) do
+			if v.quality == 3 then
+				return v.item.key
+			end
+		end
+	end
+end
+
+
+-- 获取美女随机对话
+function _P.SetRandomTalk(self)
+	if self.ActInfo == nil then return end
+
+	local maxNum = #self.ActInfo.flopConf.talks
+	local randomNum = math.random(1, maxNum)
+
+	self.RandomTalkText.Text = self.ActInfo.flopConf.talks[randomNum]
+end
+
+
+-- 设置开牌价格数据
+function _P.SetFlopCardCostData(self)
+	local openNum = 0
+	for k,v in pairs(self.ActInfo.openedCardList) do
+		openNum = openNum + 1
+	end
+	local nextOpenNum = openNum + 1
+	self.OneCostText.Text = self.ActInfo.flopConf.openCost[nextOpenNum]
+
+	if nextOpenNum <= CardNum then
+		local totalCost = 0
+		for i = nextOpenNum, CardNum do
+			totalCost = totalCost + self.ActInfo.flopConf.openCost[i]
+		end
+
+		self.AllCostText.Text = totalCost
+	end
+end
+
+
+function _P.SetCardData(self, isSetBtnData)
+	local module = self.mModule
+	if not self.ActInfo.started then
+		-- 未开局
+		if isSetBtnData then
+			self.StartBtn.Activity = true
+			self.AllOpenRect.Activity = false
+		end
+
+		for i=1,CardNum do
+			local cardDataRect = module:Get("Color" .. i)
+			local noneRect = module:Get("wenhao" .. i)
+			cardDataRect.LocalScale = Vector3(1, 1, 1)
+			noneRect.LocalScale = Vector3(0, 1, 1)
+
+			local oneData = self.ActInfo.previewCardList[i]
+			if oneData then
+				_P.SetOneCardData(self, oneData, i, isSetBtnData)
+			end
+		end
+	else
+		-- 已开局
+		if isSetBtnData then
+			self.StartBtn.Activity = false
+			self.AllOpenRect.Activity = true
+		end
+
+		for i=1,CardNum do
+			local cardDataRect = module:Get("Color" .. i)
+			local noneRect = module:Get("wenhao" .. i)
+			local openData = _P.GetOpenCardData(self, i)
+			if openData then
+				cardDataRect.LocalScale = Vector3(1, 1, 1)
+				noneRect.LocalScale = Vector3(0, 1, 1)
+
+				_P.SetOneCardData(self, openData, i, isSetBtnData)
+			else
+				cardDataRect.LocalScale = Vector3(0, 1, 1)
+				noneRect.LocalScale = Vector3(1, 1, 1)
+
+				noneRect:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					local needNum = tonumber(self.OneCostText.Text)
+					if not MBag.CheckItemEnough(Define.AssetsType.Gold, needNum) then
+						return
+					end
+
+					CActivity.OnOpenCardReq(self.ActId, i)
+				end, nil, 0.95)
+			end
+		end
+	end
+
+	_P.SetFlopCardCostData(self)
+end
+
+
+function _P.SetOneCardData(self, oneData, index, isSetBtnData)
+	local itemConf = Csv.Item[oneData.item.key]
+	if itemConf then
+		local iconImg = self.mModule:Get("Icon" .. index)
+		iconImg.SpriteName = itemConf.icon
+		iconImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+
+			if itemConf.id and itemConf.id > 0 then
+				WindowMgr.Create("UBagDetailPop", itemConf.id)
+			end
+		end, nil, 1)
+
+		-- local nameText = self.mModule:Get("IconName" .. index)
+		-- nameText.Text = itemConf.name
+	end
+
+	self.mModule:Get("IconNum" .. index).Text = oneData.item.value
+	if oneData.quality then
+		self.mModule:Get("Color" .. index).SpriteName = CardQualityBg[oneData.quality]
+
+		if isSetBtnData and oneData.quality == 3 then
+			_P.SetSuperCardShowEffect(self, index)
+		end
+	end
+end
+
+
+function _P.GetOpenCardData(self, cardId)
+	if self.ActInfo.openedCardList then
+		for k,v in pairs(self.ActInfo.openedCardList) do
+			if v.id == cardId then
+				return v
+			end
+		end
+	end
+end
+
+
+-- 设置高级卡牌特效显示
+function _P.SetSuperCardShowEffect(self, index)
+	local noneImg = self.mModule:Get("wenhao" .. index)
+	local isShowEffect = noneImg.LocalScale.x == 0
+	self.SuperCardEffect.Activity = isShowEffect
+	self.SuperCardEffect.LocalPosition = noneImg.RootCanvasPos
+end
+
+
+function _P.SetTweenOverState(self)
+	if self.ActInfo == nil then return end
+
+	if self.ActInfo.started then
+		if self.ActInfo.openedCardList then
+			for k,v in pairs(self.ActInfo.openedCardList) do
+				if v.quality == 3 then
+					_P.SetSuperCardShowEffect(self, v.id)
+					return
+				end
+			end
+		end
+	else
+		if self.ActInfo.previewCardList then
+			for k,v in pairs(self.ActInfo.previewCardList) do
+				if v.quality == 3 then
+					_P.SetSuperCardShowEffect(self, k)
+					return
+				end
+			end
+		end
+	end
+end
+
+
+-- 开局返回
+function _M:OnFlopCardStart()
+	self.ActInfo.started = true
+	self.ActInfo.openedCardList = {}
+	self.LockNode.RaycastTarget = true
+	self.StartBtn.Activity = false
+	self.AllOpenRect.Activity = true
+	self.SuperCardEffect.Activity = false
+
+	local tweenRect = self.mModule:Get("TweenRect")
+	local tween = tweenRect.CachedTran:GetJTweener(OpenTween)
+	tween:Play()
+
+	tween:SetWaitEventOnComplete('Started', function()
+		self.LockNode.RaycastTarget = false
+		_P.SetCardData(self)
+	end)
+	tween:Play('Started')
+end
+
+
+-- 单张开牌返回
+function _M:OnOpenCardBack(data)
+	self.ActInfo = MActivity.GetFromId(self.ActId)
+	self.LockNode.RaycastTarget = true
+
+	local noneImg = self.mModule:Get("wenhao" .. data.card.id)
+	local cardImg = self.mModule:Get("Color" .. data.card.id)
+	_P.SetOneCardData(self, data.card, data.card.id)
+
+	-- 若翻到高级卡，播放特效
+	if data and data.card and data.card.quality == 3 then
+		CCommon.CreateEffect(self.mModule:Get("SuperCardActorPanel"), SuperCardEffectId, noneImg.RootCanvasPos)
+	end
+
+	local tween1 = noneImg:DOScaleX(0, 0.3)
+	tween1:OnComplete(function()
+		local tween2 = cardImg:DOScaleX(1, 0.3)
+		tween2:OnComplete(function()
+			-- 飘道具
+			CCommon.ShowFlyItem(self._RootNode, data.card.item.key, data.card.item.value, nil, Vector2(cardImg.RootCanvasPos.x - 62, cardImg.RootCanvasPos.y), true)
+
+			-- 判断是否已翻到最后一张卡牌,刷新
+			if data.previewCardList and next(data.previewCardList) ~= nil then
+				self.SuperCardEffect.Activity = false
+				local tweenRect = self.mModule:Get("TweenRect")
+				local tween = tweenRect.CachedTran:GetJTweener(RefreshTween)
+				tween:SetOnComplete(function()
+					self.StartBtn.Activity = true
+					self.AllOpenRect.Activity = false
+					self.LockNode.RaycastTarget = false
+					_P.SetTweenOverState(self)
+				end)
+				tween:Play()
+
+				local refreshFunc = function()
+					_P.SetCardData(self)
+					_P.SetSuperPrizeData(self)
+				end
+				tween:SetWaitEventOnComplete(RefreshCardDataTag, refreshFunc)
+				tween:Play(RefreshCardDataTag)
+			else
+				_P.SetFlopCardCostData(self)
+				_P.SetTweenOverState(self)
+				self.LockNode.RaycastTarget = false
+			end
+		end)
+	end)
+end
+
+
+-- 全开返回（先翻牌-飘道具-走刷新流程）
+function _M:OnOpenAllCardBack(data)
+	self.ActInfo = MActivity.GetFromId(self.ActId)
+	self.LockNode.RaycastTarget = true
+
+	if data.openedCardList then
+		for k,v in pairs(data.openedCardList) do
+			_P.SetOneCardData(self, v, v.id)
+		end
+
+		local index = 0
+		for k,v in pairs(data.openedCardList) do
+			local noneImg = self.mModule:Get("wenhao" .. v.id)
+			local cardImg = self.mModule:Get("Color" .. v.id)
+			local isShowItem = noneImg.LocalScale.x == 1
+
+			local tween1 = noneImg:DOScaleX(0, 0.3)
+			tween1:OnComplete(function()
+				local tween2 = cardImg:DOScaleX(1, 0.3)
+				tween2:OnComplete(function()
+					if v.quality == 3 then
+						_P.SetSuperCardShowEffect(self, v.id)
+					end
+					
+					if isShowItem then
+						index = index + 1
+					end
+
+					TimeDelay.DelayCall((index - 1) * 0.15, false, function( ... )
+						if self ~= nil and self._RootNode ~= nil and isShowItem then
+							CCommon.ShowFlyItem(self._RootNode, v.item.key, v.item.value, nil, Vector2(-50, -100), true)
+						end
+					end)
+				end)
+			end)
+		end
+		
+		self.ItemLightRect:AddOnTime(function()
+			self.SuperCardEffect.Activity = false
+			local tweenRect = self.mModule:Get("TweenRect")
+			local tween = tweenRect.CachedTran:GetJTweener(RefreshTween)
+			tween:SetOnComplete(function()
+				self.StartBtn.Activity = true
+				self.AllOpenRect.Activity = false
+				self.LockNode.RaycastTarget = false
+				_P.SetTweenOverState(self)
+			end)
+			tween:Play()
+
+			local refreshFunc = function()
+				_P.SetCardData(self)
+				_P.SetSuperPrizeData(self)
+			end
+			tween:SetWaitEventOnComplete(RefreshCardDataTag, refreshFunc)
+			tween:Play(RefreshCardDataTag)
+		end, nil, 1)
+	end
+end
+
+
+-- 刷新返回(不用刷新数据，直接调用刷新动画)
+function _M:OnRefreshCardBack(data)
+	self.StartBtn.Activity = false
+	self.AllOpenRect.Activity = false
+	self.LockNode.RaycastTarget = true
+
+	if data.openedCardList then
+		for k,v in pairs(data.openedCardList) do
+			local noneImg = self.mModule:Get("wenhao" .. v.id)
+			local isShowItem = noneImg.LocalScale.x == 1
+			if isShowItem then
+				_P.SetOneCardData(self, v, v.id)
+			end
+		end
+
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+		self.SuperCardEffect.Activity = false
+
+		local tweenRect = self.mModule:Get("TweenRect")
+		local tween = tweenRect.CachedTran:GetJTweener(RefreshTween)
+		tween:SetOnComplete(function()
+			self.StartBtn.Activity = true
+			self.LockNode.RaycastTarget = false
+			_P.SetTweenOverState(self)
+		end)
+		tween:Play()
+
+		local refreshFunc = function()
+			_P.SetCardData(self)
+			_P.SetSuperPrizeData(self)
+		end
+		tween:SetWaitEventOnComplete(RefreshCardDataTag, refreshFunc)
+		tween:Play(RefreshCardDataTag)
+	end
+	
+
+	if data.refreshTime then
+		_P.OnStartTimer(self)
+	end
+end
+
+
+-- 刷新之前，获取之前没有刷出的物品
+function _P.GetUnOpenCardData(self)
+	local cardList = {}
+	if self.ActInfo.previewCardList then
+		for previewKey,previewValue in pairs(self.ActInfo.previewCardList) do
+			local isOpen = false
+			if self.ActInfo.openedCardList then
+				for k,v in pairs(self.ActInfo.openedCardList) do
+					if v.item.key == previewValue.item.key then
+						isOpen = true
+						break
+					end
+				end
+			end
+
+			if not isOpen then
+				cardList[#cardList + 1] = previewValue
+			end
+		end
+	end
+
+	return cardList
+end
+
+
+-- 活动状态更新
+function _M:OnUpdateViewState(data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

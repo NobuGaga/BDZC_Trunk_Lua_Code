@@ -16,8 +16,12 @@ local CCommon = JRequire "Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [SDK.SDKMgr.bytes#_M]
 local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.SDKFuncName.bytes#_M]
+local SDKFuncName = JRequire "SDK.SDKFuncName"
 --@RefType [Libs.LuaUtil.bytes#_M]
 local luaUtil = JRequire "Libs.LuaUtil"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat
 
 ----------------------CS类引用--------------------------
 local HttpHelper = CS.Utility.HttpHelper
@@ -106,6 +110,10 @@ function _M.Init()
 	_M.isHasExitAccount = (sdkParam.isHasExitAccount or 1) ~= 0
 	_M.AppName = sdkParam.appName
 	_M.PackageName = sdkParam.packageName
+	local isMergeShow = sdkParam.isMergeShow
+	if isMergeShow then
+		_M.IsMergeShowMain = (tonumber(isMergeShow) == 1)
+	end
 	_M.ClientVersion = _M.GameParam.resVersion.ShowVersion
 	_M.CdnVersion = _M.GameParam.cdnVersion.ShowVersion
 
@@ -115,6 +123,8 @@ function _M.Init()
 	
 	--公告url
 	_M.NoticeUrl = _M.GameParam.cdnVersion.noticeUrl
+	-- 登陆公告url
+	_M.LoginNoticeUrl = _M.GameParam.cdnVersion.loginNoticeUrl
 	--敏感词url
 	_M.CheckChatUrl = _M.GameParam.cdnVersion.checkChat
 	--名字
@@ -129,10 +139,24 @@ function _M.Init()
 	_M.ChannelLog = _M.GameParam.cdnVersion.channelLog
 	--获取公网IP的URL
 	_M.IpUrl = _M.GameParam.cdnVersion.get_ip_url
+	--登录验证url
+	_M.LoginUrl = _M.GameParam.cdnVersion.loginUrl
+	--超级vipurl
+	_M.SuperVipUrl = _M.GameParam.cdnVersion.superVipUrl
 	--从URL中获得的IP
 	_M.PublicIP = sdkParam.ip or ""
 	--加了密的IP
 	_M.EncryptIP = ""
+	--是不是关闭了前端打点
+	_M.IsCloseLog = false
+	if _M.GameParam.cdnVersion.closeLogType ~= nil and tonumber(_M.GameParam.cdnVersion.closeLogType) == 1 then
+		_M.IsCloseLog = true
+	end
+	--是不是关闭了平台打点
+	_M.IsCloseChannelLog = false
+	if _M.GameParam.cdnVersion.closeChannelType ~= nil and tonumber(_M.GameParam.cdnVersion.closeChannelType) == 1 then
+		_M.IsCloseChannelLog = true
+	end
 
 	--设置区ID
 	_M.AreaId = ""
@@ -146,6 +170,32 @@ function _M.Init()
 	_M.initServerIdList = _M.GameParam.cdnVersion.serverid
 	local isPrivacy = _M.GameParam.cdnVersion.isPrivacy
 	_M.IsShowPrivacy = (tonumber(isPrivacy) == 1)	
+	--审核状态下打开log
+	if _M.IsiOSCommit then
+		_M.IsCloseLog = false
+	end
+
+	_M.IsTaiWan = false
+	if _M.Spid == Define.PlatformType.AndroidYiWanForeign or _M.Spid == Define.PlatformType.iOSYiWanForeign or
+		_M.Spid == Define.PlatformType.AndroidYiWanAsia or _M.Spid == Define.PlatformType.iOSYiWanAsia then
+		_M.IsTaiWan = true
+	end
+
+	if sdkParam.sdkFuncNameList then
+		_M.SDKFuncNameList = sdkParam.sdkFuncNameList
+		local splitFunc = LuaUtil.StringSplit(sdkParam.sdkFuncNameList, ",")
+		for index, funcName in ipairs(SDKFuncName.__module) do
+			if splitFunc[index] and splitFunc[index] ~= "" then
+				SDKFuncName.__module[funcName] = splitFunc[index]
+			end
+		end
+	end
+
+	if _M.IsiOSCommit and _M.IsMergeShowMain then
+		_M.InitSceneType = Define.SysId.World
+	else
+		_M.InitSceneType = Define.SysId.Home
+	end
 end
 
 function _M.CheckSpidAlter(id)
@@ -189,6 +239,9 @@ function _M.HttpPostDataToPHP(urlType, argList)
 	if _M.ChannelLog == nil then
 		return
 	end
+	if _M.IsCloseChannelLog then
+		return
+	end
 	--断线重连接口切换账号时可能没登录游戏，作角色ID过滤
 	local playerID = MPlayer.GetId()
 	if playerID == nil or playerID == 0 then
@@ -208,6 +261,15 @@ function _M.HttpPostDataToPHP(urlType, argList)
 		session:AppendParam(key, value)
 	end
 	HttpHelper.Request(session)
+end
+
+local CSLogPost = CS.Utility.LogPoint
+function _M.LogPoint(...)
+	if _M.IsCloseLog then
+		return
+	end
+
+	CSLogPost.LogPost(...)
 end
 
 function _M.SetAreaID(areaIdStr)
@@ -246,6 +308,9 @@ function _M.GetPngStreamAssetsPath(pngName, sysName)
 end
 
 function _M.SetSbid(sbid)
+	if sbid == nil then
+		return
+	end
 	_M.Sbid = sbid
 
 	CS.Utility.LogPoint.AddSystemParam("sbid", sbid)
@@ -297,8 +362,14 @@ function _M.OpenLoginInput()
 end
 
 function _M.HttpPostExitDataToPHP()
+	if HeartBeat == nil then
+		HeartBeat = JRequire "Dev.Player.HeartBeat"
+	end
+	if HeartBeat.ServerTime == 0 then
+		return
+	end
 	_M.HttpPostDataToPHP(Define.PostUrlType.EnterGame, {flag = "2", ipAddress = _M.PublicIP, 
-						 eTime = os.date("%Y-%m-%d %H:%M:%S", os.time())})
+						 eTime = os.date("%Y-%m-%d %H:%M:%S", HeartBeat.ServSecond())})
 end
 
 function _M.GameQuit()
@@ -330,6 +401,7 @@ _M.ReLoginType =
 	NoChangeAccount = 1,	--不切换账号
 	ChangeAccount = 2,		--切换账号
 	ToLogin = 3,			--调用登陆
+	ChangeServerList = 4,	--重新获取服务器列表
 }
 
 _M.OnReLoginCall = nil
@@ -344,7 +416,7 @@ function _M.ToReLogin(reloginType)
 
 	EventCenter.CallEventTrigger(Define.EventListenId.ToReLogin)
 	_M.IsOnGame = false
-	CS.Utility.LogPoint.LogPost(10, 1, tostring(reloginType), luaUtil.TransToYearMonthDayHMS(os.time()))
+	_M.LogPoint(10, 1, tostring(reloginType), luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.HttpPostExitDataToPHP()
 	if _M.OnReLoginCall ~= nil then
 		_M.OnReLoginCall()

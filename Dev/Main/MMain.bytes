@@ -13,6 +13,10 @@ local MShop = JRequire "Dev.Shop.MShop"
 local MSiege = JRequire "Dev.SiegeWall.MSiege"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local MSuperVIP = JRequire "Dev.SuperVIP.MSuperVIP"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local MCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.MCrossLotteryActivity"
 
 local _M = {}
 
@@ -21,6 +25,11 @@ _M.Funcs = {}
 
 --引导 guideId = true
 _M.Guides = {}
+_M.curGuidID = 0
+
+--弱引导
+_M.WeakGuides = {}
+_M.curWeakGuide = nil
 
 --小红点
 _M.Redpoints = {childs = {}, parent = nil, isActive = false}
@@ -73,6 +82,8 @@ function _M.Clean( ... )
 	_M.Redpoints = {childs = {}, parent = nil, isActive = false}
 	_M.WaitStorys = {}
 	_M.WaitTriggerStorys = {}
+	_M.WeakGuides = {}
+	_M.curWeakGuideID = nil
 	_M.BoobLayer = "Message"
 end
 
@@ -99,14 +110,14 @@ function _M.DequeueWaitStory()
 	return nil
 end
 
-function _M.FuncIsOpen(funcId)
+function _M.FuncIsOpen(funcId, isCheckFid)
 	if _Alter_Func[funcId] == false then
 		return false
 	end
 
 	if _M.Funcs[funcId] == true then
 		local csv = Csv.Func[funcId]
-		if csv ~= nil and csv.fid ~= nil and csv.fid > 0 then
+		if (isCheckFid == true or isCheckFid == nil) and csv ~= nil and csv.fid ~= nil and csv.fid > 0 then
 			local fatherCsv = Csv.Func[csv.fid]
 			--判断父节点是否开启
 			if fatherCsv ~= nil and not _M.FuncIsOpen(csv.fid) then
@@ -115,21 +126,24 @@ function _M.FuncIsOpen(funcId)
 			end
 		end
 
-		-- 一元礼包活动领取完所有像关闭
-		if funcId == Define.SysId.OneRecharge then
-			return MActivity.IsShowsOneRecharge
-		end
-
 		if csv ~= nil and csv.actType ~= nil then
 			local isHave = false
 			local isCrossAct = Define.CrossActivitySysID[funcId]
-			for _,actType in pairs(csv.actType) do
-				if (isCrossAct and MCrossActivity.IsHaveActivityDataForType(actType)) or
-								(not isCrossAct and MActivity.IsHaveActForType(actType)) then
-					isHave = true
+			if funcId == Define.SysId.MergeServer or funcId == Define.SysId.HappyWeekend then -- 合服活动、欢乐周末判断
+				return MActivity.CheckHasFixActData(csv.actType, funcId)
+			else
+				for _,actType in pairs(csv.actType) do
+					if (isCrossAct and MCrossActivity.IsHaveActivityDataForType(actType)) or
+						(not isCrossAct and MActivity.IsHaveActForType(actType)) then
+						isHave = true
+					end
 				end
+					-- 一元礼包活动领取完所有像关闭
+				if isHave and funcId == Define.SysId.OneRecharge then
+					return MActivity.IsShowsOneRecharge
+				end
+				return isHave
 			end
-			return isHave
 		end
 		--月卡，年卡，vip，首充开启检测
 		if funcId == Define.SysId.MonthWelfare then
@@ -196,6 +210,23 @@ function _M.FuncIsOpen(funcId)
 		-- 	end
 
 		-- 	return nowLevel >= csv.openParam
+		elseif funcId == Define.SysId.SuperVIP then
+			return MSuperVIP.IsShowSuperVIP()
+		elseif funcId == Define.SysId.LimitActivity then
+			--限时活动需要考虑子节点是否已开启
+			local childFuncs = Csv.FuncMap[Define.SysId.LimitActivity]
+			if childFuncs ~= nil and #childFuncs > 0 then
+				for _,v in pairs(childFuncs) do
+					if _M.FuncIsOpen(v.id, false) then
+						return true
+					end
+				end
+			end
+			return false
+		elseif funcId == Define.SysId.CrossArena then
+			return MCrossArena.GetIsArenaOpen()
+		elseif funcId == Define.SysId.DiamondLottery then
+			return MCrossLotteryActivity.CheckIsLotteryOpen()
 		end
 		-------------------------
 		return true
@@ -291,6 +322,27 @@ function _M.RedpointIsActive(funcId, ... )
 		end
 	end
 	return tab.isActive
+end
+
+function _M.GetWeakGuideInfo(_id)
+	if _M.WeakGuides ~= nil then
+		if _M.WeakGuides[_id] ~= nil then
+			return _M.WeakGuides[_id]
+		end
+	end
+	return {id = _id,num = 0}
+end
+
+function _M.IsWeakGuideDone(_id)
+	local weakGuideCsv = Csv.WeakGuide[_id]
+	if weakGuideCsv ~= nil then
+		if weakGuideCsv.type == 1 then
+			return MBattle.CurId >= weakGuideCsv.value
+		elseif weakGuideCsv.type == 2 then
+			return _M.GetWeakGuideInfo(_id).num > 0 
+		end
+	end
+	return false
 end
 
 return _M

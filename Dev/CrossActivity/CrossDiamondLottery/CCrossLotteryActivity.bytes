@@ -1,0 +1,267 @@
+local MCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.MCrossLotteryActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local CMain = JRequire "Dev.Main.CMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cCrossActGet = 1,	 -- 领取奖励 PCrossActivity.CGet
+	cCrossActInfo = 2,	 -- 获取活动消息，为一些打开窗口要请求内容的协议设计 PCrossActivity.CGetActivityInfo
+	cLottery = 3,		 -- (抽奖)请求抽奖 PCrossActivity.CLottery
+	cLotteryNumGet = 4,	 -- (抽奖)请求次数奖励 PCrossActivity.CLottery
+	cLotteryOpen = 5,	 -- (抽奖)打开界面 - 返回历史消息(最近20条)
+	cLotteryClose = 6,	 -- (抽奖)关闭界面 - 在打开过程中, 实时推送新的历史消息
+
+	sCrossActInit = 1,	 	 -- 初始化 PCrossActivity.SActivity
+	sCrossActUpdate = 2,	 -- 更新 PCrossActivity.SActivity
+	sCrossActGetReward = 3,  -- 获取/操作成功反馈 PCrossActivity.SActivityGeted
+	sCrossActUpdateState = 4,-- 更新状态 PCrossActivity.SUpdateState
+	sCrossActUpdatePro = 5,  -- 更新进度 PCrossActivity.SUpdatePro
+	sLotteryPoolGold = 6,	 -- (抽奖)奖池同步 PCrossActivity.SLotteryPoolGold
+	sLottery = 7,		 	 -- (抽奖)抽奖返回 PCrossActivity.SLottery
+	sLotteryNumGet = 8,	 	 -- (抽奖)次数奖励返回 PCrossActivity.SLotteryNumGet
+	sLotteryMessage = 9, 	 -- (抽奖)消息刷新 PCrossActivity.SLotteryMessage
+	sLotteryMsgList = 10, 	 -- (抽奖)历史消息列表 PCrossActivity.SLotteryMsgList
+}
+
+
+function _M.ModuleClean()
+	MCrossLotteryActivity.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cLottery] = "PCrossActivity.CLottery",
+		[ECmdId.cLotteryNumGet] = "PCrossActivity.CLottery",
+		[ECmdId.cLotteryOpen] = "",
+		[ECmdId.cLotteryClose] = "",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sCrossActInit]    		= { proto = "PCrossActivity.SActivity",			handle = _P.OnInit},
+		[ECmdId.sCrossActUpdate]   		= { proto = "PCrossActivity.SActivity",			handle = _P.OnUpdate},
+		[ECmdId.sCrossActUpdateState]   = { proto = "PCrossActivity.SUpdateState",		handle = _P.OnUpdateState},
+		[ECmdId.sLotteryPoolGold] 		= { proto = "PCrossActivity.SLotteryPoolGold",	handle = _P.OnLotteryPoolGoldPush},
+		[ECmdId.sLottery]         		= { proto = "PCrossActivity.SLottery",			handle = _P.OnLotteryBack},
+		[ECmdId.sLotteryNumGet]   		= { proto = "PCrossActivity.SLotteryNumGet",	handle = _P.OnGetRewardBack},
+		[ECmdId.sLotteryMessage]  		= { proto = "PCrossActivity.SLotteryMessage",	handle = _P.OnNewMessagePush},
+		[ECmdId.sLotteryMsgList]  		= { proto = "PCrossActivity.SLotteryMsgList",	handle = _P.OnGetMessageList},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.CrossActivity, func_send, func_recv, isReload)
+end
+
+-- C2S
+-- 抽奖请求
+function _M.OnLotteryReq(num)
+	_M.Send(ECmdId.cLottery, {num = num})
+end
+
+
+-- 领取奖励请求
+function _M.LotteryNumGetReq(num)
+	_M.Send(ECmdId.cLotteryNumGet, {num = num})
+end
+
+
+-- 打开界面请求
+function _M.OnLotteryOpenReq()
+	_M.Send(ECmdId.cLotteryOpen)
+end
+
+
+-- 关闭界面请求
+function _M.OnLotteryCloseReq()
+	_M.Send(ECmdId.cLotteryClose)
+end
+
+
+-- S2C
+function _P.OnInit(data)
+	MCrossLotteryActivity.CleanActData()
+	_P.DoUpdate(data)
+end
+
+
+function _P.OnUpdate(data)
+	_P.DoUpdate(data)
+	_P.RefreshMainBtn()
+end
+
+
+-- 更新状态
+function _P.OnUpdateState(data)
+	local isNeedUpdateMainBtn = false
+
+	local lotteryData = MCrossLotteryActivity.LotteryData[data.actId]
+	if lotteryData then
+		if lotteryData.state.state == MActivity.ActivityState.Close then
+			isNeedUpdateMainBtn = true
+		else
+			local newState = data.state
+			lotteryData.state = 
+			{
+				state = newState.state,
+				startTime = newState.startTime,
+				endTime = newState.endTime,
+			}
+		end
+		
+		-- 检查小红点
+		_P.CheckLotteryRepoint(lotteryData.actId)
+		WindowMgr.Call("UCrossDiamondLottery", "OnUpdateInfo", lotteryData.actId)
+	end
+
+	if isNeedUpdateMainBtn then
+		_P.RefreshMainBtn()
+	end
+end
+
+
+function _P.RefreshMainBtn()
+	WindowMgr.Call("UMain", "RefreshTopBtns")
+end
+
+
+function _P.DoUpdate(data)
+	if data == nil then return end
+
+	if data.lottery ~= nil then
+		MCrossLotteryActivity.ActTypeCached[Define.CrossActivityType.CrossDiamondLottery] = data.lottery.actId
+		_P.DoUpdateLottery(data.lottery)
+	end
+end
+
+
+function _P.DoUpdateLottery(data)
+	local info = _P.StateInfo(data)
+	info.totalNum = data.totalNum
+	info.isFree = data.isFree
+	info.numGets = {}
+	if data.numGets ~= nil then
+		for k,v in pairs(data.numGets) do
+			info.numGets[v] = true
+		end
+	end
+	info.poolGold = data.poolGold or 0
+	MCrossLotteryActivity.LotteryData[info.actId] = info
+
+	--检查小红点
+	_P.CheckLotteryRepoint(info.actId)
+	--刷新界面
+	WindowMgr.Call("UCrossDiamondLottery", "OnUpdateInfo", info.actId)
+end
+
+
+function _P.StateInfo(data)
+	if data == nil then return nil end
+
+	local state = data.state
+	local info = 
+	{
+		actId = data.actId,
+		state = {
+			state = state.state
+		}
+		
+	}
+	if nil ~= state.startTime then
+		info.state.startTime = state.startTime
+	end
+	if nil ~= state.endTime then
+		info.state.endTime = state.endTime
+	end
+	if nil ~= state.lefttime then
+		info.state.lefttime = state.lefttime
+	end
+	return info
+end
+
+
+function _P.CheckLotteryRepoint(actId)
+	local data = MCrossLotteryActivity.LotteryData[actId]
+	if data == nil then return end
+
+	local isNeedRedpoint = false
+	if data.isFree then
+		isNeedRedpoint = true
+	else
+		local csvLine = Csv.CrossLottery[actId]
+		if csvLine ~= nil then
+			if csvLine.num ~= nil and csvLine.reward ~= nil then
+				for _,v in pairs(csvLine.num) do
+					if v <= data.totalNum and data.numGets[v] ~= true then
+						isNeedRedpoint = true
+						break
+					end
+				end
+			end
+		end
+	end
+
+	CMain.UpdateRedpoint(isNeedRedpoint, Define.SysId.DiamondLottery)
+end
+
+
+function _P.OnLotteryPoolGoldPush(data)
+	local lotteryData = MCrossLotteryActivity.LotteryData[data.actId]
+	if lotteryData == nil then return end
+
+	lotteryData.poolGold = data.gold or 0
+	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryPoolGoldPush", data)
+end
+
+
+function _P.OnLotteryBack(data)
+	local lotteryData = MCrossLotteryActivity.LotteryData[data.actId]
+	if lotteryData == nil then return end
+	lotteryData.totalNum = data.totalNum
+	lotteryData.isFree = data.isFree
+
+	_P.CheckLotteryRepoint(lotteryData.actId)
+	WindowMgr.Call("UCrossDiamondLottery", "OnLottery", lotteryData.actId, data.rewardList)
+end
+
+
+function _P.OnGetRewardBack(data)
+	local lotteryData = MCrossLotteryActivity.LotteryData[data.actId]
+	if lotteryData == nil then return end
+	local lastGets = lotteryData.numGets
+	lotteryData.numGets = {}
+	local getNum = 0
+	for k,v in pairs(data.numGets) do
+		lotteryData.numGets[v] = true
+		if lastGets[v] ~= true then
+			getNum = v
+		end
+	end
+
+	_P.CheckLotteryRepoint(lotteryData.actId)
+	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryNumGet", lotteryData.actId, getNum, data.getRewards)
+end
+
+
+function _P.OnNewMessagePush(data)
+	table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = data.itemId, playerName = data.playerName, itemCount = data.itemCount})
+	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryMsg", data.actId)
+end
+
+
+function _P.OnGetMessageList(data)
+	MCrossLotteryActivity.LotteryMessage = {}
+	if data.list ~= nil then
+		for k,v in pairs(data.list) do
+			table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = v.itemId, playerName = v.playerName, itemCount = v.itemCount})
+		end
+	end
+	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryMsg", data.actId)
+end
+
+
+return _M

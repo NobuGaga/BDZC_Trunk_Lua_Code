@@ -15,11 +15,20 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local EventCenter = JRequire "Dev.EventCenter"
 --@RefType [Dev.Main.MMain.bytes#_M]
 local MMain = JRequire "Dev.Main.MMain"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
 
 ----------------------CS类引用--------------------------
 
 ----------------------常量定义--------------------------
 local GTE_EFFECT_ID = 5
+
+local TASK_STATE =
+{
+	Done = 1,
+	Current = 2,
+	NoStart = 3
+}
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -29,31 +38,23 @@ local _P = {}
 local _R = {}
 
 function _R.OnTaskUpdate(self)
-	local lastTask = self.TaskInfo
+	local lastTask = self.LastMainTaskInfo
 	if lastTask.questid ~= MQuest.MainQuest.questid then
-		local effect
 		SoundMgr.PlaySystem(10004)
-		effect = CCommon.CreateEffect(self.ContentRoot, GTE_EFFECT_ID, self.BtnDone.LocalPosition, function( ... )
-			if effect ~= nil then
-				effect:Destroy()
-			end
-			if MQuest.MainTaskIsEnd() then
-				self:Destroy()
-			else
-				_P.doCreate(self)
-			end			
-		end)
-		self.BtnDone.Activity = false
-		local csv = Csv.MainQuest[lastTask.questid]
-		if csv ~= nil and csv.reward ~= nil then
-			for index,info in pairs(csv.reward) do
-				CCommon.ShowFlyItem(self.ContentRoot,info[1],info[2], (index - 1) * 0.6)
-			end
+
+		if MQuest.MainTaskIsEnd() then
+			self:Destroy()
 		else
-			error("cont find funcId! questid: " .. lastTask.questid)
-		end
+			local lastInfo = self.TaskList[lastTask.questid]
+			local lastCsv = Csv.MainQuest[lastTask.questid]
+			for index,info in pairs(lastCsv.reward) do
+				CCommon.ShowFlyItem(self._RootNode,info[1],info[2], (index - 1) * 0.6)
+			end
+			
+			_P.createList(self, true)
+		end		
 	else
-		_P.doCreate(self)
+		_P.refreshOneTask(self, Csv.MainQuest[lastTask.questid])
 	end
 end
 
@@ -65,135 +66,212 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _P.doCreate(self)
-	local moudle = self.Moudle
-	if moudle ~= nil then
-		local mainTask = MQuest.MainQuest
-		self.TaskInfo = 
-		{
-			questid = mainTask.questid,
-			pro = mainTask.pro,
-			maxval = mainTask.maxval,
-		}
-		local csv = Csv.MainQuest[mainTask.questid]
-		if csv ~= nil then
-			self.Title.Text = csv.title
-			self.Desc.Text = csv.desc
-			self.Items:DestroyChildren()
-
-			if csv.reward ~= nil then
-				for _,info in pairs(csv.reward) do
-					local id = info[1]
-					CCommon.CreateItem(self.Items, id,function ( ... )
+function _P.refreshOneTask(self, csvLine)
+	local info = self.TaskList[csvLine.id]
+	local moudle = info.moudle
+	local mainTask = MQuest.MainQuest
+	local height = 340
+	if mainTask.questid == csvLine.id or info.isLook then
+		if info.isInit == false then
+			info.isInit = true
+			moudle:Get("desc").Text = csvLine.desc
+			moudle:Get("descTitle").Text = Csv.Text("quest_desc")
+			moudle:Get("stateTitle").Text = Csv.Text("quest_state")
+			moudle:Get("rewardTitle").Text = Csv.Text("quest_reward")
+			moudle:Get("C_text_0").Text = Csv.Text("quest_get")
+			moudle:Get("C_text").Text = Csv.Text("quest_go")
+			local itemNode = moudle:Get("Items")
+			if csvLine.reward ~= nil then
+				for _,itemInfo in pairs(csvLine.reward) do
+					local id = itemInfo[1]
+					CCommon.CreateItem(itemNode, id,function ( ... )
 						WindowMgr.Create("UBagDetailPop",id)
-					end,{num = info[2]},Define.SysId.Quest)
+					end,{num = itemInfo[2]},Define.SysId.Quest)
 				end
 			end
-
+		end
+		moudle:Get("TextRect").Activity = true
+		moudle:Get("RewardRect").Activity = true
+		local Sanjiaox = moudle:Get("Sanjiaox")
+		local StatePro = moudle:Get("statePro")
+		local StateDone = moudle:Get("stateDone")
+		if mainTask.questid == csvLine.id then
+			Sanjiaox.Activity = false
+			local BtnDone = moudle:Get("BtnDone")
+			local BtnPro = moudle:Get("BtnPro")	
+			moudle:Get("BtnRect").Activity = true		
 			if mainTask.pro >= mainTask.maxval then
-				self.BtnDone.RaycastTarget = true
-
-				self.BtnPro.Activity = false
-				self.BtnDone.Activity = true
-				self.StatePro.Activity = false
-				self.StateDone.Activity = true
+				BtnDone.RaycastTarget = true
+				StateDone.Text = Csv.Text("quest_done")
+				BtnPro.Activity = false
+				BtnDone.Activity = true
+				StatePro.Activity = false
+				StateDone.Activity = true
+				BtnDone:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					BtnDone.RaycastTarget = false
+					CQuest.MainDoneReq()
+				end, nil, 0.9)
 			else
-				self.BtnPro.Activity = true
-				self.BtnDone.Activity = false
-				self.StatePro.Activity = true
-				self.StateDone.Activity = false
-
+				BtnPro.Activity = true
+				BtnDone.Activity = false
+				StatePro.Activity = true
+				StateDone.Activity = false
+				BtnPro:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					if csvLine ~= nil and csvLine.funcId ~= nil then
+						if MMain.FuncIsOpen(csvLine.funcId) then
+							WindowOpen.Open(csvLine.funcId, csvLine.uiParam)
+							EventCenter.CallEventTrigger(Define.EventListenId.MainQuestOpen, csvLine.id)
+						else
+							local funcCsv = Csv.Func[csvLine.funcId]
+							if funcCsv ~= nil and funcCsv.conditionDesc ~= nil then
+								CCommon.ShowError(funcCsv.conditionDesc)
+							else
+								CCommon.ShowError(Csv.Text("common_funcClose"))
+							end
+						end		
+					else
+						error("cont find funcId! questid: " .. mainTask.questid)
+					end
+				end, nil, 0.9)
 				local proStr
 				local maxStr
-				if csv.proType == 1 then
+				if csvLine.proType == 1 then
 					--公司规模到达
 					local maxCsv = Csv.Company[mainTask.maxval]
 					if maxCsv ~= nil then
-						self.StatePro.Text = Csv.Text("quest_pro_1", {max = maxCsv.name})
+						StatePro.Text = Csv.Text("quest_pro_1", {max = maxCsv.name})
 					else
-						self.StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
+						StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
 					end					
 				else
-					self.StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
+					StatePro.Text = Csv.Text("quest_pro", {pro = mainTask.pro, max = mainTask.maxval})	
 				end						
 			end
+			height = 426
 		else
-			error("cont find Quest Csv! questid: " .. mainTask.questid)
-		end
-	end	
-end
-
-function _P.OnPressDone(self)
-	self.BtnDone.RaycastTarget = false
-
-	CQuest.MainDoneReq()
-end
-
-function _P.OnPressGo(self)
-	local mainTask = self.TaskInfo
-
-	local csv = Csv.MainQuest[mainTask.questid]
-	if csv ~= nil and csv.funcId ~= nil then
-		if MMain.FuncIsOpen(csv.funcId) then
-			WindowOpen.Open(csv.funcId)
-			EventCenter.CallEventTrigger(Define.EventListenId.MainQuestOpen, csv.id)
-		else
-			local funcCsv = Csv.Func[csv.funcId]
-			if funcCsv ~= nil and funcCsv.conditionDesc ~= nil then
-				CCommon.ShowError(funcCsv.conditionDesc)
+			Sanjiaox.LocalScale = Vector3(1, -1, 1)
+			Sanjiaox.Activity = true
+			Sanjiaox:AddOnButton(function()
+				info.isLook = false
+				_P.refreshOneTask(self, csvLine)
+			end, nil, 1.2)
+			moudle:Get("BtnRect").Activity = false
+			height = 340
+			if info.taskState == TASK_STATE.Done then
+				StateDone.Text = Csv.Text("quest_done")
+				StatePro.Activity = false
+				StateDone.Activity = true
 			else
-				CCommon.ShowError(Csv.Text("common_funcClose"))
+				StatePro.Text = Csv.Text("quest_noStart")
+				StatePro.Activity = true
+				StateDone.Activity = false
 			end
-		end		
+		end
 	else
-		error("cont find funcId! questid: " .. mainTask.questid)
+		moudle:Get("TextRect").Activity = false
+		moudle:Get("RewardRect").Activity = false
+		moudle:Get("BtnRect").Activity = false
+		local Sanjiaox = moudle:Get("Sanjiaox")
+		Sanjiaox.LocalScale = Vector3(1, 1, 1)
+		Sanjiaox.Activity = true
+		Sanjiaox:AddOnButton(function()
+			info.isLook = true
+			_P.refreshOneTask(self, csvLine)
+		end, nil, 1.2)
+		height = 64
+	end
+	local size = moudle.SelfRect.SizeDelta
+	size.y = height
+	moudle.SelfRect.SizeDelta = size
+	local Yuandian = moudle:Get("Yuandian")
+	local titleBg = moudle:Get("TitleBg")
+	if mainTask.questid == csvLine.id then
+		Yuandian.SpriteName = "rw_004"
+		titleBg.SpriteName = "rw_006_2"
+	else
+		Yuandian.SpriteName = "rw_003"
+		titleBg.SpriteName = "rw_006"
+	end
+	if info.taskState == TASK_STATE.Done then
+		Yuandian.IsGray = true
+		moudle:Get("YWC").Activity = true
+	else
+		Yuandian.IsGray = false
+		moudle:Get("YWC").Activity = false
+	end
+	return height
+end
+
+function _P.createList(self, isLookCurrnt)
+	self.TaskContent:DestroyChildren()
+	self.TaskList = {}
+	local mainTask = MQuest.MainQuest
+	self.LastMainTaskInfo = 
+	{
+		questid = mainTask.questid,
+		pro = mainTask.pro,
+		maxval = mainTask.maxval,
+	}
+	local mainTaskCsv = Csv.MainQuest[mainTask.questid]
+	local questList = Csv.MainQuestGroup[mainTaskCsv.group]
+	local sortList = {}
+	for _,line in pairs(questList) do
+		table.insert(sortList, line)
+	end
+	table.sort(sortList, function(a, b) return a.groupSort < b.groupSort end)
+	local taskState = TASK_STATE.Done
+	local isHaveCurrent = false
+	local mainIndex = 0
+	for index,line in pairs(sortList) do
+		local moudle = self:CreateMoudle(self.TaskContent, "M__Task_Item")
+		moudle:Get("title").Text = line.title
+		if isHaveCurrent then
+			taskState = TASK_STATE.NoStart
+		elseif line.id == mainTask.questid then
+			isHaveCurrent = true
+			taskState = TASK_STATE.Current
+		end
+		self.TaskList[line.id] = 
+		{
+			moudle = moudle,
+			isLook = line.id == mainTask.questid,
+			taskState = taskState,
+			isInit = false,
+			index = index
+		}
+		_P.refreshOneTask(self, line)		
+		if line.id == mainTask.questid then
+			mainIndex = index
+		end
+	end
+	if mainIndex > 4 and isLookCurrnt then
+		if mainIndex == #sortList then
+			self.TaskContent.LocalPosition = Vector2(70, 94 * (mainIndex - 2))
+		else
+			self.TaskContent.LocalPosition = Vector2(70, 94 * (mainIndex - 3))
+		end
+	else
+		self.TaskContent.LocalPosition = Vector2(70, 0)
 	end
 end
 
 --界面构建
 function _M:OnCreate()
-	self._EventNode:AddOnClick(function ( ... )
-		SoundMgr.Play(10001)
-		self:Destroy()
-	end, nil)
-
 	local moudle = self:CreateMoudle(self._RootNode, "M__Task")
 	self.Moudle = moudle
-	moudle:Get("BG1").RaycastTarget = true
-
 	moudle:Get("return"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end, nil, 1.2)
-
-	self.BtnPro = moudle:Get("BtnPro")
-	self.BtnDone = moudle:Get("BtnDone")
-	self.Title = moudle:Get("title")
-	self.Desc = moudle:Get("desc")
-	self.StateDone = moudle:Get("stateDone")
-	self.StatePro = moudle:Get("statePro")
-	self.Items = moudle:Get("Items")
-	self.ContentRoot = moudle:Get("content")
-
+	moudle:Get("HeadIcon").SpriteName = MPlayer.GetHeadIcon()
 	moudle:Get("text").Text = Csv.Text("quest_main")
-	moudle:Get("descTitle").Text = Csv.Text("quest_desc")
-	moudle:Get("stateTitle").Text = Csv.Text("quest_state")
-	moudle:Get("rewardTitle").Text = Csv.Text("quest_reward")
-	moudle:Get("C_text_0").Text = Csv.Text("quest_get")
-	moudle:Get("C_text").Text = Csv.Text("quest_go")
-	
-	self.StateDone.Text = Csv.Text("quest_done")
-
-	self.BtnPro:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		_P.OnPressGo(self)
-	end, nil, 0.9)
-	self.BtnDone:AddOnButton(function ( ... )
-		SoundMgr.Play(10001)
-		_P.OnPressDone(self)
-	end, nil, 0.9)
-
-	_P.doCreate(self)
+	moudle:Get("Text").Text = Csv.Text("quest_my")
+	moudle:Get("Time").Text = LuaUtil.TransToYMD2(HeartBeat.ServSecond())
+	self.TaskList = {}
+	self.TaskContent = moudle:Get("Content")
+	_P.createList(self, true)
 end
 
 return _M

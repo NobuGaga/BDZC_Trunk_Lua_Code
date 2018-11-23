@@ -5,7 +5,10 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
 local EventCenter = JRequire "Dev.EventCenter"
 local MBattle = JRequire "Dev.Battle.MBattle"
+local MMain = JRequire "Dev.Main.MMain"
 local JGuiManager = CS.JGui.JGuiManager
+local SDKMgr = JRequire "SDK.SDKMgr"
+local SDKShareType = JRequire "SDK.SDKShareType"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -13,6 +16,9 @@ local _M = Class(WindowBase)
 local _P = {}
 
 local winTalkActorId = 10019 -- 谈判成功
+
+local PosShareBtn2 = -390
+local PosShareBtn1 = -10
 
 --界面构建
 function _M:OnCreate(list,call)
@@ -24,9 +30,11 @@ function _M:OnCreate(list,call)
 	self.Call = call
 	moudle:Get("Tips").Text = Csv.Text("battle_acqu3")
 
+	local count = 0
 	local content = moudle:Get("content")
 	for k,v in ipairs(list) do
 		if _P.CheckIsHaveWin(v.value.list) then
+			count = count + 1
 			local itemMoudle = JGuiManager.GetMoudle(content,"M_Wghej_Onekey_Item")
 			itemMoudle:Get("Pingjia").Text = Csv.Text("battle_relation")
 			local csvChapter = Csv.Chapter[v.chapter]
@@ -56,6 +64,22 @@ function _M:OnCreate(list,call)
 	-- 播放战斗胜利特效
 	SoundMgr.PlayNonStopUI(10014)
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), winTalkActorId)
+	
+	local FxBtn = moudle:Get("FxBtn")
+	if MMain.FuncIsOpen(Define.SysId.Share) then
+		FxBtn.Activity = count ~= 0
+		FxBtn:AddOnButton(function()
+			SDKMgr.ReqShare(SDKShareType.WinBattle)
+		end)
+		moudle:Get("FxBtnText").Text = Csv.Text("quest_share_btn")
+		if count == 1 then
+			FxBtn.LocalPosition = Vector2(FxBtn.LocalPosition.x, PosShareBtn1)
+		elseif count == 2 then
+			FxBtn.LocalPosition = Vector2(FxBtn.LocalPosition.x, PosShareBtn2)
+		end
+	else
+		FxBtn.Activity = false
+	end
 end
 
 function _P.GetSaveStr(offsetNum)

@@ -50,6 +50,7 @@ function _M:OnCreate(data,isVote)
 		text4.Text = ""
 		text5.Text = ""
 		text6.Text = ""
+		text5.Activity = false
 	else
 		text1.Text = Csv.Text("finance_resultTitle_fb2",{num = data.hurt})--"对【索罗斯】抵御了"
 		text2.Text = ""
@@ -57,11 +58,24 @@ function _M:OnCreate(data,isVote)
 		text4.Text = ""
 		text5.Text = Csv.Text("finance_result_jifenFb2",{num = data.jifen})--副本积分："
 		text6.Text = ""
+		text5.Activity = true
+	end
+
+	--宝箱
+	local luckText = moudle:Get("luck")
+	local itemContent = moudle:Get("Items")
+
+	luckText.Activity = false
+	itemContent.Activity = false
+
+	if data.itemBoxId ~= nil and data.itemBoxId > 0 then
+		luckText.Activity = true
+		itemContent.Activity = true
+		luckText.Text = Csv.Text("finance_boxTips2")
+		CCommon.CreateItem(itemContent,data.itemBoxId, nil, {num = 1})
 	end
 
 	-- 播放战斗失败特效
-
-
 	local _isWin
 	if isVote then
 		_isWin = MVote.BossPower.ncur <= data.hurt

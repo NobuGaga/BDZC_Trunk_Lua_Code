@@ -24,10 +24,10 @@ function _M:OnCreate(seatId)
 
 	module:Get("Title").Text = Csv.Text("car_openSeat_title")
 	module:Get("text1").Text = Csv.Text("car_openSeat_condition")
-	module:Get("text3").Text = Csv.Text("car_openSeat_goldOpen")
 	
 	local openShowText = module:Get("text2")
 	local goldOpenText = module:Get("text4")
+	local itemTipText = module:Get("text3")
 	local seatConf = Csv.CarSeatOpen[seatId]
 	if seatConf then
 		local openStr = ""
@@ -44,7 +44,36 @@ function _M:OnCreate(seatId)
 		end
 
 		openShowText.Text = openStr
-		goldOpenText.Text = Csv.Text("car_openSeat_goldOpenShow", {num = seatConf.openCost})
+
+		for k,v in pairs(seatConf.openCost) do
+			if v[1] == Define.AssetsType.Gold then
+				itemTipText.Text = Csv.Text("car_openSeat_goldOpen")
+				goldOpenText.Text = Csv.Text("car_openSeat_goldOpenShow", {num = v[2]})
+				break
+			else
+				itemTipText.Text = Csv.Text("car_main_itemOpen")
+				local itemConf = Csv.Item[v[1]]
+				if itemConf then
+					local iconImg = module:Get("Icon")
+					iconImg.SpriteName = itemConf.icon
+					iconImg:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+
+						if v[1] ~= nil then
+							WindowMgr.Create("UBagDetailPop", v[1])
+						end
+					end, nil, 1)
+					
+					local numText = module:Get("Num")
+					local curGetNum = MBag.GetItemNum(v[1])
+					if curGetNum >= v[2] then
+						numText.Text = Csv.Text("car_main_greenShow", {num = curGetNum, need = v[2]})
+					else
+						numText.Text = Csv.Text("car_main_redShow", {num = curGetNum, need = v[2]})
+					end
+				end
+			end
+		end
 	end
 
 	module:Get("C_text").Text = Csv.Text("car_openSeat_ok")
@@ -66,12 +95,16 @@ end
 -- 开启车位
 function _P.OnOpenSeat(self, seatId)
 	local seatConf = Csv.CarSeatOpen[seatId]
-	if not MBag.CheckItemEnough(Define.AssetsType.Gold, seatConf.openCost) then
-		return
-	end
+	if seatConf then
+		for k,v in pairs(seatConf.openCost) do
+			if not MBag.CheckItemEnough(v[1], v[2]) then
+				return
+			end
+		end
 
-	CCar.CarOpenParkingReq(seatId)
-	self:Destroy()
+		CCar.CarOpenParkingReq(seatId)
+		self:Destroy()
+	end
 end
 
 

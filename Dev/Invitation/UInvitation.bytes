@@ -1,0 +1,404 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MWelfare = JRequire"Dev.Welfare.MWelfare"
+local CWelfare = JRequire"Dev.Welfare.CWelfare"
+local CNotice = JRequire "Dev.Notice.CNotice"
+local MMain = JRequire "Dev.Main.MMain"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MInvitation = JRequire"Dev.Invitation.MInvitation"
+local CInvitation = JRequire "Dev.Invitation.CInvitation"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+
+local rewarID = 135
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent,effectRect)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Welfare_Invitation", WindowType.UI, 0)
+	self.mMoudle = moudle
+	self.mEffectRect = effectRect
+	self.mInputMoudle = nil
+
+	local mineNum = MInvitation.code
+
+	--moudle:Get("Title").Text = Csv.Text("welfare_invitation_title")
+	moudle:Get("Text1").Text = Csv.Text("welfare_invitation_title2")
+	moudle:Get("Text2").Text = Csv.Text("welfare_invitation_mine",{num = mineNum})
+	moudle:Get("C_text").Text = Csv.Text("welfare_invitation_copy")
+	moudle:Get("C_text2").Text = Csv.Text("welfare_invitation_desc")
+
+	moudle:Get("C_Btn_a"):AddOnButton(function()
+		--复制邀请码
+		SoundMgr.Play(10001)
+		SDKMgr.CopyText(mineNum)
+		CCommon.ShowError(Csv.Text("welfare_copySuccess"))--"复制成功！")
+	end)
+
+	moudle:Get("C_Btn_b"):AddOnClick(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("URuleTips",Define.SysId.Invitation)
+	end)
+
+	local node = moudle:Get("content")
+	self.PageNode = node
+	local funcs = MMain.GetOpenedFuncs(Define.SysId.Invitation, true)
+	local funcReds = {}
+	local count = #funcs
+	if count > 0 then
+		--Table标签控制
+		local colorLight = Color(255/255,225/255,75/255,1)
+		local colorDefault = Color(0/255,195/255,255/255,1)
+		local tabHandle = TabGroup.new(function (funcId)
+			_P.OnChoose(self, funcId)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
+	
+		local index = 0
+		for k,v in pairs(funcs) do
+			index = index + 1
+			tabHandle:Add(v.id, moudle:Get("tab"..index), moudle:Get("tabText"..index), v.name)
+
+			--注册小红点
+			table.insert(funcReds,{funcId = v.id,redImg = moudle:Get("redPoint_" .. index)})
+			--self:RegistRedpoint(moudle:Get("redPoint_" .. index), v.id)
+		end
+		tabHandle:Choose(funcs[1].id)
+		self.tabHandle = tabHandle
+		self.mFuncRed = funcReds
+	end
+	_P.RefreshToggleRed(self)
+end
+
+function _P.RefreshToggleRed(self)
+	local funcRed = self.mFuncRed
+	if funcRed ~= nil then
+		for k,v in pairs(funcRed)do
+			if v.redImg ~= nil then
+				if MInvitation.CheckToggleRed(v.funcId) then
+					v.redImg.Activity = true
+				else
+					v.redImg.Activity = false
+				end
+			end
+		end
+	end
+end
+
+function _P.OnChoose(self, funcId)
+	local content = self.PageNode
+	content:DestroyChildren()
+	content.LocalPosition = Vector2(0,0)
+
+	self.mInputMoudle = nil
+	self.mRewardItems = {}
+
+	--local rewardItems = {}
+	if funcId == Define.SysId.Invitation_reward then
+		if not MInvitation.IsInvitation then
+			self.mInputMoudle =  _P.CreateInputItem(self,content) --如果已领取被邀请奖励则不再出现
+		end
+
+		local csvInvitation = Csv.FriendInvitation[1001]
+		if csvInvitation.value ~= nil then
+			for k,v in pairs(csvInvitation.value)do
+				 local itemMoudle =  _P.CreateRewardItem(self,content,k,funcId)
+				 --rewardItems[k] = {moudle = itemMoudle,index = k,func = funcId}
+			end
+		end
+
+	elseif funcId == Define.SysId.Invitation_power then
+		local csvInvitation = Csv.FriendInvitation[1002]
+		if csvInvitation.value ~= nil then
+			for k,v in pairs(csvInvitation.value)do
+				local itemMoudle =  _P.CreateRewardItem(self,content,k,funcId)
+				--rewardItems[k] = {moudle = itemMoudle,index = k,func = funcId}
+			end
+		end
+
+	elseif funcId == Define.SysId.Invitation_chongzhi then
+		local csvInvitation = Csv.FriendInvitation[1003]
+		if csvInvitation.value ~= nil then
+			for k,v in pairs(csvInvitation.value)do
+				local itemMoudle =  _P.CreateRewardItem(self,content,k,funcId)
+				--rewardItems[k] = {moudle = itemMoudle,index = k,func = funcId}
+			end
+		end
+	end
+	
+	--self.mRewardItems = rewardItems
+	self.mSelectFuncId = funcId
+	_P.SortItems(self,funcId)
+end
+
+function _P.SortItems(self,funcId)
+	local rewardList = self.mRewardItems
+	if rewardList ~= nil then
+		table.sort(rewardList, function (a, b)
+			if a.gainType == b.gainType then
+				return a.index < b.index
+			else
+				return a.gainType < b.gainType
+			end
+		end)
+
+		local _index = 0
+		for k,v in pairs(rewardList)do
+			_index = _index +1
+			v.moudle.SelfRect.CachedTran:SetSiblingIndex(k)
+		end
+	end
+end
+
+function _P.CreateInputItem(self,parent)
+	local moudle = JGuiManager.GetMoudle(parent,"M_Welfare_Invitation_Item2", WindowType.UI, 10)
+	moudle:Get("Placeholder").Text = Csv.Text("welfare_invitation_rewardDesc")
+	moudle:Get("C_text_0").Text = Csv.Text("welfare_invitation_sure")
+
+	local input = moudle:Get("input")
+
+	moudle:Get("C_Btn_a_0"):AddOnButton(function()
+		--确认并领取奖励
+		if input.Text ~= "" then
+			CInvitation.ReqInvitationCode(input.Text)
+		else
+			CCommon.ShowError(Csv.Text("welfare_invitation_noInput"))
+		end
+	end)
+
+	local rect = moudle:Get("rect")
+	local rewardList = Csv.Const(rewarID)
+	if rewardList ~= nil then
+		for k,v in pairs(rewardList)do
+			CCommon.CreateItem(rect, v[1], function() 
+				CCommon.ShowItemTips(v[1]) 
+			end, {num = v[2],scale = 0.75})
+		end
+	end
+
+	return moudle
+end
+
+function _P.CreateRewardItem(self,parent,index,funcId)
+	local moudle = JGuiManager.GetMoudle(parent,"M_Welfare_Invitation_Item", WindowType.UI, 10)
+
+	_P.RefreshItem(self,moudle,index,funcId)
+
+	return moudle
+end
+
+function _P.RefreshItem(self,moudle,index,funcId)
+	local titleText = moudle:Get("Text")
+	local rewardTimes = moudle:Get("Num")
+	local headBox = moudle:Get("HeadBox")
+	local headIcon = moudle:Get("Head")
+	local wenhaoImg = moudle:Get("Wenhao")
+	local rect = moudle:Get("rect")
+	rect:DestroyChildren()
+
+	headBox.Activity = false
+	wenhaoImg.Activity = true
+	headIcon.Activity = false
+	rect.LocalPosition = Vector2(-180, -100)
+
+	local csvInvitation = nil
+	local csvInvitationData = nil
+	local title = nil
+	local rewardType = 1
+
+	if funcId == Define.SysId.Invitation_reward then
+		csvInvitation = Csv.FriendInvitation[1001]
+		rewardType = csvInvitation.id
+		headBox.Activity = true
+		rect.LocalPosition = Vector2(-80, -100)
+	elseif funcId == Define.SysId.Invitation_power then
+		csvInvitation = Csv.FriendInvitation[1002]
+		rewardType = csvInvitation.id
+	elseif funcId == Define.SysId.Invitation_chongzhi then
+		csvInvitation = Csv.FriendInvitation[1003]
+		rewardType = csvInvitation.id
+	end
+
+	if csvInvitation ~= nil then
+		for k,v in pairs(csvInvitation.value)do
+			if k == index then
+				if v ~= nil then
+					csvInvitationData = {
+						target = v[1],
+						rewardid = v[2],
+						count = v[3],
+					}
+				end
+			end
+		end
+
+		for k,v in pairs(csvInvitation.title)do
+			if k == index then
+				if v ~= nil then
+					title = v
+				end
+			end
+		end
+	end
+	
+	if title ~= nil then
+		titleText.Text = title
+	end
+
+	if csvInvitationData ~= nil then
+		local csvRewardData = Csv.ItemGroup[csvInvitationData.rewardid]
+		if csvRewardData ~= nil then
+			local rewardList = csvRewardData.rewards
+			if rewardList ~= nil then
+				for k,v in pairs(rewardList)do
+					CCommon.CreateItem(rect, v[1], function() 
+						CCommon.ShowItemTips(v[1]) 
+					end, {num = v[2],scale = 0.75})
+				end
+			end
+		end
+		rewardTimes.Text = Csv.Text("welfare_invitation_getNum",{num = csvInvitationData.count - MInvitation.GetGainTimes(index,rewardType),max = csvInvitationData.count})
+	end
+
+	--
+	local getImg = moudle:Get("getImg")
+	local gainBtn = moudle:Get("C_Btn_a")
+	local gainText = moudle:Get("C_text")
+	gainBtn:AddOnButton(function()
+		--领取奖励
+		CInvitation.ReqGetReward(rewardType,index)
+	end)
+
+	getImg.Activity = false
+	gainBtn.Activity = true
+	gainBtn.IsGray = true
+	gainBtn.RaycastTarget = false
+
+	local gainType = 0 --0可领取 1未达成 2已领取 
+	local gainNum = MInvitation.GetGainTimes(index,rewardType)
+	if csvInvitationData ~= nil then
+		--已解锁阶段的玩家头像
+		local invitationInfo = MInvitation.GetInvitationData(csvInvitationData.target)
+		if invitationInfo ~= nil then
+			wenhaoImg.Activity = false
+			headIcon.Activity = true
+	
+			headIcon.SpriteName = MPlayer.HeadIconFromSex(invitationInfo.head.headid,invitationInfo.head.gender, true)
+		end
+
+		if gainNum < csvInvitationData.count then
+			local isEnough = false
+			local enoughList =  MInvitation.GetInvitationsByType(funcId,csvInvitationData.target)
+			
+			if funcId == Define.SysId.Invitation_reward then
+				--邀请人数特殊处理
+				if #enoughList >= csvInvitationData.target then
+					--可领取
+					gainBtn.IsGray = false
+					gainBtn.RaycastTarget = true
+					gainText.Text = Csv.Text("welfare_invitation_get")
+				else
+					--未满足领取条件
+					gainType = 1
+					gainText.Text = Csv.Text("welfare_invitation_get2")
+				end
+			else
+				if #enoughList > gainNum then
+					--可领取
+					gainBtn.IsGray = false
+					gainBtn.RaycastTarget = true
+					gainText.Text = Csv.Text("welfare_invitation_get")
+				else
+					--未满足领取条件
+					gainType = 1
+					gainText.Text = Csv.Text("welfare_invitation_get2")
+				end
+			end
+		else
+			--已领取完毕
+			getImg.Activity = true
+			gainBtn.Activity = false
+
+			gainType = 2
+			gainText.Text = Csv.Text("welfare_invitation_get1")
+		end
+	end
+
+	local rewardList = self.mRewardItems
+	if self.mRewardItems ~= nil then
+		for k,v in pairs(self.mRewardItems)do
+			if v.index == index then
+				v.gainType = gainType
+				return moudle
+			end
+		end
+		table.insert(self.mRewardItems,{moudle = moudle,index = index,func = funcId,gainType = gainType})
+		return moudle
+	end
+end
+
+function _M:GetReward(data)
+	local itemData = nil
+	if self.mRewardItems ~= nil then
+		for k,v in pairs(self.mRewardItems)do
+			if v.index == data.index then
+				itemData = v
+			end
+		end
+	end
+	
+	if itemData ~= nil then
+		if data.reward ~= nil then
+			local delay = 0
+			for k,v in pairs(data.reward)do
+				delay = delay +0.2
+				CCommon.ShowFlyItem(self.mEffectRect, v.key,v.value,delay, itemData.moudle.SelfRect.RootCanvasPos+Vector2(0,-80))
+			end
+			_P.RefreshItem(self,itemData.moudle,itemData.index,itemData.func)
+		end
+	end
+	_P.RefreshToggleRed(self)
+	_P.SortItems(self,funcId)
+end
+
+function _M:OnInPutSuccess(data)
+	if data.result then
+		if data.reward ~= nil then
+			local delay = 0
+			for k,v in pairs(data.reward) do
+				delay = delay +0.2
+				if self.mInputMoudle ~= nil then
+					CCommon.ShowFlyItem(self.mEffectRect, v.key,v.value,delay, self.mInputMoudle.SelfRect.RootCanvasPos+Vector2(0,-80))
+				end
+			end
+
+			self.mInputMoudle:Get("input").Text = ""
+			local getBtn =  self.mInputMoudle:Get("C_Btn_a_0")
+			getBtn.IsGray = true
+			getBtn.RaycastTarget = false
+		end
+	else
+
+	end
+end
+
+function _M:RefreshRed()
+	_P.RefreshToggleRed(self)
+	
+	if self.mSelectFuncId ~= nil then
+		_P.OnChoose(self, self.mSelectFuncId)
+	end
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
+end
+
+return _M

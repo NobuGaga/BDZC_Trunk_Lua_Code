@@ -29,6 +29,8 @@ RechargeIDForType[Define.ActivityType.RechargeReward_TotalDay] = Define.SysId.Re
 RechargeIDForType[Define.ActivityType.RechargeReward_DailyGift] = Define.SysId.RechargeReward_DailyGift
 RechargeIDForType[Define.ActivityType.RechargeReward_Single] = Define.SysId.RechargeReward_Single
 
+local SCALE_EFFECT_ID = "T_Parliament_RightArrow"
+
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -46,10 +48,6 @@ function _M:BeforeDestroy()
 		self.tabHandle:delete()
 		self.tabHandle = nil
 	end
-end
-
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
 end
 
 function _P.OnChoose(self, funcId)
@@ -159,7 +157,7 @@ function _M:OnCreate(openFunc)
 			end
 			--注册小红点
 			local redpoint = moudle:Get("redpoint_" .. index)
-			self:RegistRedpoint(redpoint, v.id)
+			self:RegistRedpoint(redpoint, Define.SysId.RechargeReward, v.id)
 			local isRed = MMain.RedpointIsActive(v.id)
 			if isRed then
 				if self.selectIndex == nil then
@@ -184,12 +182,23 @@ function _M:OnCreate(openFunc)
 		end
 	end
 	_P.MovePageList(self)
-	moudle:Get("BeforeBtn"):AddOnButton(function ()
+	local leftBtn = moudle:Get("BeforeBtn")
+	leftBtn:AddOnButton(function ()
 		_P.OnClickArrow(self, true)
 	end, nil, 1)
-	moudle:Get("NextBtn"):AddOnButton(function ()
+
+	if count > 4 then
+		leftBtn.CachedTran:GetJTweener(SCALE_EFFECT_ID):Play()
+	end
+
+	local rightBtn = moudle:Get("NextBtn")
+	rightBtn:AddOnButton(function ()
 		_P.OnClickArrow(self)
 	end, nil, 1)
+
+	if count > 4 then
+		rightBtn.CachedTran:GetJTweener(SCALE_EFFECT_ID):Play()
+	end
 end
 
 function _P.OnClickArrow(self, isLeft)

@@ -132,6 +132,14 @@ function _P.OnChoose(self, funcId)
 		nameImg.Activity = false
 	end
 
+	local nameImg2 = self.mModule:Get("Name2")
+	if fundConf.nameBg2 ~= nil then
+		nameImg2.SpriteName = fundConf.nameBg2
+		nameImg2.Activity = true
+	else
+		nameImg2.Activity = false
+	end
+	
 	local timeText = self.mModule:Get("text2")
 	local investEndTime = (self.ActInfo.investEndTime or self.ActInfo.state.endTime)
 	if self.ActInfo.state.state == MActivity.ActivityState.Doing then -- 投资截止前(与后端约好，时间戳减1)
@@ -271,7 +279,11 @@ end
 
 function _P.OnClickFundBtn(self)
 	local fundConf = Csv.Fund[self.ActInfo.actId]
-	local rechargeConf =  Csv.Recharge[fundConf.productId]
+	local productId = fundConf.productId
+	if GameSetting.IsTaiWan then
+		productId = fundConf.productId2
+	end
+	local rechargeConf = Csv.Recharge[productId]
 	local hasInvestemt = self.ActInfo.day > 0
 	if hasInvestemt then
 		local hasCanGetId = _P.GetCurRewardId(self)
@@ -279,7 +291,8 @@ function _P.OnClickFundBtn(self)
 			CActivity.GetRewardReq(self.ActInfo.actId, hasCanGetId)
 		end
 	else
-		SDKMgr.ReqPay(fundConf.productId, rechargeConf.sdkProductId, fundConf.amount, fundConf.totalGold, fundConf.productName, self.ActInfo.actId)
+		local price = rechargeConf.cost
+		SDKMgr.ReqPay(rechargeConf.id, rechargeConf.sdkProductId, price, fundConf.totalGold, fundConf.productName, self.ActInfo.actId)
 	end
 end
 

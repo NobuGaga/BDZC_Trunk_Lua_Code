@@ -1,0 +1,40 @@
+local MActivity = JRequire "Dev.Activity.MActivity"
+
+local _M = {}
+
+_M.LotteryData = {}
+_M.LotteryMessage = {}
+_M.ActTypeCached = {}
+
+
+function _M.Clean()
+	_M.LotteryData = {}
+	_M.LotteryMessage = {}
+	_M.ActTypeCached = {}
+end
+
+
+function _M.CleanActData( )
+	_M.LotteryData = {}
+	_M.ActTypeCached = {}
+end
+
+
+--判断活动是否开启
+function _M.CheckIsLotteryOpen()
+	local isShow = false
+	if next(_M.LotteryData) ~= nil then
+		for k,v in pairs(_M.LotteryData) do
+			if v.state ~= nil and (v.state.state == MActivity.ActivityState.Doing or
+									v.state.state == MActivity.ActivityState.Finish) then
+				isShow = true
+				break
+			end
+		end
+	end
+	
+	return isShow
+end
+
+
+return _M

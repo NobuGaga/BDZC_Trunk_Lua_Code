@@ -10,6 +10,9 @@ local _P = {}
 _M.selectToggle = 0
 _M.SignDay = 1
 _M.isSign = false
+_M.SignRewardPoint = 0
+_M.SignRewardID = 0
+_M.isCanGetSignReward = false
 
 _M.firstRechargeState = 0
 _M.monthCardData = {}
@@ -24,6 +27,9 @@ function _M.Clean()
 	_M.selectToggle = 0
 	_M.SignDay = 1
 	_M.isSign = false
+	_M.SignRewardPoint = 0
+	_M.SignRewardID = 0
+	_M.isCanGetSignReward = false
 	_M.isGetQQWelfare = false
 	_M.isGetWeixinWelfare = false
 	_M.WaitShows = {}
@@ -33,11 +39,36 @@ end
 function _M.InitSign(data)
 	_M.SignDay = data.day
 	_M.isSign = data.isGet
+	_M.SignRewardPoint = data.rewardNum
+	_M.SignRewardID = data.rewardId
+	_P.RefreshSignRewardGetState()
 end
 
 function _M.RefreshSign(data)
 	if data.success == true then
 		_M.isSign = true
+		_M.SignRewardPoint = data.rewardNum
+		_P.RefreshSignRewardGetState()
+	end
+end
+
+function _M.RefreshSignRewardID(id)
+	if _M.SignRewardID ~= id then
+		_M.SignRewardID = id
+		_P.RefreshSignRewardGetState()
+		return true
+	end
+	return false
+end
+
+function _P.RefreshSignRewardGetState()
+	_M.isCanGetSignReward = false
+	local csvValue = Csv.SignReward[_M.SignRewardID + 1]
+	if csvValue == nil then
+		return
+	end
+	if _M.SignRewardPoint >= csvValue.need then
+		_M.isCanGetSignReward = true
 	end
 end
 

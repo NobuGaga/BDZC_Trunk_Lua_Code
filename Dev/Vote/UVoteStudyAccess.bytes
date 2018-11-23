@@ -89,12 +89,7 @@ function _R.SetCommerceMember(self,data)
 
 		voteMoudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(v.headId,v.sex)
 		voteMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..v.vip
-		local csvVip = Csv.Vip[v.vip]
-		if csvVip.imgBord ~= nil then
-			voteMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-		else
-			voteMoudle:Get("OutBox").Activity = false
-		end
+		voteMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
 
 		local Box = voteMoudle:Get("Box")
 		local BoxClick = voteMoudle:Get("BoxClick")

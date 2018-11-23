@@ -57,6 +57,7 @@ _P.TextDispatcher =
 			local img = JGuiManager.CreateImage(rectUp,"")
 			img.SpriteNameAutoScale = strType..string.sub(tostring(num2),j,j)
 		end
+		
 		imgShili.LocalPosition = Vector2(-(_P.GetWidth(leng1,26,5)/2 + 20),0)
 		rectUp.LocalPosition = Vector2(_P.GetWidth(leng1,26,5)/2 + _P.GetWidth(leng2,18,5)/2 + 10,0)
 		imgBG.SizeDelta = Vector2(_P.GetWidth(leng1,26,5) + _P.GetWidth(leng2,18,5) + 10 + 81 + 200,71)
@@ -96,6 +97,7 @@ _P.TextDispatcher =
 			local img = JGuiManager.CreateImage(rectUp,"")
 			img.SpriteNameAutoScale = strType..string.sub(tostring(num2),j,j)
 		end
+		
 		rectPower.LocalPosition = Vector2(-40,0)
 		imgShili.LocalPosition = Vector2(-(_P.GetWidth(leng1,26,5)/2 + 60),0)
 		rectUp.LocalPosition = Vector2(_P.GetWidth(leng1,26,5)/2 + _P.GetWidth(leng2,18,5)/2 - 30,0)
@@ -428,7 +430,13 @@ _P.DebugBtn =
 			CS.GameManager.Inst:GC()
 		end
 	},
-	-- [4] = {
+	[4] = {
+		Text = "繁体",
+		DOFunc = function(self, moudle)
+			GameSetting.IsTaiWan = not GameSetting.IsTaiWan
+		end
+	},
+	-- [5] = {
 	-- 	Text = "界面Mem",
 	-- 	DOFunc = function(self, moudle)
 	-- 		WindowMgr.WindowGCCollect = not WindowMgr.WindowGCCollect

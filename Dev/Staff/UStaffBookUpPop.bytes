@@ -12,7 +12,7 @@ local levelUpActorId = 10010
 local NUM_TWEEN = "T_Club_NumSacle"
 local UnityTime = CS.UnityEngine.Time
 
-local _MODE_TYPE = 
+local _MODE_TYPE =
 {
 	--明星授课
 	MODE_1 = 1,
@@ -24,7 +24,7 @@ local _MODE_TYPE =
 	MODE_4 = 4,
 }
 
-_P.ModeSort = 
+_P.ModeSort =
 {
 	_MODE_TYPE.MODE_1,
 	_MODE_TYPE.MODE_2,
@@ -32,7 +32,7 @@ _P.ModeSort =
 	_MODE_TYPE.MODE_4
 }
 
-_P.ModeParam = 
+_P.ModeParam =
 {
 	[_MODE_TYPE.MODE_1] = {
 		checkShow = function()
@@ -50,9 +50,9 @@ _P.ModeParam =
 			return bookCsv.lvUpItem
 		end,
 		updateInfoFunc = function(info, staffId, bookCsv, bookLvCsv, isMaxLevel)
-			info.Cost.Text = 
+			info.Cost.Text =
 				Csv.Text("staff_bookC",{name = Csv.Item[bookCsv.lvUpItem].name, num = MBag.GetItemNum(bookCsv.lvUpItem), max = bookLvCsv.itemNum})
-			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.itemPer/100})
+			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.itemPerC/100})
 		end,
 	},
 	[_MODE_TYPE.MODE_2] = {
@@ -79,9 +79,9 @@ _P.ModeParam =
 			return Define.AssetsType.Bookexp
 		end,
 		updateInfoFunc = function(info, staffId, bookCsv, bookLvCsv, isMaxLevel, bookexp)
-			info.Cost.Text = 
+			info.Cost.Text =
 				Csv.Text("staff_bookC",{name = Csv.Text("staff_bookexp"),num = bookexp,max = bookLvCsv.expNum})
-			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.exPer})
+			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.exPerC})
 		end,
 	},
 	[_MODE_TYPE.MODE_3] = {
@@ -89,7 +89,7 @@ _P.ModeParam =
 			return bookLvCsv.upLevelCost ~= nil
 		end,
 		checkEnough = function(staffId, bookCsv, bookLvCsv)
-			return MBag.CheckItemEnough(bookLvCsv.upLevelCost[1], bookLvCsv.upLevelCost[2]) 
+			return MBag.CheckItemEnough(bookLvCsv.upLevelCost[1], bookLvCsv.upLevelCost[2])
 		end,
 		pressFunc = function(staffId, bookCsv, bookLvCsv, isEnough)
 			if isEnough then
@@ -100,9 +100,9 @@ _P.ModeParam =
 			return bookLvCsv.upLevelCost[1]
 		end,
 		updateInfoFunc = function(info, staffId, bookCsv, bookLvCsv, isMaxLevel)
-			info.Cost.Text = 
+			info.Cost.Text =
 				Csv.Text("staff_bookC",{name = Csv.Item[bookLvCsv.upLevelCost[1]].name, num = MBag.GetItemNum(bookLvCsv.upLevelCost[1]), max = bookLvCsv.upLevelCost[2]})
-			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.upLevelPer/100})
+			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.upLevelPerC/100})
 		end,
 	},
 	[_MODE_TYPE.MODE_4] = {
@@ -110,7 +110,7 @@ _P.ModeParam =
 			return bookCsv.lvUpItem2 ~= nil
 		end,
 		checkEnough = function(staffId, bookCsv, bookLvCsv)
-			return MBag.CheckItemEnough(bookCsv.lvUpItem2, bookLvCsv.upLevelCost2) 
+			return MBag.CheckItemEnough(bookCsv.lvUpItem2, bookLvCsv.upLevelCost2)
 		end,
 		pressFunc = function(staffId, bookCsv, bookLvCsv, isEnough)
 			if isEnough then
@@ -121,9 +121,9 @@ _P.ModeParam =
 			return bookCsv.lvUpItem2
 		end,
 		updateInfoFunc = function(info, staffId, bookCsv, bookLvCsv, isMaxLevel)
-			info.Cost.Text = 
+			info.Cost.Text =
 				Csv.Text("staff_bookC",{name = Csv.Item[bookCsv.lvUpItem2].name, num = MBag.GetItemNum(bookCsv.lvUpItem2), max = bookLvCsv.upLevelCost2})
-			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.upLevelPer2/100})
+			info.UpChance.Text = Csv.Text("staff_chance",{num = bookLvCsv.upLevelPer2C/100})
 
 			if isMaxLevel then
 				info.BtnUp.Activity = false
@@ -137,7 +137,7 @@ _P.ModeParam =
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -163,7 +163,7 @@ function _M:OnCreate(staffid,bookid,bookstar)
 	local bookLvCsv = Csv.BookLv[bookstar * 1000 + bookLv]
 	self.mBookStar = bookstar
 	self.mBookLv = bookLv
-	self.NowShowText = bookCsv.addDesc	
+	self.NowShowText = bookCsv.addDesc
 	self.TextNowNum = moudle:Get("NowEffectNum")
 	self.TextUpNum = moudle:Get("UpEffectNum")
 	self.Level = moudle:Get("Level")
@@ -194,8 +194,8 @@ function _M:OnCreate(staffid,bookid,bookstar)
 			local TextUp = oneMoudle:Get("C_text")
 			TextUp.Text = Csv.Text("staff_up")
 			local BtnUp = oneMoudle:Get("BtnUp")
-			
-			self.ModeList[mode] = 
+
+			self.ModeList[mode] =
 			{
 				MaxText = MaxText,
 				TextUp = TextUp,
@@ -236,7 +236,7 @@ function _M:OnCreate(staffid,bookid,bookstar)
 		local nowBookLv = MStaff.GetStaffDataByID(staffid).book[bookid]
 		self.mBookLv = nowBookLv
 		_P.OnCreateData(self,staffid,bookid,bookstar,nowBookLv, false)
-	end)	
+	end)
 end
 
 function _R.CreateData(self,data)
@@ -272,7 +272,7 @@ function _P.OnCreateData(self,staffid,bookid,bookstar,booklevel,isShowEffect)
 		self.UpEffect.Text = Csv.Text("staff_bookU",{name = ""})
 		self.TextUpNum.Text = ""
 	end
-	
+
 	-- 字体变大效果
 	self.TextNowNum.Text = bookLvCsv.aptitude
 	if isShowEffect and self.TextNowNum.Text ~= "" then
@@ -281,7 +281,7 @@ function _P.OnCreateData(self,staffid,bookid,bookstar,booklevel,isShowEffect)
 	if isShowEffect and self.TextUpNum.Text ~= "" then
 		self.TextUpNum.CachedTran:GetJTweener(NUM_TWEEN):Play()
 	end
-	
+
 	local isMaxLevel = _P.IsLevelMax(self,staffid)
 	for mode,info in pairs(self.ModeList) do
 		local modeInfo = _P.ModeParam[mode]

@@ -1,19 +1,14 @@
 ----------------------文件引用--------------------------
---@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
 local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
---@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
---@RefType [Dev.Battle.CBattle.bytes#_M]
 local CBattle = JRequire "Dev.Battle.CBattle"
---@RefType [Dev.Battle.MBattle.bytes#_M]
 local MBattle = JRequire "Dev.Battle.MBattle"
---@RefType [Dev.Player.MPlayer.bytes#_M]
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
 local MPlayer = JRequire "Dev.Player.MPlayer"
---@RefType [Dev.Bag.MBag.bytes#_M]
 local MBag = JRequire "Dev.Bag.MBag"
---@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
---@RefType [Dev.Main.UStoryMoudle.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
 local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
 local MMain = JRequire "Dev.Main.MMain"
 local JTweenerManager = CS.JTween.JTweenerManager
@@ -74,7 +69,7 @@ function _P.ShowFirstEnter(self)
 end
 
 --外部调用刷新
-function _R.OnResult(self, data)
+function _R.OnResult(self, data, lastCityID)
 	self.VSEffect.Activity = false
 	
 	local playStory = function (staffId, storyId, callBack)
@@ -149,12 +144,18 @@ function _R.OnResult(self, data)
 		_P.RefreshBuild(self)
 		_P.RefreshTips(self,false,false)
 		self:Unlock()
-		--WindowMgr.Create("UBattleBigMap",true)
 	end
 
 	local playPatrol = function (bgSp, patrolId, callBack)
 		WindowMgr.Create("UBattleGetPatrol", bgSp, patrolId, callBack)
 		_P.RefreshTips(self,false,false)
+	end
+
+	--关卡大地图
+	local playBattleMap = function(lastBattleId, callBack)
+			if callBack ~= nil then
+				callBack()
+			end
 	end
 
 	local lastBattleId = self.LastBattleID
@@ -172,11 +173,20 @@ function _R.OnResult(self, data)
 							if lastBattleCsv.patrolid ~= nil and lastBattleCsv.patrolid > 0 then
 								playPatrol(Csv.BattleIcon[lastBattleCsv.scene].str, lastBattleCsv.patrolid, function()
 									if self.Moudle ~= nil then
-										playNewPart(curBattleCsv.part)
+										playBattleMap(lastBattleId, function()
+											EventCenter.CallEventTrigger(Define.EventListenId.GetPatrol, lastBattleCsv.patrolid)
+											if self.Moudle ~= nil then
+												playNewPart(curBattleCsv.part)
+											end
+										end)										
 									end
 								end)
 							else
-								playNewPart(curBattleCsv.part)
+								playBattleMap(lastBattleId, function()
+									if self.Moudle ~= nil then
+										playNewPart(curBattleCsv.part)
+									end
+								end)
 							end
 						end				
 					end)
@@ -187,13 +197,22 @@ function _R.OnResult(self, data)
 				playChapterEnd(lastBattleCsv.chapter, function()
 					if self.Moudle ~= nil then
 						if lastBattleCsv.patrolid ~= nil and lastBattleCsv.patrolid > 0 then
-							playPatrol(Csv.BattleIcon[lastBattleCsv.scene].str, lastBattleCsv.patrolid)
+							playPatrol(Csv.BattleIcon[lastBattleCsv.scene].str, lastBattleCsv.patrolid, function()
+								if self.Moudle ~= nil then
+									playBattleMap(lastBattleId, function()
+										EventCenter.CallEventTrigger(Define.EventListenId.GetPatrol, lastBattleCsv.patrolid)
+									end)
+								end
+							end)
 							_P.RefreshTips(self,true,false)
+						else
+							playBattleMap(lastBattleId)
 						end	
 					end	
 				end)
 			end	
 		else
+			playBattleMap(lastBattleId)
 			_P.RefreshBattle(self)
 		end
 	end
@@ -358,12 +377,14 @@ function _P.RefreshBattle(self)
 			end
 		end
 	end
+	--发送当前开通关卡消息
+	EventCenter.CallEventTrigger(Define.EventListenId.CurBattleID, MBattle.CurId)
 end
 
 function _P.CreateBoss()
 	local money = _P.GetMoney()
+	local csvBattle = Csv.Battle[MBattle.CurId]
 	local callBack = function()
-		local csvBattle = Csv.Battle[MBattle.CurId]
 		if csvBattle ~= nil and csvBattle.icon ~= nil then
 			local csvBattleIcon = Csv.BattleIcon[csvBattle.icon]
 			local csvBattleTab = Csv.BattleIcon[csvBattle.tableImg]
@@ -382,12 +403,18 @@ function _P.CreateBoss()
 							end
 						end
 					end,
-					{battleid = MBattle.CurId})
+					{battleid = MBattle.CurId, isGuanKaBoss = true})
 			end
 		end
 	end
 
-	WindowMgr.Create("ULineUpCheck",callBack)
+	if MLineUp.CheckIsFull() then
+		callBack()
+	else
+		local enemyBlood = (not MBattle.HasFightBossTimes() and csvBattle.gold) or MBattle.CurBlood
+		WindowMgr.Create("ULineUpCheck",callBack, true, {enemyFight = enemyBlood})
+	end
+	
 	-- local DATA = {}
 	-- DATA.result = true
 	-- DATA.fight = {}
@@ -569,37 +596,11 @@ function _M:OnCreate()
 	_P.RefreshTips(self,false,false)
 	moudle:Get("title2").Text = Csv.Text("battle_tipT1")
 	moudle:Get("chiyougupiao").Text = Csv.Text("battle_tipT2")
-	moudle:Get("chiyougufen").Text = Csv.Text("battle_tipT3")
+	-- moudle:Get("chiyougufen").Text = Csv.Text("battle_tipT3")
 	moudle:Get("icon").SpriteName = Csv.Item[Define.AssetsType.Record].miniIcon
-	--moudle:Get("chigu").Text = Csv.Text("battle_tipT5")
-	--moudle:Get("chigu2").Text = "%"
-	moudle:Get("bianmaNum_1").Text = "%"
+	-- moudle:Get("bianmaNum_1").Text = "%"
 	self.mLastGufen = _P.GetMyGufen()
 
-	-- if MBattle.IsFirstBattle() then
-	-- 	_P.ShowFirstEnter(self)
-	-- end
-
-	-- local vip = MPlayer.GetVip()
-	-- local csvVip = Csv.Vip[vip]
-	-- if csvVip ~= nil then
-	-- 	local imgBord = moudle:Get("VipBox")
-	-- 	if csvVip.imgBord ~= nil then
-	-- 		imgBord.Activity = true
-	-- 		imgBord.SpriteName = csvVip.imgBord
-	-- 	else
-	-- 		imgBord.Activity = false
-	-- 	end
-
-	-- 	local imgNum = moudle:Get("VipNum")
-	-- 	if csvVip.icon ~= nil then
-	-- 		imgNum.Activity = true
-	-- 		imgNum.SpriteName = csvVip.icon
-	-- 	else
-	-- 		imgNum.Activity = false
-	-- 	end
-	-- end
-	
 	local effectPanel = moudle:Get("AcquActorPanel")
 	CCommon.CreateEffect(effectPanel,ONEKEY_EFFECT)
 	effectPanel.Activity = false
@@ -609,7 +610,7 @@ function _M:OnCreate()
 	BtnAcqu:AddOnButton(function()
 		local csvBattle = Csv.Battle[MBattle.CurId]
 		if csvBattle ~= nil and csvBattle.type == MBattle.BattleType.BOSS then
-			CCommon.ShowError(Csv.Text("battle_acqu2"))
+			-- CCommon.ShowError(Csv.Text("battle_acqu2"))
 			_P.CreateBoss()
 			--WindowMgr.Create("UBattleBoss")
 			return 
@@ -620,7 +621,13 @@ function _M:OnCreate()
 		end
 		CBattle.AcquisitionReq()
 	end,nil,0.9)
-
+	if MMain.FuncIsOpen(Define.SysId.BattleMap) then
+		moudle:Get("Entrance"):AddOnButton(function()
+			WindowOpen.Open(Define.SysId.BattleMap)
+		end)
+	else
+		moudle:Get("Entrance").Activity = false
+	end	
 	local textOneTips = moudle:Get("Btn_Tip")
 	local tipObj = moudle:Get("TipsBg")
 	textOneTips.Text = Csv.Func[Define.SysId.Battle_Onekey].conditionDesc
@@ -647,6 +654,16 @@ function _M:OnCreate()
 
 		_P.ShowFirstEnter(self)
 	end
+	
+	moudle:Get("new_text").Text = Csv.Text("battle_process")
+	moudle:Get("TIPSBOX"):AddOnButton(function ()
+		local csvBattle = Csv.Battle[MBattle.CurId]
+		if csvBattle.next and csvBattle.next > 0 then
+			WindowMgr.Create("UBattleFrame")
+		elseif not GameSetting.IsiOSCommit then
+			CCommon.ShowRight(Csv.Text("common_over"))
+		end
+	end, nil, 1)
 end
 
 function _P.RefreshBuild(self)
@@ -697,42 +714,43 @@ function _P.RefreshTips(self,isAnimate,isall)
 	local csvPart = Csv.Part[partId]
 	if csvPart ~= nil then
 		if not isall then
+			moudle:Get("Logo").SpriteName = MBattle.GetCurrentCsvBattleFrameData().icon
 			moudle:Get("companyname").Text = csvPart.company
 			moudle:Get("bianmaNum").Text = csvPart.code
 		end
 	end
 	local box = moudle:Get("TIPSBOX")
 	if isAnimate then
-		local Num1 = moudle:Get("bianmaNum_0")
-		local Num2 = moudle:Get("bianmaNum_1")
-		Num1:DOScale(1.1,0.5)
-		Num2:DOScale(1.1,0.5)
-		box:AddOnTime(function()
-			local TextUpdate = Num1
-			if TextUpdate ~= nil then
-				TextUpdate:DOKill()
-				local lastNum = self.mLastGufen
-				local nowNum = gufen
-				self.mLastGufen = nowNum
-				local dura = 0.3
-				local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
-					if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
-				end, function()
-					if TextUpdate ~= nil then 
-						if isall then
-							TextUpdate.Text = LuaUtil.NumberFormat(100)
-						else
-							TextUpdate.Text = LuaUtil.NumberFormat(nowNum) 
-						end
-					end
-				end)
-				t:SetTarget(TextUpdate.CachedTran)
-			end
-			box:AddOnTime(function()
-				Num1:DOScale(1,0.5)
-				Num2:DOScale(1,0.5)
-			end,nil,0.3)
-		end,nil,0.5)
+		-- local Num1 = moudle:Get("bianmaNum_0")
+		-- local Num2 = moudle:Get("bianmaNum_1")
+		-- Num1:DOScale(1.1,0.5)
+		-- Num2:DOScale(1.1,0.5)
+		-- box:AddOnTime(function()
+		-- 	local TextUpdate = Num1
+		-- 	if TextUpdate ~= nil then
+		-- 		TextUpdate:DOKill()
+		-- 		local lastNum = self.mLastGufen
+		-- 		local nowNum = gufen
+		-- 		self.mLastGufen = nowNum
+		-- 		local dura = 0.3
+		-- 		local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+		-- 			if TextUpdate ~= nil then TextUpdate.Text = LuaUtil.NumberFormat(value) end
+		-- 		end, function()
+		-- 			if TextUpdate ~= nil then 
+		-- 				if isall then
+		-- 					TextUpdate.Text = LuaUtil.NumberFormat(100)
+		-- 				else
+		-- 					TextUpdate.Text = LuaUtil.NumberFormat(nowNum) 
+		-- 				end
+		-- 			end
+		-- 		end)
+		-- 		t:SetTarget(TextUpdate.CachedTran)
+		-- 	end
+		-- 	box:AddOnTime(function()
+		-- 		Num1:DOScale(1,0.5)
+		-- 		Num2:DOScale(1,0.5)
+		-- 	end,nil,0.3)
+		-- end,nil,0.5)
 		local btn
 		if isall then
 			btn = self.Battles[MAX_BATTLE_COUNT]
@@ -745,7 +763,7 @@ function _P.RefreshTips(self,isAnimate,isall)
 			gufenMoudle.SelfRect.LocalPosition = icon.LocalPosition
 		end
 	else
-		moudle:Get("bianmaNum_0").Text = gufen
+		-- moudle:Get("bianmaNum_0").Text = gufen
 	end
 
 	_P.RefreshMessage(self,isAnimate,isall)
@@ -887,7 +905,7 @@ end
 local MoneyActorId = 10165
 local Acqu_Time1 = 1
 local Acqu_Time2 = 0.6
-function _R.OnAcquisition(self,list)
+function _R.OnAcquisition(self, list, lastCityID)
 	local acquList = {}
 	for k,v in ipairs(list) do
 		local data = {value = v,chapter = _P.GetChapterForAcqu(v)}

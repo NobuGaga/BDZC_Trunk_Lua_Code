@@ -1,0 +1,159 @@
+--跨服竞技场-淘汰赛奖励界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+local DefaultNoReward = "ty_023" --默认无奖励底图
+
+function _M:BeforeDestroy()
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Matching_Ranking2")
+	self.Moudle = moudle
+	moudle:Get("Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	moudle:Get("textBtnGet").Text = Csv.Text("cross_arena_getReward")
+	self:RegistRedpoint(moudle:Get("redpoint"), Define.SysId.CrossArena, 2, 2)
+	moudle:Get("btnGet"):AddOnButton(function ( ... )
+		--领奖
+		local isInKnockout, rank, isFinal, isChampion = MCrossArena.GetIsInKnockout()
+		if isInKnockout and isFinal then
+			--如果是冠亚军，传1,2名
+			if rank == 2 then
+				if isChampion then
+					rank = 1
+				else
+					rank = 2
+				end
+			end
+		end
+		CCrossArena.CCUArenaReward(MCrossArena.REWARD_TYPE.Knockout, rank or 0)
+	end, nil, 1.2)
+
+	_P.RefreshList(self)
+	_R.RefreshData(self)
+end
+
+function _P.RefreshList(self)
+	local moudle = self.Moudle
+	local data = MCrossArena.GetKnockoutReward()
+	if data == nil then
+		return
+	end
+	local content = moudle:Get("content")
+	for k, v in pairs(data) do
+		local itemMoudle = JGuiManager.GetMoudle(content, "M_Xgsr_Ranking_Item", WindowType.UI, 0)
+		if v.rank == 1 or v.rank == 2 then
+			itemMoudle:Get("textTitle").Text = Csv.Text("cross_arena_rank1", {num = v.rank})
+		else
+			itemMoudle:Get("textTitle").Text = Csv.Text("cross_arena_rank2", {num = v.rank})
+		end
+				
+		local content = itemMoudle:Get("GoodsItem")
+		content:DestroyChildren()
+
+		local layout = content:AddGridLayoutGroup()
+		local columnLimitNum = layout.constraintCount
+		local oneItemHeight = layout.cellSize.y + layout.spacing.y
+		local bgHeight = itemMoudle.SelfRect.SizeDelta.y
+	
+		local num = 0
+		for k, v in pairs(v.reward) do
+			CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.CrossArena)
+			num = num + 1
+		end
+	
+		local remNum = num % columnLimitNum
+		if remNum ~= 0 then
+			for i=1, (columnLimitNum - remNum) do
+				local rewardItem = CCommon.CreateItem(content, 1)
+				rewardItem.SelfRect.SpriteName = DefaultNoReward
+				rewardItem:Get("Icon").Activity = false
+				num = num + 1
+			end
+		end
+	
+		local row, rest = math.modf(num / columnLimitNum)
+		itemMoudle.SelfRect.SizeDelta = Vector2(itemMoudle.SelfRect.SizeDelta.x, bgHeight + (row - 1) * oneItemHeight) -- 默认有一行不需要计算进去
+	end
+end
+
+function _R.RefreshData(self, data)
+	local moudle = self.Moudle
+	local isShowGetReward = false
+	local isInKnockout, rank, isFinal, isChampion = MCrossArena.GetIsInKnockout()
+	if isInKnockout and isFinal then
+		if rank ~= 2 and isChampion == true then
+			isShowGetReward = false
+		else
+			isShowGetReward = true
+		end
+	end
+	-- moudle:Get("Ours").Activity = isShowGetReward
+
+	if MCrossArena.GetArenaStageType() <= MCrossArena.ARENA_STAGE_TYPE.SixTeenReady then
+		moudle:Get("Ours").Text = Csv.Text('cross_arena_pkRewardTip3')
+	else
+		if isShowGetReward then
+			local text = Csv.Text("cross_arena_tx16", {num=rank})
+			if rank == 2 then
+				if isChampion then
+					text = Csv.Text("cross_arena_tx18")
+				else
+					text = Csv.Text("cross_arena_tx17")
+				end
+			end
+			moudle:Get("Ours").Text = text
+		else
+			if not isInKnockout then
+				moudle:Get("Ours").Text = Csv.Text('cross_arena_pkRewardTip2')
+			else
+				moudle:Get("Ours").Text = Csv.Text('cross_arena_pkRewardTip1')
+			end
+		end
+	end	
+
+	moudle:Get("GetAnim").Activity = isShowGetReward and MCrossArena.GetIsGetKnockoutReward()
+	local btnGet = moudle:Get("btnGet")
+	btnGet.Activity = isShowGetReward and not MCrossArena.GetIsGetKnockoutReward()
+	btnGet.IsGray = MCrossArena.GetIsGetKnockoutReward()
+	btnGet.RaycastTarget = not MCrossArena.GetIsGetKnockoutReward()
+
+	if data ~= nil and isShowGetReward then
+		local csvCrossAren = Csv.CrossArena[MCrossArena.State.actId]
+		local rewardList = csvCrossAren["reward"..data.index]
+		if rewardList ~= nil then
+			local pos = btnGet.RootCanvasPos
+			for index,item in pairs(rewardList) do
+				CCommon.ShowFlyItem(self._RootNode, item[1], item[2], (index - 1) * 0.6, pos + Vector2(-100, 0))
+			end
+		end
+	end
+end
+
+return _M

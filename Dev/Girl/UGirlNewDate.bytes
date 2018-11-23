@@ -117,7 +117,7 @@ function _M:OnCreate(id)
 	gameBtn:AddOnButton(function(...)
 		tips.Activity = false
 		scoreIcon.Activity = true
-		CGirl.ReqDateGameStart(2,id)
+		--CGirl.ReqDateGameStart(2,id)
 		_P.PlayGame(self)
 	end)
 	self.mGameTime = gameTime
@@ -263,9 +263,9 @@ function _P.CreatDate_2(self)
 						if CURTAIN_SCALE_TYPE == 2 then
 							MGirl.isDateRoom = false
 							if not MGirl.isRandomDate then
-								CGirl.ReqDateGameStart(2,id)
-								CGirl.ReqDateGameOver(2,id)
-								_P.ShowRward()
+								--CGirl.ReqDateGameStart(2,id)
+								--CGirl.ReqDateGameOver(2,id)
+								--_P.ShowRward()
 							end
 						end
 					end
@@ -489,7 +489,7 @@ function _P.CreatDateItem(self,parent,id,pox)
 		--发送消息
 		if isClick == false then
 			isClick = true
-			CGirl.ReqDatePlayGame(2,self.mGirlID,id)
+			--CGirl.ReqDatePlayGame(2,self.mGirlID,id)
 
 			_P.ClickDateItem(self,data.score)
 			CCommon.CreateEffect(actorPanel,10076)
@@ -529,7 +529,7 @@ function _P.GameOver(self)
 	
 			self.mNext.Activity = true -- 
 			--奖励
-			_P.ShowRward()
+			--_P.ShowRward()
 			_P.ShowDate2Girl(self)
 			
 		end
@@ -543,7 +543,7 @@ function _P.GameOver(self)
 	self.mRedTween:SetWaitEventOnComplete(T_GirlDate_Red_Open,RedCurtainOpen)
 	self.mRedTween:Play(T_GirlDate_Red_Open)
 
-	CGirl.ReqDateGameOver(2,self.mGirlID)
+	--CGirl.ReqDateGameOver(2,self.mGirlID)
 end
 
 function _P.ShowRward()

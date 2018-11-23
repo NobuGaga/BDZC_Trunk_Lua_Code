@@ -1,0 +1,304 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Player.MPlayer.bytes#_M]
+local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Battle.CBattle.bytes#_M]
+local CBattle = JRequire "Dev.Battle.CBattle"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+local JTweenerManager = CS.JTween.JTweenerManager
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local TALK_TWEEN_NAME = "T_Battle_Talk"
+local DEFAULT_BODY_NAME = "staff_choose"
+local dandaoActorId = 10173
+local attackActorId = 10174
+local T_FB_Staff_AttackGo = "T_FB_Staff_AttackGo"
+local T_FB_Staff_AttackBack = "T_FB_Staff_AttackBack"
+local T_FB_Boss_Dark = "T_FB_Boss_Dark"
+local T_FB_Boss_blood = "T_FB_Boss_blood"
+local T_FB_Boss_Hurt = "T_FB_Boss_Hurt"
+local T_FB_Boss_HurtBack = "T_FB_Boss_HurtBack"
+
+local T_PKBTN_BREATH = "T_Finance_Button"
+
+local GuideBattleId = 1
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(callBack)
+	local moudle = self:CreateMoudle(self._RootNode, "M_PK_Story")
+	self.Moudle = moudle
+	self.mCallBack = callBack
+	--[[
+	moudle:Get("Btn_back"):AddOnButton(function( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+
+		--跳过引导
+	end, nil, 0.9)
+	--]]
+
+	self.Enemy = 
+	{
+		Body = moudle:Get("BossImg"),
+		BloodBar = moudle:Get("bar"),
+		Blood = moudle:Get("text"),
+		Talk = moudle:Get("dialogueBg"),
+		DiaText = moudle:Get("dialogue"),
+		HurtFly = moudle:Get("HurtFly"),
+		Name = moudle:Get("BossName"),
+	}
+
+	self.Own = 
+	{
+		Body = moudle:Get("OwnImg"),
+		TalkBG = moudle:Get("dialogueBg2"),
+		TalkText = moudle:Get("dialogue2"),
+	}
+
+	moudle:Get("OwnImg").SpriteName = MPlayer.GetBodySp()
+	moudle:Get("OwnHead").SpriteName = MPlayer.GetHeadSp()
+
+	local pkRoot = moudle:Get("beginPK")
+	pkRoot:AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+
+		_P.ClickBattle(self)
+	end, nil, 0.9)	
+	local tbnTween = pkRoot.CachedTran:GetJTweener(T_PKBTN_BREATH)--动画
+	tbnTween:Play()
+	self.PkRoot = pkRoot
+	
+
+	self.mGuideBattleId = 1
+	local csvGuideBattle = Csv.GuideBattle[self.mGuideBattleId]
+
+	if csvGuideBattle ~= nil then
+		local enemy = self.Enemy
+		local own = self.Own
+
+		enemy.Body.SpriteName = csvGuideBattle.enemyImg
+
+		local fill = csvGuideBattle.bossBlood/csvGuideBattle.maxBlood
+		enemy.BloodBar.FillAmount = fill
+		enemy.Blood.Text = Csv.Text("guide_battle_bossBlood", {per = fill*100}) --(fill*100).."%"
+		enemy.Name.Text = csvGuideBattle.enemyName
+
+		enemy.Talk.Activity = false
+		own.TalkBG.Activity = false
+		self.PkRoot.Activity = true
+	end
+end
+
+function _P.ClickBattle(self)
+	self.PkRoot.Activity = false
+	
+	local check = function()
+		local csvGuideBattle = Csv.GuideBattle[self.mGuideBattleId]
+		if self.Moudle ~= nil then
+			if csvGuideBattle.next ~= nil then
+				self.mGuideBattleId = csvGuideBattle.next
+				_P.ClickBattle(self)
+			else
+				self:Destroy()
+				self.mCallBack()
+			end
+		end
+	end
+	
+	_P.OnBattle(self,check)
+end
+
+function _P.OnBattle(self,callBack)
+	local csvGuideBattle = Csv.GuideBattle[self.mGuideBattleId]
+
+	local PlayFight = function()
+		--战斗效果播放
+		self:Lock()
+		
+		if csvGuideBattle == nil then
+			self:Unlock()
+			return
+		end
+
+		local oneHurt = csvGuideBattle.attack
+		local startBlood = csvGuideBattle.bossBlood
+		local maxBlood = csvGuideBattle.maxBlood
+
+		local t = self.Moudle.SelfRect.CachedTran:GetJTweener("T_Battle_FightBoss2")
+
+		local doHurt = function(isFire)
+			local info = self.Enemy
+			local lastBlood = startBlood
+			startBlood = math.max(0,startBlood - oneHurt)
+			local fill = startBlood / maxBlood
+			info.BloodBar:DOKill()
+			info.Blood:DOKill()
+			local ft = info.BloodBar:DOFillAmount(fill, 0.2)
+			if isFire then
+				ft:SetDelay(0.26)
+			end
+			local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
+				if info.Blood ~= nil then
+					local endValue = (value / maxBlood) * 100
+					local per = math.floor(endValue + 0.5)
+					if per == 0 and endValue > 0 then
+						per = 1
+					end
+					info.Blood.Text = Csv.Text("guide_battle_bossBlood", {per = per}) 
+				end
+			end, function()
+				if info.Blood ~= nil then 
+					local endValue = fill * 100
+					local per = math.floor(endValue + 0.5)
+					if per == 0 and endValue > 0 then
+						per = 1
+					end
+					info.Blood.Text = Csv.Text("guide_battle_bossBlood", {per = per}) 
+				end
+
+				CCommon.ShowFlyText(info.HurtFly, "-" .. oneHurt)
+			end)
+			t:SetTarget(info.Blood.CachedTran)
+		end
+
+		local ownFire = function ()
+			if t ~= nil then
+				t:Restore()
+				callBack()
+			end
+		end
+
+		---------------员工 --> boss----------------------------------
+		local ownTalk = function()
+			if t ~= nil then
+				_P.OwnTalk(self,function()
+					t:Play(T_FB_Boss_blood)
+					t:Play(T_FB_Boss_Hurt)
+
+					local actorPanel2 = self.Moudle:Get("ActorLightPanel2")
+					CCommon.CreateEffect(actorPanel2, csvGuideBattle.effectId)
+					--[[
+					local actorPanel = self.Moudle:Get("ActorLightPanel")
+					local actorPanel2 = self.Moudle:Get("ActorLightPanel2")
+					actorPanel:AddOnTime(function()
+						CCommon.CreateEffect(actorPanel, attackActorId)
+					end,nil,0.4)
+					CCommon.CreateEffect(actorPanel2, dandaoActorId)
+					actorPanel2:AddOnTime(function()
+						local t = actorPanel2:DOAnchorPosY(475,0.2)
+						t:SetEase(CS.DG.Tweening.Ease.Linear)
+						t:OnComplete(function()
+							actorPanel2.LocalPosition = Vector2.zero
+							actorPanel2:DestroyChildren()
+						end)
+					end,nil,0.2)
+					--]]
+				end)
+			end
+		end
+
+		local enemyHurtBack = function()
+			if t ~= nil then
+				SoundMgr.Play(10059)
+				t:Play(T_FB_Boss_HurtBack)
+			end
+		end
+
+		local StaffAttackEnd = function()
+			doHurt()
+			t:Play(T_FB_Staff_AttackBack)
+		end
+
+		local staffRound = function()
+			if t ~= nil then
+				_P.EnemyTalk(self,function()
+					self.Moudle.SelfRect:AddOnTime(function()
+						ownFire()	
+					end,nil,1)
+				end)	
+			end
+		end
+
+
+		t:SetWaitEventOnComplete(T_FB_Staff_AttackGo, ownTalk)
+		t:SetWaitEventOnComplete(T_FB_Boss_Hurt, enemyHurtBack)
+		t:SetWaitEventOnComplete(T_FB_Boss_HurtBack, StaffAttackEnd)
+		t:SetWaitEventOnComplete(T_FB_Staff_AttackBack, staffRound)
+
+		SoundMgr.Play(10020)
+		t:Play(T_FB_Staff_AttackGo)
+		t:Play(T_FB_Boss_Dark)	
+	end
+	PlayFight()
+end
+
+
+function _P.OwnTalk(self, callBack)
+	local csvGuideBattle = Csv.GuideBattle[self.mGuideBattleId]
+	--播放特效
+	if self.LastOwnTalkTween ~= nil then
+		self.LastOwnTalkTween:Restore()
+	end
+	local text = csvGuideBattle.ownTalk
+	self.Own.TalkBG.Activity = true
+	self.Own.TalkText.Text = text
+	local t = self.Own.TalkBG.CachedTran:GetJTweener("T_CommerceBattle_OwnTalk")
+	self.LastOwnTalkTween = t
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.Own.TalkBG.Activity = false
+		end		
+	end)
+	t:Play()
+	self.Moudle:Get("BG_Img"):AddOnTime(function()
+		callBack()
+	end,nil,0.3)
+end
+
+function _P.EnemyTalk(self, callBack)
+	local csvGuideBattle = Csv.GuideBattle[self.mGuideBattleId]
+	--播放特效
+	if self.LastEnemyTalkTween ~= nil then
+		self.LastEnemyTalkTween:Restore()
+	end
+	local text = csvGuideBattle.enemyTalk
+	self.Enemy.Talk.Activity = true
+	self.Enemy.DiaText.Text = text
+	local t = self.Enemy.Talk.CachedTran:GetJTweener("T_CommerceBattle_OwnTalk")
+	self.LastEnemyTalkTween = t
+	t:SetOnComplete(function()
+		if self.Moudle ~= nil then
+			self.Enemy.Talk.Activity = false
+		end		
+	end)
+	t:Play()
+	self.Moudle:Get("BG_Img"):AddOnTime(function()
+		callBack()
+	end,nil,0.3)
+
+end
+
+return _M

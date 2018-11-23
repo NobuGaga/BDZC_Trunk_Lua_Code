@@ -1,0 +1,158 @@
+--跨服竞技场-淘汰赛准备界面
+
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CLogin = JRequire "Dev.Login.CLogin"
+local MStaff = JRequire "Dev.Staff.MStaff"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+----------------------常量定义--------------------------
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
+local _R = {}
+
+
+function _M:BeforeDestroy()
+end
+
+--外部调用派发器
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Matching")
+	self.Moudle = moudle
+
+	--共用的UI，这里不需要tween，初始化位置
+	local topBg = moudle:Get("BG2")
+	local topStaff = moudle:Get("ViewBg_0")
+	local topBody = moudle:Get("Mask1")
+	local botBg = moudle:Get("BG3")
+	local botStaff = moudle:Get("ViewBg")
+	local botBody = moudle:Get("Mask2")
+	topBg.LocalPosition = Vector2(0, 99)
+	topStaff.LocalPosition = Vector2(40, 5.8)
+	topBody.LocalPosition = Vector2(0, -206)
+	botBg.LocalPosition = Vector2(0, -180)
+	botStaff.LocalPosition = Vector2(-40, 75)
+	botBody.LocalPosition = Vector2(0, 420)
+
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title7")
+	moudle:Get("CoursText").Text = Csv.Text("cross_arena_tx9")
+	moudle:Get("AdjustmentBtnText_0").Text = Csv.Text("cross_arena_tx6")
+	moudle:Get("TopBg").Activity = true
+	moudle:Get("Front").Activity = false
+	moudle:Get("After").Activity = true
+	moudle:Get("C_Btn_a_0").Activity = false
+
+	self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 2)
+
+	CCommon.CreateEffectEx(moudle:Get("canvas"), 10222)
+	moudle:Get("CourseBtn"):AddOnButton(function()
+		WindowMgr.Create("UCrossArenaKnockoutToday")
+	end, nil, 1.2)
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	moudle:Get("AdjustmentBtn"):AddOnButton(function()
+		--布阵
+		WindowOpen.Open(Define.SysId.LineUp)
+	end, nil, 1.2)
+
+	self.TimeText = moudle:Get("TimeText")
+	self.TimeText:AddOnUpdate(function()
+		self.TimeText.Text = MCrossArena.GetStageUpdateTimeText(MCrossArena.GetArenaStageType(), HeartBeat.ServSecond())
+	end, nil, 1)
+
+	_R.RefreshData(self)
+end
+
+function _R.RefreshData(self)
+	local moudle = self.Moudle
+	local isMatch, data = MCrossArena.GetIsCanKnockoutMatch()
+	if not isMatch then
+		return
+	end
+	local player1 = data.player1
+	local player2 = data.player2
+	local serverInfo = CLogin.GetServerInfoByID(player1.serverid)
+	local commerceName = player1.commercename
+	if commerceName == nil or commerceName == "" then
+		commerceName = Csv.Text("staff_none")
+	end
+	moudle:Get("text6").Text = player1.name
+	moudle:Get("text1").Text = Csv.Text("cross_arena_matchtext1", {num = commerceName})
+	moudle:Get("text2").Text = Csv.Text("cross_arena_vote", {num = player1.chip})
+	moudle:Get("text3").Text = Csv.Text("cross_arena_matchtext2", {num = serverInfo ~= nil and serverInfo.name or ""})
+	moudle:Get("text5").Text = Csv.Text("cross_arena_matchtext5", {num = player1.power})
+	moudle:Get("BSX2").SpriteName = MPlayer.GetOtherHeadAsset(player1.body, player1.sex)
+	moudle:Get("head2").SpriteName = MPlayer.GetOtherHeadAsset(player1.headid, player1.sex)
+
+	local Content = moudle:Get("Content")
+	Content:DestroyChildren()
+	if player1.staffs then
+		for k, v in pairs(player1.staffs) do
+			local itemMoudle = JGuiManager.GetMoudle(Content,"M_CrossSports_Matching_Item")
+			local csvStaff = Csv.Personnel[v.staffid]
+			if csvStaff ~= nil then 
+				itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+			end
+			itemMoudle:Get("BG1").SpriteName = MStaff.Color2Image[v.color]
+		end
+	end
+
+	serverInfo = CLogin.GetServerInfoByID(player2.serverid)
+	local commerceName = player2.commercename
+	if commerceName == nil or commerceName == "" then
+		commerceName = Csv.Text("staff_none")
+	end
+	moudle:Get("text66").Text = player2.name
+	moudle:Get("text11").Text = Csv.Text("cross_arena_matchtext1", {num = commerceName})
+	moudle:Get("text22").Text = Csv.Text("cross_arena_vote", {num = player2.chip})
+	moudle:Get("text33").Text = Csv.Text("cross_arena_matchtext2", {num = serverInfo ~= nil and serverInfo.name or ""})
+	moudle:Get("text55").Text = Csv.Text("cross_arena_matchtext5", {num = player2.power})
+
+	moudle:Get("BodyIcon").SpriteName = MPlayer.GetOtherHeadAsset(player2.body, player2.sex)
+	moudle:Get("HeadIcon").SpriteName = MPlayer.GetOtherHeadAsset(player2.headid, player2.sex)
+
+	local Content_0 = moudle:Get("Content_0")
+	Content_0:DestroyChildren()
+	if player2.staffs then
+		for k, v in pairs(player2.staffs) do
+			local itemMoudle = JGuiManager.GetMoudle(Content_0,"M_CrossSports_Matching_Item")
+			local csvStaff = Csv.Personnel[v.staffid]
+			if csvStaff ~= nil then 
+				itemMoudle:Get("BSX").SpriteName = csvStaff.asset
+			end
+			itemMoudle:Get("BG1").SpriteName = MStaff.Color2Image[v.color]
+		end
+	end
+end
+
+return _M

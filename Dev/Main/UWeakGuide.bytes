@@ -1,0 +1,168 @@
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local CTrigger = JRequire "Dev.Main.CTrigger"
+local MBattle = JRequire "Dev.Battle.MBattle"
+local MQuest = JRequire "Dev.Quest.MQuest"
+
+local _M = Class()
+local _P = {}
+local _R = {}
+
+function _M:ctor(parent,id,callBlack)
+	self.mParent = parent
+	self._RootNode = parent._RootNode
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_WeakGuideMoude", WindowType.UI, 0)
+	self.mMoudle = moudle
+
+	self.mCallBlack = callBlack
+
+	local weakGudieCsv = Csv.WeakGuide[id]
+	self.mWeakGuideCsv = weakGudieCsv
+	self.mCurGuideInfo = MMain.GetWeakGuideInfo(id)
+
+	--Tips
+	local TipsBg = moudle:Get("TipsBg")
+	if weakGudieCsv.tips ~= nil then
+		if weakGudieCsv.tipsPos ~= nil then
+			TipsBg.LocalPosition = Vector2(weakGudieCsv.tipsPos[1], weakGudieCsv.tipsPos[2])
+		end
+		if weakGudieCsv.tipsSize ~= nil then
+			TipsBg.SizeDelta = Vector2(weakGudieCsv.tipsSize[1], weakGudieCsv.tipsSize[2])
+		end
+		if weakGudieCsv.tipsSp ~= nil then
+			TipsBg.SpriteName = weakGudieCsv.tipsSp
+		end
+		local tips = moudle:Get("Tips")
+
+		--1，通关关卡 2,主线进度
+		if weakGudieCsv.type == 1 then
+			tips.Text = weakGudieCsv.tips
+		elseif weakGudieCsv.type == 2 then
+			--主线任务进度
+			local mainQuest = MQuest.MainQuest
+			tips.Text = Csv.Text(weakGudieCsv.tips,{num = mainQuest.maxval - mainQuest.pro})
+		end
+	end
+
+	--选中框
+	if weakGudieCsv.lightSp ~= nil then
+		local light = moudle:Get("Light")
+		if weakGudieCsv.lightSize ~= nil then
+			light.SizeDelta = Vector2(weakGudieCsv.lightSize[1], weakGudieCsv.lightSize[2])
+		end
+		if weakGudieCsv.lightPos ~= nil then
+			light.LocalPosition = Vector2(weakGudieCsv.lightPos[1], weakGudieCsv.lightPos[2])
+		end
+		light.SpriteName = weakGudieCsv.lightSp
+		if weakGudieCsv.lightTween ~= nil then
+			local t = light.CachedTran:GetJTweener(weakGudieCsv.lightTween)
+			t:Play()
+		end
+	end
+
+	--碰撞
+	self.PressPosition = nil
+	if weakGudieCsv.btnSize ~= nil then
+		local btn = moudle:Get("Btn")
+		self.mBtn = btn
+		if weakGudieCsv.btnPos ~= nil then
+			btn.LocalPosition = Vector2(weakGudieCsv.btnPos[1], weakGudieCsv.btnPos[2])
+		end	
+		if weakGudieCsv.btnSize ~= nil then
+			btn.SizeDelta = Vector2(weakGudieCsv.btnSize[1], weakGudieCsv.btnSize[2])
+		end	
+		self.PressPosition = CS.UnityEngine.RectTransformUtility.WorldToScreenPoint(parent._CanvasNode.WorldCamera, btn.CachedTran.position)
+		btn:AddOnClick(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnToDone(self,parent, weakGudieCsv)
+		end, nil)
+	end
+
+	--特效
+	if weakGudieCsv.effectId ~= nil and weakGudieCsv.effectId > 0 then
+		local effectPos
+		if weakGudieCsv.effectPos ~= nil then
+			effectPos = Vector2(weakGudieCsv.effectPos[1], weakGudieCsv.effectPos[2])
+		else
+			effectPos = Vector2.zero
+		end
+		local effectNode = moudle:Get("EffectNode")
+		if weakGudieCsv.effectRot then
+			effectNode.LocalEulerAngles = Vector3(0, 0, weakGudieCsv.effectRot)
+		end
+		CCommon.CreateEffect(effectNode, weakGudieCsv.effectId, effectPos)
+	end
+end
+
+function _M:RefreshGuide(id)
+	local weakGudieCsv = self.mWeakGuideCsv
+	self.mCurGuideInfo = MMain.GetWeakGuideInfo(weakGudieCsv.id)
+	local tips = self.mMoudle:Get("Tips")
+	--1，通关关卡 2，主线进度
+	if self.mCurGuideInfo ~= nil then
+		if weakGudieCsv.type == 1 then
+			tips.Text = weakGudieCsv.tips
+			if MBattle.CurId == weakGudieCsv.value then
+				self.mCallBlack()
+			end
+		elseif weakGudieCsv.type == 2 then
+			--主线任务进度
+			local mainQuest = MQuest.MainQuest
+			tips.Text = Csv.Text(weakGudieCsv.tips,{num = mainQuest.maxval - mainQuest.pro})
+			if mainQuest.pro >= mainQuest.maxval then
+				self.mCallBlack()
+			end
+		end
+	end
+end
+
+function _P.OnToDone(self,parent,csvLine)
+	if parent._EventNode ~= nil then
+		if self.PressPosition ~= nil then
+			local raycastObjs = JGuiManager.RaycastAll(self.PressPosition)
+			if raycastObjs ~= nil and raycastObjs.Length > 0 then
+				local obj 
+				for i=0,raycastObjs.Length -1 do
+					obj = raycastObjs[i]
+					--  --
+					if self.mBtn.gameObject ~= obj then
+						JGuiManager.CallEvent(obj, self.PressPosition)
+						break
+					end
+				end
+			end
+		end
+		--发送消息
+		local weakGudieCsv = self.mWeakGuideCsv
+		if weakGudieCsv ~= nil then
+			if weakGudieCsv.type == 1 then
+				CMain.ReqWeakGuide(self.mWeakGuideCsv.id)
+			elseif weakGudieCsv.type == 2 then
+				local mainQuest = MQuest.MainQuest
+				if mainQuest.pro >= mainQuest.maxval -1 then
+					CMain.ReqWeakGuide(self.mWeakGuideCsv.id)
+				end
+			end
+		end
+	end
+end
+
+function _M.CloseView()
+	local moudle = self.mMoudle
+	moudle.SelfRect.Activity = false
+end
+
+function _M:Destroy()
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		if self.mHandle ~= nil and self.mParent ~= nil then
+			self.mParent:UnRegistCallEvent(self.mHandle)
+		end 
+		moudle:Destroy()
+	end
+end
+
+return _M

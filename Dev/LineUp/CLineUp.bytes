@@ -13,6 +13,7 @@ local ECmdId = {
 	cPLineUpAddStaff				= 1,--添加员工 	PLineUp.CAddStaff
 	cPLineUpOpen					= 2,--开启格子
 	cPLineUpDownStaff				= 4,--员工下阵
+	cPLineUpAuto					= 5,--一键上阵
 	
 	sPLineUpInit					= 1,--初始化 	PLineUp.SPLineUpInit
 	sPLineUpOpen					= 2,--开启格子	PLineUp.SPLineUpOpen
@@ -23,6 +24,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cPLineUpAddStaff] = "PLineUp.CAddStaff",
 		[ECmdId.cPLineUpOpen] = "",
 		[ECmdId.cPLineUpDownStaff] = "PLineUp.CDownStaff",
+		[ECmdId.cPLineUpAuto] = "",
 	}
 	local recv = {
 		[ECmdId.sPLineUpInit]		=		{proto = "PLineUp.SPLineUpInit",		handle = _P.OnLineUpInit},
@@ -34,6 +36,11 @@ end
 --清空模块
 function _M.ModuleClean()
 	MLineUp.Clean()
+end
+
+--一键上阵
+function _M.ClickAutoChange()
+	_M.Send(ECmdId.cPLineUpAuto)
 end
 
 function _M.CheckRedpoint()
@@ -57,10 +64,8 @@ function _M.CheckRedpoint()
 				isRed = not MStaff.CheckIsEquip(staffID,2)
 			end
 		end
-		CMain.UpdateRedpoint(isRed, Define.SysId.LineUp, i)
+		CMain.UpdateRedpoint(isRed, Define.SysId.Staff, Define.SysId.LineUp, i)
 	end
-
-	CStaff.CheckStaffRedPoint()
 end
 
 function _M.LineUpAddStaff(staffid,pos)
@@ -80,17 +85,16 @@ function _P.OnLineUpInit(data)
 	MLineUp.InitLine(data)
 	_M.CheckRedpoint()
 
-	if WindowMgr.IsCreated("ULineUp") then
-		WindowMgr.Call("ULineUp","SetList")
-	end
+	WindowMgr.Call("UStaff","LineSetList")
+	WindowMgr.Call("ULineUpCheck","LineSetList")
 end
 
 function _P.OnLineUpOpen(data)
 	MLineUp.LineUpOpen(data)
 	_M.CheckRedpoint()
 
-	if WindowMgr.IsCreated("ULineUp") then
-		WindowMgr.Call("ULineUp","OnLineUpOpen")
+	if WindowMgr.IsCreated("UStaff") then
+		WindowMgr.Call("UStaff","OnLineUpOpen")
 	end
 end
 

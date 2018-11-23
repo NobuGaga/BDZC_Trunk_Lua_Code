@@ -43,14 +43,8 @@ function _M:OnCreate(playerInfo)
 		
 		self:Destroy()
 	end)
-
-	local csvVip = Csv.Vip[playerInfo.vip]
-	if csvVip ~= nil and csvVip.imgBord ~= nil then
-		moudle:Get("VipBox").SpriteName = csvVip.imgBord
-		moudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
-	else
-		moudle:Get("VipBox").Activity = false
-	end
+	moudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(playerInfo.chatBg, playerInfo.vip)
+	moudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..playerInfo.vip
 end
 
 return _M

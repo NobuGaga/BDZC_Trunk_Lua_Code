@@ -1,4 +1,5 @@
 local EventCenter = JRequire "Dev.EventCenter"
+local UWeakGuide = JRequire "Dev.Main.UWeakGuide"
 
 local JGuiManager = CS.JGui.JGuiManager
 
@@ -79,9 +80,15 @@ function _M:OnCreate(...)
 	
 end
 
---回弹调用
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
+--
+function _M:BaseBeforeDestroy(...)
+	--移除弱引导
+	if self.mWeakGuide ~= nil then
+		self.mWeakGuide:Destroy()
+		self.mWeakGuide = nil
+	end
+
+	self:BeforeDestroy( ... )
 end
 
 --删除界面前调用
@@ -104,6 +111,30 @@ function _M:Dispatch(funcName, ...)
 	
 end
 
+--创建弱引导
+function _M:CreateWakeGuide(id,doneBlack)
+
+	local callBack = function()
+		self.mWeakGuide:Destroy()
+		self.mWeakGuide = nil
+		doneBlack()
+	end
+	if self.mWeakGuide ~= nil then
+		self.mWeakGuide:Destroy()
+		self.mWeakGuide = nil
+		self.mWeakGuide = UWeakGuide.new(self, id,callBack)
+	else
+		self.mWeakGuide = UWeakGuide.new(self, id,callBack)
+	end
+end
+
+--弱引导更新
+function _M:RefreshWeakGuide(id)
+	if self.mWeakGuide ~= nil then
+		self.mWeakGuide:RefreshGuide(id)
+	end
+end
+
 --注册一个监听事件 (****不可以重载*****)
 function _M:RegistCallEvent(eventId, onEventCall)
 	local handle = EventCenter.RegistCallEvent(eventId, onEventCall)
@@ -123,6 +154,62 @@ function _M:UnRegistAllEvent()
 		EventCenter.UnRegistCallEvent(k)
 	end
 	self._CallEvents = {}
+end
+
+function _M:UnRegistRedpointForNode(redpointWidget)
+	local checkFunc
+	checkFunc = function(tab)
+		if tab == nil then
+			return
+		end
+		if tab._redpointWidget == redpointWidget then
+			tab._redpointWidget = nil
+			return
+		end
+		for k,v in pairs(tab) do
+			if type(v) == "table" then
+				checkFunc(v)
+			end
+		end
+	end
+
+	checkFunc(self._Redpoints)
+end
+
+function _M:UnRegistRedpointForPath(funcId, ...)
+	local indexKeys = {funcId, ...}
+	local len = #indexKeys
+
+	local tab = self._Redpoints
+	for k, v in pairs(indexKeys) do
+		if tab and tab[v] then
+			if len == k then
+				tab[v] = nil
+				break
+			end
+			tab = tab[v]
+		else
+			break
+		end
+	end
+end
+
+function _M:UnRegistChildrenRedpointForPath(funcId, ...)
+	local indexKeys = {funcId, ...}
+	local len = #indexKeys
+
+	local tab = self._Redpoints
+	for k, v in pairs(indexKeys) do
+		if tab and tab[v] then
+			if len == k then
+				tab[v] = {_redpointWidget = tab[v]._redpointWidget}
+				break
+			end
+			tab = tab[v]
+		else
+			break
+		end
+	end
 end
 
 --注册小红点挂载点 (****不可以重载*****)
@@ -164,17 +251,14 @@ function _M:OnRedpointUpdate(isActive, ... )
 		return
 	end
 	local indexKeys = {...}
-	local tab
+	local tab = self._Redpoints
 	for k,v in pairs(indexKeys) do
-		if tab ~= nil then
-			if tab[v] == nil then
-				return
-			end
-			tab = tab[v]
-		else
-			tab = self._Redpoints[v]
+		if tab[v] == nil then
+			return
 		end
+		tab = tab[v]
 	end
+
 	if tab ~= nil and tab._redpointWidget ~= nil then
 		tab._redpointWidget.Activity = isActive
 	end

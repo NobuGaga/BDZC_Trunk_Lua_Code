@@ -25,7 +25,7 @@ local _R = {}
 --外部调用派发器
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -57,10 +57,10 @@ function _M:OnCreate()
 	local inputNotice2 = moudle:Get("input_2")
 	inputNotice2.PlaceholderWidget.Text = Csv.Text("commerce_create11")
 	moudle:Get("C_text").Text = Csv.Text("commerce_create17")
-	
+
 	self.Moudle = moudle
 	local info = MCommerce.MyCommerceInfo
-	if info ~= nil then	
+	if info ~= nil then
 		local csv = Csv.Commerce[info.level]
 		local name = moudle:Get("GangNameText")
 		name.Text = info.name
@@ -77,7 +77,7 @@ function _M:OnCreate()
 		end)
 
 		moudle:Get("PresidentNameText").Text = info.leader
-		moudle:Get("GangLevelText").Text = Csv.Text("commerce_detail23", 
+		moudle:Get("GangLevelText").Text = Csv.Text("commerce_detail23",
 			{level = info.level, exp = info.exp, expMax = csv.exp})
 		moudle:Get("PeopleNumText").Text = info.memberNum .. "/" .. csv.count
 		moudle:Get("GangMoneyText").Text = tostring(info.money)

@@ -1,0 +1,465 @@
+-- 中秋活动-累计充值界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+
+
+local MOVE_TWEEN = "T_EquipRob_MoveTween"
+local CanGetActorId = 6
+local ITEM_HEIGHT = 120
+local EFFECTID = 24
+local SPACE = 20
+local COLUMN = 4
+
+
+function _M:ctor(parent, actId)
+	local payConf = Csv.ActivityMidPay[actId]
+	if payConf == nil then return end
+	self.PayConf = payConf
+
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, payConf.prefName, WindowType.UI, 0)
+	self.mModule = module
+
+	if actId ~= nil then
+		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
+	end
+
+	module:Get("titletext").Text = payConf.showTip
+	module:Get("activeText").Text = Csv.Text("midAutumn_dayTip")
+	module:Get("timetext").Text = Csv.Text("midAutumn_pay_timeShow", {day1 = os.date("%Y/%m/%d", self.ActInfo.state.startTime), day2 = os.date("%Y/%m/%d", self.ActInfo.state.endTime)})
+	module:Get("timetext3").Text = Csv.Text("chargeaward_T8")
+	module:Get("Sence").SpriteName = payConf.viewBg
+
+	local curPayText = module:Get("timenum")
+	curPayText.Text = Csv.Text("chargeaward_T9", {num = self.ActInfo.num})
+	self.CurPayText = curPayText
+	self.TotalDayText = module:Get("curText")
+
+	_P.SetDayData(self)
+	_P.SetTodayPayData(self)
+	_P.MoveIconPos(self)
+end
+
+
+-- 上方累计天数奖励数据
+function _P.SetDayData(self)
+	local module = self.mModule
+	self.DayAwardList = {}
+
+	local totalNums = #self.PayConf.needDay
+	for index,id in pairs(self.PayConf.needDay) do
+		local info = 
+		{
+			itemRect = module:Get("reward" .. index),
+			iconImg = module:Get("RewardIcon" .. index),
+			qualityImg = module:Get("chest" .. index),
+			actorPanel = module:Get("ActorPanel" .. index),
+			effect = nil,
+			state = -1,
+		}
+
+		local numText = module:Get("text" .. index)
+		numText.Text = self.PayConf.title[index]
+
+		info.qualityImg:AddOnButton(function( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickItem(self, index)
+		end, nil, 0.9)
+		self.DayAwardList[index] = info
+	end
+
+	local rewardsNum = module:Get("rewardrect").CachedTran.childCount
+	if totalNums < rewardsNum then
+		for i = totalNums + 1,rewardsNum do
+			module:Get("reward" .. i).Activity = false
+		end
+	end
+
+	for k,v in pairs(self.DayAwardList) do
+		_P.SetOneDayRewardData(self, k)
+	end
+	self.TotalDayText.Text = tostring(self.ActInfo.totalDays)
+end
+
+
+-- 设置单个累计天数奖励
+function _P.SetOneDayRewardData(self, index)
+	local rewardState = 0
+	local isGeted = self.ActInfo.totalDaysList[index].isGeted
+	local curItemData = self.DayAwardList[index]
+	if isGeted then
+		rewardState = MActivity.RewardGetState.Geted
+	else
+		local needDay = self.PayConf.needDay[index]
+		if needDay > self.ActInfo.totalDays then
+			rewardState = MActivity.RewardGetState.CanNotGet
+		else
+			rewardState = MActivity.RewardGetState.CanGet
+		end
+	end
+
+	if curItemData.state ~= rewardState then
+		curItemData.state = rewardState
+		if curItemData.effect ~= nil then
+			curItemData.effect:Destroy()
+			curItemData.effect = nil
+		end
+
+		curItemData.iconImg.SpriteName = self.PayConf.moonBoxIcons[index][rewardState + 1]
+		if rewardState == MActivity.RewardGetState.CanGet then
+			curItemData.iconImg.SpriteName = ""
+			curItemData.effect = CCommon.CreateEffect(curItemData.itemRect, CanGetActorId, curItemData.qualityImg.LocalPosition, nil, self.PayConf.effectParam[index])
+		end
+	end
+
+	if curItemData.actorPanel ~= nil and curItemData.actorPanel.CachedTran.childCount == 0 and self.PayConf.isShowAnim[index] ~= nil and self.PayConf.isShowAnim[index] ~= 0 then
+		local itemLight = CCommon.CreateItemLight(curItemData.actorPanel, Define.SysId.MidAFestival, nil, 4)
+		if itemLight ~= nil then
+			itemLight.SelfRect.SizeDelta = Vector2(145, 145)
+		end
+	end
+end
+
+
+function _P.OnClickItem(self, index)
+	local curData = self.DayAwardList[index]
+	if curData.state == MActivity.RewardGetState.CanGet then
+		CActivity.GetPayDayResBack(self.ActId, index)
+	else --查看奖励
+		WindowMgr.Create("UMidautumnPayPreview", self.PayConf.needDay[index], self.PayConf.daysReward[index])
+	end
+end
+
+
+-- 下方当天充值奖励数据
+function _P.SetTodayPayData(self)
+	local listData = _P.GetSortListData(self)
+	if listData == nil or next(listData) == nil then
+		return
+	end
+
+	self.PayItemTable = {}
+	local itemGrid = self.mModule:Get("content")
+	itemGrid:DestroyChildren()
+
+	for k,v in pairs(listData) do
+		self.PayItemTable[v.index] = _P.OnCreatePayItem(self, itemGrid, v)
+	end
+
+	_P.GetCurTime(self)
+	_P.OnStartTimer(self)
+end
+
+
+function _P.OnCreatePayItem(self, itemGrid, data)
+	local item = {}
+	local itemModule = JGuiManager.GetMoudle(itemGrid, self.PayConf.prefItemName, WindowType.Tip1, 0)
+	if itemModule ~= nil then
+		itemModule:Get("title").Text = Csv.Text("midAutumn_todayGet", {num = data.payNeedNum})
+		itemModule:Get("slidertext").Text = Csv.Text("chargeaward_slider", {num = self.ActInfo.num, max = data.payNeedNum})
+		itemModule:Get("Fill").FillAmount = math.min(1, self.ActInfo.num / data.payNeedNum)
+		
+		local getBtn = itemModule:Get("C_Btn_a")
+		local btnText = itemModule:Get("C_text")
+		local getImg = itemModule:Get("Geted")
+		getBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnGetReward(self, data)
+		end, nil, 0.9)
+
+		if data.isGeted then  -- 已领取
+			getBtn.Activity = false
+			getImg.Activity = true
+		else
+			getBtn.Activity = true
+			getImg.Activity = false
+			if self.ActInfo.num >= data.payNeedNum then
+				btnText.Text = Csv.Text("chargeaward_get")
+			else
+				btnText.Text = Csv.Text("chargeaward_go")
+			end
+		end
+
+		local itemSize = itemModule.SelfRect.SizeDelta
+		local itemSizeY = itemSize.y
+		if data.payReward ~= nil then
+			local itemContent = itemModule:Get("content")
+			for k,v in pairs(data.payReward) do
+				CCommon.CreateItem(itemContent, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.MidAFestival)
+			end
+
+			if #data.payReward > COLUMN then
+				local num = #data.payReward - COLUMN
+				local num1,num2 = math.modf(num / COLUMN)
+				if num2 > 0 then
+					num1 = num1 + 1
+				end
+				local addY = (ITEM_HEIGHT + SPACE) * num1
+				itemModule.SelfRect.SizeDelta = Vector2(itemSize.x, itemSizeY + addY)
+				
+				local bgImg = itemModule:Get("BG")
+				bgImg.SizeDelta = Vector2(bgImg.SizeDelta.x, bgImg.SizeDelta.y + addY)
+
+				local boxImg = itemModule:Get("Box")
+				boxImg.SizeDelta = Vector2(boxImg.SizeDelta.x, boxImg.SizeDelta.y + addY)
+			end
+		end
+	end
+
+	item.timeText = itemModule:Get("timetext")
+	item.module = itemModule
+	return item
+end
+
+
+function _P.OnGetReward(self, data)
+	if data.isGeted then
+		CCommon.ShowError(Csv.Text("err_reward_geted"))
+		return
+	end
+
+	if self.ActInfo.num >= data.payNeedNum then
+		-- 领取奖励
+		CActivity.GetRewardReq(self.ActId, data.index)
+	else
+		WindowOpen.Open(Define.SysId.Recharge)
+	end
+end
+
+
+function _P.GetSortListData(self)
+	local listData = {}
+	local listMaxNum = #self.ActInfo.dailylist
+	for i=1,listMaxNum do
+		local needNum = MActivity.GetTodayData(self.PayConf.payNeedNum[i], self.ActInfo.day)
+		local rewardList = {}
+		local groupId = MActivity.GetTodayData(self.PayConf.payReward[i], self.ActInfo.day)
+		if groupId and groupId > 0 then
+			rewardList = Csv.ItemGroup[groupId].rewards
+		end
+
+	local info = {index = i, payNeedNum = needNum, payReward = rewardList, isGeted = self.ActInfo.dailylist[i].isGeted}
+		listData[#listData + 1] = info
+	end
+
+	table.sort(listData, function(a, b)
+		if a.isGeted and b.isGeted then
+			return a.index < b.index
+		elseif not a.isGeted and b.isGeted then
+			return true
+		elseif a.isGeted and not b.isGeted then
+			return false
+		else
+			return a.index < b.index
+		end
+	end)
+
+	return listData
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateTimer ~= nil then
+		self.UpdateTimer:Destroy()
+		self.UpdateTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	local leftTime = self.TodayLeftTime - HeartBeat.ServSecond()
+	_P.OnClearTimer(self)
+	_P.UpdateTimeText(self, leftTime)
+	
+	if leftTime >= 0 then
+		self.UpdateTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local time = self.TodayLeftTime - HeartBeat.ServSecond()
+	if time < 0 then
+		_P.GetCurTime(self)
+		time = self.TodayLeftTime - HeartBeat.ServSecond()
+	end
+
+	_P.UpdateTimeText(self, time)
+end
+
+
+function _P.GetCurTime(self)
+	local curYear = os.date("%Y", HeartBeat.ServSecond())
+	local curMonth = os.date("%m", HeartBeat.ServSecond())
+	local curDay = os.date("%d", HeartBeat.ServSecond())
+	self.TodayLeftTime = os.time({day = curDay, month = curMonth, year = curYear, hour = 24, minute = 0, second = 0}) - 1
+end
+
+
+function _P.UpdateTimeText(self, leftTime)
+	if leftTime == nil or leftTime < 0 then
+		leftTime = 0
+	end
+
+	for k,v in pairs(self.PayItemTable) do
+		v.timeText.Text = Csv.Text("midAutumn_daojishi", {time = LuaUtil.GetTimeHMS(leftTime)})
+	end
+end
+
+
+-- 移动动画
+function _P.MoveIconPos(self)
+	local leftArrowImg = self.mModule:Get("JT2")
+	if leftArrowImg == nil or leftArrowImg.Activity == false then return end
+
+	local index = 0
+	for k,v in pairs(self.ActInfo.totalDaysList) do
+		if v.isGeted then
+			index = k
+		end
+
+		if index ~= 0 and not v.isGeted then
+			break
+		end
+	end
+
+	local posX = index * -117
+	if posX < -279 then
+		posX = -279
+	end
+	local rect = self.mModule:Get("rewardrect")
+	rect:DOAnchorPosX(posX, 0.15)
+end
+
+
+function _M:GetDayRewardBack(data)
+	local curDayData = self.ActInfo.totalDaysList[data.index]
+	if curDayData ~= nil then
+		curDayData.isGeted = true
+	end
+	_P.SetOneDayRewardData(self, data.index)
+	self.TotalDayText.Text = tostring(self.ActInfo.totalDays)
+
+	if data.rewardList ~= nil then
+		local curData = self.DayAwardList[data.index]
+		for index,v in pairs(data.rewardList) do
+			local pos = curData.itemRect.RootCanvasPos
+			if pos.x > 160 then
+				pos.x = 160
+			end
+			CCommon.ShowFlyItem(self._RootNode, v.key, v.value, (index - 1) * 0.6, pos)
+		end
+	end
+	_P.MoveIconPos(self)
+end
+
+
+function _M:GetRewardBack(data)
+	if data ~= nil and data.index ~= nil then
+		for k,v in pairs(self.ActInfo.dailylist) do
+			if v.index == data.index then
+				v.isGeted = true
+				break
+			end
+		end
+
+		if data.isGeted then
+			local itemModule = self.PayItemTable[data.index].module
+			itemModule:Get("C_Btn_a").Activity = false
+
+			local effectNode = itemModule:Get("EffectNode")
+			local effectmodule = CCommon.CreateEffect(effectNode, EFFECTID, nil, function( ... )
+				itemModule:Get("Geted").Activity = true
+			end, {M_Effect_Achieve_Get = "fl_030"})
+			effectmodule.SelfRect.SizeDelta = Vector2(138, 138)
+			SoundMgr.PlaySystem(10004)
+
+			local rewardList = nil
+			local groupId = MActivity.GetTodayData(self.PayConf.payReward[data.index], self.ActInfo.day)
+			if groupId and groupId > 0 then
+				rewardList = Csv.ItemGroup[groupId].rewards
+			end
+
+			if rewardList ~= nil then
+				for k,v in pairs(rewardList) do
+					CCommon.ShowFlyItem(self._RootNode, v[1], v[2], k*0.3, effectNode.RootCanvasPos)
+				end
+			end
+		end
+	end
+end
+
+
+-- 界面更新
+function _M:UpdateViewData(data)
+	self.ActInfo = MActivity.GetFromId(self.ActId)
+	for k,v in pairs(self.DayAwardList) do
+		_P.SetOneDayRewardData(self, k)
+	end
+	self.TotalDayText.Text = tostring(self.ActInfo.totalDays)
+	self.CurPayText.Text = Csv.Text("chargeaward_T9", {num = self.ActInfo.num})
+	
+	_P.SetTodayPayData(self)
+end
+
+
+-- 活动状态更新
+function _M:OnUpdateViewState(data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+		for k,v in pairs(self.DayAwardList) do
+			_P.SetOneDayRewardData(self, k)
+		end
+		self.TotalDayText.Text = tostring(self.ActInfo.totalDays)
+		self.CurPayText.Text = Csv.Text("chargeaward_T9", {num = self.ActInfo.num})
+	
+		_P.SetTodayPayData(self)
+	end
+end
+
+
+-- 充值成功后更新进度
+function _M:UpdatePayNumData(data)
+	self.ActInfo.num = data.pro
+	self.CurPayText.Text = Csv.Text("chargeaward_T9", {num = self.ActInfo.num})
+	_P.SetTodayPayData(self)
+end
+
+
+-- 更新累充天数数据
+function _M:OnDayUpdatePush(data)
+	self.ActInfo.totalDays = data.totalDays
+	for k,v in pairs(self.DayAwardList) do
+		_P.SetOneDayRewardData(self, k)
+	end
+	self.TotalDayText.Text = tostring(self.ActInfo.totalDays)
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

@@ -17,6 +17,7 @@ local _P = {}
 local _R = {}
 
 local MAX_TAG = 6		--标签数量最大值
+local EquipSysId = 10105
 
 function _M:BeforeDestroy()
 	if self.ChooseMoudle ~= nil then
@@ -93,7 +94,6 @@ function _M:OnCreate(id,chooseFuncId)
 	local BtnClose = moudle:Get("C_Back_Btn")
 	BtnClose:AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
-		WindowMgr.Call("UStaff","ResetPoint")
 		self:Destroy()
 		end, nil, 1.2)
 
@@ -113,8 +113,9 @@ function _M:OnCreate(id,chooseFuncId)
 
 	local node = moudle:Get("PageNode")
 	self.PageNode = node
-	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff, true))
+	local funcs = _P.GetDetailFuncs(self,MMain.GetOpenedFuncs(Define.SysId.Staff_List, true))
 	local count = #funcs
+	local index = 0
 	if count > 0 then
 		--Table标签控制
 		local colorLight = Color(255/255,225/255,75/255,1)
@@ -123,16 +124,18 @@ function _M:OnCreate(id,chooseFuncId)
 			_P.OnChoose(self, funcId)
 		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,colorDefault,colorLight)
 	
-		local index = 0
 		for k,v in pairs(funcs) do
-			index = index + 1
-			tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
+			-- 未获得的员工不显示装备栏，by:pyh
+			if v.id ~= EquipSysId then
+				index = index + 1
+				tabHandle:Add(v.id, moudle:Get("Toggle"..index), moudle:Get("C_text_"..index), v.name)
+			end
 		end
 		tabHandle:Choose(funcs[1].id)
 		self.tabHandle = tabHandle
 	end
-	if count < 4 then
-		for i=count + 1,4 do
+	if index < 4 then
+		for i=index + 1,4 do
 			moudle:Get("Toggle"..i).Activity = false
 		end
 	end
@@ -186,7 +189,7 @@ function _P.OnCreateData(self,id)
 	moudle:Get("Attri2Data").Text = math.ceil(attr2)
 	moudle:Get("Attri3Data").Text = math.ceil(attr3)
 	moudle:Get("Attri4Data").Text = math.ceil(attr4)
-	moudle:Get("redPoint_colorup").Activity = MStaff.GetRedPointColorUp(id)
+	moudle:Get("redPoint_colorup").Activity = false
 
 	self.mMoudle:Get("C_text").Text = Csv.Text("staff_get")
 

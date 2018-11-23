@@ -71,12 +71,12 @@ end
 
 function _M.Update()
 	local ret = {}
-	if _M.RefreshTime > 0 then
-		_M.RefreshTime = _M.RefreshTime - 1
-		if _M.RefreshTime == 0 then
-			ret.refFight = true
-		end
-	end
+	-- if _M.RefreshTime > 0 then
+	-- 	_M.RefreshTime = _M.RefreshTime - 1
+	-- 	if _M.RefreshTime == 0 then
+	-- 		ret.refFight = true
+	-- 	end
+	-- end
 	if _M.ShopRefreshTime > 0 then
 		_M.ShopRefreshTime = _M.ShopRefreshTime - 1
 		if _M.ShopRefreshTime == 0 then
@@ -112,9 +112,10 @@ function _M.UpdateDailyState(dailyState)
 	_M.DailyState = dailyState
 end
 
-function _M.UpdateFightTimes(fightTimes, refreshTime)
+function _M.UpdateFightTimes(fightTimes, refreshTime, buyTimes)
 	_M.FightTimes = fightTimes
 	_M.RefreshTime = refreshTime
+	_M.BuyTimes = buyTimes
 end 
 
 function _M.UpdateShopItemNum(id, num)

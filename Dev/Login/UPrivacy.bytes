@@ -13,9 +13,9 @@ local ImageSize = {
 							right = 1,
 							top = 62,
 							bottom = 122,
-						}, 
-					 }, 
-	['button'] = { width = 238, height = 76, }, 
+						},
+					 },
+	['button'] = { width = 238, height = 76, },
 }
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
@@ -27,12 +27,12 @@ function _M:OnCreate()
 	moudle:Get("Title").Text = Csv.PrivacyText[1].str
 	moudle:Get("SureText").Text = Csv.PrivacyText[2].str
 	moudle:Get("CancelText").Text = Csv.PrivacyText[3].str
-	
+
 	local gameName = GameSetting.AppName
 	if gameName == nil or gameName == "" then
 		gameName = Csv.PrivacyText[4].str
 	end
-	moudle:Get("Content").Text = LuaUtil.Format(Csv.PrivacyText[5].str, {gameName = gameName}) 
+	moudle:Get("Content").Text = LuaUtil.Format(Csv.PrivacyText[5].str, {gameName = gameName})
 	moudle:Get("Sure"):AddOnButton(function( ... )
 		CS.UnityEngine.PlayerPrefs.SetInt("_login_Privacy_", 1)
 		self:Destroy()

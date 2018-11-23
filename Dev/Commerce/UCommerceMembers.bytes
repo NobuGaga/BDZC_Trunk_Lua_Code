@@ -53,15 +53,10 @@ function _R.OnMemberList(self, data)
 					SoundMgr.Play(10001)
 					CPlayer.LookPlayerReq(playerId)
 				end)
-			end			
-			oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
-			local csvVip = Csv.Vip[player.vip]
-			if csvVip.imgBord ~= nil then
-				oneMoudle:Get("OutBox").SpriteName = csvVip.imgBord
-				oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..player.vip
-			else
-				oneMoudle:Get("OutBox").Activity = false
 			end
+			oneMoudle:Get("Head").SpriteName = MPlayer.HeadIconFromSex(player.headId,player.sex, true)
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(player.chatBg, player.vip)
+			oneMoudle:Get("Num").SpriteNameAutoScale = "friend_num_"..player.vip
 			oneMoudle:Get("SLText").Text = Csv.Text("club_info_force")
 			oneMoudle:Get("SLNum").Text = tostring(player.power)
 			oneMoudle:Get("Company").Text = Csv.Text("club_info_company")
@@ -104,7 +99,7 @@ end
 --外部调用派发器
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end

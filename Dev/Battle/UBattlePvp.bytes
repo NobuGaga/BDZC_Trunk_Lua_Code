@@ -6,15 +6,9 @@ local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
 local MStaff = JRequire "Dev.Staff.MStaff"
 --@RefType [Dev.Battle.MBattle.bytes#_M]
 local MBattle = JRequire "Dev.Battle.MBattle"
---@RefType [Dev.Player.MPlayer.bytes#_M]
-local MPlayer = JRequire "Dev.Player.MPlayer"
---@RefType [Dev.Bag.MBag.bytes#_M]
-local MBag = JRequire "Dev.Bag.MBag"
 --@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
---@RefType [Dev.Battle.CBattle.bytes#_M]
-local CBattle = JRequire "Dev.Battle.CBattle"
-local MLineUp = JRequire "Dev.LineUp.MLineUp"
+
 local UBattlePvpSkill = JRequire "Dev.Battle.UBattlePvpSkill"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local JTweenerManager = CS.JTween.JTweenerManager
@@ -62,11 +56,13 @@ end
 
 
 --界面构建
-function _M:OnCreate(data, onDoneCall)
+--autoGetStaffpower:ture 表示在SFightPVP 协议的员工列表里获取战力
+function _M:OnCreate(data, onDoneCall, autoGetStaffpower)
 	local moudle = self:CreateMoudle(self._RootNode, "M_PVP")
 	self.OnCloseCall = onDoneCall
 	self.Moudle = moudle
 	self:Lock()
+	self.AutoGetStaffpower = autoGetStaffpower
 	self.mData = data
 	self.IsWin = data.result
 	self.NowRound = 1		--当前回合
@@ -77,6 +73,8 @@ function _M:OnCreate(data, onDoneCall)
 	self.BuffTable = {}				--我方当前回合所有员工身上各自拥有的buff
 	self.BuffTableEnemy = {}		--敌方当前回合所有员工身上各自拥有的buff
 	self.ReportTable = _P.GetBattleReport(_P.GetSortReport(data.fight))		--处理后的战报
+	moudle:Get("NameText1").Text = data.name
+	moudle:Get("NameText2").Text = data.rname
 
 	self.Enemy = 
 	{
@@ -91,6 +89,7 @@ function _M:OnCreate(data, onDoneCall)
 		Blood = moudle:Get("zdlNum2"),
 		HurtFly = moudle:Get("HurtFly2"),
 		BloodBar = moudle:Get("XueTiao2"),
+		StaffNumText = moudle:Get("NumText_0"),
 	}
 
 	self.StaffMoudleTable = {}
@@ -140,10 +139,10 @@ function _P.CreateLineSelf(self,data)
 		local content = moudle:Get("Content")
 		for k,v in ipairs(lineUpList) do
 			local staffData = {}
-			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
-			local canvas = staffMoudle:Get("canvas")
-			canvas.SortingLayerName = "Tips2"
-			canvas.SortingOrder = 10
+			local staffMoudle = self:CreateMoudle(content, "M_NewBossPK_Item")
+			-- local canvas = staffMoudle:Get("canvas")
+			-- canvas.SortingLayerName = "Tips2"
+			-- canvas.SortingOrder = 10
 			staffMoudle:Get("battleBack").Activity = false
 			if k == self.SelfIndex then -- 当前员工
 				staffMoudle.SelfRect.LocalScale = Vector3.one
@@ -183,6 +182,8 @@ function _P.CreateLineSelf(self,data)
 
 		content.LocalPosition = Vector2(_P.GetStaffContentPosX(self.SelfIndex,true),0)
 	end
+	local totalStaffs = (lineUpList and #lineUpList) or 0
+	self.Own.StaffNumText.Text = math.min(self.SelfIndex, totalStaffs) .. '/' .. totalStaffs
 end
 
 -- 敌方员工列表，设置敌方上方员工数据
@@ -193,10 +194,10 @@ function _P.CreateLineEnemy(self,data)
 		local content = moudle:Get("Content2")
 		for k,v in ipairs(lineUpList) do
 			local staffData = {}
-			local staffMoudle = JGuiManager.GetMoudle(content, "M_NewBossPK_Item")
-			local canvas = staffMoudle:Get("canvas")
-			canvas.SortingLayerName = "Tips2"
-			canvas.SortingOrder = 10
+			local staffMoudle = self:CreateMoudle(content, "M_NewBossPK_Item")
+			-- local canvas = staffMoudle:Get("canvas")
+			-- canvas.SortingLayerName = "Tips2"
+			-- canvas.SortingOrder = 10
 			staffMoudle:Get("battleBack").Activity = false
 			if k == self.EnemyIndex then
 				staffMoudle.SelfRect.LocalScale = Vector3(0.62,0.62,0.62)
@@ -238,7 +239,7 @@ function _P.CreateLineEnemy(self,data)
 	end
 
 	local totalStaffs = (lineUpList and #lineUpList) or 0
-	self.Enemy.StaffNumText.Text = (self.EnemyIndex - 1) .. '/' .. totalStaffs
+	self.Enemy.StaffNumText.Text = math.min(self.EnemyIndex, totalStaffs) .. '/' .. totalStaffs
 end
 
 function _M:Lock()
@@ -325,7 +326,7 @@ function _P.OnFight(self, data)
 			end
 			
 			local startBlood = data.rinitblood
-			local oneHurt = data.rinitblood - data.rlaveblood
+			local oneHurt = data.rinitblood - lastBlood
 			info.Blood:DOKill()
 			info.BloodBar:DOKill()
 			local fill = lastBlood / data.rbaseblood
@@ -357,7 +358,14 @@ function _P.OnFight(self, data)
 			local oneHurt = data.initblood - data.laveblood
 			info.Blood:DOKill()
 			info.BloodBar:DOKill()
-			local fill = lastBlood / MStaff.StaffTable[data.staffid].power
+
+			local fill = 0
+			if self.AutoGetStaffpower then 
+				fill = lastBlood / _P.GetStaffPower(self.SelfLineStaffs, data.staffid)
+			else
+				fill = lastBlood / MStaff.StaffTable[data.staffid].power
+			end
+			
 			local ft = info.BloodBar:DOFillAmount(fill, 0.2)
 			local t = JTweenerManager.IntTween(lastBlood, startBlood, 0.2, function(value)
 				if info.Blood ~= nil then
@@ -391,7 +399,9 @@ function _P.OnFight(self, data)
 			if reportTable ~= nil and reportTable[1] ~= nil then
 				table.remove(reportTable,1)
 			end
-			self.TiredActorPanel.Activity = false
+			if self.TiredActorPanel then
+				self.TiredActorPanel.Activity = false
+			end
 		end
 		
 		-- 整个动画结束0.5s后
@@ -415,7 +425,7 @@ function _P.OnFight(self, data)
 				t:Play(T_FB_Boss_blood) -- 变红
 				t:Play(T_FB_Boss_Hurt)
 
-				SoundMgr.Play(10021)
+				SoundMgr.Play(10059)
 				local actorPanel = self.Moudle:Get("ActorLightPanel")
 				local actorPanel2 = self.Moudle:Get("ActorLightPanel2")
 				actorPanel:AddOnTime(function()
@@ -469,6 +479,7 @@ end
 -- 播放疲劳技能动画
 function _P.PlayTiredBuffAnim(self, curData, data, callBack)
 	self.TiredActorPanel.Activity = true
+	SoundMgr.Play(10061)
 
 	local addBlood = math.abs(data.addblood)
 	local info = nil
@@ -502,7 +513,11 @@ function _P.PlayTiredBuffAnim(self, curData, data, callBack)
 
 		local fill = 0
 		if data.target then
-			fill = lastBlood / MStaff.StaffTable[curData.staffid].power
+			if self.AutoGetStaffpower then
+				fill = lastBlood / _P.GetStaffPower(self.SelfLineStaffs, curData.staffid)
+			else
+				fill = lastBlood / MStaff.StaffTable[curData.staffid].power
+			end
 		else
 			fill = lastBlood / curData.rbaseblood
 		end
@@ -535,6 +550,9 @@ function _P.PlayNextAnimate(self)
 	t1:SetEase(CS.DG.Tweening.Ease.Linear)
 	t1:OnComplete(
 		function()
+			local totalStaffs = #self.mData.staffs
+			self.Own.StaffNumText.Text = math.min(self.SelfIndex, totalStaffs) .. '/' .. totalStaffs
+
 			staffImg.LocalPosition = Vector2(0,-1100)
 			local reportData = self.ReportTable[1]
 			if reportData ~= nil then
@@ -569,7 +587,7 @@ function _P.PlayNextAnimateEnemy(self)
 	t1:OnComplete(
 		function()
 			local totalStaffs = #self.mData.rstaffs
-			self.Enemy.StaffNumText.Text = (self.EnemyIndex - 1) .. '/' .. totalStaffs
+			self.Enemy.StaffNumText.Text = math.min(self.EnemyIndex,totalStaffs) .. '/' .. totalStaffs
 			
 			staffImg.LocalPosition = Vector2(700,-210)
 			local reportData = self.ReportTable[1]
@@ -855,8 +873,11 @@ function _P.SetViewEnd(self)
 		end
 	end
 
+	local totalStaffs = #data.staffs
+		self.Own.StaffNumText.Text = math.min(self.SelfIndex, totalStaffs) .. '/' .. totalStaffs
+
 	local totalStaffs = #data.rstaffs
-	self.Enemy.StaffNumText.Text = (self.EnemyIndex - 1) .. '/' .. totalStaffs
+	self.Enemy.StaffNumText.Text = math.min(self.EnemyIndex, totalStaffs) .. '/' .. totalStaffs
 
 	if self.TiredRect.Activity then--隐藏疲劳展示
 		_P.OnShowTiredInfo(self)
@@ -950,6 +971,19 @@ function _P.OnShowTiredInfo(self)
 			self.TiredRect.Activity = false
 		end, nil, ShowTime)
 	end
+end
+
+--获取员工战力
+function _P.GetStaffPower(staffList, staffId)
+	if staffList == nil or staffId == nil then
+		return 1
+	end
+	for k, v in pairs(staffList) do
+		if v.staffid == staffId then
+			return v.power or 1
+		end
+	end
+	return 1
 end
 
 return _M

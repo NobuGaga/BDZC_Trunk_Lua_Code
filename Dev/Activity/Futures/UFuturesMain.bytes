@@ -48,6 +48,13 @@ function _M:OnCreate()
 		return 
 	end
 
+	local needMaxNum = Csv.Const(108)[4]
+	if GameSetting.IsTaiWan then
+		self.NeedMaxPrice = Csv.Const(141)
+	else
+		self.NeedMaxPrice = needMaxNum
+	end
+
 	moudle:Get("C_Text").Text = Csv.Text("futures_title")
 	moudle:Get("InfoText").Text = Csv.Text("futures_zj")
 	moudle:Get("tIPS").Text = Csv.Text("futures_odds")
@@ -56,7 +63,7 @@ function _M:OnCreate()
 	moudle:Get("TimeText").Text = Csv.Text("futures_time_text4")
 	moudle:Get("Date").Text = Csv.Text("futures_time_text2")
 	moudle:Get("C_text").Text = Csv.Text("futures_reset")
-	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num=Csv.Const(108)[4]})
+	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num = self.NeedMaxPrice})
 
 	self.initPos = {}
 	for i = 1, 6 do
@@ -86,7 +93,7 @@ function _P.DoFuturesReset(self)
 
 	local state = self.mData.state
 	local activityId = self.mData.actId
-	local needAmount = ((self.mData.resetNeedAmount == nil and Csv.Const(108)[4]) or self.mData.resetNeedAmount)
+	local needAmount = ((self.mData.resetNeedAmount == nil and self.NeedMaxPrice) or self.mData.resetNeedAmount)
 	moudle:Get("ExpText").Text = self.mData.rechargeAmount.."/"..needAmount
 	moudle:Get("ProgressBar").FillAmount = self.mData.rechargeAmount/needAmount
 	moudle:Get("DateText").Text = Csv.Text("futures_time_text", {startTime = os.date("%Y/%m/%d", state.startTime),

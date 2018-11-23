@@ -1,0 +1,305 @@
+--@RefType [Libs.WindowMgr.WindowType.bytes#_M]
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Welfare.MWelfare.bytes#_M]
+local MWelfare = JRequire "Dev.Welfare.MWelfare"
+--@RefType [Dev.Welfare.CWelfare.bytes#_M]
+local CWelfare = JRequire "Dev.Welfare.CWelfare"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+local JGuiManager = CS.JGui.JGuiManager
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Sign_View"
+local ItemName = "M_Sign_Item"
+
+--领取奖励特效
+local RewardEffectID = 5
+--签到特效ID
+local SignEffectID = 10239
+--进度条动画时间
+local FeelBarUpTime = 0.3
+--子Item个数
+local ItemMaxCount = 3
+--默认通用Item宽度
+local DefaultItemWidth = 120
+--子Item创建通用Item缩放
+local ItemScale = 0.7
+
+local NotOpenSprite = "yth_014_1"
+local OpenedSprite = "yth_014"
+--宝箱Tween动画
+local TweenName = "T_Effect_ActiveAward_Copy"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class()
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+function _M:Destroy()
+	if self.moudle then
+		self.moudle:Destroy()
+	end
+end
+
+function _M:ctor(node, effectRect)
+	self._RootNode = node
+	self.moudle = JGuiManager.GetMoudle(self._RootNode, MoudleName, WindowType.UI, 0)
+	self.effectRect = effectRect
+
+	_P.InitView(self)
+	self:RefreshView()
+end
+
+function _P.InitView(self)
+	self.feelName = self.moudle:Get("feelName")
+	self.textFeelTips = self.moudle:Get("textFeelTips")
+	self.textFeelPro = self.moudle:Get("textFeelPro")
+	self.feelProcess = self.moudle:Get("feelProcess")
+	self.signRewardRect = self.moudle:Get("signRewardRect")
+	self.signRewardScale = self.signRewardRect.SizeDelta.x / DefaultItemWidth
+	self.btnGet = self.moudle:Get("btnGet")
+	self.moudle:Get("textBtnGet").Text = Csv.Text("rankreward_get")
+	self.btnGet.Activity = false
+	self.btnGet.CachedTran:GetJTweener("T_Sign_Get"):Play()
+	self.btnGet:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CWelfare.ReqGetSignReward()
+	end)
+	CCommon.CreateEffect(self.moudle:Get("rightActorNode"), 20010)
+	CCommon.CreateEffect(self.moudle:Get("leftActorNode"), 20009)
+	self.textLeft = self.moudle:Get("textLeft")
+	self.textRight = self.moudle:Get("textRight")
+	self.moudle:Get("textLeftName").Text = Csv.Text("welfare_feel_left_name")
+	self.moudle:Get("textRightName").Text = Csv.Text("welfare_feel_right_name")
+	self.effectNode = self.moudle:Get("effectNode")
+	self.btnSign = self.moudle:Get("btnSign")
+	self.btnSign.Activity = false
+	self.btnSign:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		CWelfare.ReqSign()
+	end)
+end
+
+function _P.RefreshFeelInfo(self)
+	_P.RefreshFeelProcess(self)
+	self.signRewardRect:DestroyChildren()
+	local nextRewarData = _P.GetCsvNextSignRewardData()
+	if nextRewarData == nil then
+		self.textFeelTips.Text = Csv.Text("welfare_feel_tips_full")
+		self.signRewardRect.Activity = false
+		return
+	end
+	self.textFeelTips.Text = Csv.Text("welfare_feel_tips")
+	self.curSignReward = nextRewarData.reward
+	self.signRewardRect.Activity = true
+	local rewardID, rewardNum = _P.GetCsvNextSignFirstRewardData()
+	local rewardItem = CCommon.CreateItem(self.signRewardRect, rewardID, CCommon.ShowItemTips, {num = rewardNum}, Define.SysId.Welfare_Sign)
+	rewardItem.SelfRect.LocalPosition = Vector2(0, 0)
+	rewardItem.SelfRect.AnchorMin = Vector2(0.5, 0.5)
+	rewardItem.SelfRect.AnchorMax = Vector2(0.5, 0.5)
+	rewardItem.SelfRect.LocalScale = Vector3(self.signRewardScale, self.signRewardScale, 1)
+	_P.CalculateItemSpace(self, rewardItem.SelfRect.SizeDelta.x)
+end
+
+function _P.RefreshFeelProcess(self, isSign)
+	self.feelProcess:DOKill()
+	local nextRewarData = _P.GetCsvNextSignRewardData()
+	if nextRewarData == nil then
+		self.textFeelPro.Text = Csv.Text("welfare_feel_pro_full")
+		self.feelProcess.FillAmount = 1
+		return
+	end
+	local reachRewardData = _P.GetCsvReachSignRewardData()
+	self.lastNeedFeel = reachRewardData.need
+	self.feelName.SpriteName = _P.GetCsvReachSignFeelData().levelImage
+	self.textFeelPro.Text = Csv.Text("welfare_feel_pro", {cur = MWelfare.SignRewardPoint, need = self.lastNeedFeel})
+	self.btnGet.Activity = MWelfare.isCanGetSignReward
+	local pro = MWelfare.SignRewardPoint / reachRewardData.need
+	if isSign and self.feelProcess.FillAmount == 1 then
+		self.feelProcess:DOFillAmount(pro, FeelBarUpTime)
+	else
+		self.feelProcess.FillAmount = pro
+	end
+end
+
+function _P.PlayFeelProcessAnimation(self, isSign)
+	self.feelProcess:DOKill()
+	self.feelProcess:DOFillAmount(MWelfare.SignRewardPoint / self.lastNeedFeel, FeelBarUpTime):OnComplete(function() 
+		_P.RefreshFeelProcess(self, isSign)
+ 	end)
+end
+
+function _P.RefreshDayReward(self)
+	_P.RefreshTalkText(self)
+	self.btnSign.Activity = not MWelfare.isSign
+	if not MWelfare.isSign then
+		self.btnSign.SpriteName = NotOpenSprite
+		if self.boxTween then
+			self.boxTween:DOKill()
+			self.boxTween = nil
+		end
+		self.boxTween = self.btnSign.CachedTran:GetJTweener(TweenName)
+		self.boxTween:Play()
+	end
+	if self.content == nil then
+		self.content = self.moudle:Get("content")
+		_P.CalculateItemSpace(self)
+	end
+	self.content:DestroyChildren()
+	local firstID = MWelfare.SignDay - ItemMaxCount
+	if firstID < 0 then
+		firstID = 1
+	else
+		firstID = firstID + 2
+	end
+	for index = firstID, firstID + ItemMaxCount - 1 do
+		_P.CreateDayRewardItem(self, index)
+	end
+end
+
+function _P.CreateDayRewardItem(self, index)
+	local csvSign = Csv.Sign[index]
+	if csvSign == nil then
+		return
+	end
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName, WindowType.UI, 10)
+	itemMoudle:Get("textDay").Text = Csv.Text("welfare_feel_day", {day = index})
+	local isSign = false
+	if index < MWelfare.SignDay or (index == MWelfare.SignDay and MWelfare.isSign) then
+		isSign = true
+	end
+	local itemContent = itemMoudle:Get("content")
+	local layout = itemContent:AddHorizontalLayoutGroup()
+	layout.spacing = layout.spacing - self.itemSpace
+	for _, rewardData in ipairs(csvSign.reward) do
+		local rewardItem = CCommon.CreateItem(itemContent, rewardData[1], CCommon.ShowItemTips, 
+							{num = rewardData[2], scale = ItemScale}, 
+							isSign or Define.SysId.Welfare_Sign)
+		rewardItem.SelfRect.Pivot = Vector2(0, 0.5)
+	end
+	itemMoudle:Get("darkBg").Activity = isSign
+	if index == MWelfare.SignDay then
+		self.todayReward = csvSign.reward
+		self.getPos = itemMoudle:Get("getPos")
+	end
+end
+
+function _P.RefreshTalkText(self)
+	local csvData = _P.GetCsvCurTalkData()
+	if MWelfare.isSign then
+		self.textLeft.Text = csvData.leftGot
+		self.textRight.Text = csvData.rightGot
+	else
+		self.textLeft.Text = csvData.leftGet
+		self.textRight.Text = csvData.rightGet
+	end
+end
+
+function _P.CalculateItemSpace(self, defaultItemWidth)
+	if defaultItemWidth == nil then
+		defaultItemWidth = DefaultItemWidth
+	end
+	self.itemSpace = defaultItemWidth * (1 - ItemScale)
+end
+
+function _M:RefreshSign()
+	CCommon.CreateEffect(self.effectNode, SignEffectID)
+	_P.PlayFeelProcessAnimation(self, true)
+	if self.boxTween then
+		self.boxTween:Restore()
+		self.boxTween:DOKill()
+		self.boxTween = nil
+	end
+	self.btnSign.SpriteName = OpenedSprite
+	local delayTime = FeelBarUpTime
+	SoundMgr.Play(10004)
+	for index, rewardData in ipairs(self.todayReward) do
+		CCommon.ShowFlyItem(self.effectRect, rewardData[1], rewardData[2], FeelBarUpTime * index)
+		delayTime = delayTime + FeelBarUpTime
+	end
+	self.effectRect:AddOnTime(function()
+		CCommon.CreateEffect(self.getPos, RewardEffectID, nil, function ()
+			_P.RefreshDayReward(self)
+		end)
+	end, nil, delayTime)
+end
+
+function _M:OnGetSignReward()
+	SoundMgr.Play(10004)
+	for index, rewardData in ipairs(self.curSignReward) do
+		CCommon.ShowFlyItem(self.effectRect, rewardData[1], rewardData[2], FeelBarUpTime * index)
+	end
+	_P.RefreshFeelInfo(self)
+end
+
+function _M:RefreshView()
+	_P.RefreshFeelInfo(self)
+	_P.RefreshDayReward(self)
+end
+
+--------------------------------- 获取 Csv 数据内容 ---------------------------------
+function _P.GetCsvReachSignRewardData()
+	local id = 1
+	for index, csvValue in ipairs(Csv.SignReward) do
+		if MWelfare.SignRewardPoint >= csvValue.need then
+			id = index + 1
+		else
+			break
+		end
+	end
+	local csvValue = Csv.SignReward[id]
+	if csvValue then
+		return csvValue
+	else
+		return Csv.SignReward[id - 1]
+	end
+end
+
+function _P.GetCsvReachSignFeelData()
+	local id = 1
+	for index, csvValue in ipairs(Csv.SignFeelLevel) do
+		if MWelfare.SignRewardPoint >= csvValue.need then
+			id = index + 1
+		else
+			break
+		end
+	end
+	local csvValue = Csv.SignFeelLevel[id]
+	if csvValue then
+		return csvValue
+	else
+		return Csv.SignFeelLevel[id - 1]
+	end
+end
+
+function _P.GetCsvNextSignFirstRewardData()
+	local csvValue = _P.GetCsvNextSignRewardData()
+	if csvValue then
+		for _, rewardData in ipairs(csvValue.reward) do
+			local itemID = rewardData[1]
+			return Csv.Item[itemID].id, rewardData[2]
+		end
+	end 
+end
+
+function _P.GetCsvNextSignRewardData()
+	return Csv.SignReward[MWelfare.SignRewardID + 1]
+end
+
+function _P.GetCsvCurTalkData()
+	local csvValue = Csv.SignRewardTalk[MWelfare.SignDay]
+	if csvValue then
+		return csvValue
+	end
+	local csvLength = 0
+	for index, _ in ipairs(Csv.SignRewardTalk) do
+		csvLength = index
+	end
+	return Csv.SignRewardTalk[csvLength]
+end
+
+return _M

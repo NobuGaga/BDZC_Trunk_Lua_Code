@@ -189,14 +189,8 @@ function _P.CreateCommerceItem(self)
 				end
 				commerceMoudle:Get("SJ").Text = Csv.Text("parliament_tip15",{str = tostring(v.id)})
 				commerceMoudle:Get("C_text").Text = Csv.Text("parliament_tip5")
-
-				local csvVip = Csv.Vip[v.vip]
-				if csvVip ~= nil and csvVip.imgBord ~= nil then
-					commerceMoudle:Get("VipBox").SpriteName = csvVip.imgBord
-					commerceMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.vip
-				else
-					commerceMoudle:Get("VipBox").Activity = false
-				end
+				commerceMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
+				commerceMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.vip
 
 				local btn = commerceMoudle:Get("C_Btn_b")
 				local flag = commerceMoudle:Get("YZS")
@@ -236,16 +230,10 @@ function _P.CreateFriendItem(self)
 			friendMoudle:Get("TX").Text = Csv.Text("parliament_tip13",{str = Csv.Company[v.level].name})
 			friendMoudle:Get("SJ").Text = Csv.Text("parliament_tip15",{str = tostring(v.id)})
 			friendMoudle:Get("C_text").Text = Csv.Text("parliament_tip5")
+			friendMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
+			friendMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.vip
 
-			local csvVip = Csv.Vip[v.vip]
-			if csvVip ~= nil and csvVip.imgBord ~= nil then
-				friendMoudle:Get("VipBox").SpriteName = csvVip.imgBord
-				friendMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.vip
-			else
-				friendMoudle:Get("VipBox").Activity = false
-			end
-
-			if v. commerceName ~= nil then
+			if v.commerceName ~= nil then
 				friendMoudle:Get("GX").Text = Csv.Text("parliament_tip14",{str = v.commerceName})
 			else
 				friendMoudle:Get("GX").Text = Csv.Text("Friend_11")
@@ -289,15 +277,8 @@ function _R.FindPlayer(self,data)
 		moudle:Get("GX").Text = Csv.Text("parliament_tip14",{str = ""})
 	end
 	moudle:Get("SJ").Text = Csv.Text("parliament_tip15",{str = tostring(data.id)})
-
-	local csvVip = Csv.Vip[data.vip]
-	if csvVip ~= nil and csvVip.imgBord ~= nil then
-		moudle:Get("VipBox").Activity = true
-		moudle:Get("VipBox").SpriteName = csvVip.imgBord
-		moudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..data.vip
-	else
-		moudle:Get("VipBox").Activity = false
-	end
+	moudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(data.chatBg, data.vip)
+	moudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..data.vip
 
 	local btn = moudle:Get("C_Btn_b_1")
 	local flag = moudle:Get("YZS")

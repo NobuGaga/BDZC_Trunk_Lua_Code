@@ -46,7 +46,14 @@ function _M:OnCreate()
 	moudle:Get("C_Btn_a"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
 		_P.OnCZClick(self)
-		end, nil, 1.2)
+	end, nil, 1.2)
+
+	local needMaxNum = Csv.Const(108)[4]
+	if GameSetting.IsTaiWan then
+		self.NeedMaxPrice = Csv.Const(141)
+	else
+		self.NeedMaxPrice = needMaxNum
+	end
 
 	moudle:Get("tIPS").Text = Csv.Text("futures_odds")
 	moudle:Get("shuxin").Text = Csv.Text("futures_main_tips")
@@ -57,7 +64,7 @@ function _M:OnCreate()
 	moudle:Get("TimeText").Text = Csv.Text("futures_time_text4")
 	moudle:Get("Date").Text = Csv.Text("futures_time_text2")
 	moudle:Get("C_Btn_b").Activity = false
-	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num=Csv.Const(108)[4]})
+	moudle:Get("Tips2").Text = Csv.Text("futures_main_tips2", {num = self.NeedMaxPrice})
 
 	_R.OnFuturesReset(self)
 	
@@ -86,7 +93,7 @@ function _R.OnFuturesReset(self)
 		index = index+1
 	end
 
-	local needAmount = ((self.mData.resetNeedAmount == nil and Csv.Const(108)[4]) or self.mData.resetNeedAmount)
+	local needAmount = ((self.mData.resetNeedAmount == nil and self.NeedMaxPrice) or self.mData.resetNeedAmount)
 	moudle:Get("ExpText").Text = self.mData.rechargeAmount.."/"..needAmount
 	moudle:Get("ProgressBar").FillAmount = self.mData.rechargeAmount/needAmount
 	moudle:Get("DateText").Text = Csv.Text("futures_time_text", {startTime = os.date("%Y/%m/%d", self.mData.state.startTime),endTime = os.date("%Y/%m/%d", self.mData.state.endTime)})

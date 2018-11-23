@@ -11,11 +11,19 @@ local _P = {}
 local _R = {}
 
 local MONTHCARD_ID = 1
-local CARD_ACTORID = 10066
+local TaiWan_MONTHCARD_ID = 1001
 local YEARCARD_ID = 2
+local TaiWan_YEARCARD_ID = 1002
+local CARD_ACTORID = 10066
 local CARD_ACTORID = 10067
+
 local MonthGetStaffId = Csv.Const(124)[1]
 local YearGetStaffId = Csv.Const(125)[1]
+
+local Const_MonthCard_ID = 11006
+local Const_YearCard_ID = 11007
+local Const_MonthCard_ID2 = 11009
+local Const_YearCard_ID2 = 11010
 
 function _M:ctor(parent)
 	self._RootNode = parent
@@ -32,6 +40,10 @@ end
 -------------------------显示月卡---------------------------------------
 function _P.ShowMonthCard(self)
 	local moudle = self.mMoudle
+	local curConstMonCardID = Const_MonthCard_ID
+	if GameSetting.IsTaiWan then
+		curConstMonCardID = Const_MonthCard_ID2
+	end
 	--月卡--
 	local titleText = moudle:Get("title")
 	local chixuText = moudle:Get("timetext")
@@ -54,17 +66,17 @@ function _P.ShowMonthCard(self)
 	titleText.Text = Csv.Text("welfare_monthCard_title")
 	chixuText.Text = Csv.Text("welfare_monthCard_chixu")
 	getFirst1.Text = Csv.Text("welfare_monthCard_getfirst1")
-	getFirst2.Text = Csv.Const(11006)[2]
+	getFirst2.Text = Csv.Const(curConstMonCardID)[2]
 	getFirst3.Text = Csv.Text("welfare_monthCard_getfirst3")
  	getDay1.Text = Csv.Text("welfare_monthCard_getday1")
-	getDay2.Text = Csv.Const(11006)[3]
+	getDay2.Text = Csv.Const(curConstMonCardID)[3]
 	getDay3.Text = Csv.Text("welfare_monthCard_getday3")
 	godTimes1.Text = Csv.Text("welfare_card_god1")
 	godTimes2.Text = Csv.Text("welfare_card_god2",{num = 1}) 
 	leftTime1.Text = Csv.Text("welfare_monthCard_leftTime1")
 	leftTime2.Text = 30
 	leftTime3.Text = Csv.Text("welfare_monthCard_leftTime3")
-	costNum.Text = "¥"..Csv.Const(11006)[1]
+	costNum.Text = Csv.Const(curConstMonCardID)[1]
 	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
 	tipsText.Text =Csv.Text("welfare_monthCard_tips")
 
@@ -90,7 +102,12 @@ function _P.ShowMonthCard(self)
 
 	local buyBtn = moudle:Get("Btn")
 	buyBtn:AddOnButton(function(...)
-		local monthData = Csv.Recharge[MONTHCARD_ID]
+		local monthData 
+		if GameSetting.IsTaiWan then
+			monthData = Csv.Recharge[TaiWan_MONTHCARD_ID]
+		else
+			monthData = Csv.Recharge[MONTHCARD_ID]
+		end
 		local cardName = Csv.Text("welfare_monthCard")
 		SDKMgr.ReqPay(monthData.id,monthData.sdkProductId,monthData.cost,monthData.diamond,cardName) 
 	end)
@@ -128,6 +145,10 @@ end
 -------------------------终身卡-------------------------------------
 function _P.ShowYearCard(self)
 	local moudle = self.mMoudle
+	local curConstYearCardID = Const_YearCard_ID
+	if GameSetting.IsTaiWan then
+		curConstYearCardID = Const_YearCard_ID2
+	end
 
 	local titleText = moudle:Get("title_0")
 	local chixuText = moudle:Get("timetext_0")
@@ -147,14 +168,14 @@ function _P.ShowYearCard(self)
 	titleText.Text = Csv.Text("welfare_yearCard_title")
 	chixuText.Text = Csv.Text("welfare_longlife")
 	getFirst1.Text = Csv.Text("welfare_yearCard_getfirst1")
-	getFirst2.Text = Csv.Const(11007)[2]
+	getFirst2.Text = Csv.Const(curConstYearCardID)[2]
 	getFirst3.Text = Csv.Text("welfare_yearCard_getfirst3")
  	getDay1.Text = Csv.Text("welfare_yearCard_getday1")
-	getDay2.Text = Csv.Const(11007)[3]
+	getDay2.Text = Csv.Const(curConstYearCardID)[3]
  	getDay3.Text = Csv.Text("welfare_yearCard_getday3")
 	godTimes1.Text = Csv.Text("welfare_card_god1")
 	godTimes2.Text = Csv.Text("welfare_card_god2",{num = 2}) 
-	costNum.Text = "¥"..Csv.Const(11007)[1]
+	costNum.Text = Csv.Const(curConstYearCardID)[1]
 	buyText.Text = Csv.Text("welfare_buy")--welfare_buymore
 	tipsText.Text =Csv.Text("welfare_yearCard_tips")
 
@@ -180,7 +201,12 @@ function _P.ShowYearCard(self)
 	self.mCostNum_Y = costNum
 
 	buyBtn:AddOnButton(function(...)
-		local monthData = Csv.Recharge[YEARCARD_ID]
+		local monthData 
+		if GameSetting.IsTaiWan then
+			monthData = Csv.Recharge[TaiWan_YEARCARD_ID]
+		else
+			monthData = Csv.Recharge[YEARCARD_ID]
+		end
 		local cardName = Csv.Text("welfare_yearCard")
 		SDKMgr.ReqPay(monthData.id,monthData.sdkProductId,monthData.cost,monthData.diamond,cardName) 
 	end)

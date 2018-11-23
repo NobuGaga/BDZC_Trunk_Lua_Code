@@ -86,4 +86,91 @@ function _M.GetLineStaffNum()
 	return staffNum
 end
 
+function _M.CheckIsFull()
+	local upNum = 0
+	for k,v in pairs(_M.LineUpList) do
+		upNum = upNum + 1
+	end
+	return upNum >= _M.SeatNum
+end
+
+--计算增加一个员工时，增加的员工羁绊数（装备或其他羁绊不算）
+function _M.GetAddStaffLinkNum(index, staffid)
+	--计算原来羁绊总数
+	local function calPreAllLink()
+		local num = 0
+		local lineStaff = {}
+		for k, v in pairs(_M.LineUpList) do
+			local dataStaff = MStaff.StaffTable[v]
+			if dataStaff and dataStaff.link then
+				for k1, v1 in pairs(dataStaff.link) do
+					local csvLink = Csv.Link[v1]
+					if csvLink and csvLink.type == 0 then
+						num = num + 1
+					end
+				end
+			end
+			lineStaff[k] = v
+		end
+		return num, lineStaff
+	end
+
+	--计算单个员工自己已激活的羁绊数量
+	local function calOneStaffLink(staffid, lineStaff)
+		local num = 0
+		local csvStaff = Csv.Personnel[staffid]
+		if csvStaff == nil then
+			return num
+		end
+
+		local function checkIsUp(staffid, lineStaff)
+			if staffid == nil or lineStaff == nil then
+				return false
+			end
+			for k, v in pairs(lineStaff) do
+				if v and v == staffid then
+					return true
+				end
+			end
+			return false
+		end
+
+		for k, v in pairs(csvStaff.link) do
+			local csvLink = Csv.Link[v]
+			if csvLink and csvLink.type == 0 then
+				local isAdd = false
+				for k1, v1 in pairs(csvLink.target) do
+					if not checkIsUp(v1, lineStaff) then
+						isAdd = false
+						break
+					else
+						isAdd = true
+					end
+				end
+				if isAdd then
+					num = num + 1
+				end
+			end
+		end
+		return num
+	end
+
+	local preNum, lineStaff = calPreAllLink()
+
+	--新增员工计算
+	for k, v in pairs(lineStaff) do
+		if v and v == staffid then
+			lineStaff[k] = nil
+			break
+		end
+	end
+	lineStaff[index] = staffid
+
+	local nowNum = 0
+	for k, v in pairs(lineStaff) do
+		nowNum = nowNum + calOneStaffLink(v, lineStaff)
+	end
+	return nowNum - preNum
+end
+
 return _M

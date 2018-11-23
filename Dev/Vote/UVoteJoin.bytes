@@ -111,15 +111,8 @@ function _R.RefreshView(self,data)
 			else
 				voteMoudle:Get("IngBg").Activity = false
 			end
-
-			local csvVip = Csv.Vip[v.viplv]
-			if csvVip.imgBord ~= nil then
-				voteMoudle:Get("VipBox").SpriteName = csvVip.imgBord
-				voteMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.viplv
-			else
-				voteMoudle:Get("VipBox").Activity = false
-			end
-
+			voteMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.viplv)
+			voteMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.viplv
 			voteMoudle:Get("bsx").SpriteName = MPlayer.GetOtherHeadIcon(v.avatar.head,v.sex)
 		end
 	end

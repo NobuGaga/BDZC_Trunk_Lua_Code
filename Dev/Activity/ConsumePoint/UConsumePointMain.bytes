@@ -1,0 +1,442 @@
+-- 消费积分界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CMain = JRequire "Dev.Main.CMain"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+local TagSpriteName = {"XFJF_001", "XFJF_002"}
+local COLUMN = 3
+local ITEM_HEIGHT = 308
+local SPACE = 20
+local EFFECT_ID = 12
+local ItemTypeCount = 3
+local ItemSizeY = 122
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:BeforeDestroy( ... )
+	CActivity.OnConsumeCloseUIReq()
+	if MActivity.ConsumePointRed == true then
+		CMain.UpdateRedpoint(false, Define.SysId.ConsumePoint)
+		MActivity.ConsumePointRed = false
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Integral_UMain")
+	self.mModule = module
+
+	local actId = MActivity.ActIdForType[Define.ActivityType.ConsumePoint]
+	if actId ~= nil then
+		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
+	end
+
+	module:Get("C_Text").Text = Csv.Text("consume_title")
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	module:Get("Time").Text = Csv.Text("consume_timeShow", {day1 = os.date("%Y/%m/%d", self.ActInfo.state.startTime), day2 = os.date("%Y/%m/%d", self.ActInfo.state.endTime)})
+	module:Get("Tips").Text = Csv.Text("consume_tips")
+
+	local pointText = module:Get("Jifen")
+	pointText.Text = Csv.Text("consume_own", {num = self.ActInfo.score})
+	self.PointText = pointText
+
+	_P.GetThisTypeHasStageNum(self)
+	CActivity.OnConsumeOpenUIReq()
+end
+
+
+function _P.SetListData(self)
+	local listData = self.mData
+	if listData == nil or next(listData) == nil then
+		return
+	end
+
+	_P.OnClearItem(self)
+	self.BuyItemTable = {}
+	for k,v in pairs(listData) do
+		self.BuyItemTable[k] = _P.OnCreateItem(self, v)
+	end
+	_P.OnStartTimer(self)
+end
+
+
+function _P.OnCreateItem(self, data)
+	local item = {}
+	local productData = {}
+	local module = self.mModule
+	module:Get("Title" .. data.type).Text = Csv.Text("consume_itemTitle" .. data.type)
+	module:Get("BtnText" .. data.type).Text = Csv.Text("consume_nextShow")
+
+	local previewBtn = module:Get("Btn" .. data.type)
+	previewBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickPreview(self, data)
+	end, nil, 0.9)
+
+	local nextConsumeConf = Csv.ConsumeScore[data.type * 10000 + data.stage]
+	previewBtn.Activity = (nextConsumeConf ~= nil and nextConsumeConf.nextStage ~= nil)
+
+	local itemContent = module:Get("ItemRect" .. data.type)
+	local itemSize = itemContent.SizeDelta
+	if data.shop ~= nil then
+		for k,v in pairs(data.shop) do
+			local itemId = v.item.key
+			local productModule = JGuiManager.GetMoudle(itemContent, "M_Integral_UMain_Item", WindowType.UI, 0)
+			if productModule ~= nil then
+				local buyBtn = productModule:Get("C_Btn_b")
+				buyBtn:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					_P.OnClickBuyProduct(self, v, data.type)
+				end, nil, 0.9)
+
+				-- 设置按钮状态
+				local isCanBuy = (v.sellCount > 0 or data.type == ItemTypeCount)
+				buyBtn.IsGray = not isCanBuy
+				buyBtn.RaycastTarget = isCanBuy
+
+				local itemConf = Csv.Item[itemId]
+				if itemConf then
+					productModule:Get("Icon").SpriteName = itemConf.icon
+
+					local qualityImg = productModule:Get("IconBox")
+					qualityImg.SpriteName = itemConf.colorIcon
+					qualityImg:AddOnButton(function ( ... )
+						SoundMgr.Play(10001)
+						if itemId and itemId > 0 then
+							CCommon.ShowItemTips(itemId)
+						end
+					end)
+
+					local strColor = Csv.ItemColor[itemConf.color].str
+					productModule:Get("GoodName").Text = Csv.Text("common_color", {num = strColor, name = itemConf.name})
+				end
+
+				local countText = productModule:Get("ItemCount")
+				countText.Text = 'X' .. v.item.value
+				countText.Activity = v.item.value > 1
+
+				local tagImg = productModule:Get("Corner")
+				local leaveText = productModule:Get("Score")
+				if data.type ~= ItemTypeCount then
+					tagImg.Activity = true
+					tagImg.SpriteName = TagSpriteName[data.type]
+					leaveText.Text = Csv.Text("consume_leaveNum", {num = v.sellCount})
+				else
+					tagImg.Activity = false
+					leaveText.Text = ''
+				end
+				productModule:Get("C_text").Text = Csv.Text("consume_point", {num = v.cost})
+				productModule:Get("Total").Activity = false
+			end
+
+			productData[itemId] = {itemModule = productModule, cost = v.cost, sellCount = v.sellCount, type = data.type}
+		end
+
+		local num = #data.shop
+		local num1,num2 = math.modf(num / COLUMN)
+		if num2 > 0 then
+			num1 = num1 + 1
+		end
+		local addY = (ITEM_HEIGHT + SPACE) * num1
+		itemContent.SizeDelta = Vector2(itemSize.x, ItemSizeY + addY)
+	end
+
+	item.type = data.type
+	item.stage = data.stage
+	item.timeText = module:Get("Time" .. data.type)
+	item.productData = productData
+	return item
+end
+
+
+-- 清除数据
+function _P.OnClearItem(self)
+	if self.BuyItemTable and next(self.BuyItemTable) ~= nil then
+		for k,v in pairs(self.BuyItemTable) do
+			for itemKey,itemData in pairs(v.productData) do
+				local itemModule = itemData.itemModule
+				itemModule:Destroy()
+			end
+		end
+	end
+end
+
+
+-- 查看下一期预览
+function _P.OnClickPreview(self, data)
+	local nextConsumeConf = Csv.ConsumeScore[data.type * 10000 + data.stage]
+	if nextConsumeConf == nil or nextConsumeConf.nextStage == nil then
+		CCommon.ShowError(Csv.Text("consume_maxStage"))
+	else
+		WindowMgr.Create("UConsumePointPreview", data.type, self.mData[data.type].nextRefreshTime or 0, nextConsumeConf.nextStage)
+	end
+end
+
+
+-- 点击购买商品
+function _P.OnClickBuyProduct(self, data, proType)
+	if data.sellCount <= 0 then
+		CCommon.ShowError(Csv.Text("shop_timeslow"))
+		return
+	end
+
+	if data.cost > self.ActInfo.score then
+		CCommon.ShowError(Csv.Text("club_exchange_pointError"))
+		return
+	end
+
+	-- 购买商品
+	CActivity.OnConsumeBuyReq(proType, data.item.key)
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateTimer ~= nil then
+		self.UpdateTimer:Destroy()
+		self.UpdateTimer = nil
+	end
+end
+
+
+-- 开启计时器
+function _P.OnStartTimer(self)
+	local isHasTime = false
+	for k,v in pairs(self.mData) do
+		local proType = v.type
+		if v.stage < self.StageNumList[proType] then
+			local nextConsumeConf = Csv.ConsumeScore[proType * 10000 + v.stage]
+			if v.nextRefreshTime - HeartBeat.ServSecond() >= 0 then
+				if not isHasTime then
+					isHasTime = true
+				end
+			elseif proType ~= 1 and nextConsumeConf and nextConsumeConf.nextStage and not MActivity.ConsumePointReqState[v.stage][proType] then
+				MActivity.ConsumePointReqState[v.stage][proType] = true
+				CActivity.OnConsumeRefreshReq(proType)
+			end
+		end
+	end
+
+	_P.OnClearTimer(self)
+	_P.UpdateTimeText(self)
+	
+	if isHasTime then
+		self.UpdateTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self)
+		end, nil, 1)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local isHasTime = false
+	for k,v in pairs(self.mData) do
+		local proType = v.type
+		if v.stage < self.StageNumList[proType] then
+			local nextConsumeConf = Csv.ConsumeScore[proType * 10000 + v.stage]
+			if v.nextRefreshTime - HeartBeat.ServSecond() >= 0 then
+				if not isHasTime then
+					isHasTime = true
+				end
+			elseif proType ~= 1 and nextConsumeConf and nextConsumeConf.nextStage and not MActivity.ConsumePointReqState[v.stage][proType] then --最后阶段倒计时为0时不需要刷新物品
+				MActivity.ConsumePointReqState[v.stage][proType] = true
+				CActivity.OnConsumeRefreshReq(proType)
+			end
+		end
+	end
+
+	if not isHasTime then
+		_P.OnClearTimer(self)
+	end
+
+	_P.UpdateTimeText(self)
+end
+
+
+function _P.UpdateTimeText(self)
+	for k,v in pairs(self.BuyItemTable) do
+		local leftTime = self.mData[k].nextRefreshTime - HeartBeat.ServSecond()
+		if leftTime < 0 then
+			leftTime = 0
+		end
+
+		if v.stage >= self.StageNumList[v.type] then
+			v.timeText.Text = Csv.Text("consume_max")
+		else
+			v.timeText.Text = Csv.Text("consume_refresh", {time = LuaUtil.GetTimeHMS(leftTime)})
+		end
+	end
+end
+
+
+-- 打开界面数据返回
+function _R.OnGetDataBack(self, data)
+	if data.actId == self.ActId then
+		for k,v in pairs(data.shop) do
+			if self.mData == nil then
+				self.mData = {}
+			end
+
+			self.mData[v.type] = v
+		end
+
+		_P.SetListData(self)
+	end
+end
+
+
+-- 倒计时为0，刷新商品返回
+function _R.OnRefreshViewBack(self, data)
+	if data.actId == self.ActId then
+		for k,v in pairs(data.shop) do
+			self.mData[v.type] = v
+		end
+
+		if data.isCountRefresh and data.shop then -- 别人购买，刷新数量
+			for typeKey,typeValue in pairs(data.shop) do
+				local curTypeModule = self.BuyItemTable[typeValue.type]
+				for shopKey,shopValue in pairs(typeValue.shop) do
+					local itemData = curTypeModule.productData[shopValue.item.key]
+					local itemModule = itemData.itemModule
+					if itemModule then
+						local leaveText = itemModule:Get("Score")
+						if typeValue.type ~= ItemTypeCount then
+							leaveText.Text = Csv.Text("consume_leaveNum", {num = shopValue.sellCount})
+						else
+							leaveText.Text = ''
+						end
+					end
+				end
+			end
+		else --阶段刷新
+			_P.SetListData(self)
+		end
+	end
+end
+
+
+-- 购买商品返回
+function _R.OnBuyCallBack(self, data)
+	if data.actId == self.ActId then
+		self.ActInfo.score = data.socre
+		local curTypeModule = self.BuyItemTable[data.type]
+		if data.goods then
+			-- 更新数据
+			local itemId = data.goods.item.key
+			for k,v in pairs(self.mData[data.type].shop) do
+				if v.item.key == itemId then
+					v.sellCount = data.goods.sellCount
+					break
+				end
+			end
+
+			local itemData = curTypeModule.productData[itemId]
+			local itemModule = itemData.itemModule
+			if itemModule then
+				local leaveText = itemModule:Get("Score")
+				if data.type ~= ItemTypeCount then
+					leaveText.Text = Csv.Text("consume_leaveNum", {num = data.goods.sellCount})
+				else
+					leaveText.Text = ''
+				end
+				self.PointText.Text = Csv.Text("consume_own", {num = data.socre})
+
+				-- 播放特效
+				CCommon.ShowFlyItem(leaveText, itemId, data.goods.item.value)
+				SoundMgr.Play(11000)
+
+				-- 设置按钮状态
+				itemData.sellCount = data.goods.sellCount
+				local isCanBuy = (itemData.sellCount > 0 or data.type == ItemTypeCount)
+				local buyBtn = itemModule:Get("C_Btn_b")
+				buyBtn.IsGray = not isCanBuy
+				buyBtn.RaycastTarget = isCanBuy
+			end
+		end
+	end
+end
+
+
+-- 设置按钮状态，积分不够显示为灰色
+function _P.SetBtnState(self)
+	for k,v in pairs(self.BuyItemTable) do
+		for itemKey,itemData in pairs(v.productData) do
+			local itemModule = itemData.itemModule
+			local isCanBuy = (itemData.sellCount > 0 or itemData.type == ItemTypeCount)
+			local buyBtn = itemModule:Get("C_Btn_b")
+			buyBtn.IsGray = not isCanBuy
+			buyBtn.RaycastTarget = isCanBuy
+		end
+	end
+end
+
+
+function _R.OnUpdateScoreNum(self, data)
+	if data.actId == self.ActId then
+		self.ActInfo.score = data.socre
+		self.PointText.Text = Csv.Text("consume_own", {num = data.socre})
+
+		-- 设置按钮状态
+		_P.SetBtnState(self)
+	end
+end
+
+
+-- 关闭界面
+function _R.OnUpdateActState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+	end
+end
+
+
+-- 获取每一类型共有阶段
+function _P.GetThisTypeHasStageNum(self)
+	self.StageNumList = {0, 0, 0}
+	for k,v in pairs(Csv.ConsumeScore) do
+		self.StageNumList[v.consumeType] = self.StageNumList[v.consumeType] + 1
+	end
+end
+
+
+return _M

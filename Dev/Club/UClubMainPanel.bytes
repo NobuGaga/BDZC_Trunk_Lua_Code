@@ -26,10 +26,6 @@ local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
 
-function _M:OnPopCreate( ... )
-	self:OnCreate(...)
-end
-
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
@@ -117,6 +113,7 @@ function _M:OnCreate(...)
 	-- 播放动画
 	local scaleTween = TipBox.CachedTran:GetJTweener(BOXTIP_POSY)
 	scaleTween:Play()
+	self.TipBox = TipBox
 
 	local oneSpriteTip = module:Get("dialogue1")
 	local twoSpriteTip = module:Get("dialogue2")
@@ -128,6 +125,18 @@ function _M:OnCreate(...)
 		local moveY2 = twoSpriteTip.CachedTran:GetJTweener(SPRITETIP_POSY)
 		moveY2:Play()
 	end, nil, 0.2)
+
+	local clubRedRect = module:Get("Redpoint")
+	self:RegistRedpoint(clubRedRect, Define.SysId.Club)
+	local tClub = clubRedRect.CachedTran:GetJTweener("T_Effect_Guodong")
+	tClub:Play()
+	self.ClubRedRect = clubRedRect
+	_P.UpdateTipBoxState(self)
+end
+
+
+function _P.UpdateTipBoxState(self)
+	self.TipBox.Activity = not self.ClubRedRect.Activity
 end
 
 
@@ -223,6 +232,7 @@ end
 -- 更新两只守门精灵显示
 function _R.OnRefreshOwnText(self, data)
 	_P.OnUpdateSpriteData(self, data)
+	_P.UpdateTipBoxState(self)
 
 	if data == nil or data.gainPoint == nil or data.gainPoint <= 0 then return end
 	local tweenRect = self.mModule:Get("gainEffect")
@@ -259,6 +269,11 @@ end
 function _R.OnCreateShipList(self, data)
 	_P.OnCreateList(self, data.shipList)
 	_P.OnUpdateSpriteData(self, data)
+end
+
+
+function _R.MineClubFinishBack(self)
+	_P.UpdateTipBoxState(self)
 end
 
 

@@ -7,6 +7,7 @@ local MCommerce = JRequire "Dev.Commerce.MCommerce"
 local CSiege = JRequire "Dev.SiegeWall.CSiege"
 local CCommon = JRequire "Dev.Common.CCommon"
 local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
 
 local _M = {}
 local _P = {}
@@ -59,6 +60,9 @@ _M.IsOpenView = false
 _M.IsGetNewUdisk = false
 _M.IsGetBoss = false
 
+_M.FirstOpenSiege = true
+_M.SiegeRed = false
+
 function _M.Clean()
 	--_M.ActivityState = false --活动开关
 	--_M.StartTime = 0
@@ -93,6 +97,9 @@ function _M.Clean()
 	_M.IsOpenView = false
 	_M.IsGetNewUdisk = false
 	_M.IsGetBoss = false
+
+	_M.FirstOpenSiege = true
+	_M.SiegeRed = false
 end
 
 function _M.SiegeActivityStatus(data)
@@ -476,6 +483,13 @@ function _M.SetRankStage(data)
 	end
 	--状态通知
 	WindowMgr.Call("USiegeMain", "UpdateRedPoint")
+
+	--红点
+	_M.SiegeRed = _P.ShowTopRedPoint()
+	if _M.FirstOpenSiege then
+		_M.SiegeRed = true
+	end
+	CMain.UpdateRedpoint(_M.SiegeRed,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
 end
 
 ---------------------------------------------------------
@@ -507,6 +521,16 @@ function _M.GetTeamType(commerceID)
 		end
 	end
 	return nil
+end
+
+function _P.ShowTopRedPoint()
+	for i = 1,3,1 do
+		if _M.CheckRankRed(i) then
+			return true
+		end
+	end
+
+	return false
 end
 
 function _M.CheckRankRed(_siege)
@@ -548,7 +572,17 @@ function _M.CheckActivityRed()
 			end
 		end
 	end
-	CMain.UpdateRedpoint(isRed,Define.SysId.SiegeWall)
+
+	if _M.FirstOpenSiege then
+		isRed = true
+	end
+	_M.SiegeRed = isRed
+	if MMain.FuncIsOpen(Define.SysId.LimitActivity) then
+		CMain.UpdateRedpoint(isRed,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
+	else
+		_M.SiegeRed = false
+		CMain.UpdateRedpoint(false,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
+	end
 end
 
 function _P.GetTargetTime(hour)

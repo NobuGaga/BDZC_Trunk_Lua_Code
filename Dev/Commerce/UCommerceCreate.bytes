@@ -25,7 +25,7 @@ local _R = {}
 --外部调用派发器
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun ~= nil then
 		fun(self, ...)
 	end
 end
@@ -83,16 +83,16 @@ function _M:OnCreate()
 	moudle:Get("C_Btn_b"):AddOnButton(function()
 		SoundMgr.Play(10001)
 		local name = LuaUtil.Trim(inputName.Text)
-		local password = LuaUtil.Trim(inputPassword.Text)
+		local password = "123456"
 		if name == nil or name == "" then
 			CCommon.ShowError(Csv.Text("commerce_create12"))
-		elseif password == nil or password == "" then
-			CCommon.ShowError(Csv.Text("commerce_create13"))
-		elseif string.len(password) < 6 then
-			CCommon.ShowError(Csv.Text("commerce_create14"))
+		-- elseif password == nil or password == "" then
+			-- CCommon.ShowError(Csv.Text("commerce_create13"))
+		-- elseif string.len(password) < 6 then
+			-- CCommon.ShowError(Csv.Text("commerce_create14"))
 		else
 			local weixin = LuaUtil.Trim(inputWeixin.Text or "")
-			local qq = LuaUtil.Trim(inputQQ.Text or "")	
+			local qq = LuaUtil.Trim(inputQQ.Text or "")
 			local declaration = LuaUtil.Trim(inputDeclaration.Text or "")
 			local isAuto = onBtn.Activity
 			CCommerce.CreateReq(name,password,isAuto,weixin,qq,declaration)

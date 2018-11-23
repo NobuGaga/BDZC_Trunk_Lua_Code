@@ -1,0 +1,58 @@
+-------------------------
+---跨服排行榜积分排行前50名
+-------------------------
+local JGuiManager = CS.JGui.JGuiManager
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class()
+local _P = {}
+
+local DefaultNoReward = "ty_023" --默认无奖励底图
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	self._RootNode:DestroyChildren()
+	local list = MCrossArena.GetScoreMatchReward()
+	for k, v in pairs(list) do
+		local itemMoudle = JGuiManager.GetMoudle(self._RootNode, "M_Xgsr_Ranking_Item")
+		itemMoudle:Get("textTitle").Text = v.title
+		local bgHeight = itemMoudle.SelfRect.SizeDelta.y
+		
+		local content = itemMoudle:Get("GoodsItem")
+		content:DestroyChildren()
+	
+		local layout = content:AddGridLayoutGroup()
+		local columnLimitNum = layout.constraintCount
+		local oneItemHeight = layout.cellSize.y + layout.spacing.y
+	
+		local num = 0
+		for k, v in pairs(v.reward) do
+			CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]}, Define.SysId.CrossArena)
+			num = num + 1
+		end
+	
+		local remNum = num % columnLimitNum
+		if remNum ~= 0 then
+			for i=1, (columnLimitNum - remNum) do
+				local rewardItem = CCommon.CreateItem(content, 1)
+				rewardItem.SelfRect.SpriteName = DefaultNoReward
+				rewardItem:Get("Icon").Activity = false
+				num = num + 1
+			end
+		end
+	
+		local row, rest = math.modf(num / columnLimitNum)
+		itemMoudle.SelfRect.SizeDelta = Vector2(itemMoudle.SelfRect.SizeDelta.x, bgHeight + (row - 1) * oneItemHeight) -- 默认有一行不需要计算进去
+	end
+end
+
+function _M:Destroy()
+	if self._RootNode ~= nil then
+		self._RootNode:DestroyChildren()
+		self._RootNode = nil
+	end
+end
+
+return _M

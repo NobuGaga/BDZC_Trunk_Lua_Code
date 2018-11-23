@@ -280,7 +280,7 @@ function _M.CheckIsCanUpApti(carData)
 	local upConf = Csv.CarUpQualification[upId]
 	if upConf then
 		if carData.intensifylv >= carData.level then return false end
-
+		upConf = Csv.CarUpQualification2[upConf.id2]
 		if upConf.aptiExpUpCost then
 			local curNum1 = MBag.GetItemNum(upConf.aptiExpUpCost[1])
 			if curNum1 >= upConf.aptiExpUpCost[2] then

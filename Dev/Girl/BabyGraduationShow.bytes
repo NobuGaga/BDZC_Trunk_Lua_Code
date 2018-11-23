@@ -42,6 +42,10 @@ function _M:OnCreate(data)
 	local charm = moudle:Get("charm")
 	local charmText = moudle:Get("charmText")
 	local babyIcon = moudle:Get("BSX")
+	local bgImg = moudle:Get("black")
+	local topBg1 = moudle:Get("Img1")
+	local bottomBg = moudle:Get("Img2")
+	local topImg = moudle:Get("Img3")
 
 	parent.Text = Csv.Text("Girl_baby_parent")--"母亲"
 	attribute.Text = Csv.Text("Girl_baby_gradallAttribute")--"总属性"
@@ -50,8 +54,8 @@ function _M:OnCreate(data)
 	power.Text = Csv.Text("Girl_baby_gradtype3")--"魄力"
 	charm.Text = Csv.Text("Girl_baby_gradtype4")--"魅力"
 
-	babyIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
-	babyIcon:SetNativeSize()
+	--babyIcon.SpriteName = MGirl.GetBabyIcon(data.gender,data.degree)
+	--babyIcon:SetNativeSize()
 	Education.Text = MGirl.GetEducationName(data.degree)
 	nameText.Text = data.name
 	parentText.Text = Csv.Girl[data.girlid].name
@@ -60,6 +64,22 @@ function _M:OnCreate(data)
 	knowledgeText.Text = data.attribute.Zhili
 	powerText.Text = data.attribute.Zhengzhi
 	charmText.Text = data.attribute.Meili
+
+	local csvDegree = Csv.BabyDegree[data.degree]
+	if csvDegree ~= nil then
+		bgImg.SpriteName = csvDegree.graduationBg
+		topBg1.SpriteName = csvDegree.topBg1
+		bottomBg.SpriteName = csvDegree.bottomBg
+		topImg.SpriteName = csvDegree.topImg
+
+		--1女 2男
+		if data.gender == 1 then
+			babyIcon.SpriteName = csvDegree.graduationBSX2
+		else
+			babyIcon.SpriteName = csvDegree.graduationBSX1
+		end
+	end
+	
 
 	-- 宝宝毕业特效
 	CCommon.CreateEffect(moudle:Get("ActorPanel"), babyActorId)

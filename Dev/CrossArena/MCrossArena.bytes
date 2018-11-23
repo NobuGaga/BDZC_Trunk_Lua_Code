@@ -1,0 +1,721 @@
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = {}
+
+--1:积分排名奖励 2:玩家押注奖励 3:押注奖池奖励 4:淘汰赛奖励
+_M.REWARD_TYPE = {
+	Score = 1,
+	Chip = 2,
+	ChipPool = 3,
+	Knockout = 4
+}
+
+--活动阶段
+_M.ARENA_STAGE_TYPE = 
+{
+	None = 0,				--无
+	Ready = 1,				--预备筛选
+	ReadyRslt = 2,			--预备筛选结果公示(每个服巅峰竞技前十名)
+	ScoreMatch = 3,			--积分赛
+	ScoreMatchRslt = 4,		--积分赛结果公示
+	SixTeenReady = 5,		--16进8准备阶段
+	SixTeenBattle = 6,		--16进8战斗阶段
+
+	EightReady = 7,			--8进4准备阶段
+	EightBattle = 8,		--8进4战斗阶段
+
+	FourReady = 9,			--4进2准备阶段
+	FourBattle = 10,		--4进2战斗阶段
+
+	FinalReady = 11,		--决赛准备阶段
+	FinalBattle = 12,		--决赛战斗阶段
+	FinalRslt = 13,			--决赛结果公示
+}
+
+_M.State = 
+{
+	actId = 0,		--//活动id
+	state = 2,		--//活动状态 1： 开启、2关闭
+	startTime = 0, 	--//开启时间
+	endTime = 0,	--//关闭时间
+	isScoreMatch = false, --是否有积分赛参赛资格
+	arenaStage = _M.ARENA_STAGE_TYPE.None,		--当前阶段
+	scorereward = false, -- 积分赛是否领奖
+	topreward = false,			--//淘汰赛是否领奖
+	matchCount = 0,				--积分赛匹配次数
+	redpointtip = false,		--红点提示
+	canOut = false,	--淘汰赛领奖赛红点
+	canScore = false,--积分赛能否领奖
+	canChip = false,	--押注分红有领取红点
+}
+
+--当天自己的匹配信息
+_M.MatchInfo = nil
+--积分排行榜信息
+_M.ScoreRankList = nil
+--今天的比赛信息
+_M.SCUArenaChipInfo = nil
+--赛程表信息
+_M.KnockoutAll = nil
+
+--UnityEngine.PlayerPrefs 标记-预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+_M.CrossArena_Cache_StartTime = nil
+--UnityEngine.PlayerPrefs 标记-竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+_M.CrossArena_Cache_Stage = nil
+
+--我的投票列表
+_M.MyChipList = {}
+
+local CrossArenaTimeCsv = Csv.Const(146)
+
+function _M.Clean()
+	_M.State = 
+	{
+		actId = 0,		--//活动id
+		state = 2,		--//活动状态 1： 开启、2关闭
+		startTime = 0, 	--//开启时间
+		endTime = 0,	--//关闭时间
+		isScoreMatch = false, --是否有积分赛参赛资格
+		arenaStage = _M.ARENA_STAGE_TYPE.None,		--当前阶段
+		scorereward = false, -- 积分赛是否领奖
+		topreward = false,			--淘汰赛是否奖励
+		matchCount = 0,				--积分赛匹配次数
+		redpoint = false,
+		canOut = false,	--淘汰赛领奖赛红点
+		canScore = false,--积分赛能否领奖
+		canChip = false,	--押注分红有领取红点
+	}
+
+	--当天自己的匹配信息
+	_M.MatchInfo = nil
+	--积分排行榜信息
+	_M.ScoreRankList = nil
+	--今天的比赛信息
+	_M.SCUArenaChipInfo = nil
+	--赛程表信息
+	_M.KnockoutAll = nil
+
+	_M.CrossArena_Cache_StartTime = nil
+	_M.CrossArena_Cache_Stage = nil
+
+	_M.MyChipList = {}
+end
+
+function _M.SetInit(data)
+	_M.State.actId = data.actId
+	_M.State.state = data.state
+	_M.State.startTime = data.starttime or _M.State.startTime
+	_M.State.endTime = data.endtime or _M.State.endTime
+	_M.State.isScoreMatch = false
+	if data.isScoreMatch ~= nil then
+		_M.State.isScoreMatch = data.isScoreMatch
+	end
+	_M.State.arenaStage = data.arenaStage or _M.State.arenaStage
+	--积分赛是否领奖  1
+	_M.State.scorereward = false
+	if data.scorereward ~= nil then
+		_M.State.scorereward = data.scorereward
+	end
+	--淘汰赛是否奖励  2
+	_M.State.topreward = false
+	if data.topreward ~= nil then
+		_M.State.topreward = data.topreward
+	end
+	if data.matchCount ~= nil then
+		_M.State.matchCount = data.matchCount
+	end
+	--是否剩余次数
+	--是否可以投票
+	--3
+	_M.State.redpointtip = false
+	if data.redpoint ~= nil then
+		_M.State.redpointtip = data.redpoint
+	end
+	_M.State.cantop = false
+	if data.cantop ~= nil then
+		_M.State.canOut = data.cantop
+	end
+	_M.State.canScore = false
+	if data.canScore ~= nil then
+		_M.State.canScore = data.canScore
+	end
+	_M.State.canChip = false
+	if data.canChip ~= nil then
+		_M.State.canChip = data.canChip
+	end
+end
+
+function _M.SetCUArenaMyChip(list)
+	_M.MyChipList = {}
+	if list ~= nil then
+		for k, v in pairs(list) do
+			_M.MyChipList[v] = true
+		end
+	end
+end
+
+function _M.IsMyChip(playerID)
+	return _M.MyChipList[playerID] == true
+end
+
+--判断活动是否开启
+function _M.GetIsArenaOpen()
+	return _M.State.state == 1 and _M.State.arenaStage ~= _M.ARENA_STAGE_TYPE.None
+end
+
+--判断活动标记状态
+function _M.GetStateType()
+	return _M.State.state
+end
+
+--获取当前活动阶段
+function _M.GetArenaStageType()
+	return _M.State.arenaStage
+end
+
+function _M.GetArenaTime()
+	return _M.State.startTime, _M.State.endTime
+end
+
+--获取积分赛匹配次数
+function _M.GetScoreMatchCount()
+	return _M.State.matchCount
+end
+
+--是否有积分赛参赛资格
+function _M.GetIsCanScoreMatch()
+	return _M.State.isScoreMatch
+end
+
+--是否已领取积分奖励
+function _M.GetIsGetScoreReward()
+	return _M.State.scorereward
+end
+
+--是否已领取淘汰赛奖励
+function _M.GetIsGetKnockoutReward()
+	return _M.State.topreward
+end
+
+--是否显示红点
+function _M.GetIsRedPoint()
+	return _M.State.redpointtip
+end
+
+--是否显示淘汰赛红点
+function _M.GetIsRedCanOut()
+	return _M.State.canOut
+end
+
+--是否显示积分赛奖励红点
+function _M.GetIsRedCanScore()
+	return _M.State.canScore
+end
+
+--是否显示投票领取红点
+function _M.GetIsRedCanChip()
+	return _M.State.canChip
+end
+
+--更新领取奖励
+function _M.SetArenaRewardFlag(data)
+	if data.type == _M.REWARD_TYPE.Score then
+		_M.State.scorereward = true
+	elseif data.type == _M.REWARD_TYPE.Knockout then
+		_M.State.topreward = true
+	elseif data.type == _M.REWARD_TYPE.Chip then
+		--分红,前端处理分红奖池
+		if _M.SCUArenaChipInfo and _M.SCUArenaChipInfo.player and data.index then
+			for k, v in pairs(_M.SCUArenaChipInfo.player) do
+				if v.player1.playerid == data.index or v.player2.playerid == data.index then
+					v.gisget = true
+					_M.SCUArenaChipInfo.reward = _M.SCUArenaChipInfo.reward + (v.tickCount or 0)
+					break
+				end
+			end
+		end
+	elseif data.type == _M.REWARD_TYPE.ChipPool then
+		--奖池
+		if _M.SCUArenaChipInfo then
+			_M.SCUArenaChipInfo.reward = 0
+		end
+	end
+end
+
+function _M.SetScoreRankList(data)
+	_M.ScoreRankList = data
+end
+
+function _M.GetScoreRankList()
+	return _M.ScoreRankList
+end
+
+function _M.SetSCUArenaChipInfo(data)
+	_M.SCUArenaChipInfo = data
+end
+
+function _M.SetSCUArenaMatchInfo(data)
+	_M.MatchInfo = data
+	--更新匹配次数
+	_M.State.matchCount = data.matchCount
+end
+
+function _M.GetMatchInfo()
+	return _M.MatchInfo
+end
+
+--是否有淘汰赛资格
+function _M.GetIsCanKnockoutMatch()
+	if _M.SCUArenaChipInfo then
+		return _M.SCUArenaChipInfo.mymatch ~= nil, _M.SCUArenaChipInfo.mymatch
+	end
+	return false
+end
+
+--获取今日比赛信息
+function _M.GetTodayKnockoutMatch()
+	return _M.SCUArenaChipInfo
+end
+
+--获取预备筛选时间
+function _M.GetYuBeiShuaixuanTime()
+	local startTime = CrossArenaTimeCsv[1]
+	local endTime = CrossArenaTimeCsv[2]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取预备筛选公示结果时间
+function _M.GetYuBeiShuaixuanRsltTime()
+	local startTime = CrossArenaTimeCsv[2]
+	local endTime = CrossArenaTimeCsv[3]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取积分赛开始时间
+function _M.GetJiFenSaiTime()
+	local startTime = CrossArenaTimeCsv[3]
+	local endTime = CrossArenaTimeCsv[4]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取积分赛结果公示时间
+function _M.GetJiFenSaiRsltTime()
+	local startTime = CrossArenaTimeCsv[4]
+	local endTime = CrossArenaTimeCsv[5]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取16进8 准备阶段时间，玩家投票时间
+function _M.Get16ReadyTime()
+	local startTime = CrossArenaTimeCsv[5]
+	local endTime = CrossArenaTimeCsv[6]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取16进8 战斗时间
+function _M.Get16BattleTime()
+	local startTime = CrossArenaTimeCsv[6]
+	local endTime = CrossArenaTimeCsv[7]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取8进4 准备阶段时间
+function _M.Get8ReadyTime()
+	local startTime = CrossArenaTimeCsv[7]
+	local endTime = CrossArenaTimeCsv[8]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取8进4 战斗时间
+function _M.Get8BattleTime()
+	local startTime = CrossArenaTimeCsv[8]
+	local endTime = CrossArenaTimeCsv[9]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取4进2 准备阶段时间
+function _M.Get4ReadyTime()
+	local startTime = CrossArenaTimeCsv[9]
+	local endTime = CrossArenaTimeCsv[10]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取4进2 战斗时间
+function _M.Get4BattleTime()
+	local startTime = CrossArenaTimeCsv[10]
+	local endTime = CrossArenaTimeCsv[11]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取决赛 准备阶段时间
+function _M.GetFinalReadyTime()
+	local startTime = CrossArenaTimeCsv[11]
+	local endTime = CrossArenaTimeCsv[12]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取决赛 战斗时间
+function _M.GetFinalBattleTime()
+	local startTime = CrossArenaTimeCsv[12]
+	local endTime = CrossArenaTimeCsv[13]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--获取决赛 回看时间
+function _M.GetFinalRsltTime()
+	local startTime = CrossArenaTimeCsv[13]
+	local endTime = CrossArenaTimeCsv[14]
+	return _M.State.startTime + startTime, _M.State.startTime + endTime
+end
+
+--
+function _M.IsInArenaTime()
+	local startTime, endTime = _M.GetArenaTime()
+	local serverTime = HeartBeat.ServSecond()
+	return serverTime >= startTime and serverTime <= endTime
+end
+
+--获取实时跨服竞技场阶段时间
+function _M.GetRTArenaStateTime(stage)
+	if not _M.IsInArenaTime() or stage == nil then
+		return 0, 0
+	end
+	if stage == _M.ARENA_STAGE_TYPE.Ready then
+		return _M.GetYuBeiShuaixuanTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.ReadyRslt then
+		return _M.GetYuBeiShuaixuanRsltTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatch then
+		return _M.GetJiFenSaiTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatchRslt then
+		return _M.GetJiFenSaiRsltTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.SixTeenReady then
+		return _M.Get16ReadyTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+		return _M.Get16BattleTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.EightReady then
+		return _M.Get8ReadyTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
+		return _M.Get8BattleTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.FourReady then
+		return _M.Get4ReadyTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
+		return _M.Get4BattleTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalReady then
+		return _M.GetFinalReadyTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
+		return _M.GetFinalBattleTime()
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalRslt then
+		return _M.GetFinalRsltTime()
+	end
+	return 0, 0
+end
+
+--获取积分赛奖励
+function _M.GetScoreMatchReward()
+	local list = {}
+	local csvCrossAren = Csv.CrossArena[_M.State.actId]
+	if csvCrossAren then
+		for k, v in pairs(csvCrossAren.from) do
+			local to = csvCrossAren.to[k]
+			local title = csvCrossAren.rewardTitle[k]
+			local reward = csvCrossAren.reward[k]
+			table.insert(list, {from = v, to = to, title = title, reward = reward})
+		end
+	end
+	return list
+end
+
+--获取淘汰赛奖励
+function _M.GetKnockoutReward()
+	local list = {}
+	local csvCrossAren = Csv.CrossArena[_M.State.actId]
+	if csvCrossAren then
+		table.insert(list, {rank = 1, reward = csvCrossAren.reward1})
+		table.insert(list, {rank = 2, reward = csvCrossAren.reward2})
+		table.insert(list, {rank = 4, reward = csvCrossAren.reward4})
+		table.insert(list, {rank = 8, reward = csvCrossAren.reward8})
+		table.insert(list, {rank = 16, reward = csvCrossAren.reward16})
+	end
+	return list
+end
+
+--投一票需要消耗的钻石数
+function _M.GetVoteCost()
+	local csvCrossAren = Csv.CrossArena[_M.State.actId]
+	if csvCrossAren then
+		return csvCrossAren.voteCost, csvCrossAren.vote
+	end
+	return 0, 0
+end
+
+function _M.SetKnockoutAll(data)
+	_M.KnockoutAll = data
+end
+
+--获取所有淘汰赛数据
+function _M.GetKnockoutAll()
+	return _M.KnockoutAll
+end
+
+--判断自己是否在淘汰赛中 return{是否在淘汰赛，几强被淘汰，是否结束对战}
+function _M.GetIsInKnockout()
+	local playerId = MPlayer.GetId()
+	if _M.KnockoutAll == nil then
+		return false
+	end
+	if _M.KnockoutAll.fight2 then
+		for k, v in pairs(_M.KnockoutAll.fight2) do
+			if v.player1.playerid == playerId then
+				return true, 2, v.player1.vsresult or v.player2.vsresult, v.player1.vsresult
+			end
+			if v.player2.playerid == playerId then
+				return true, 2, v.player1.vsresult or v.player2.vsresult, v.player2.vsresult
+			end
+		end
+	end
+	if _M.KnockoutAll.fight4 then
+		for k, v in pairs(_M.KnockoutAll.fight4) do
+			if v.player1.playerid == playerId then
+				return true, 4, v.player1.vsresult or v.player2.vsresult, v.player1.vsresult
+			elseif v.player2.playerid == playerId then
+				return true, 4, v.player1.vsresult or v.player2.vsresult, v.player2.vsresult
+			end
+		end
+	end
+	if _M.KnockoutAll.fight8 then
+		for k, v in pairs(_M.KnockoutAll.fight8) do
+			if v.player1.playerid == playerId then
+				return true, 8, v.player1.vsresult or v.player2.vsresult, v.player1.vsresult
+			elseif v.player2.playerid == playerId then
+				return true, 8, v.player1.vsresult or v.player2.vsresult, v.player2.vsresult
+			end
+		end
+	end
+	if _M.KnockoutAll.fight16 then
+		for k, v in pairs(_M.KnockoutAll.fight16) do
+			if v.player1.playerid == playerId then
+				return true, 16, v.player1.vsresult or v.player2.vsresult, v.player1.vsresult
+			elseif v.player2.playerid == playerId then
+				return true, 16, v.player1.vsresult or v.player2.vsresult, v.player2.vsresult
+			end
+		end
+	end
+
+	return false
+end
+
+--红点相关做标记：预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+function _M.SaveCacheCrossArenaStartTime()
+	local startTime = _M.State.startTime
+	local oldValue = _M.GetCacheCrossArenaStartTime()
+	if startTime ~= oldValue then
+		_M.CrossArena_Cache_StartTime = startTime
+		local key = "ccrossarena_starttime"..(MPlayer.GetId() or 0)
+		CS.UnityEngine.PlayerPrefs.SetInt(key, startTime)
+	end
+end
+
+--红点相关做标记：预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+function _M.GetCacheCrossArenaStartTime()
+	if _M.CrossArena_Cache_StartTime == nil then
+		local key = "ccrossarena_starttime"..(MPlayer.GetId() or 0)
+		local startTime = CS.UnityEngine.PlayerPrefs.GetInt(key)
+		_M.CrossArena_Cache_StartTime = startTime or 0
+	end
+	return _M.CrossArena_Cache_StartTime
+end
+
+--是否保存过红点标记
+function _M.IsSaveCacheCrossArenaStartTime()
+	local startTime = _M.GetCacheCrossArenaStartTime()
+	return _M.State.startTime == startTime
+end
+
+--红点相关做标记：竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+function _M.SaveCacheCrossArenaStage()
+	local value = os.date("%Y%m%d", HeartBeat.ServSecond())
+	local oldValue = _M.GetCacheCrossArenaStage()
+	if value ~= oldValue then
+		_M.CrossArena_Cache_Stage = value
+		local key = "crossarena_stage"..(MPlayer.GetId() or 0)
+		CS.UnityEngine.PlayerPrefs.SetString(key, value)
+	end
+end
+
+--红点相关做标记：竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
+function _M.GetCacheCrossArenaStage()
+	if _M.CrossArena_Cache_Stage == nil then
+		local key = "crossarena_stage"..(MPlayer.GetId() or 0)
+		local stage = CS.UnityEngine.PlayerPrefs.GetString(key)
+		_M.CrossArena_Cache_Stage = stage or ""
+	end
+	return _M.CrossArena_Cache_Stage
+end
+
+--是否保存过红点标记
+function _M.IsSaveCacheCrossArenaStage()
+	local oldValue = _M.GetCacheCrossArenaStage()
+	local neValue = os.date("%Y%m%d", HeartBeat.ServSecond())
+	return neValue == oldValue
+end
+
+--获取当前应该播放第几场直播的Index
+--16强，直播：一共播放8场比赛，轮流直播
+function _M.GetBattleIndex(CurStage)
+	--当前淘汰赛中，该播放第几场直播的Index
+	local index = -1
+	--当前比赛中是否到了播放战斗结果界面
+	local isShowBattleRslt = false
+	local data = _M.GetKnockoutAll()
+	if data == nil then
+		return index, isShowBattleRslt, 1
+	end
+	local constCsv = Csv.Const(148)
+	--直播界面展示时间
+	local battleShowTime = constCsv[1] --25
+	--直播完后结果展示时间
+	local battleRsltTime = constCsv[2] --5
+	local serverTime = HeartBeat.ServSecond()
+	local startTime, endTime = _M.GetRTArenaStateTime(CurStage)
+	local space = endTime - startTime
+
+	--print(CurStage, "_____________", serverTime, startTime, endTime)
+
+	if space > 0 then
+		local fightdetail = nil
+		if CurStage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+			fightdetail = data.fight16
+		elseif CurStage == _M.ARENA_STAGE_TYPE.EightBattle then
+			fightdetail = data.fight8
+		elseif CurStage == _M.ARENA_STAGE_TYPE.FourBattle then
+			fightdetail = data.fight4
+		elseif CurStage == _M.ARENA_STAGE_TYPE.FinalBattle then
+			fightdetail = data.fight2
+		end
+		if fightdetail ~= nil then
+			for i = #fightdetail, 1, -1 do
+				local oneStartTime = startTime + (i - 1) * (battleShowTime + battleRsltTime)
+
+				if serverTime >= oneStartTime then
+					if serverTime >= oneStartTime + battleShowTime then
+						return i, true, 0
+					end
+					return i, false, 1 - ((serverTime - oneStartTime) / battleShowTime)
+				end
+			end
+			return 1, false, 1
+		end		
+	end
+	return index, isShowBattleRslt, 1
+end
+
+function _M.GetCurFightDetail(stage)
+	local fightdetail = nil
+	local data = _M.GetKnockoutAll()
+	if data then
+		if stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+			fightdetail = data.fight16
+		elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
+			fightdetail = data.fight8
+		elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
+			fightdetail = data.fight4
+		elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
+			fightdetail = data.fight2
+		end
+	end
+	return fightdetail
+end
+
+function _M.GetStageNum(stage)
+	if stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+		return 16
+	elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
+		return 8
+	elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
+		return 4
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
+		return 2
+	end
+	return 0
+end
+
+function _M.GetLiveTitle(stage, index)
+	if stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+		return Csv.Text("cross_arena_liveTitle", {index = 16, num = index})
+	elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
+		return Csv.Text("cross_arena_liveTitle", {index = 8, num = index})
+	elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
+		return Csv.Text("cross_arena_liveTitle", {index = 4, num = index})
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
+		return Csv.Text("cross_arena_liveTitle1")
+	end
+	return ""
+end
+
+function _M.GetName(nameStr)
+	local ret1 = string.match(nameStr, "S%d+.") or ""
+	return ret1, string.gsub(nameStr,ret1,"")
+end
+
+function _M.GetPlayerName(nameStr)
+	local ret1 = string.match(nameStr, "S%d+.") or ""
+	return string.gsub(nameStr,ret1,"")
+end
+
+function _M.GetStageUpdateTimeText(stage, serverTime)
+	local timeStr = "00:00:00"
+	local todayPassed = serverTime - LuaUtil.TodayStartTime(serverTime)
+	local isWaitGetReward = todayPassed > Csv.Const(151)
+	if stage == _M.ARENA_STAGE_TYPE.SixTeenReady then
+		local startTime, endTime = _M.Get16ReadyTime()
+		local rs = endTime - serverTime
+		if rs > 0 then
+			timeStr = LuaUtil.GetTimeHMS(rs)
+		end
+		return Csv.Text("cross_arena_updateTime1", {num = timeStr})
+	elseif stage == _M.ARENA_STAGE_TYPE.SixTeenBattle or stage == _M.ARENA_STAGE_TYPE.EightReady then
+		local startTime, endTime = _M.Get8ReadyTime()
+		local rs = endTime - serverTime
+		if rs > 0 then
+			if isWaitGetReward then
+				return Csv.Text("cross_arena_updateTime2", {num = LuaUtil.GetTimeHMS(86400 - todayPassed)})
+			end
+
+			timeStr = LuaUtil.GetTimeHMS(rs)
+		end
+		return Csv.Text("cross_arena_updateTime3", {num = timeStr})
+	elseif stage == _M.ARENA_STAGE_TYPE.EightBattle or stage == _M.ARENA_STAGE_TYPE.FourReady then
+		local startTime, endTime = _M.Get4ReadyTime()
+		local rs = endTime - serverTime
+		if rs > 0 then
+			if isWaitGetReward then
+				return Csv.Text("cross_arena_updateTime4", {num = LuaUtil.GetTimeHMS(86400 - todayPassed)})
+			end
+
+			timeStr = LuaUtil.GetTimeHMS(rs)
+		end
+		return Csv.Text("cross_arena_updateTime5", {num = timeStr})
+	elseif stage == _M.ARENA_STAGE_TYPE.FourBattle or stage == _M.ARENA_STAGE_TYPE.FinalReady then
+		local startTime, endTime = _M.GetFinalReadyTime()
+		local rs = endTime - serverTime
+		if rs > 0 then
+			if isWaitGetReward then
+				return Csv.Text("cross_arena_updateTime6", {num = LuaUtil.GetTimeHMS(86400 - todayPassed)})
+			end
+
+			timeStr = LuaUtil.GetTimeHMS(rs)
+		end
+		return Csv.Text("cross_arena_updateTime7", {num = timeStr})
+	elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle or stage == _M.ARENA_STAGE_TYPE.FinalRslt then
+		local startTime, endTime = _M.GetFinalRsltTime()
+		local rs = endTime - serverTime
+		if rs > 0 then
+			timeStr = LuaUtil.GetTimeHMS(rs)
+		end
+		return Csv.Text("cross_arena_updateTime8", {num = timeStr})
+	end
+	return ""
+end
+
+return _M

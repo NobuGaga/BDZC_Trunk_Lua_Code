@@ -19,6 +19,7 @@ local Linear = CS.DG.Tweening.Ease.Linear
 
 ----------------------常量定义--------------------------
 local GTE_EFFECT_ID = 5
+local SHARE_REWARD = Csv.Const(139)
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -310,6 +311,11 @@ function _M:OnCreate()
 	local line 
 	local taskMoudle
 	for _,item in pairs(taskInfos) do
+		if (item.state == MQuest.State.Finish and not self.isCreateShare and MQuest.GotShareRewardTime ~= MQuest.MAX_SHARE_TIME) or
+			(MQuest.IsCanGetShareReward() and not self.isCreateShare) then
+			_P.CreateShareItem(self)
+			self.isCreateShare = true
+		end
 		local k = item.questid
 
 		line = Csv.DailyQuest[k]
@@ -392,6 +398,10 @@ function _M:OnCreate()
 		end
 	end
 
+	if not self.isCreateShare then
+		_P.CreateShareItem(self)
+	end
+
 	if GameSetting.IsiOSCommit then
 		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iOSBg.name, "Task"),
 												iOSImage.iOSBg.width, iOSImage.iOSBg.height,
@@ -404,6 +414,125 @@ function _M:OnCreate()
 														end
 													end
 												end, iOSImage.iOSBg.sliceVector4)
+	end
+end
+
+function _P.CreateShareItem(self)
+	if not MMain.FuncIsOpen(Define.SysId.Share) then
+		return
+	end
+	local taskParent = self.Moudle:Get("content")
+	local taskMoudle = self:CreateMoudle(taskParent, "M_Daily_TaskItem")
+	taskMoudle:Get("img").Text = Csv.Text("quest_share")
+	taskMoudle:Get("title").Text = Csv.Text("quest_share")
+	taskMoudle:Get("target").Text = Csv.Text("quest_state")
+	taskMoudle:Get("rewardTitle").Text = Csv.Text("quest_reward")		
+
+	local rewardText = {}
+	if SHARE_REWARD then
+		for _, rewardData in pairs(SHARE_REWARD) do
+			table.insert(rewardText, string.format("%s+%d", Csv.Item[rewardData[1]].name, rewardData[2]))
+		end
+	end
+	if #rewardText > 0 then
+		local tmp = rewardText[1]
+		if #rewardText > 1 then
+			for i=2,#rewardText do
+				tmp = string.format("%s,%s", tmp, rewardText[i])
+			end
+		end
+		taskMoudle:Get("rewardText").Text = tmp
+	end
+
+	taskMoudle:Get("C_text").Text = Csv.Text("quest_get")
+	taskMoudle:Get("C_text_0").Text = Csv.Text("quest_go")
+
+	local info = 
+	{
+		state = MQuest.State.Doing,
+		moudle = taskMoudle,
+		targetText = taskMoudle:Get("targetText"),
+		haveGet = taskMoudle:Get("haveGet"),
+		GetBtn = taskMoudle:Get("GetBtn"),
+		GoBtn = taskMoudle:Get("GoBtn"),
+		BtnRect = taskMoudle:Get("BtnRect"),
+	}
+	self.shareItemData = info
+	info.GetBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnSharePress(self)
+	end, nil, 0.9)	
+	info.GoBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnSharePress(self)
+	end, nil, 0.9)		
+	_P.RefreshShareItemBtnState(self)
+
+	if GameSetting.IsiOSCommit then
+		CS.Plugin.LoadStreamingAssets.LoadSpriteWithBorder(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iOSItemBg.name, "Task"),
+										iOSImage.iOSItemBg.width, iOSImage.iOSItemBg.height,
+										function (sp)
+											if taskMoudle then
+												local node = taskMoudle:Get(iOSImage.iOSItemBg.name)
+												if node and sp then
+													node.Sprite = sp
+													node.Activity = true
+												end
+											end
+										end, iOSImage.iOSItemBg.sliceVector4)
+										
+		CS.Plugin.LoadStreamingAssets.LoadSprite(CS.GameManager.Inst, GameSetting.GetPngStreamAssetsPath(iOSImage.iconBg.name, "Task"),
+										iOSImage.iconBg.width, iOSImage.iconBg.height,
+										function (sp)
+											if taskMoudle then
+												local node = taskMoudle:Get(iOSImage.iconBg.name)
+												if node and sp then
+													node.Sprite = sp
+												end
+											end
+										end)
+										
+	end
+end
+
+function _P.OnSharePress(self)
+	if MQuest.IsCanGetShareReward() then
+		CQuest.GetShareReward(true)
+	else
+		WindowOpen.Open(Define.SysId.Airport)
+	end
+end
+
+function _P.RefreshShareItemBtnState(self)
+	self.shareItemData.targetText.Text = Csv.Text("quest_pro", {pro = MQuest.ShareTime, max = MQuest.MAX_SHARE_TIME})
+	local isCanGet = MQuest.IsCanGetShareReward()
+	self.shareItemData.haveGet.Activity = MQuest.GotShareRewardTime > 0
+	self.shareItemData.GetBtn.Activity = isCanGet
+	self.shareItemData.GoBtn.Activity = MQuest.GotShareRewardTime == 0 and not isCanGet 
+end
+
+function _R.OnRefreshShareView(self)
+	if not MMain.FuncIsOpen(Define.SysId.Share) then
+		return
+	end
+	if SHARE_REWARD == nil then
+		return
+	end
+	for index, item in pairs(SHARE_REWARD) do
+		CCommon.ShowFlyItem(self._RootNode, item[1], item[2], index * 0.6, self.shareItemData.BtnRect.RootCanvasPos)
+		SoundMgr.Play(11000)
+	end
+	if MQuest.GotShareRewardTime == MQuest.MAX_SHARE_TIME then
+		self.shareItemData.GetBtn.Activity = false
+		local effect = CCommon.CreateEffect(self.shareItemData.BtnRect, GTE_EFFECT_ID, nil, function( ... )	
+			if effect then
+				effect:Destroy()
+			end
+			_P.RefreshShareItemBtnState(self)
+		end)
+		SoundMgr.PlaySystem(10004)
+	else
+		_P.RefreshShareItemBtnState(self)
 	end
 end
 

@@ -83,7 +83,8 @@ local DressIconOffset =
 local ClickSoundId =
 {
 	[Define.SysId.Aircraft] = 10031,
-	[Define.SysId.Patrol] = 10032
+	[Define.SysId.Patrol] = 10032,
+	[Define.SysId.BusinessMap] = 10032,
 }
 
 function _P.RefreshFunc(self, moudle)
@@ -438,6 +439,7 @@ function _M:OnCreate()
 	-- homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = true,actor = moudle:Get("ActorGirl3")}
 	homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = false,actor = moudle:Get("ActorGirl3"),redpoint = moudle:Get("QP_4")}
 	homeBtns[Define.SysId.Patrol] = {btn = moudle:Get("Projector1"),btnClick = moudle:Get("Projector1")}
+	homeBtns[Define.SysId.BusinessMap] = {btn = moudle:Get("Shapan"),btnClick = moudle:Get("Shapan")}
 	homeBtns[Define.SysId.Girl_Baby] = {btn = moudle:Get("Child"),btnClick = moudle:Get("Child_Click"),redpoint = moudle:Get("QP_2")}
 	local car = moudle:Get("Car")
 	homeBtns[Define.SysId.Car] = {btn = car,btnClick = moudle:Get("Car_Click"),canChange = true,actor = moudle:Get("ActorCar"),redpoint = moudle:Get("red1"),scale = moudle:Get("scale2"),tips = moudle:Get("tip2")}
@@ -491,9 +493,11 @@ function _M:OnCreate()
 		local moudle = self.Moudle
 		if moudle ~= nil then
 			local funcCsv = Csv.Func[funcId]
-			_P.RefreshFunc(self,moudle)
-			if funcId == Define.SysId.Girl then
-				CGirl.CheckUnlockRedpoint()
+			if funcCsv ~= nil then
+				_P.RefreshFunc(self,moudle)
+				if funcId == Define.SysId.Girl then
+					CGirl.CheckUnlockRedpoint()
+				end
 			end
 		end
 	end)
@@ -575,6 +579,7 @@ function _M:OnCreate()
 	moudle:Get("GN_Text8").Text = Csv.Text("home_btn13")
 	moudle:Get("GN_Text9").Text = Csv.Text("home_btn14")
 	moudle:Get("GN_Text10").Text = Csv.Text("home_btn16")
+	moudle:Get("GN_Text11").Text = Csv.Text("home_btn17")
 
 	moudle:Get("text1_0").Text = Csv.Text("home_tip5")
 	if MPlayer.GetSex() == 1 then
@@ -621,7 +626,7 @@ function _M:OnCreate()
 
 	CCommon.CreateEffect(videoActor,10031)
 	self:RegistRedpoint(videoActor, Define.SysId.Patrol)
-
+	self:RegistRedpoint(moudle:Get("red9"), Define.SysId.BusinessMap)
 	CCommon.CreateEffect(penquanActor,10149)
 
 	local shuActor = moudle:Get("ShuActor")

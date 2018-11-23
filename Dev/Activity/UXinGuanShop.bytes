@@ -300,8 +300,9 @@ end
 function _R.OnBuyCallBack(self, data)
 	local index = data.index
 	local updateItem = self.mRawTableItems[index]
+	if updateItem == nil then return end
 	local itemModule = updateItem.module
-	if updateItem == nil or itemModule == nil then return end
+	if itemModule == nil then return end
 
 	local updateData = self.mData.shopList[index]
 	if updateData then updateData.buyCount = data.buyCount end

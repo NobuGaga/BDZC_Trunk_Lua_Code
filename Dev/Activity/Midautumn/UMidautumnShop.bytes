@@ -1,0 +1,171 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.WindowMgr.WindowType.bytes#_M]
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Shop_Active"
+local ItemName = "M_Shop_Active_Item"
+
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyHeight = 69
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+function _M:Destroy()
+	if self.module then
+		self.module:Destroy()
+	end
+end
+
+function _M:ctor(parent, actId)
+	if parent == nil or actId == nil then
+		return
+	end
+
+	self.actId = actId
+	self._RootNode = parent
+	self.module = JGuiManager.GetMoudle(self._RootNode, MoudleName, WindowType.UI, 0)
+	self.module:Get("textTips").Text = Csv.Text("shop_festival")
+	self.textTime = self.module:Get("textTime")
+	self.poster = self.module:Get("poster")
+	self.content = self.module:Get("content")
+	self.itemCache = {}
+
+	self:UpdateViewData()
+end
+
+--判断是否启动倒计时
+function _P.JudgeToCounterTime(self)
+	local isFinish = _P.RefreshTimeText(self) 
+	if isFinish and self.timer then
+		self.timer:Destroy()
+		self.timer = nil
+	elseif not isFinish and self.timer == nil then
+		self.timer = self.textTime:AddOnUpdate(function() _P.JudgeToCounterTime(self) end, nil, 1)
+	end
+end
+
+--倒计商店刷新商品时间标签时间
+function _P.RefreshTimeText(self)
+	local time = self.actData.refreshTime - HeartBeat.ServSecond()
+	local isFinish = time < 0
+	if isFinish then
+		time = 0
+	end
+	self.textTime.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("shop_festival_time"))
+	return isFinish
+end
+
+function _P.CreateItem(self, data)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	itemMoudle:Get("textTitle").Text = data.name
+	itemMoudle:Get("textTips").Text = Csv.Text("shop_festival_price")
+	itemMoudle:Get("textOrigin").Text = data.original
+	itemMoudle:Get("textReal").Text = data.price
+	_P.CreateItemReward(self, itemMoudle, data.itemList)
+
+	local cacheData = {}
+	cacheData.textBuyLimit = itemMoudle:Get("textBuyLimit")
+	cacheData.textBuyLimit.Text = Csv.Text("shop_festival_limit", {num = data.buyCount})
+	cacheData.effectNode = itemMoudle:Get("effectNode")
+	cacheData.itemList = data.itemList
+	cacheData.limit = data.limit
+	cacheData.buyCount = data.buyCount
+	cacheData.buyFlag = itemMoudle:Get("buyFlag")
+
+	itemMoudle:Get("textBtnBuy").Text = Csv.Text("shop_buy")
+	cacheData.btnBuy = itemMoudle:Get("btnBuy")
+	cacheData.btnBuy:AddOnButton(function()
+		SoundMgr.Play(10002)
+		local itemData = self.itemCache[data.giftId]
+		if itemData.buyCount <= 0 then
+			CCommon.ShowRight(Csv.Text("xinguan_shop_getMax"))
+		else
+			CActivity.GetRewardReq(self.actId, data.giftId)
+		end
+	end)
+
+	self.itemCache[data.giftId] = cacheData
+end
+
+function _P.CreateItemReward(self, itemMoudle, itemList)
+	local content = itemMoudle:Get("content")
+	if self.itemFit == nil or self.itemContentCount == nil then
+		local layout = content:AddGridLayoutGroup()
+		self.itemFit = layout.cellSize.y + layout.spacing.y
+		self.itemContentCount = layout.constraintCount
+	end
+	for _, rewardData in ipairs(itemList) do
+		CCommon.CreateItem(content, rewardData.itemID, CCommon.ShowItemTips, {num = rewardData.itemNum}, Define.SysId.MidAFestival)
+	end
+	local row, rest = math.modf(#itemList / self.itemContentCount)
+	if rest > 0 then
+		row = row + 1
+	end
+	if row > 1 then
+		local size = itemMoudle.SelfRect.SizeDelta
+		itemMoudle.SelfRect.SizeDelta = Vector2(size.x, size.y + (row - 1) * self.itemFit)
+	end
+end
+
+function _P.RefreshItemBuyButton(self, giftId)
+	local itemData = self.itemCache[giftId] 
+	local isLimitBuy = itemData.buyCount <= 0
+	itemData.btnBuy.Activity = not isLimitBuy
+	itemData.buyFlag.Activity = isLimitBuy
+end
+
+function _M:UpdateViewData()
+	self.actData = MActivity.GetFromId(self.actId)
+	self.poster.SpriteName = self.actData.viewBg
+	_P.JudgeToCounterTime(self)
+	self.content:DestroyChildren()
+	for _, data in ipairs(self.actData.giftList) do
+		_P.CreateItem(self, data)
+		-- _P.RefreshItemBuyButton(self, data.giftId)
+	end
+end
+
+function _M:OnUpdateViewState(data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		CCommon.ShowRight(Csv.Text("shop_festival_refresh"))
+	end
+end
+
+function _M:GetRewardBack(data)
+	local itemData = self.itemCache[data.index]
+	for index, rewardData in ipairs(itemData.itemList) do 
+		CCommon.ShowFlyItem(itemData.effectNode, rewardData.itemID, rewardData.itemNum, index * RewardFlyDelay, Vector2(0, RewardFlyHeight), true)
+	end
+end
+
+function _M:OnUpdatePro(data)
+	local itemData = self.itemCache[data.index]
+	itemData.buyCount = itemData.limit - data.pro
+	itemData.textBuyLimit.Text = Csv.Text("shop_festival_limit", {num = itemData.buyCount})
+	-- _P.RefreshItemBuyButton(self, data.index)
+end
+
+return _M

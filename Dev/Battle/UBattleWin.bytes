@@ -9,6 +9,14 @@ local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MBattle = JRequire "Dev.Battle.MBattle"
+--@RefType [Dev.Main.MMain.bytes#_M]
+local MMain = JRequire "Dev.Main.MMain"
+--@RefType [SDK.SDKMgr.bytes#_M]
+local SDKMgr = JRequire "SDK.SDKMgr"
+--@RefType [SDK.SDKShareType.bytes#_M]
+local SDKShareType = JRequire "SDK.SDKShareType"
+local MBag = JRequire "Dev.Bag.MBag"
+local CTrigger = JRequire "Dev.Main.CTrigger"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -28,14 +36,15 @@ function _M:EndDestroy( ... )
 end
 
 --界面构建
-function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattle, ...)
+function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattle, onAutoBattle, ...)
 	self.OnCloseCall = onClose
 	self.OnCloseCallParam = {...}
 	self.isSeckillBattle = isSeckillBattle
+	self.OnAutoBattle = onAutoBattle
 
 	self._EventNode:AddOnClick(function()
 		SoundMgr.Play(10001)
-		self:Destroy()
+		_P.OnCloseView(self)
 	end, nil)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_Success")
 	local itemRoot = moudle:Get("Items")
@@ -46,6 +55,17 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 	end, nil, 1)
 
 	local csv = Csv.Battle[battleId]
+	self.mCsvBattle = csv
+
+	local backBtn = moudle:Get("C_Btn_a")
+	backBtn:AddOnButton(function( ... )
+		SoundMgr.Play(10001)
+		if self.mCsvBattle.trigger ~= nil then
+			CTrigger.Trigger(self.mCsvBattle.trigger)
+		end
+		self:Destroy()
+	end, nil, 0.9)
+	moudle:Get("C_text_0").Text = Csv.Text("battle_back")
 
 	-- 播放战斗胜利特效
 	SoundMgr.PlayNonStopUI(10014)
@@ -86,6 +106,8 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 			str = Csv.Text("battle_win2", {fameAdd = csv.fameAdd})
 		end
 		bossRewardText.Text = str
+		LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close2"))
+		backBtn.Activity = false
 	else -- 普通关卡胜利
 		local relationText = moudle:Get("RelationText")
 		local moneyText = moudle:Get("SaveGoldText")
@@ -93,7 +115,7 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 		
 		relationText.Text = Csv.Text("battle_relation")
 
-		local imageName = _P.GetBattleLevel(self, csv.Courage, ownPower)
+		local imageName,isConformAuto = _P.GetBattleLevel(self, csv.Courage, ownPower)
 		levelImage.Activity = false
 		local effect = CCommon.CreateEffect(moudle:Get("Effect"), GTE_EFFECT_ID, nil, function( ... )
 			if effect ~= nil then
@@ -110,14 +132,77 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 			local totalPart = MBattle.GetPassNum()
 			local totalMoney = MBattle.GetAllNum()
 			moneyText.Text = Csv.Text("battle_seckillShow", {partNum = totalPart, totalNum = LuaUtil.NumberFormat(totalMoney)}) .. _P.GetSaveStr(MBattle.GetAllSeckillMoney())
+			LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close2"))
+			backBtn.Activity = false
 		else
 			moneyText.Text = _P.GetSaveMoneyNum(csv.gold, hurtNum)
+			backBtn.Activity = true
+
+			self.Times = tonumber(Csv.Const(20171)[1])
+			local isLastBattle = (battleId % 10 >= 8) -- 是否是最后一关
+			self.AutoData = {isConformAuto = isConformAuto, isLastBattle = isLastBattle}
+
+			local autoText = moudle:Get("Tips11")
+			self.AutoText = autoText
+			self.AutoBattleTimer = autoText:AddOnUpdate(function()
+				_P.OnUpdateTime(self)
+			end, nil, 1)
+
+			local warnTipText = moudle:Get("Tips22")
+			if isConformAuto and not isLastBattle then
+				warnTipText.Activity = false
+				autoText.Text = Csv.Text("battle_auto_battle", {time = self.Times})
+				LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("battle_auto_tip"))
+			else
+				if isLastBattle then
+					warnTipText.Activity = false
+				else
+					warnTipText.Activity = true
+					local moneyNum = MBag.GetItemNum(Define.AssetsType.Soldier)
+					if moneyNum <= 0 then
+						warnTipText.Text = Csv.Text("battle_moneyNone")
+					else
+						warnTipText.Text = Csv.Text("battle_deficiency")
+					end
+				end
+				autoText.Text = Csv.Text("battle_auto_close", {time = self.Times})
+				LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close2"))
+			end
 		end
 	end
 
-	moudle:Get("Tips11").Text = Csv.Text("")
-	
-	LuaUtil.TextAddThreePoint(moudle:Get("closeText"), Csv.Text("common_close2"))
+	local FxBtn = moudle:Get("FxBtn")
+	if MMain.FuncIsOpen(Define.SysId.Share) then
+		FxBtn.Activity = true
+		FxBtn:AddOnButton(function()
+			SDKMgr.ReqShare(SDKShareType.WinBattle)
+		end)
+		moudle:Get("FxBtnText").Text = Csv.Text("quest_share_btn")
+	else
+		FxBtn.Activity = false
+	end
+end
+
+
+function _P.ClearTimer(self)
+	if self.AutoBattleTimer ~= nil then
+		self.AutoBattleTimer:Destroy()
+		self.AutoBattleTimer = nil
+	end
+end
+
+function _P.OnUpdateTime(self)
+	if self.Times > 0 then
+		if self.AutoData and self.AutoData.isConformAuto and not self.AutoData.isLastBattle then
+			self.AutoText.Text = Csv.Text("battle_auto_battle", {time = self.Times})
+		else
+			self.AutoText.Text = Csv.Text("battle_auto_close", {time = self.Times})
+		end
+	else
+		_P.ClearTimer(self)
+		_P.OnCloseView(self)
+	end
+	self.Times = self.Times - 1
 end
 
 
@@ -134,19 +219,25 @@ function _P.GetBattleLevel(self, enemyPower, ownPower)
 	end
 	
 	local levelNameStr = ""
+	local isConformAuto = false
 	if enemyPower * 3 < ownPower then
 		levelNameStr = "gk_025"
+		isConformAuto = true
 	elseif enemyPower * 1.5 < ownPower and ownPower <= enemyPower * 3 then
 		levelNameStr = "gk_026"
+		isConformAuto = true
 	elseif enemyPower < ownPower and ownPower <= enemyPower * 1.5 then
 		levelNameStr = "gk_027"
+		isConformAuto = true
 	elseif enemyPower * 0.5 < ownPower and ownPower <= enemyPower then
 		levelNameStr = "gk_024"
+		isConformAuto = false
 	elseif ownPower <= enemyPower * 0.5 then
 		levelNameStr = "gk_023"
+		isConformAuto = false
 	end
 
-	return levelNameStr
+	return levelNameStr,isConformAuto
 end
 
 
@@ -170,6 +261,22 @@ function _P.GetSaveStr(offsetNum)
 	end
 
 	return saveStr
+end
+
+
+-- 倒计时时间到，或者点击任意点关闭
+function _P.OnCloseView(self)
+	if self.mCsvBattle.trigger == nil then
+		if self.AutoData and self.AutoData.isConformAuto and not self.AutoData.isLastBattle then
+			-- 自动进入下一关
+			if self.OnAutoBattle then
+				self.OnAutoBattle()
+			end
+		end
+	else
+		CTrigger.Trigger(self.mCsvBattle.trigger)
+	end
+	self:Destroy()
 end
 
 

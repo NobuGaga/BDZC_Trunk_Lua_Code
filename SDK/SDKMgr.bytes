@@ -6,6 +6,10 @@ local luaUtil = JRequire "Libs.LuaUtil"
 local MLogin = JRequire "Dev.Login.MLogin"
 --@RefType [Dev.Player.MPlayer.bytes#_M]
 local MPlayer = JRequire "Dev.Player.MPlayer"
+--@RefType [Dev.Recharge.MRecharge.bytes#_M]
+local MRecharge = JRequire "Dev.Recharge.MRecharge"
+--@RefType [Dev.Quest.CQuest.bytes#_M]
+local CQuest
 --@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
 
@@ -57,21 +61,21 @@ end
 ------------------------------请求接口------------------------------
 --登录请求
 function _M.ReqLogin()
-	CS.Utility.LogPoint.LogPost(16, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(16, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqLogin()
 end
 
 --登录请求
 function _M.ReqSwitchAccount()
-	CS.Utility.LogPoint.LogPost(17, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(17, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqSwitchAccount()
 end
 
 --登出请求
 function _M.ReqLogout()
-	CS.Utility.LogPoint.LogPost(18, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
-	_M.SdkObj.ReqLogout()
+	GameSetting.LogPoint(18, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	MLogin.Status = MLogin.ELoginStatus.NotLogin
+	_M.SdkObj.ReqLogout()
 end
 
 --收集数据
@@ -80,7 +84,7 @@ function _M.ReqCollectData(type, roleID, roleName, roleLevel)
 	   or nil == MLogin.SelectServer.name then
 		return
 	end
-	CS.Utility.LogPoint.LogPost(19, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(19, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	if nil == roleID then
 		roleID = MPlayer.GetId()
 	end
@@ -105,12 +109,21 @@ function _M.ReqPay(csvID, sdkProductId, price, gold, productName, param, callbac
 	if nil ~= callback then
 		_M.PayCallBack = callback
 	end
-	CS.Utility.LogPoint.LogPost(12, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
-	_M.SdkObj.ReqPay(csvID, sdkProductId, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MLogin.SelectServer.id, MLogin.SelectServer.name, MLogin.GetAccountSpid(), GameSetting.Sbid, param)
+	sdkProductId = MRecharge.GetCsvRechargeSdkProductId(csvID)
+	GameSetting.LogPoint(12, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	_M.SdkObj.ReqPay(csvID, sdkProductId, price, gold, productName, num, MPlayer.GetId(), MPlayer.GetName(), MPlayer.GetServerId(), MLogin.SelectServer.name, MLogin.GetAccountSpid(), GameSetting.Sbid, param)
+end
+
+function _M.ReqEnterUserCenter()
+	_M.SdkObj.ReqEnterUserCenter()
+end
+
+function _M.ReqShare(type)
+	_M.SdkObj.ReqShare(type)
 end
 
 function _M.ReqExit()
-	CS.Utility.LogPoint.LogPost(20, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(20, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.ReqExit()
 end
 
@@ -206,23 +219,27 @@ end
 --Http请求获取服务器里列表
 function _M.GetServerList()
 	MLogin.ServerList = {}
+	MLogin.LoginedServerList = {}
+
 	local cached_test_serverlist = CS.Loader.LoadAccessor.ReadText("test_serverlist.txt")
 	if cached_test_serverlist ~= nil and cached_test_serverlis ~= "" then
 		print("test_serverlist:", cached_test_serverlist)
 		local retTable = rapidjson.decode(cached_test_serverlist)
 		if nil ~= retTable and nil ~= retTable.data and nil ~= retTable.data.ServerGroup then
 			MLogin.ServerList = retTable.data.ServerGroup
+			MLogin.LoginedServerList = retTable.data.LastServer
 			_P.InitServerList()
 		else
 			_P.OnGetServerlistFail()
 			error("test_serverlist error!!!")
 		end
 	else
-		CS.Utility.LogPoint.LogPost(5, 1, luaUtil.TransToYearMonthDayHMS(os.time()), GameSetting.ServListUrl)
+		GameSetting.LogPoint(5, 1, luaUtil.TransToYearMonthDayHMS(os.time()), GameSetting.ServListUrl)
 		local session = HttpSession(CS.Utility.HttpRequestType.Post, GameSetting.ServListUrl)
 		session:AppendParam("spid", GameSetting.Spid)
 		session:AppendParam("sbid", GameSetting.Sbid)
 		session:AppendParam("areaid", GameSetting.AreaId or "")
+		session:AppendParam("account", MLogin.GetDevelopAccount())
 		if GameSetting.IsiOSCommit and GameSetting.initServerIdList ~= nil then
 			session:AppendParam("serverId", GameSetting.initServerIdList)
 		end
@@ -236,6 +253,8 @@ function _M.GetServerList()
 					if 0 == state then
 						if nil ~= retTable.data and nil ~= retTable.data.ServerGroup then
 							MLogin.ServerList = retTable.data.ServerGroup
+							MLogin.LoginedServerList = retTable.data.LastServer
+
 							if MLogin.ServerList then
 								for k,v in ipairs(MLogin.ServerList) do
 									if v.server then
@@ -245,23 +264,29 @@ function _M.GetServerList()
 									end
 								end
 							end
+
+							if MLogin.LoginedServerList then
+								for k,v in pairs(MLogin.LoginedServerList) do
+									MLogin.LoginedServerList[k] = tonumber(v)
+								end
+							end
 							local length = luaUtil.StringLenght(param1)
-							CS.Utility.LogPoint.LogPost(5, 2, luaUtil.TransToYearMonthDayHMS(os.time()), tostring(length))
+							GameSetting.LogPoint(5, 2, luaUtil.TransToYearMonthDayHMS(os.time()), tostring(length))
 							_P.InitServerList()
 						end
 					else
 						_P.OnGetServerlistFail()
-						CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), retTable.errormsg)
+						GameSetting.LogPoint(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), retTable.errormsg)
 						error("get server list error, state = " .. state .. "  errormsg = " .. retTable.errormsg)
 					end
 				else
 					_P.OnGetServerlistFail()
-					CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
+					GameSetting.LogPoint(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
 					error("GetServerList --> HttpSession retTable is empty!! url:" .. GameSetting.ServListUrl .. ", info:" .. param2)
 				end
 			else
 				_P.OnGetServerlistFail()
-				CS.Utility.LogPoint.LogPost(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
+				GameSetting.LogPoint(5, 3, luaUtil.TransToYearMonthDayHMS(os.time()), param2)
 				error("GetServerList --> HttpSession error!! url:" .. GameSetting.ServListUrl .. ", info:" .. param2)
 			end
 		end)
@@ -272,14 +297,19 @@ end
 ------------------------------回调接口------------------------------
 --登录回调
 function _R.OnSDKLogin(jsonStr)
-	CS.Utility.LogPoint.LogPost(16, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(16, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.OnLogin(jsonStr)
 	_M.GetServerList()
 end
 
+--登录请求验证
+function _R.OnSDKLoginHttpRequest(jsonStr)
+	_M.SdkObj.OnSDKLoginHttpRequest(jsonStr)
+end
+
 --切换账号回调
 function _R.OnSDKSwitchAccount(jsonStr)
-	CS.Utility.LogPoint.LogPost(17, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(17, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.ReqCollectData(SDKCollectType.ExitRole)
 	_M.SdkObj.OnSwitchAccount(jsonStr)
 	MLogin.Status = MLogin.ELoginStatus.NotLogin
@@ -289,15 +319,20 @@ end
 
 --登出账号回调
 function _R.OnSDKLogout()
-	CS.Utility.LogPoint.LogPost(18, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(18, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.ReqCollectData(SDKCollectType.ExitRole)
 	MLogin.Status = MLogin.ELoginStatus.NotLogin
 	GameSetting.ToReLogin(GameSetting.ReLoginType.ToLogin)
 end
 
+--登出账号失败回调
+function _R.OnSDKLogoutFail()
+	MLogin.Status = MLogin.ELoginStatus.Login
+end
+
 --支付回调
 function _R.OnSDKPay(jsonStr)
-	CS.Utility.LogPoint.LogPost(13, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(13, 1, luaUtil.TransToYearMonthDayHMS(os.time()))
 	_M.SdkObj.OnPay(jsonStr)
 	if nil ~= _M.PayCallBack then
 		_M.PayCallBack(jsonStr)
@@ -305,9 +340,17 @@ function _R.OnSDKPay(jsonStr)
 	end
 end
 
+function _R.OnSDKShareSuccess(jsonStr)
+	_M.SdkObj.OnSDKShareSuccess(jsonStr)
+	if CQuest == nil then
+		CQuest = JRequire "Dev.Quest.CQuest"
+	end
+	CQuest.GetShareReward(false)
+end
+
 --退出游戏回调
 function _R.OnSDKExit()
-	CS.Utility.LogPoint.LogPost(20, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
+	GameSetting.LogPoint(20, 2, luaUtil.TransToYearMonthDayHMS(os.time()))
 	GameSetting.OnGameEscapePress()
 end
 
@@ -319,8 +362,13 @@ _P.CreateSdk =
 		return BaseSDK.new()
 	end,
 	[Define.PlatformType.AndroidPhone] = function(spid)
-		if Define.PlatformType.DEVELOP ~= spid then
-			local AndroidSDK = JRequire "SDK.AndroidYiWanSDK"
+		local AndroidSDK
+		if Define.PlatformType.AndroidYiWanForeign == spid or Define.PlatformType.AndroidYiWanAsia == spid then
+			AndroidSDK = JRequire "SDK.AndroidYiWanForeignSDK"
+		elseif Define.PlatformType.DEVELOP ~= spid then
+			AndroidSDK = JRequire "SDK.AndroidYiWanSDK"
+		end
+		if AndroidSDK then
 			return AndroidSDK.new()
 		end
 		return nil
@@ -340,11 +388,15 @@ _P.CreateSdk =
 		else
 			spid = originSpid
 		end
-		if Define.PlatformType.iOSYiWan == spid then
-			local iOSSDK = JRequire "SDK.iOSYiWanSDK"
-			return iOSSDK.new()
+		local iOSSDK
+		if Define.PlatformType.iOSYiWanForeign == originSpid or Define.PlatformType.iOSYiWanAsia == originSpid then
+			iOSSDK = JRequire "SDK.iOSYiWanForeignSDK"
+		elseif Define.PlatformType.iOSYiWan == spid then
+			iOSSDK = JRequire "SDK.iOSYiWanSDK"
 		elseif Define.PlatformType.iOSDefault == spid then
-			local iOSSDK = JRequire "SDK.iOSDefaultSDK"
+			iOSSDK = JRequire "SDK.iOSDefaultSDK"
+		end
+		if iOSSDK then
 			return iOSSDK.new()
 		end
 		return nil

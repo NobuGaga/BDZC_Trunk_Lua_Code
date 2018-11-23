@@ -22,6 +22,15 @@ function _R.GetOnekeyDate(self,data)
 
 	local dateList = {}
 	for k,v in pairs(data) do
+		local dateValue = {}
+		dateValue.data = v
+		dateValue.crit = 0
+		if v.crit then
+			dateValue.crit = 1
+		end
+		table.insert(dateList,dateValue)
+
+		--[[
 		if dateList[v.girlid] ~= nil then
 			dateList[v.girlid].data.gainFriend = dateList[v.girlid].data.gainFriend +v.gainFriend
 			dateList[v.girlid].data.gainIntimacy = dateList[v.girlid].data.gainIntimacy +v.gainIntimacy
@@ -37,6 +46,7 @@ function _R.GetOnekeyDate(self,data)
 				dateList[v.girlid].crit = 1
 			end
 		end
+		--]]
 	end
 	for k,v in pairs(dateList) do
 		_P.CreatItem(self,content,v)

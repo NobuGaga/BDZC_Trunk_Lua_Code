@@ -24,8 +24,8 @@ function _M:Dispatch(funcName, ...)
 end
 
 
-function _M:OnCreate(rewardList, onClose)
-	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Success")
+function _M:OnCreate(isShowRank, score, rewardList,tipStr, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Autumn_Success")
 
 	self.OnCloseCall = onClose
 	self._EventNode:AddOnClick(function()
@@ -46,6 +46,14 @@ function _M:OnCreate(rewardList, onClose)
 		for _,v in pairs(rewardList)do
 			CCommon.CreateItem(content, v.key, CCommon.ShowItemTips, {num = v.value})
 		end
+	end
+
+	if tipStr then
+		module:Get("Tips1").Text = tipStr
+	end
+
+	if isShowRank and score > 0 then
+		module:Get("Tips2").Text = Csv.Text("adventure_enemy_point", {num = score})
 	end
 
 	LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))

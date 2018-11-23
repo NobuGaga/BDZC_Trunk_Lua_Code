@@ -1,0 +1,68 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Battle.MBattle.bytes#_M]
+local MBattle = JRequire "Dev.Battle.MBattle"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Checkpoint_Organization_Reward"
+local textTitle = "textTitle"
+local csvTitleText = "battle_frame_reward"
+local btnClose = "btnClose"
+local ItemName = "M_Checkpoint_Organization_Reward_Item"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitRewardList(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+function _P.InitRewardList(self)
+	local content = self.moudle:Get("content")
+	local MaxStar = 7
+	local curChapter = math.modf(MBattle.CurId / 100)
+	for _, csvData in ipairs(MBattle.CsvBattleReward) do
+		if curChapter < csvData.maxChapter then
+			local itemMoudle = JGuiManager.GetMoudle(content, ItemName)
+			local csvStaff = Csv.Personnel[csvData.staffID]
+			itemMoudle:Get("head").SpriteName = csvStaff.asset
+			for starIndex = csvStaff.star + 1, MaxStar do
+				itemMoudle:Get("star" .. starIndex).Activity = false
+			end
+			itemMoudle:Get("textName").Text = csvStaff.name
+			itemMoudle:Get("textDesc").Text = csvStaff.tips
+			for index, sprite in ipairs(csvStaff.labelImg) do
+				itemMoudle:Get("label" .. index).SpriteName = sprite
+			end
+			local curChapterIndex = csvData.chapter[curChapter]
+			if curChapterIndex then
+				itemMoudle:Get("process").FillAmount = curChapterIndex / csvData.count
+				itemMoudle:Get("textProcess").Text = Csv.Text("battle_reward_process", {cur = curChapterIndex, max = csvData.count})
+			else
+				itemMoudle:Get("processInfo").Activity = false
+			end
+			itemMoudle:Get("textGetTips").Text = Csv.Text("battle_reward_get_tips", {num = csvData.maxChapter})
+		end
+	end
+end
+
+return _M

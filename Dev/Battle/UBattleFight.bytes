@@ -199,7 +199,7 @@ function _P.OnPlayOwnBlood(self, isFast)
 	self.Own.BloodBar:DOKill()
 
 	local nowMoney = MBag.GetItemNum(Define.AssetsType.Soldier)
-	local isWinDelay = (isFast == nil and 0.3) or 0.05
+	local isWinDelay = (isFast == nil and 0.2) or 0.05
 
 	local curRoundBlood = math.floor((self.StartMoney - nowMoney) * ((self.totalMineNum - self.CurMineRound) / self.totalMineNum) + nowMoney)
 	self.Own.BloodBar:DOFillAmount(curRoundBlood / self.StartMoney, isWinDelay)
@@ -240,7 +240,7 @@ function _P.OnPlayThatBlood(self, isFast)
 
 	local leaveBlood = self.LastEnemyBlood - nowBlood
 	local curRoundBlood = math.floor(leaveBlood * ((self.totalEnemyNum - self.CurEnemyRound) / self.totalEnemyNum) + nowBlood)
-	local isWinDelay = (isFast == nil and 0.3) or 0.05
+	local isWinDelay = (isFast == nil and 0.2) or 0.05
 
 	self.Enemy.BloodBar:DOFillAmount(curRoundBlood / lastBattleCsv.gold, isWinDelay)
 	self.thatIntTween = JTweenerManager.IntTween(self.LastEnemyNum, curRoundBlood, isWinDelay, function(value)
@@ -315,7 +315,7 @@ function _P.OnPlayOneReport(self, isFast)
 
 			if self.isSkipBattle then self.isSkipBattle = nil end
 		else
-			local delayTime = (reportData.playType == BattleShowEnum.Task and 1.2) or 1.9
+			local delayTime = (reportData.playType == BattleShowEnum.Task and 0.7) or 1.9
 			self.BG:AddOnTime(function()
 				if not self.isSkipBattle or self.resultData.state == MBattle.ResultState.Fail then
 					if self.isShowResult == nil then
@@ -397,11 +397,11 @@ function _P.OnPlayTalk(self, data)
 				effectRect.LocalRotation = CS.UnityEngine.Quaternion(180, 0, 0, 1)
 				effectRect.LocalScale = Vector3(-1, 1, 1)
 			end
-		end, nil, 0.6)
+		end, nil, 0.3)
 
 		enemyImg:AddOnTime(function()
 			enemyImg.Activity = false
-		end, nil, 0.9)
+		end, nil, 0.7)
 	else
 		SoundMgr.PlayNonStopUI(10023)
 	end
@@ -458,7 +458,7 @@ function _P.OnPlaySeckillAnim(self)
 					self.Enemy.TalkText:DOKill()
 				end
 			end)
-		end, nil, 1.1)
+		end, nil, 1.0)
 
 		local tabImg = self.Moudle:Get("tab")
 		tabImg:AddOnTime(function()
@@ -1234,7 +1234,7 @@ end
 -- 玩家身上金钱图片显示
 function _P.GetMoneyImgName(moneyNum)
 	if moneyNum == nil or moneyNum <= 0 then
-		return ''
+		return 'Money_1'
 	elseif moneyNum > 0 and moneyNum < 100000 then
 		return 'Money_1'
 	elseif moneyNum >= 100000 and moneyNum < 10000000 then

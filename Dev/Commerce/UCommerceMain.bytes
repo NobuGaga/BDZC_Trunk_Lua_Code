@@ -1,0 +1,458 @@
+-- 商会主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local UCommerceOne = JRequire "Dev.Commerce.UCommerceOne"
+local UCommerceBattleList = JRequire "Dev.Commerce.UCommerceBattleList"
+local UCommerceManager = JRequire "Dev.Commerce.UCommerceManager"
+local UCommerceProduct = JRequire "Dev.Commerce.UCommerceProduct"
+local UCommerceResearch = JRequire "Dev.Commerce.UCommerceResearch"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local OpenLevels = Csv.Const(20174) -- 商会生产、研究开放等级
+local FloorImgNames = {"sh_051", "sh_052", "sh_053", "sh_054", "sh_055"}
+
+function _M:BeforeDestroy()
+	if MCommerce.MyCommerceId ~= nil and MCommerce.MyCommerceId > 0 then
+		CCommerce.CloseReq()
+	end
+end
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main")
+	self.Moudle = moudle
+	self.PageNode = moudle:Get("PageRect")
+
+	SoundMgr.PlaySystem(20116)
+	moudle:Get("C_BackBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		SoundMgr.DestroySystem()
+		self:Destroy()
+	end, nil, 1.2)
+
+	local funcCsv = Csv.Func[Define.SysId.Commerce]
+	moudle:Get("C_TltleText").Text = funcCsv.name
+	
+	self.FloorModules = {}
+	for i=1,5 do
+		local floorBtn = moudle:Get("current" .. i)
+		floorBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnClickFloor(self, i)
+		end, nil, 0.98)
+		floorBtn.SpriteName = ''
+		
+		local lightImg = moudle:Get("light" .. i)
+		lightImg.Activity = false
+	
+		self.FloorModules[i] = {floorBtn = floorBtn}
+	end
+	_P.OnClickFloor(self, MCommerce.CommerceFloor.Hall)
+
+	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
+		_P.BtnLightUpdate[MCommerce.CommerceFloor.Product](self)
+	end)
+end
+
+
+function _P.OnClickFloor(self, floorIndex)
+	if self.CurSelectFloor ~= nil and self.CurSelectFloor == floorIndex then
+		return
+	end
+	if floorIndex == MCommerce.CommerceFloor.Office then
+		local myInfo = MCommerce.MyCommerceInfo.myInfo
+		if myInfo and myInfo.job ~= MCommerce.JobType.HuiZhang and
+			myInfo.job ~= MCommerce.JobType.FuHuiZhang
+		then
+			CCommon.ShowError(Csv.Text("commerce_battle38"))
+			return
+		end
+	end
+
+	if floorIndex == MCommerce.CommerceFloor.Product and (OpenLevels[1] > MCommerce.CommerceLevel or MCommerce.MyCommerceInfo == nil or
+			MCommerce.MyCommerceInfo.myInfo == nil or MCommerce.MyCommerceInfo.myInfo.productTable == nil or MCommerce.MyCommerceInfo.myInfo.donateTable == nil) then
+		CCommon.ShowError(Csv.Text("product_11"))
+		return
+	end
+
+	if floorIndex == MCommerce.CommerceFloor.Research and OpenLevels[2] > MCommerce.CommerceLevel then
+		CCommon.ShowError(Csv.Text("product_12"))
+		return
+	end
+
+	-- 设置颜色
+	if self.CurSelectFloor ~= nil then
+		self.FloorModules[self.CurSelectFloor].floorBtn.SpriteName = ''
+	end
+	self.CurSelectFloor = floorIndex
+	self.FloorModules[floorIndex].floorBtn.SpriteName = FloorImgNames[floorIndex]
+
+	if self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:Destroy()
+		self.ChooseMoudle:delete()
+		self.ChooseMoudle = nil
+	end
+
+	if floorIndex == MCommerce.CommerceFloor.Hall then
+		self.ChooseMoudle = UCommerceOne.new(self.PageNode, function(...)
+			self:RegistRedpoint(...)
+		end)
+	elseif floorIndex == MCommerce.CommerceFloor.Battle then
+		self.ChooseMoudle = UCommerceBattleList.new(self.PageNode)
+	elseif floorIndex == MCommerce.CommerceFloor.Product then
+		-- 商会生产
+		self.ChooseMoudle = UCommerceProduct.new(self.PageNode)
+	elseif floorIndex == MCommerce.CommerceFloor.Research then
+		-- 商会研发
+		self.ChooseMoudle = UCommerceResearch.new(self.PageNode)
+	elseif floorIndex == MCommerce.CommerceFloor.Office then
+		-- 商会管理
+		self.ChooseMoudle = UCommerceManager.new(self.PageNode)
+	end
+end
+
+_P.BtnLightUpdate =
+{
+	[MCommerce.CommerceFloor.Battle] = function(self)
+		--副本战斗小红点
+		self.Moudle:Get("light" .. MCommerce.CommerceFloor.Battle).Activity = MCommerce.BattleRedPoint
+	end,
+	[MCommerce.CommerceFloor.Product] = function(self)
+		--商会生产小红点
+		local isShow = _P.GetProductRedTag()
+		self.Moudle:Get("light" .. MCommerce.CommerceFloor.Product).Activity = isShow
+	end,
+	[MCommerce.CommerceFloor.Research] = function(self)
+		--商会研究小红点
+		local isShow = _P.GetStudyRedTag()
+		self.Moudle:Get("light" .. MCommerce.CommerceFloor.Research).Activity = isShow
+	end,
+	[MCommerce.CommerceFloor.Office] = function(self)
+		--商会管理小红点
+		local data = MCommerce.MyCommerceInfo
+		if data ~= nil then
+			self.Moudle:Get("light" .. MCommerce.CommerceFloor.Office).Activity = data.haveApply
+		end
+	end,
+}
+
+
+-- 商会生产红点
+function _P.GetProductRedTag()
+	local isAutoFull = false
+	local isHasCanGet = false
+	if MCommerce.MyCommerceInfo ~= nil and MCommerce.MyCommerceInfo.myInfo ~= nil then
+		local productTable = MCommerce.MyCommerceInfo.myInfo.productTable
+		if OpenLevels[1] <= MCommerce.CommerceLevel and productTable ~= nil and productTable.startTime ~= nil then
+			local produceConf = Csv.CommerceProduce[MCommerce.CommerceLevel]
+			if produceConf then
+				local midTimes = HeartBeat.ServSecond() - productTable.startTime
+				local addNum = (midTimes / produceConf.interval) * produceConf.produceItemCount
+				local curNum = math.floor(productTable.stockCount + addNum)
+				isAutoFull = curNum >= produceConf.produceItemMax
+			end
+
+			local curLv = MCommerce.MyCommerceInfo.productGangLv
+			if curLv ~= nil and curLv ~= 0 then
+				local curProductConf = Csv.CommerceProduce[curLv]
+				if curProductConf ~= nil then
+					local curScore = MCommerce.MyCommerceInfo.productScore
+					for k,rewardData in pairs(curProductConf.donateReward) do
+						local isGet = _P.CheckThisRewIsGet(k)
+						if (not isGet) and rewardData[1] <= curScore then
+							isHasCanGet = true
+							break
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return isAutoFull or isHasCanGet
+end
+
+
+-- 判定该档奖励是否已经领取
+function _P.CheckThisRewIsGet(index)
+	local isGet = false
+	if MCommerce.MyCommerceInfo.myInfo.donateTable ~= nil and MCommerce.MyCommerceInfo.myInfo.donateTable.rewardedList ~= nil then
+		for k,v in pairs(MCommerce.MyCommerceInfo.myInfo.donateTable.rewardedList) do
+			if v == index then
+				isGet = true
+				break
+			end
+		end
+	end
+	return isGet
+end
+
+
+-- 商会研究红点
+function _P.GetStudyRedTag()
+	local isCanStudy = false
+
+	local curLevel = MCommerce.CommerceLevel
+	if OpenLevels[2] <= curLevel then
+		local isNotStudy = MCommerce.MyCommerceInfo.myInfo.curStudyData == nil
+		for k,data in pairs(Csv.CommercePriShowItem) do
+			local putOnData = MCabinet.CheckIsHasGet(data.id)
+			local isGet = (putOnData ~= nil)
+
+			if isNotStudy and data.needCommerceLevel < curLevel and (not isGet) then
+				isCanStudy = true
+				break
+			end
+		end
+	end
+
+	return isCanStudy
+end
+
+
+----------------------第一楼--------------------------
+function _R.WaitCreateSuccess(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:WaitCreateSuccess()
+	end
+end
+
+
+function _R.OnUpdateName(self)
+	if (self.CurSelectFloor == MCommerce.CommerceFloor.Hall or self.CurSelectFloor == MCommerce.CommerceFloor.Product) and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateName()
+	end
+end
+
+
+function _R.OnRefreshDissolutionTime(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnRefreshDissolutionTime()
+	end
+end
+
+
+function _R.OnUpdateExp(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateExp()
+	end
+end
+
+
+function _R.OnUpdateNotice(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateNotice()
+	end
+end
+
+
+-- 副本可以战斗推送(红点)
+function _R.OnUpdatemeCanFight(self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Battle](self)
+end
+
+
+function _R.OnUpdatemeMyInfo(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdatemeMyInfo()
+	end
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Battle](self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Office](self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Research](self)
+end
+
+
+function _R.OnUpdatemeDynamics(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdatemeDynamics()
+	end
+end
+
+
+function _R.OnOpen(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnOpen()
+	end
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Battle](self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Office](self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Product](self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Research](self)
+end
+
+
+function _R.OnTalkUpdate(self, sender, value)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnTalkUpdate(sender, value)
+	end
+end
+
+
+function _R.OnRefreshActivityBtn(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnRefreshActivityBtn()
+	end
+end
+
+
+-- 刷新商会充值图标显示
+function _R.OnRefreshRechargeBtn(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Hall and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnRefreshRechargeBtn()
+	end
+end
+
+
+----------------------第二楼--------------------------
+function _R.UpdateBattle(self, data, isUpdate)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Battle and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:UpdateBattle(data, isUpdate)
+	end
+end
+
+
+function _R.OnBattleList(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Battle and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnBattleList(data)
+	end
+end
+
+
+-- 打开界面
+function _R.OnOpenBattleList(self, openIndex)
+	_P.OnClickFloor(self, openIndex)
+end
+
+
+-- 判断当前是否在副本页签，然后做某种事情
+function _R.BattleInfoReq(self, callBack)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Battle and callBack ~= nil then
+		callBack()
+	end
+end
+
+
+----------------------第三楼--------------------------
+function _R.OnDonateBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnDonateBack(data)
+	end
+end
+
+function _R.OnGetProduceBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnGetProduceBack(data)
+	end
+end
+
+function _R.OnGetDonateBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnGetDonateBack(data)
+	end
+end
+
+function _R.OnGetLogBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnGetLogBack(data)
+	end
+end
+
+function _R.OnNewLogPush(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnNewLogPush(data)
+	end
+end
+
+function _R.OnUpdateDonate(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateDonate(data)
+	end
+end
+
+-- 更新商会等级
+function _R.OnUpdateCommerceLevel(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateCommerceLevel()
+	end
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Research](self)
+end
+
+-- 商会捐献积分、等级发生变化
+function _R.OnUpdateProduct(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Product and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnUpdateProduct()
+	end
+end
+
+----------------------第四楼--------------------------
+-- 研究个人展品返回
+function _R.OnResearchBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Research and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnResearchBack(data)
+	end
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Research](self)
+end
+
+-- 投资个人展品返回
+function _R.OnInvestBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Research and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnInvestBack(data)
+	end
+end
+
+-- 领取个人展品返回
+function _R.OnGetShowItemBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Research and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnGetShowItemBack(data)
+	end
+end
+
+-- 获得或删除展览品返回
+function _R.OnGetOrDelCabinet(self, data)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Research](self)
+end
+
+
+----------------------第五楼--------------------------
+-- 商会管理推送，应该放在第三层
+function _R.OnUpdateHaveApply(self)
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Office](self)
+end
+
+
+-- 隐藏入会申请红点
+function _R.SetRedpointHidden(self)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Office and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:SetRedpointHidden()
+	end
+
+	_P.BtnLightUpdate[MCommerce.CommerceFloor.Office](self)
+end
+
+
+-- 展出商会展览品返回
+function _R.OnShowItemBack(self, data)
+	if self.CurSelectFloor == MCommerce.CommerceFloor.Office and self.ChooseMoudle ~= nil then
+		self.ChooseMoudle:OnShowItemBack(data)
+	end
+end
+
+
+return _M

@@ -1,0 +1,55 @@
+--[[
+	@desc :
+    2019-01-10 14:52:42
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+function _M:OnCreate(isWin, callBack)
+	self.OnCloseCall = callBack
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_M_GangPK_PK_Success")
+	self.Moudle = moudle
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+		LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
+	end, nil, 1)
+
+	SoundMgr.Play(10014)
+	CCommon.CreateEffect(moudle:Get("ActorPanel"), 10046)
+	local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+	moudle:Get("Score").Text = Csv.Text("cross_commerce_46")
+	if isWin then
+		moudle:Get("ScoreNum").Text = "+" .. actCsv.killPoint
+	else
+		moudle:Get("ScoreNum").Text = "+" .. actCsv.joinPoint
+	end
+end
+
+return _M

@@ -19,9 +19,12 @@ function _M:Destroy( ... )
 		self.Moudle:Destroy()
 		self.Moudle = nil
 	end
+	if self.closeCall ~= nil then
+		self.closeCall()
+	end
 end
 
-function _M:ctor(parent,id,storyType)
+function _M:ctor(parent,id,storyType,closeCall)
 	local csvLine = Csv.Girl[id]
 	local showSysID = csvLine.showSysid
 
@@ -47,11 +50,14 @@ function _M:ctor(parent,id,storyType)
 
 	local moudle = JGuiManager.GetMoudle(parent, "M_Guidance_Girl", mainLayerInfo.type, mainLayerInfo.index)
 	self.Moudle = moudle
-	moudle.SelfRect.RaycastTarget = true
+	moudle.SelfRect.RaycastTarget = false
 	moudle.SelfRect:AddOnTime(function( ... )
-		moudle.SelfRect.RaycastTarget = false
+		moudle.SelfRect.RaycastTarget = true
 		_P.ShowTips(self)
 	end, nil, 1.2)
+	moudle.SelfRect:AddOnClick(function()
+		self:Destroy()
+	end)
 	mainLayerInfo.index = moudle.SortingOrder + 1
 
 	local bsxSp = moudle:Get("BSX")
@@ -95,6 +101,7 @@ function _M:ctor(parent,id,storyType)
 	else
 		FxBtn.Activity = false
 	end
+	self.closeCall = closeCall
 end
 
 function _P.ShowTips(self)

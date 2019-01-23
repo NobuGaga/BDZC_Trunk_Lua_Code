@@ -55,7 +55,11 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 	end, nil, 1)
 
 	local csv = Csv.Battle[battleId]
+	local CsvChaper = Csv.Chapter[csv.chapter]
 	self.mCsvBattle = csv
+
+	--章节奖励
+	local chaperReward = CsvChaper.reward
 
 	local backBtn = moudle:Get("C_Btn_a")
 	backBtn:AddOnButton(function( ... )
@@ -88,7 +92,15 @@ function _M:OnCreate(battleId, money, onClose, ownPower, hurtNum, isSeckillBattl
 	end
 	if rewardData.item ~= nil then
 		for _,v in pairs(rewardData.item) do
-			CCommon.CreateItem(itemRoot, v[1], nil, {num = v[2]})
+			--筛选，把章节奖励剔除
+			if chaperReward ~= nil then
+				if chaperReward[1] ~= v[1] then
+					CCommon.CreateItem(itemRoot, v[1], nil, {num = v[2]})
+				end
+			else
+				CCommon.CreateItem(itemRoot, v[1], nil, {num = v[2]})
+			end
+			
 		end
 	end
 

@@ -7,6 +7,7 @@ local MActivity = JRequire "Dev.Activity.MActivity"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 local MBag = JRequire "Dev.Bag.MBag"
 
 local JTweenerManager = CS.JTween.JTweenerManager
@@ -23,7 +24,6 @@ local GTE_EFFECT_ID = 5
 local SHOW_REWARD_NUM = 4
 local ItemSize = 130
 local DiffItemSize = 123
-local GoldImageName = 'xf_tb_003'
 
 
 --删除界面前调用
@@ -65,6 +65,7 @@ function _M:OnCreate()
 	end
 
 	self.RewardNums = #self.LotteryConf.num
+	self.EffectActorPanel = module:Get("ActorPanel")
 	module:Get("C_Text").Text = self.LotteryConf.title
 	module:Get("Banner").SpriteName = self.LotteryConf.image
 	local closeBtn = module:Get("C_Back_Btn")
@@ -86,7 +87,7 @@ function _M:OnCreate()
 	end
 
 	module:Get("Time").Text = Csv.Text("timelimit_last_time", {startTime = LuaUtil.TransToMD(self.ActInfo.state.startTime),
-								endTime = LuaUtil.TransToMD(self.ActInfo.state.endTime) .. " " .. LuaUtil.TransToHMS(self.ActInfo.state.endTime)})
+								endTime = LuaUtil.TransToMD(self.ActInfo.state.endTime)})
 	self.AssetText = module:Get("AssetNum_2")
 	self.AssetNum = MBag.GetItemNum(Define.AssetsType.Gold)
 	self.AssetText.Text = tostring(self.AssetNum)
@@ -122,7 +123,7 @@ function _M:OnCreate()
 	moreBtn.Text = Csv.Text("lottery_4")
 	moreBtn:AddOnButton(function( ... )
 		SoundMgr.Play(10001)
-		WindowMgr.Create("ULotteryMsg", MCrossLotteryActivity.LotteryMessage)
+		WindowMgr.Create("ULotteryMsg", MCrossLotteryActivity.LotteryMessage, true)
 	end, nil, 1.2)
 	self.MsgIndex = 0
 	self.MsgStop = false
@@ -173,7 +174,6 @@ function _M:OnCreate()
 	_P.ChangeActID(self)
 
 	-- 请求打开界面
-	self.GoodItemFx = nil
 	CCrossLotteryActivity.OnLotteryOpenReq()
 end
 
@@ -228,8 +228,8 @@ function _P.DoMessage(self)
 		self.MsgText:DOKill()
 		if self.MsgStop then
 			self.MsgStop = false
-			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 200, 0)
-			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 400, 3)
+			self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 206, 0)
+			local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 412, 3)
 			t:SetEase(Linear)
 			t:OnComplete(function()
 				_P.DoMessage(self)
@@ -239,21 +239,27 @@ function _P.DoMessage(self)
 			self.MsgIndex = self.MsgIndex + 1
 			local msgInfo = msgs[self.MsgIndex]
 			local itemCsv = Csv.Item[msgInfo.itemId]
-			if msgInfo.itemId == Define.AssetsType.Gold and msgInfo.itemCount ~= nil and msgInfo.itemCount > 0 then
-				self.MsgText.Text = Csv.Text("DLottery_getGold", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
+			local lotteryItemConf = nil
+			if msgInfo.lotteryItemId ~= nil and msgInfo.lotteryItemId > 0 then
+				lotteryItemConf = Csv.CrossLotteryItem[msgInfo.lotteryItemId]
+			end
+
+			if lotteryItemConf ~= nil and lotteryItemConf.poolGoldRatio ~= nil then
+				self.MsgText.Text = Csv.Text("DLottery_getGold2", {name = msgInfo.playerName, proNum = math.ceil(lotteryItemConf.poolGoldRatio / 100),
+																	item = itemCsv.name, num = msgInfo.itemCount})
 			else
-				self.MsgText.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
+				self.MsgText.Text = Csv.Text("DLottery_getGold1", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
 			end
 			
 			if self.MsgIndex == #msgs then
-				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth / 2 - 200, 3)
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth / 2 - 206, 3)
 				t:SetEase(Linear)
 				t:OnComplete(function()
 					self.MsgStop = true
 					_P.DoMessage(self)
 				end)
 			else
-				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 400, 6)
+				local t = self.MsgText:DOAnchorPosX(-self.MsgText.PreferredWidth - 412, 6)
 				t:SetEase(Linear)
 				t:OnComplete(function()
 					_P.DoMessage(self)
@@ -263,7 +269,7 @@ function _P.DoMessage(self)
 	elseif self.MsgText ~= nil then
 		self.MsgStop = true
 		self.MsgText:DOKill()
-		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 200, 0)
+		self.MsgText.LocalPosition = Vector2(-self.MsgText.PreferredWidth / 2 - 206, 0)
 	end
 end
 
@@ -272,6 +278,12 @@ end
 function _P.ToReqLottery(self, num)
 	if self.ActId > 0 then
 		if self.LotteryConf ~= nil then
+			local curVipLv = MPlayer.GetVip()
+			if curVipLv < self.LotteryConf.vipLv then
+				CCommon.ShowError(Csv.Text("DLottery_vipLimit", {num = self.LotteryConf.vipLv}))
+				return
+			end
+
 			if num == 1 then
 				if self.ActInfo ~= nil then
 					if self.ActInfo.isFree then
@@ -291,6 +303,7 @@ end
 
 
 function _P.DoToReqLottery(self, num)
+	SoundMgr.Play(10069)
 	CCrossLotteryActivity.OnLotteryReq(num)
 	
 	if self.LeftBtn ~= nil then
@@ -417,12 +430,16 @@ function _P.ChangeActID(self)
 			local itemCsv = Csv.Item[itemId]
 			local itemSp = module:Get("IconBox"..index)
 			itemSp.SpriteName = itemCsv.colorIcon
-			if itemId == Define.AssetsType.Gold and lotterItemCsv.poolGoldRatio ~= nil then
-				module:Get("Icon"..index).SpriteName = GoldImageName
+			if lotterItemCsv.poolGoldRatio ~= nil then
 				module:Get("Num"..index).Text = math.ceil(lotterItemCsv.poolGoldRatio / 100) .. '%'
 			else
-				module:Get("Icon"..index).SpriteName = itemCsv.icon
 				module:Get("Num"..index).Text = "x" .. lotterItemCsv.num
+			end
+
+			if lotterItemCsv.superImg ~= nil then
+				module:Get("Icon"..index).SpriteName = lotterItemCsv.superImg
+			else
+				module:Get("Icon"..index).SpriteName = itemCsv.icon
 			end
 
 			itemSp:AddOnButton(function ( ... )
@@ -459,13 +476,18 @@ function _P.OnPressFunc(btn, data, isOne, clickCall)
 end
 
 
-function _P.DoUpdateTotalNum(self)
+function _P.DoUpdateTotalNum(self, showGold)
 	if self.GetBtn ~= nil then
 		local isHaveCanGet = false
 		if self.ActId > 0 and self.ActInfo ~= nil then
 			self.TotalNumText.Text = tostring(self.ActInfo.totalNum)
-			self.GoldPoolText.Text = tostring(self.ActInfo.poolGold)
-			self.mModule:Get("Fill").FillAmount = self.ActInfo.poolGold / self.LotteryConf.maxGold
+			if showGold then
+				local lastNum = tonumber(self.GoldPoolText.Text)
+				_P.OnPlaySlideAnim(self, lastNum, showGold)
+			else
+				self.GoldPoolText.Text = tostring(self.ActInfo.poolGold)
+				self.mModule:Get("Fill").FillAmount = self.ActInfo.poolGold / self.LotteryConf.maxGold
+			end
 
 			if self.LotteryConf ~= nil then
 				for index = 1,self.RewardNums do
@@ -561,13 +583,13 @@ local LightImgPos =
 	[11] = {posX = -132, posY = 75},
 	[12] = {posX = -75, posY = 132},
 }
-function _R.OnLottery(self, actId, itemList)
+function _R.OnLottery(self, actId, itemList, showGold)
 	if self.ActInfo ~= nil then
 		if actId ~= self.ActId then
 			self.ActId = actId
 			_P.ChangeActID(self)
 		else
-			_P.DoUpdateTotalNum(self)
+			_P.DoUpdateTotalNum(self, showGold)
 
 			if self.LotteryConf ~= nil then
 				if itemList ~= nil and #itemList > 0 then
@@ -579,10 +601,8 @@ function _R.OnLottery(self, actId, itemList)
 						TimeDelay.SetValid(self.GoodItemFxHandle, false)
 						self.GoodItemFxHandle = 0
 					end
-					if self.GoodItemFx ~= nil then
-						self.GoodItemFx:Destroy()
-						self.GoodItemFx = nil
-					end
+					self.EffectActorPanel:DestroyChildren()
+
 					local module = self.mModule
 					local lastData = itemList[#itemList]
 					local last = lastData.id
@@ -603,6 +623,7 @@ function _R.OnLottery(self, actId, itemList)
 								tween.Duration = 0.6
 							end
 							self.FlyTweener:SetOnComplete(function ( ... )
+								MCrossLotteryActivity.IsDrawing = false
 								if self.RewardRect ~= nil then
 									toRot.z = toRot.z % -360
 									self.RewardRect.LocalEulerAngles = toRot
@@ -664,27 +685,34 @@ end
 
 -- 超级大奖特效
 function _P.PlayGoodItemFx(self, itemList, callBack)
-	local isNeedShow = false
+	local isNeedShow = nil
 	for k,v in pairs(itemList) do
 		local csv = Csv.CrossLotteryItem[v.id]
-		if csv ~= nil and csv.type == 1 then
-			isNeedShow = true
+		if csv ~= nil and csv.effectId ~= nil then
+			isNeedShow = csv.effectId
 			break
 		end
 	end
-	if isNeedShow then
-		self.GoodItemFx = CCommon.CreateEffectEx(self._RootNode, 10150)
+	if isNeedShow ~= nil then
+		if isNeedShow == 10244 then
+			SoundMgr.Play(10070)
+		else
+			SoundMgr.Play(10071)
+		end
+
+		CCommon.CreateEffect(self.EffectActorPanel, isNeedShow)
 		self.GoodItemFxHandle = TimeDelay.DelayCall(1.4, false, function( ... )
-			self.GoodItemFxHandle = 0
-			callBack()
-			if self.GoodItemFx ~= nil then
-				self.GoodItemFx:Destroy()
-				self.GoodItemFx = nil
+			if self.mModule ~= nil then
+				self.GoodItemFxHandle = 0
+				self.EffectActorPanel:DestroyChildren()
+
+				callBack()
 			end
 		end)
 	else
 		callBack()
 	end
+	_R.OnLotteryPoolGoldPush(self, {actId = self.ActId, gold = self.ActInfo.poolGold})
 end
 
 
@@ -713,14 +741,25 @@ end
 
 -- 奖池钻石更新
 function _R.OnLotteryPoolGoldPush(self, data)
+	self.ActInfo.poolGold = data.gold
+
 	local lastNum = tonumber(self.GoldPoolText.Text)
-	local t = JTweenerManager.IntTween(lastNum, data.gold, 0.5, function(value)
+	if lastNum ~= data.gold and not MCrossLotteryActivity.IsDrawing then
+		_P.OnPlaySlideAnim(self, lastNum, data.gold)
+	end
+end
+
+
+function _P.OnPlaySlideAnim(self, lastNum, nowNum)
+	if lastNum == nowNum then return end
+	
+	local t = JTweenerManager.IntTween(lastNum, nowNum, 0.5, function(value)
 		if self.GoldPoolText ~= nil then self.GoldPoolText.Text = LuaUtil.NumberFormat(value) end
 	end, function()
-		if self.GoldPoolText ~= nil then self.GoldPoolText.Text = LuaUtil.NumberFormat(data.gold) end
+		if self.GoldPoolText ~= nil then self.GoldPoolText.Text = LuaUtil.NumberFormat(nowNum) end
 	end)
 
-	self.mModule:Get("Fill"):DOFillAmount(data.gold / self.LotteryConf.maxGold, 0.5)
+	self.mModule:Get("Fill"):DOFillAmount(nowNum / self.LotteryConf.maxGold, 0.5)
 end
 
 

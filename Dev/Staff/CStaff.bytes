@@ -34,6 +34,7 @@ local ECmdId = {
 	sStaffRename						=	13,--员工改名 PStaff.SStaffRename
 	sStaffReworkInfo					=	14,--员工重铸 PStaff.SStaffReworkInfo --当使用员工重铸按钮时返回
 	sStaffRestSuccessful				= 	15,--员工重铸成功
+	sStaffsLineup						= 	16,--更新阵容员工属性 PStaff.SStaffsLineup
 }
 
 function _M.ModuleInit(isReload)
@@ -62,6 +63,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sStaffRename]			=		{proto = "PStaff.SStaffRename",			handle = _P.OnStaffChangeName},
 		[ECmdId.sStaffReworkInfo]		=		{proto = "PStaff.SStaffReworkInfo",		handle = _P.OnStaffReworkInfo},
 		[ECmdId.sStaffRestSuccessful]	=		{proto = "PStaff.SStaffReworkSuccess",	handle = _P.OnStaffRestSuccessful},
+		[ECmdId.sStaffsLineup]			=		{proto = "PStaff.SStaffsLineup",		handle = _P.OnStaffsLineup},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Staff, send, recv, isReload)
 end
@@ -167,6 +169,8 @@ function _P.OnStaffNew(data)
 	local staffConf = Csv.Personnel[data.id]
 	if staffConf and staffConf.special ~= nil then
 		CActivity.UpdateStaffData(data.id)
+		--红点更新
+		CActivity.UpdateRecuitStaffRed(data.id)
 	end
 end
 
@@ -189,15 +193,23 @@ function _P.OnStaffChange(data)
 	MStaff.OnStaffNew(data.staff)
 	_M.CheckStaffRedPoint(data.staff.id)
 
-	if WindowMgr.IsCreated("UStaff") then
-		WindowMgr.Call("UStaff","StaffChange")
+	WindowMgr.Call("UStaff","StaffChange")
+	WindowMgr.Call("UEquipMain","StaffChange")
+	WindowMgr.Call("UStaffDetails","StaffChange")
+end
+
+function _P.OnStaffsLineup(data)
+	if data.staffList ~= nil then
+		for k,v in pairs(data.staffList) do
+			MStaff.OnStaffNew(v)
+		end
+
+		_M.CheckAllStaffRedPoint()
 	end
-	if WindowMgr.IsCreated("UEquipMain") then
-		WindowMgr.Call("UEquipMain","StaffChange")
-	end
-	if WindowMgr.IsCreated("UStaffDetails") then
-		WindowMgr.Call("UStaffDetails","StaffChange")
-	end
+	CLineUp.OnLineUpInit(data)
+	WindowMgr.Call("UStaff","StaffChange")
+	WindowMgr.Call("UEquipMain","StaffChange")
+	WindowMgr.Call("UStaffDetails","StaffChange")
 end
 
 function _P.OnStaffChangeName(data)

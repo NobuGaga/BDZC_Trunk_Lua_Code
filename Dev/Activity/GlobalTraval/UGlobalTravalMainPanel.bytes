@@ -19,7 +19,7 @@ local _R = {}
 local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
 local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
 local DoubleActorId = 10163
-local DiceEffectID = 10159
+-- local DiceEffectID = 10263
 local HeadBoxEffectId = 10160
 local RewardEffectId = 10161
 local OffestX = 48
@@ -100,6 +100,7 @@ function _M:OnCreate()
 	module:Get("EnterText").Text = Csv.Text("global_forward")
 	module:Get("Tips_0").Text = Csv.Text("global_show")
 	module:Get("AutoText").Text = Csv.Text("global_autoTip")
+	module:Get("DiceRect").Activity = false
 
 	local tenEnterBtn = module:Get("EnterBtn2")
 	tenEnterBtn:AddOnButton(function ( ... )
@@ -569,7 +570,7 @@ end
 
 function _R.OnTravalEnterCallBack(self, data, callback)
 	local actorPanel = self.mModule:Get("ActorPanel")
-	local diceImg = self.mModule:Get("DiceImg")
+	local diceRect = self.mModule:Get("DiceRect")
 
 	if data.passPosList ~= nil and next(data.passPosList) ~= nil then
 		self.ActInfo.passPosList = data.passPosList
@@ -577,13 +578,12 @@ function _R.OnTravalEnterCallBack(self, data, callback)
 
 	self:Lock()
 	self.ExchangeBtn.RaycastTarget = false
-	diceImg.SpriteName = self.DiceNameArrs[data.diceNumber[1]]
+	diceRect.Activity = true
+	_P.OnPlayDiceAnim(self, function( ... )
+		self.mModule:Get("DiceImg").SpriteName = self.DiceNameArrs[data.diceNumber[1]]
 
-	CCommon.CreateEffect(actorPanel, DiceEffectID, nil, function( ... )
-		diceImg.Activity = true
-
-		diceImg:AddOnTime(function()
-			diceImg.Activity = false
+		diceRect:AddOnTime(function()
+			diceRect.Activity = false
 
 			local posList = {}
 			local maxCount = 0
@@ -711,12 +711,16 @@ end
 
 function _R.OnTenTravalEnterCallBack(self, data, callback)
 	local actorPanel = self.mModule:Get("ActorPanel")
+	local diceRect = self.mModule:Get("DiceRect")
 
 	self:Lock()
 	self.ExchangeBtn.RaycastTarget = false
-	CCommon.CreateEffect(actorPanel, DiceEffectID, nil, function( ... )
+	diceRect.Activity = true
+
+	_P.OnPlayDiceAnim(self, function( ... )
 		self:Unlock()
 		self.ExchangeBtn.RaycastTarget = true
+		diceRect.Activity = false
 
 		WindowMgr.Create("UTenTravalResultPanel",data.actId, data.diceNumber, data.DrowReward, function( ... )
 			_P.OnPlayTenDiceAnim(self, data, callback)
@@ -788,6 +792,28 @@ function _P.CheckBtnIsClick(type, delayTime)
 	end
 
 	return true
+end
+
+
+-- 摇骰子动画
+function _P.OnPlayDiceAnim(self, closeBack)
+	local diceRect = self.mModule:Get("DiceRect")
+	local diceImg = self.mModule:Get("DiceImg")
+	self.mTimer = diceRect:AddOnUpdate(function()
+		local randomNum = math.random(1, 6)
+		diceImg.SpriteName = self.DiceNameArrs[randomNum]
+	end, nil, 0.1)
+
+	diceImg:AddOnTime(function()
+		if closeBack ~= nil then
+			closeBack()
+		end
+
+		if self.mTimer ~= nil then
+			self.mTimer:Destroy()
+			self.mTimer = nil
+		end
+	end, nil, 1)
 end
 
 

@@ -1,0 +1,60 @@
+--[[
+	@desc :
+    2019-01-10 14:53:50
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnGVGRecord(self, list)
+	local moudle = self.mMoudle
+	if list ~= nil and #list > 0 then
+		local content = moudle:Get("content")
+		for k,info in pairs(list) do
+			local oneMoudle = self:CreateMoudle(content, "M_GangPK_Record_Item")
+			oneMoudle:Get("ShName").Text = Csv.Text("commerce_detail2")
+			oneMoudle:Get("ShNameText").Text = info.name .. Csv.Text("commerce_detail3", {level = info.level}) 
+			oneMoudle:Get("NumJifen").Text = Csv.Text("rank_server")
+			oneMoudle:Get("NumJifenText").Text = "S" .. info.serverId
+			oneMoudle:Get("Rank").Text = Csv.Text("cross_commerce_51")
+			oneMoudle:Get("RankText").Text = info.score
+			oneMoudle:Get("zhanliImg").Text = Csv.Text("cross_commerce_58")
+			oneMoudle:Get("zhanli").Text = info.force
+
+			if info.result == 1 then
+				oneMoudle:Get("Tips").Text = Csv.Text("cross_commerce_60", {num = info.socreChange})
+			else
+				oneMoudle:Get("Tips").Text = Csv.Text("cross_commerce_59", {num = info.socreChange})
+			end
+		end
+	else
+		moudle:Get("None").Text = Csv.Text("Arena_2")
+	end
+end
+
+function _M:OnCreate(  )
+	CCrossCommerce.BRecordReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Record")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end)
+	moudle:Get("C_Text").Text = Csv.Text("cross_commerce_5")
+end
+
+return _M

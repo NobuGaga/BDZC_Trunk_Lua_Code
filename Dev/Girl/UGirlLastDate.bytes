@@ -5,6 +5,7 @@ local MGirl = JRequire"Dev.Girl.MGirl"
 local CGirl = JRequire"Dev.Girl.CGirl"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local UStoryMoudle = JRequire "Dev.Main.UStoryMoudle"
+local CMain = JRequire "Dev.Main.CMain"
 
 local ROOM_EFFECT = 10087
 local CURTAIN_SCALE_TYPE = Csv.Const(10219) --1帘子动 2帘子不动
@@ -71,13 +72,13 @@ function _M:OnCreate(id)
 	local redCurtain = moudle:Get("red")
 
 	--value
-	local bg = moudle:Get("bg")
+	-- local bg = moudle:Get("bg")
 	local body = moudle:Get("body")
 	local talk = moudle:Get("DHKtext")
 	local talkBg = moudle:Get("DHK")
 
 	self.girl_prefab = nil
-	self.mBg = bg
+	-- self.mBg = bg
 	self.mBody = body
 	self.mTalk = talk
 	self.mTalkBg = talkBg
@@ -143,7 +144,7 @@ function _M:OnCreate(id)
 	local StoryBack = function()
 		if body ~= nil then
 			value.Activity = true
-			bg.SpriteName = girlData.datebg
+			-- bg.SpriteName = girlData.datebg
 
 			local girlCsv = Csv.Girl[girlData.id]
 			if self.girl_prefab ~= nil then
@@ -164,7 +165,9 @@ function _M:OnCreate(id)
 	end
 
 	local storyId = girlData.story
-	self.mUStoryMoudle = UStoryMoudle.new(moudle.SelfRect,storyId,StoryBack)
+	CMain.OnStoryDone(storyId)
+	StoryBack()
+	-- self.mUStoryMoudle = UStoryMoudle.new(moudle.SelfRect,storyId,StoryBack)
 end
 
 function _P.ShowCurtain(self)
@@ -200,7 +203,7 @@ end
 function _P.OpenCurtain(self)
 	self.mValue.Activity = true
 	local girlData = self.mGirlData
-	self.mBg.SpriteName = girlData.roombg
+	-- self.mBg.SpriteName = girlData.roombg
 
 	local girlCsv = Csv.Girl[girlData.id]
 	if self.girl_prefab ~= nil then
@@ -399,7 +402,7 @@ function _P.GameOver(self)
 	self.mIsGame = false
 	--self.mValue.Activity = true
 	local girlData = self.mGirlData
-	self.mBg.SpriteName = girlData.roombg
+	-- self.mBg.SpriteName = girlData.roombg
 	-- self.mBody.SpriteName = girlData.roomIcon
 
 	self.mGameTime.Activity = false

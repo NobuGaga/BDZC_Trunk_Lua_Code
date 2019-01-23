@@ -1,0 +1,89 @@
+--[[
+	@desc :
+    2019-01-10 14:51:26
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnGVGFightList(self, list)
+	local moudle = self.mMoudle
+	if list ~= nil and #list > 0 then
+		local content = moudle:Get("content")
+		for k,info in pairs(list) do
+			LuaUtil.DumpTable(info, "------OnGVGFightList-----")
+
+			local oneMoudle = self:CreateMoudle(content, "M_GangPK_Opponent_Item")
+			oneMoudle:Get("ShName").Text = Csv.Text("commerce_detail2")
+			oneMoudle:Get("ShNameText").Text = info.commerceName .. Csv.Text("commerce_detail3", {level = info.commerceLevel}) 
+			oneMoudle:Get("NumJifen").Text = Csv.Text("rank_server")
+			oneMoudle:Get("NumJifenText").Text = "S" .. info.serverId
+			oneMoudle:Get("Rank").Text = Csv.Text("cross_commerce_51")
+			oneMoudle:Get("RankText").Text = info.score
+			oneMoudle:Get("zhanli").Text = info.allForce
+			oneMoudle:Get("C_text").Text = Csv.Text("cross_commerce_3")
+			oneMoudle:Get("C_Btn_a"):AddOnButton(function (  )
+				if MCrossCommerce.GVG.FightTimes > 0 then
+					if self.LastPressTime + 1 < CS.UnityEngine.Time.time then
+						self.LastPressTime = CS.UnityEngine.Time.time
+						CCrossCommerce.BFightReq(info.commerceId, info.serverId)
+					end
+				else
+					CCommon.ShowError(Csv.Text("cross_commerce_16"))				
+				end				
+			end)
+			local count = 0
+			if info.players ~= nil then
+				for k,v in pairs(info.players) do
+					count = count + 1
+					oneMoudle:Get("zhanli" .. k).Text = v.name
+					oneMoudle:Get("zhanliNum" .. k).Text = v.force
+					oneMoudle:Get("head" .. k).SpriteName = MPlayer.GetOtherHeadIcon(v.head,v.sex)
+					oneMoudle:Get("OutBox" .. k).SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
+					oneMoudle:Get("VipImg" .. k).SpriteNameAutoScale = "friend_num_"..v.vip
+					if count == 2 then
+						break
+					end
+				end
+			end
+			if count < 2 then
+				for i=count + 1,2 do
+					oneMoudle:Get("zhanli" .. k).Text = Csv.Text("cross_commerce_57")
+					oneMoudle:Get("OutBox" .. k).SpriteName = "friend_038_4"
+					oneMoudle:Get("VipImg" .. k).SpriteNameAutoScale = "friend_num_0"
+				end
+			end
+		end
+	else
+		moudle:Get("None").Text = Csv.Text("cross_commerce_52")
+	end
+end
+
+function _M:OnCreate()
+	CCrossCommerce.BFightListReq()
+	self.LastPressTime = 0
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Opponent")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_Text").Text = Csv.Text("cross_commerce_8")
+end
+
+return _M

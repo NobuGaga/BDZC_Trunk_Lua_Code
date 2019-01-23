@@ -1,6 +1,12 @@
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
 local _M = {}
 local _P = {}
 
+_M.MAX_RESET_TIMES = Csv.Const(153)[3]
+
+_M.FloodId = 1
 _M.CurID = 1
 _M.Score = 0
 _M.ResetTimes = 0
@@ -8,41 +14,112 @@ _M.CheckPower = {}
 _M.GotRewards = {}
 
 function _M.Clean()
-
+	_M.FloodId = 1
+	_M.CurID = 1
+	_M.Score = 0
+	_M.ResetTimes = 0
+	_M.CheckPower = {}
+	_M.GotRewards = {}
 end
 
 function _M.OnDayout()
 	--每日增加一点重置点
-	_M.ResetTimes = _M.ResetTimes +1
+	if _M.ResetTimes < _M.MAX_RESET_TIMES then
+		_M.ResetTimes = _M.ResetTimes +1
+	end
 end
 
 function _M.Init(data)
+	_M.FloodId = data.floodId
 	_M.CurID = data.currID
 	_M.Score = data.score
 	_M.ResetTimes = data.resetTimes
-	_M.CheckPower = data.power
-	_M.GotRewards = data.getRewards
-end
-
-function _M.SetResetTimes(data)
-	_M.ResetTimes = data.times
+	_M.CheckPower = {}
+	if data.power ~= nil then
+		for k,v in pairs(data.power)do
+			_M.CheckPower[v.key] = v.value
+		end
+	end
+	_M.GotRewards = {}
+	if data.getRewards ~= nil then
+		for k,v in pairs(data.getRewards)do
+			_M.GotRewards[v] = true
+		end
+	end
 end
 
 function _M.SetRewards(data)
-	if _M.GotRewards ~= nil then
-		local isGot = false
-		for k,v in pairs(_M.GotRewards)do
-			if v == data.id then
-				isGot = true
+	_M.GotRewards[data.id] = true
+end
+
+function _M.OnShopInfo(data)
+	_M.Score = data.score
+	_M.ShopInfo = data
+end
+
+function _M.GetBuildPower(index)
+	return _M.CheckPower[index] or 0
+end
+
+function _M.CheckGotReward(index)
+	return _M.GotRewards[index]
+end
+
+function _M.GetOwnLine()
+	local seatNum = MLineUp.SeatNum
+	local list = MLineUp.LineUpList
+	
+	local staffTab = {}
+	if seatNum ~= nil and list ~= nil then
+		for i = 1,MLineUp.SeatNum do
+			if list[i] ~= nil then
+				local csvStaff = Csv.Personnel[list[i]]
+				local dataStaff = MStaff.StaffTable[list[i]]
+
+				local _staffid = list[i]
+				local _staffcolor = 0
+				local _power = 0
+
+				if dataStaff ~= nil then
+					_staffcolor = dataStaff.color
+					_power = dataStaff.power
+				end
+				table.insert(staffTab,{staffid = _staffid,staffcolor = _staffcolor,power = _power})
 			end
 		end
-		if not isGot then
-			table.insert(_M.GotRewards,data.id)
+	end
+	return staffTab
+end
+
+function _M.GetEnemyLine(id, powerList)
+	local staffTab = {}
+
+	local staffId2power = {}
+	if powerList ~= nil then
+		for k,v in pairs(powerList) do
+			staffId2power[v.key] = v.value
+		end
+	end
+
+	local csvRobot = Csv.Robot[id]
+	if csvRobot ~= nil then
+		if csvRobot.staffs ~= nil then
+			for index,v in pairs(csvRobot.staffs) do
+				local robStaffId = csvRobot.staffs[index]
+				local csvRobStaff = Csv.RobotStaff[robStaffId]
+
+				if csvRobStaff ~= nil then
+					local _staffid = csvRobStaff.staffID
+					local _staffcolor = csvRobStaff.color
+					local _power = staffId2power[robStaffId] or csvRobStaff.force
+					table.insert(staffTab,{staffid = _staffid,staffcolor = _staffcolor,power = _power})
+				end
+			end
 		end
 	else
-		_M.GotRewards = {}
-		table.insert(_M.GotRewards,data.id)
+		print("找不到机器人id___________",id)
 	end
+	return staffTab
 end
 
 

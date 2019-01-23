@@ -181,8 +181,10 @@ end
 -- 自己活动排行版回调后
 function _R.OnGetSelfRankData(self, data)
 	self.selfRankNum = data.selfrank
-	self.mRankData.selfrank = data.selfrank
-	self.mRankData.ranklist = data.ranklist
+	if self.mRankData ~= nil then
+		self.mRankData.selfrank = data.selfrank
+		self.mRankData.ranklist = data.ranklist
+	end
 end
 
 function _R.OnUpdateData(self, actId)
@@ -199,7 +201,7 @@ end
 
 function _R.UpdateRed(self)
 	local redRect = self.mModule:Get("redpoint")
-	redRect.Activity = MActivity.CharitableRed
+	redRect.Activity = MActivity.CharitableRankRed
 	local data = MActivity.GetFromId(self.actId)
 	self.mData = data
 	_P.SetGetBtnData(self)

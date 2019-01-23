@@ -127,16 +127,13 @@ function _M:OnCreate()
 			end, {content = Csv.Text("cross_arena_tx11",{num = diamond})})
 		end
 	end, nil, 1.2)
-	moudle:Get("CourseBtn"):AddOnButton(function(...)
-		--赛程表
-		WindowMgr.Create("UCrossArenaKnockoutAll")
-	end, nil ,1.2)
-	self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 2, 2)
+	-- moudle:Get("CourseBtn"):AddOnButton(function(...)
+	-- 	--赛程表
+	-- 	--WindowMgr.Create("UCrossArenaKnockoutAll")
+	-- end, nil ,1.2)
+	-- moudle:Get("CourseBtn").Activity = false
+	-- self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 2, 2)
 	_R.RefreshData(self)
-
-	self:RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
-		 CCrossArena.CCUArenaChipInfo()
-	end)
 end
 
 function _R.RefreshData(self, dataInfo, rewardinfo)

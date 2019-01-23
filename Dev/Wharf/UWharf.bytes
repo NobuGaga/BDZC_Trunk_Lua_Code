@@ -320,9 +320,13 @@ function _M:OnCreate(data)
 
 	self.mLastBuildPos = 0
 	self.mDice1 = moudle:Get("dice1")
+	self.mDice1.Activity = false
 	self.mDice2 = moudle:Get("dice2")
+	self.mDice2.Activity = false
 	self.mBigDice1 = moudle:Get("BigDice1")
+	self.mBigDice1.Activity = false
 	self.mBigDice2 = moudle:Get("BigDice2")
+	self.mBigDice2.Activity = false
 	--特效
 	self.mActorPanel = moudle:Get("ActorPanel_0")
 	self.mUICanvas = moudle:Get("Story")
@@ -623,32 +627,26 @@ function _R.ShowAward(self,id)
 	local visitDatas =  MWharf.VisitData
 
 	local data
-	local effectDone = function()
-		if #visitDatas <=1 then
-			for k,v in pairs(visitDatas) do
-				data = v
-				local peopleData = Csv.WharfPeople[v.peopleId]
-				local num = peopleData.build    ---self.mLastBuildPos（暂不需要扣除上次建筑位置）
-				if num <= 1 then
-					num = num +11
-				elseif num > 12 then
-					num = 12 --这只是预防配置表建筑id配置超过12
-				end
-				_P.SetDice(self,num,data)
-				
-				self.mBigDice1:AddOnTime(function()
-					self.mBigDice1.Activity = false
-					self.mBigDice2.Activity = false
-
-					--_P.PlayerMove(self,num)
-					_P.MoveToSelectItem(self,data)
-				end,nil,0.5)
-
-				self.mLastBuildPos = peopleData.build
+	if #visitDatas <=1 then
+		for k,v in pairs(visitDatas) do
+			data = v
+			local peopleData = Csv.WharfPeople[v.peopleId]
+			local num = peopleData.build    ---self.mLastBuildPos（暂不需要扣除上次建筑位置）
+			if num <= 1 then
+				num = num +11
+			elseif num > 12 then
+				num = 12 --这只是预防配置表建筑id配置超过12
 			end
+			-- _P.SetDice(self,num,data)
+			
+			self.Moudle:Get("Arrow1"):AddOnTime(function()
+				_P.MoveToSelectItem(self,data)
+			end,nil,0.2)
+
+			self.mLastBuildPos = peopleData.build
 		end
 	end
-	CCommon.CreateEffect(self.mActorPanel, DICE_EFFECT_ID,nil,effectDone)
+
 	self:Lock()
 	self.mUImask.Activity = true
 end

@@ -489,7 +489,6 @@ function _M.SetRankStage(data)
 	if _M.FirstOpenSiege then
 		_M.SiegeRed = true
 	end
-	CMain.UpdateRedpoint(_M.SiegeRed,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
 end
 
 ---------------------------------------------------------
@@ -577,12 +576,11 @@ function _M.CheckActivityRed()
 		isRed = true
 	end
 	_M.SiegeRed = isRed
-	if MMain.FuncIsOpen(Define.SysId.LimitActivity) then
-		CMain.UpdateRedpoint(isRed,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
-	else
+	
+	if not MMain.FuncIsOpen(Define.SysId.SiegeWall) then
 		_M.SiegeRed = false
-		CMain.UpdateRedpoint(false,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
 	end
+	CMain.UpdateRedpoint(_M.SiegeRed,Define.SysId.LimitActivity,Define.SysId.SiegeWall)
 end
 
 function _P.GetTargetTime(hour)

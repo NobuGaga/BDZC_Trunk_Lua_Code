@@ -1,8 +1,7 @@
 --商会副本列表界面
 
 ----------------------文件引用--------------------------
---@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
-local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
 --@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 --@RefType [Dev.Commerce.CCommerce.bytes#_M]
@@ -16,87 +15,211 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 ----------------------常量定义--------------------------
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
-local _M = Class(WindowBase)
+local _M = Class()
 --私有函数模块 *** 只放置私有函数, 禁止放变量
 local _P = {}
---外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
-local _R = {}
 
 local BTN_STR1 = "ty_024_1"
 local BTN_STR2 = "ty_024_5"
 
-function _R.UpdateBattle(self, info)
+function _M:UpdateBattle(info, isUpdate)
 	local battleId = info.id
 	local csv = Csv.CommerceBattle[battleId]
 	local oneMoudle = self.Battles[battleId]
-	if info.state == MCommerce.BattleState.Close then
-		oneMoudle:Get("Bar").FillAmount = 1
-		oneMoudle:Get("bloodText").Text = "100%"
+	if info.state == MCommerce.BattleState.Close then-- 开启副本
+		oneMoudle:Get("YsgBg").Activity = false
 		oneMoudle:Get('C_Btn_e').Activity = false
+		oneMoudle:Get("bottomFighting2").Activity = false
 		oneMoudle:Get("C_text").Text = Csv.Text("commerce_battle6")
-		oneMoudle:Get('C_Btn_b'):AddOnButton(function()
+
+		local openBtn = oneMoudle:Get('C_Btn_b')
+		openBtn.Activity = true
+		openBtn:AddOnButton(function()
 			SoundMgr.Play(10001)
 			WindowMgr.Create("UCommerceBattleOpen", battleId)
 		end)
 		oneMoudle:Get("C_Btn_b").SpriteName = BTN_STR2
+	elseif info.state == MCommerce.BattleState.Doing then -- 进入副本
+		oneMoudle:Get("YsgBg").Activity = false
+		oneMoudle:Get('C_Btn_e').Activity = false
+		oneMoudle:Get("bottomFighting2").Activity = true
+		oneMoudle:Get('C_Btn_b').Activity = false
+	elseif info.state == MCommerce.BattleState.Killed then -- 被击杀
+		oneMoudle:Get("YsgBg").Activity = true
+		oneMoudle:Get('C_Btn_b').Activity = false
+		oneMoudle:Get("bottomFighting2").Activity = false
+		oneMoudle:Get("C_text_0").Text = Csv.Text("commerce_battle7")
+
+		local reportBtn = oneMoudle:Get('C_Btn_e')
+		reportBtn.Activity = true
+		reportBtn:AddOnButton(function()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceBattleReport",battleId)
+		end)
+	elseif info.state == MCommerce.BattleState.End then -- 副本结束，查看战报
+		oneMoudle:Get("YsgBg").Activity = false
+		oneMoudle:Get('C_Btn_b').Activity = false
+		oneMoudle:Get("bottomFighting2").Activity = false
+		oneMoudle:Get("C_text_0").Text = Csv.Text("commerce_battle7")
+
+		local reportBtn = oneMoudle:Get('C_Btn_e')
+		reportBtn.Activity = true
+		reportBtn:AddOnButton(function()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceBattleReport",battleId)
+		end)
+	end
+
+	if isUpdate and self.BattleListData ~= nil and self.BattleListData[info.id] ~= nil then
+		self.BattleListData[info.id] = info
+		if self.CurSelectIndex == info.id then
+			_P.SetCurSelectData(self, info.id)
+		end
+	end
+end
+
+-- 新增当前选中数据信息显示
+function _P.SetCurSelectData(self, index)
+	self.CurSelectIndex = index
+
+	local module = self.Moudle
+	local info = self.BattleListData[index]
+	if info == nil then return end
+
+	local battleId = info.id
+	local csv = Csv.CommerceBattle[battleId]
+	if csv == nil then return end
+
+	module:Get("BossIcon").SpriteName = csv.icon
+	module:Get("BossName").Text = csv.name
+	module:Get("RewardText").Text = Csv.Text("commerce_battle14", {num = csv.reward1})
+	module:Get("Experience").Text = Csv.Text("commerce_battle15", {num = csv.reward2})
+
+	if info.state == MCommerce.BattleState.Close then
+		module:Get("Blood").FillAmount = 1
+		module:Get("NumText").Text = "100%"
+		module:Get('C_Btn_e').Activity = false
+		module:Get("C_text").Text = Csv.Text("commerce_battle6")
+		module:Get("YST").Text = ''
+
+		local openBtn = module:Get('C_Btn_b')
+		openBtn.Activity = true
+		openBtn:AddOnButton(function()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceBattleOpen", battleId)
+		end)
+		openBtn.SpriteName = BTN_STR2
 	elseif info.state == MCommerce.BattleState.Doing then
-		oneMoudle:Get("Bar").FillAmount = info.blood / csv.blood
+		module:Get("Blood").FillAmount = info.blood / csv.blood
 		local endValue = (info.blood / csv.blood) * 100
 		local per = math.floor(endValue + 0.5)
 		if per == 0 and endValue > 0 then
 			per = 1
 		end
-		oneMoudle:Get("bloodText").Text = per .. "%"
-		oneMoudle:Get('C_Btn_e').Activity = false
-		oneMoudle:Get("C_text").Text = Csv.Text("commerce_battle16")
-		oneMoudle:Get('C_Btn_b'):AddOnButton(function()
+		module:Get("NumText").Text = per .. "%"
+		module:Get('C_Btn_e').Activity = false
+		module:Get("C_text").Text = Csv.Text("commerce_battle16")
+		module:Get("YST").Text = ''
+
+		local fightBtn = module:Get('C_Btn_b')
+		fightBtn.Activity = true
+		fightBtn:AddOnButton(function()
 			SoundMgr.Play(10001)
-			--WindowMgr.Create("UCommerceBattle",battleId)
 			CCommerce.BattleBattleReq(battleId)
 		end)
-		oneMoudle:Get("C_Btn_b").SpriteName = BTN_STR1
+		fightBtn.SpriteName = BTN_STR1
 	elseif info.state == MCommerce.BattleState.Killed then
-		oneMoudle:Get("Bar").FillAmount = 0
-		oneMoudle:Get("YST").Text = Csv.Text("commerce_battle5")
-		oneMoudle:Get('C_Btn_b').Activity = false
-		oneMoudle:Get("C_text_0").Text = Csv.Text("commerce_battle7")
-		oneMoudle:Get('C_Btn_e'):AddOnButton(function()
+		module:Get("Blood").FillAmount = 0
+		module:Get("YST").Text = Csv.Text("commerce_battle5")
+		module:Get('C_Btn_b').Activity = false
+		module:Get("C_text_0").Text = Csv.Text("commerce_battle7")
+		module:Get("NumText").Text = ''
+
+		local reportBtn = module:Get('C_Btn_e')
+		reportBtn.Activity = true
+		reportBtn:AddOnButton(function()
 			SoundMgr.Play(10001)
 			WindowMgr.Create("UCommerceBattleReport",battleId)
 		end)
 	elseif info.state == MCommerce.BattleState.End then
-		oneMoudle:Get("Bar").FillAmount = info.blood / csv.blood
-		oneMoudle:Get("YST").Text = ''
-		oneMoudle:Get('C_Btn_b').Activity = false
-		oneMoudle:Get("C_text_0").Text = Csv.Text("commerce_battle7")
-		oneMoudle:Get('C_Btn_e'):AddOnButton(function()
+		module:Get("Blood").FillAmount = info.blood / csv.blood
+		module:Get("YST").Text = ''
+		module:Get('C_Btn_b').Activity = false
+		module:Get("C_text_0").Text = Csv.Text("commerce_battle7")
+		module:Get("NumText").Text = ''
+
+		local reportBtn = module:Get('C_Btn_e')
+		reportBtn.Activity = true
+		reportBtn:AddOnButton(function()
 			SoundMgr.Play(10001)
 			WindowMgr.Create("UCommerceBattleReport",battleId)
 		end)
 	end
+
+	local itemMoudle = self.Battles[battleId]
+	if self.CurChooseImg ~= nil and itemMoudle ~= nil then
+		self.CurChooseImg.Activity = true
+		self.CurChooseImg:SetParent(self.Moudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(0)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+		self.CurChooseImg:SetParent(itemMoudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(2)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+	end
 end
 
-function _R.OnBattleList(self, data)
+function _M:OnBattleList(data)
 	local moudle = self.Moudle
-	local content = moudle:Get("content")
+	local content = moudle:Get("Content")
 	content:DestroyChildren()
 	self.Battles = {}
+	local chooseIndex = _P.GetCurCanEnterIndex(data.list)
 	if data ~= nil and data.list ~= nil then
 		local list = _P.GetSortList(data.list)
-		for _,info in pairs(list) do
+		self.BattleListData = {}
+		for k,info in pairs(list) do
 			local battleId = info.id
-			local oneMoudle = self:CreateMoudle(content, "M_Gang_FB_Item")
+			local oneMoudle = JGuiManager.GetMoudle(content, "M_Gang_Main_Floor2_Item")
 			local csv = Csv.CommerceBattle[battleId]
-			oneMoudle:Get("bg").SpriteName = csv.iconBg
-			oneMoudle:Get("bsx").SpriteName = csv.icon
-			oneMoudle:Get("BossName").Text = csv.name
-			oneMoudle:Get("rewardTitle").Text = Csv.Text("commerce_battle3")
-			oneMoudle:Get("RewardText").Text = Csv.Text("commerce_battle14", {num = csv.reward1})
-			oneMoudle:Get("Experience").Text = Csv.Text("commerce_battle15", {num = csv.reward2})
+			oneMoudle:Get("icon").SpriteName = csv.miniIcon
+			oneMoudle:Get("nametext").Text = csv.name
+			oneMoudle:Get("text1").Text = Csv.Text("commerce_battle14", {num = csv.reward1})
+			oneMoudle:Get("text2").Text = Csv.Text("commerce_battle15", {num = csv.reward2})
 			self.Battles[battleId] = oneMoudle
-			_R.UpdateBattle(self, info)
+			self:UpdateBattle(info)
+
+			self.BattleListData[info.id] = info
+			oneMoudle:Get("bg"):AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				_P.SetCurSelectData(self, info.id)
+			end, nil, 0.95)
+
+			if chooseIndex ~= nil and chooseIndex == info.id then
+				_P.SetCurSelectData(self, info.id)
+			end
 		end
 	end
+
+	if chooseIndex >= 3 then
+		content.SizeDelta = Vector2(250 * (#data.list) - 10, content.SizeDelta.y)
+		content.LocalPosition = Vector2((chooseIndex - 2) * -250, 3)
+	else
+		content.LocalPosition = Vector2.zero
+	end
+end
+
+function _P.GetCurCanEnterIndex(data)
+	local canIndex = 1
+	if data ~= nil then
+		for k,info in pairs(data) do
+			if info.state == MCommerce.BattleState.Doing then
+				canIndex = info.id
+				break
+			end
+		end
+	end
+
+	return canIndex
 end
 
 function _P.GetSortList(rawTable)
@@ -110,27 +233,24 @@ function _P.GetSortList(rawTable)
 	return sortTable
 end
 
---外部调用派发器
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then 
-		fun(self, ...)
-	end
-end
 
 --界面构建
-function _M:OnCreate()
+function _M:ctor(parent)
 	CCommerce.BattleInfoReq()
 	self.Battles = {}
-	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_FB")
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Gang_FB", WindowType.UI, 0)
 	self.Moudle = moudle
-	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
-		SoundMgr.Play(10002)
-		self:Destroy()
-	end, nil, 1.2)
-	moudle:Get("C_Text").Text = Csv.Text("commerce_battle1")
 	moudle:Get("KEYONH").Text = Csv.Text("commerce_battle2")
-	moudle:Get("Tips").Text = Csv.Text("commerce_battle4")
+	moudle:Get("rewardTitle").Text = Csv.Text("commerce_battle3")
+	self.CurChooseImg = moudle:Get("H")
+end
+
+function _M:Destroy()
+	local moudle = self.Moudle
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
 end
 
 return _M

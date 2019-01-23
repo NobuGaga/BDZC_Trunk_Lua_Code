@@ -122,6 +122,21 @@ function _M.RefreshActivityRewardData(actData, csvValue)
 			else
 				error("error csv data, activity ID", actData.actId)
 			end
+			if csvValue.basePro[key] and csvValue.baseReward[key] then
+				actData.rankPro = actData.rankPro or 0
+				actData.list[key].isBaseReward = true
+				actData.list[key].basePro = csvValue.basePro[key]
+				actData.list[key].baseRewards = {}
+				for rewardKey, rewardValue in pairs(csvValue.baseReward[key]) do
+					local one = {
+						key = rewardValue[1],
+						value = rewardValue[2]
+					}
+					actData.list[key].baseRewards[rewardKey] = one
+				end
+			else
+				actData.list[key].isBaseReward = false
+			end
 		end
 		--更新数据层
 		MCrossActivity.UpdateActivityData(actData.actId, actData.actType, actData)
@@ -136,7 +151,9 @@ function _M.CheckRepoint()
 	for index, data in pairs(listData) do
 		if (MActivity.ActivityState.Doing == data.state.state or
 			MActivity.ActivityState.Finish == data.state.state) then
-			local isRedPoint = MActivity.RewardGetState.CanGet == data.GetState
+			local isOutRank = data.selfRank > data.maxRewardRank or 0 == data.selfRank
+			local isFinish = data.state.state == MActivity.ActivityState.Finish
+			local isRedPoint = MActivity.RewardGetState.Geted ~= data.GetState and not isOutRank and isFinish
 			if MCrossActivity.UpdataActivityRedpoint(data.actId, 1, isRedPoint) then
 				CMain.UpdateRedpoint(isRedPoint, Define.SysId.CrossRankReward, data.actId)
 			end

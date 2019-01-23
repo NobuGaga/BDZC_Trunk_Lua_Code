@@ -21,8 +21,6 @@ local MoudleName = "M_Checkpoint_Acquisition"
 local GetSuccessSoundID = 10044
 -- 收购成功特效
 local GetSuccessEffectID = 10050
--- 战斗胜利（收购成功）
-local WinEffectID = 10002
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
@@ -46,10 +44,14 @@ function _M:OnCreate(bossSprite, patrolID, callBack)
 
 	local moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	moudle:Get("background").SpriteName = csvPatrol.bgIcon
-	moudle:Get("textName").Text = csvPatrol.name
+	local textName = moudle:Get("textName")
+	textName.Text = csvPatrol.name
+	textName.LocalPosition = Vector2(csvPatrol.namePos[1], csvPatrol.namePos[2])
 	moudle:Get("textCompanyName").Text = csvPatrol.companyName
 	moudle:Get("textGetTips").Text = Csv.Text("battle_get_success")
-	moudle:Get("heroSprite").SpriteName = csvPatrol.personIcon
+	local heroSprite = moudle:Get("heroSprite")
+	heroSprite.SpriteName = csvPatrol.personIcon
+	heroSprite.LocalPosition = Vector2(csvPatrol.personPos[1], csvPatrol.personPos[2])
 
 	SoundMgr.Play(GetSuccessSoundID)
 	self:Lock()
@@ -57,7 +59,6 @@ function _M:OnCreate(bossSprite, patrolID, callBack)
 		self:Unlock()
 		LuaUtil.TextAddThreePoint(moudle:Get("textCloseTips"), Csv.Text("common_close2"))
 	end, nil, nil, 3)
-	CCommon.CreateEffect(moudle:Get('effectNode2'), WinEffectID)
 
 	local btnShare = moudle:Get("btnShare")
 	if MMain.FuncIsOpen(Define.SysId.Share) then

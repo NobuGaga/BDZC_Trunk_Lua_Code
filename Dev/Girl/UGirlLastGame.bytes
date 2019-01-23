@@ -55,46 +55,50 @@ function _P.DoDiceGame(self)
 
 	local data = self.mData
 
-	local diceTween1 = self.mDiceTween1
-	local diceTween2 = self.mDiceTween2
+	-- local diceTween1 = self.mDiceTween1
+	-- local diceTween2 = self.mDiceTween2
 
-	local cupOpen1 =  self.mCupOpen1
+	-- local cupOpen1 =  self.mCupOpen1
 	local cupOpen2 =  self.mCupOpen2
 	local dice1 =  self.mDice1
-	local dice2 =  self.mDice2
-	local cupClose1 =  self.mCupClose1
-	local cupClose2 =  self.mCupClose2
+	-- local dice2 =  self.mDice2
+	-- local cupClose1 =  self.mCupClose1
+	-- local cupClose2 =  self.mCupClose2
 
-	diceTween1:SetOnComplete(function()
-		cupOpen1.Activity = true
-		cupOpen2.Activity = true
-		cupClose1.Activity = false
-		cupClose2.Activity = false
+	-- diceTween1:SetOnComplete(function()
+		-- cupOpen1.Activity = true
+		-- cupOpen2.Activity = true
+		-- cupClose1.Activity = false
+		-- cupClose2.Activity = false
 
 		local bigIndex = math.random(1,#BIG_DICE_ICON)
 		local smallIndex = math.random(1,#SMALL_DICE_ICON)
 		if self.mIsSuccess == true then
 			SoundMgr.Play(10035)
 			CCommon.ShowError(Csv.Text("lastgirl_dice_win"))
-			dice1.SpriteName = SMALL_DICE_ICON[smallIndex]
-			dice2.SpriteName = BIG_DICE_ICON[bigIndex]
+			cupOpen2.SpriteName = "mn_049"
+			dice1.SpriteName = "mn_049"
+			-- dice2.SpriteName = BIG_DICE_ICON[bigIndex]
 
 			CCommon.CreateEffect(self.mGirlActor,DIRNK_EFFECT_ID)
 		else
 			SoundMgr.Play(10036)
 			CCommon.ShowError(Csv.Text("lastgirl_dice_fail"))
-			dice1.SpriteName = BIG_DICE_ICON[bigIndex]
-			dice2.SpriteName = SMALL_DICE_ICON[smallIndex]
+			cupOpen2.SpriteName = "mn_049"
+			dice1.SpriteName = "mn_049_2"
+			-- dice2.SpriteName = SMALL_DICE_ICON[smallIndex]
 
 			CCommon.CreateEffect(self.mPlayerActor,DIRNK_EFFECT_ID)
 		end
 		-----------------------
 		--延迟3秒后
 		self.mMoudle.SelfRect:AddOnTime(function()
-			cupOpen1.Activity = false
-			cupOpen2.Activity = false
-			cupClose1.Activity = true
-			cupClose2.Activity = true
+			dice1.SpriteName = "mn_049_4"
+			cupOpen2.SpriteName = "mn_048"
+			-- cupOpen1.Activity = false
+			-- cupOpen2.Activity = false
+			-- cupClose1.Activity = true
+			-- cupClose2.Activity = true
 
 			_P.ShowDrink(self,data)
 
@@ -115,10 +119,10 @@ function _P.DoDiceGame(self)
 				end
 			end
 		end,nil,2)
-	end)
+	-- end)
 	
-	diceTween1:Play()
-	diceTween2:Play()
+	-- diceTween1:Play()
+	-- diceTween2:Play()
 end
 
 function _M:OnCreate(id)
@@ -206,8 +210,8 @@ function _M:OnCreate(id)
 
 	moudle:Get("HelpText").Text = Csv.Text("lastgirl_detail")
 
-	moudle:Get("DrinkerText").Text = Csv.Text("girl_drinker")
-	moudle:Get("playerDrinkerText").Text = Csv.Text("girl_drinker")
+	moudle:Get("DrinkerText").Text = Csv.Text("girl_heart")
+	moudle:Get("playerDrinkerText").Text = Csv.Text("girl_gift_num")
 
 	local startBtn = moudle:Get("StartBtn")
 	local startText = moudle:Get("StartText")
@@ -256,29 +260,30 @@ function _M:OnCreate(id)
 	self.mPlayerUnDrinks = playerunDrinks
 
 	--骰子
-	local cupOpen1 = moudle:Get("cupOpen1")
+	-- local cupOpen1 = moudle:Get("cupOpen1")
 	local cupOpen2 = moudle:Get("cupOpen2")
 	local dice1 = moudle:Get("Dice1")
-	local dice2 = moudle:Get("Dice2")
-	local cupClose1 = moudle:Get("cupClose1")
-	local cupClose2 = moudle:Get("cupClose2")
+	dice1.SpriteName = "mn_049_4"
+	-- local dice2 = moudle:Get("Dice2")
+	-- local cupClose1 = moudle:Get("cupClose1")
+	-- local cupClose2 = moudle:Get("cupClose2")
 
-	local DiceTween1 = cupClose1.CachedTran:GetJTweener(DICE_TWEEN_1)
-	local DiceTween2 = cupClose2.CachedTran:GetJTweener(DICE_TWEEN_2)
+	-- local DiceTween1 = cupClose1.CachedTran:GetJTweener(DICE_TWEEN_1)
+	-- local DiceTween2 = cupClose2.CachedTran:GetJTweener(DICE_TWEEN_2)
 	local btnTween = startBtn.CachedTran:GetJTweener(T_GIRL_GAME_BTN)
 	btnTween:Play()
 
-	cupOpen1.Activity = false
-	cupOpen2.Activity = false
+	-- cupOpen1.Activity = true
+	-- cupOpen2.Activity = true
 
-	self.mCupOpen1 = cupOpen1
+	-- self.mCupOpen1 = cupOpen1
 	self.mCupOpen2 = cupOpen2
 	self.mDice1 = dice1
-	self.mDice2 = dice2
-	self.mCupClose1 = cupClose1
-	self.mCupClose2 = cupClose2
-	self.mDiceTween1 = DiceTween1
-	self.mDiceTween2 = DiceTween2
+	-- self.mDice2 = dice2
+	-- self.mCupClose1 = cupClose1
+	-- self.mCupClose2 = cupClose2
+	-- self.mDiceTween1 = DiceTween1
+	-- self.mDiceTween2 = DiceTween2
 
 	self.mGirlActor = moudle:Get("girlActorPanel")
 	self.mPlayerActor = moudle:Get("playerActorPanel")
@@ -318,14 +323,12 @@ function _P.ShowDrink(self,data)
 	end
 	--美女酒量
 	local girlMaxEnergy = girlsData.wine
-	for k,v in pairs(girlDrinks)do
-		if k<=girlMaxEnergy then
-			girlDrinks[k].Activity = true
-			girlunDrinks[k].Activity = false
-			if k >data.game.girlEnergy then
-				girlunDrinks[k].Activity = true
-			end
-		end
+	local girlHeartLevel = girlMaxEnergy - data.game.girlEnergy
+ 	for index, _ in ipairs(girlDrinks) do
+		local isShow = index <= girlMaxEnergy 
+		local isRed = index <= girlHeartLevel
+		girlDrinks[index].Activity = isRed and isShow
+		girlunDrinks[index].Activity = not isRed and isShow
 	end
 end
 
@@ -385,7 +388,8 @@ function _P.ShowSpeek(self,data,type)--1首次2赢3输
 	end
 	local speekId =speekIdTab[math.random(1,#speekIdTab)]
 
-	local talkData = Csv.GirlTalk[speekId]
+	-- local talkData = Csv.GirlTalk[speekId]
+	local talkData = { value = { Csv.Text("Girl_game_talk") } }
 	local speekTab = {}
 	for k,v in pairs(talkData.value)do
 		table.insert(speekTab,v)

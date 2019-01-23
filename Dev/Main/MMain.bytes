@@ -15,8 +15,12 @@ local MPlayer = JRequire "Dev.Player.MPlayer"
 local MEquipRot = JRequire "Dev.EquipRot.MEquipRot"
 local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
 local MSuperVIP = JRequire "Dev.SuperVIP.MSuperVIP"
+local MBlackMark = JRequire "Dev.BlackMark.MBlackMark"
 local MBattle = JRequire "Dev.Battle.MBattle"
 local MCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.MCrossLotteryActivity"
+local MCrossOccupy = JRequire "Dev.CrossOccupy.MCrossOccupy"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
 
 local _M = {}
 
@@ -223,10 +227,18 @@ function _M.FuncIsOpen(funcId, isCheckFid)
 				end
 			end
 			return false
+		elseif funcId == Define.SysId.BlackMark then
+			return MBlackMark.IsOpen
 		elseif funcId == Define.SysId.CrossArena then
 			return MCrossArena.GetIsArenaOpen()
 		elseif funcId == Define.SysId.DiamondLottery then
 			return MCrossLotteryActivity.CheckIsLotteryOpen()
+		elseif funcId == Define.SysId.CrossOccupy then
+			return MCrossOccupy.IsShopOpen
+		elseif funcId == Define.SysId.CrossFlower then
+			return MCrossFlower.State == MCrossFlower.STATE.Open or MCrossFlower.State == MCrossFlower.STATE.Finish
+		elseif funcId == Define.SysId.CrossCommerce then
+			return MCrossCommerce.State == MCrossCommerce.STATE.Open or MCrossCommerce.State == MCrossCommerce.STATE.Finish 
 		end
 		-------------------------
 		return true

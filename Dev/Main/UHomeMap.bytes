@@ -25,7 +25,7 @@ local _R = {}
 local MAP_WIDTH = 2250
 local MAP_HEIGHT = 1334
 
-local DRESS_NODE_COUNT = 2  -- 临时删除节点5（秘书换装）
+local DRESS_NODE_COUNT = 3  -- 临时删除节点5（秘书换装）
 
 local DRESS_EFFECT = 10096
 
@@ -104,7 +104,13 @@ function _P.RefreshFunc(self, moudle)
 					btn:AddOnButton(function ( )
 						if self.DresingState then
 							if v.canChange then
-								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								if k == Define.SysId.Manage then
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k], function( ... )
+										self.Moudle:Get("red13").Activity = false
+									end)
+								else
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								end
 							end
 						else
 							SoundMgr.Play(10001)
@@ -140,7 +146,13 @@ function _P.RefreshFunc(self, moudle)
 					btn:AddOnButton(function ( )
 						if self.DresingState then
 							if v.canChange then
-								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								if k == Define.SysId.Manage then
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k], function( ... )
+										self.Moudle:Get("red13").Activity = false
+									end)
+								else
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								end
 							end
 						else
 							if ClickSoundId[k] then
@@ -161,7 +173,13 @@ function _P.RefreshFunc(self, moudle)
 					v.btnLight:AddOnClick(function ( )
 						if self.DresingState then
 							if v.canChange then
-								WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								if k == Define.SysId.Manage then
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k], function( ... )
+										self.Moudle:Get("red13").Activity = false
+									end)
+								else
+									WindowMgr.Create("UHomeDress", k, DressListIconSize[k], DressIconOffset[k])
+								end
 							end
 						else
 							SoundMgr.Play(10001)
@@ -184,11 +202,17 @@ function _P.RefreshFunc(self, moudle)
 				if v.redpoint ~= nil then
 					v.redpoint.Activity = true
 				end
+				if v.notOpen then
+					v.notOpen.Activity = false
+				end
 			else
 				v.btn.Activity = false
 				v.btnClick.Activity = false
 				if v.redpoint ~= nil then
 					v.redpoint.Activity = false
+				end
+				if v.notOpen then
+					v.notOpen.Activity = true
 				end
 			end
 		end
@@ -292,7 +316,6 @@ function _M:BeforeDestroy( ... )
 	local cachedParent = cachedTab.parent.transform
 	local cachedEffects = cachedTab.effects
 	cachedEffects.DB_MaidGirl:SetParent(cachedParent)
-	cachedEffects.DB_SecretaryGirl:SetParent(cachedParent)
 	cachedEffects.DB_Child:SetParent(cachedParent)
 	cachedEffects.DB_Girl:SetParent(cachedParent)
 	cachedEffects.DB_MatchMaker:SetParent(cachedParent)
@@ -321,6 +344,7 @@ function _M:OnCreate()
 	local cachedEffects = _Global._CachedObjects.effects
 	local DB_MaidGirl = moudle:Get("DB_MaidGirl")
 	local DB_SecretaryGirl = moudle:Get("DB_SecretaryGirl")
+	self.DB_SecretaryGirl = DB_SecretaryGirl
 	local DB_Child = moudle:Get("DB_Child")
 	local DB_Girl = moudle:Get("DB_Girl")
 	local DB_MatchMaker = moudle:Get("DB_MatchMaker")
@@ -331,7 +355,6 @@ function _M:OnCreate()
 
 	if cachedEffects.DB_MaidGirl ~= nil then
 		cachedEffects.DB_MaidGirl.Parent = DB_MaidGirl.Parent
-		cachedEffects.DB_SecretaryGirl.Parent = DB_SecretaryGirl.Parent
 		cachedEffects.DB_Child.Parent = DB_Child.Parent
 		cachedEffects.DB_Girl.Parent = DB_Girl.Parent
 		cachedEffects.DB_MatchMaker.Parent = DB_MatchMaker.Parent
@@ -344,7 +367,6 @@ function _M:OnCreate()
 		local nodeCanvasLayer = nodeCanvas.SortingLayerName
 		local nodeCanvasOrder = nodeCanvas.SortingOrder
 		cachedEffects.DB_MaidGirl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
-		cachedEffects.DB_SecretaryGirl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
 		cachedEffects.DB_Child:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
 		cachedEffects.DB_Girl:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
 		cachedEffects.DB_MatchMaker:SetEffectSortingLayer(nodeCanvasLayer, nodeCanvasOrder)
@@ -357,7 +379,6 @@ function _M:OnCreate()
 	else
 		if not GameSetting.IsiOSCommit then
 			CCommon.CreateEffect(DB_MaidGirl, 20002)
-			CCommon.CreateEffect(DB_SecretaryGirl, 20003)
 			CCommon.CreateEffect(DB_Child, 20004)
 			CCommon.CreateEffect(DB_Girl, 20005)
 			CCommon.CreateEffect(DB_MatchMaker, 20006)
@@ -368,7 +389,6 @@ function _M:OnCreate()
 		_Global._CachedObjects.effects = 
 		{
 			DB_MaidGirl = DB_MaidGirl,
-			DB_SecretaryGirl = DB_SecretaryGirl,
 			DB_Child = DB_Child,
 			DB_Girl = DB_Girl,
 			DB_MatchMaker = DB_MatchMaker,
@@ -429,6 +449,9 @@ function _M:OnCreate()
 		for _, prefabName in ipairs(HomePeopleShadow) do
 			moudle:Get(prefabName).Activity = false
 		end
+	else
+		local itemId = MPlayer.GetDress()[Define.SysId.Manage]
+		_P.SetMissAnimData(self, itemId)
 	end
 
 	local homeBtns = {}
@@ -437,9 +460,12 @@ function _M:OnCreate()
 	homeBtns[Define.SysId.Girl_Unlock] = {btn = moudle:Get("Girl_2"),btnClick = moudle:Get("Girl_2_Click"),canChange = false,actor = moudle:Get("ActorGirl2"),redpoint = moudle:Get("QP_3")}
 	homeBtns[Define.SysId.Verdict] = {btn = moudle:Get("Computer"),btnClick = moudle:Get("Computer2"),btnLight = moudle:Get("Computer2"),isLight = true,redpoint = moudle:Get("QP_1")}
 	-- homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = true,actor = moudle:Get("ActorGirl3")}
-	homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = false,actor = moudle:Get("ActorGirl3"),redpoint = moudle:Get("QP_4")}
+	homeBtns[Define.SysId.Manage] = {btn = moudle:Get("Girl_3"),btnClick = moudle:Get("Girl_3_Click"),canChange = true,actor = moudle:Get("ActorGirl3"),redpoint = moudle:Get("QP_4"),scale = moudle:Get("scale3"),tips = moudle:Get("tip3")}
 	homeBtns[Define.SysId.Patrol] = {btn = moudle:Get("Projector1"),btnClick = moudle:Get("Projector1")}
 	homeBtns[Define.SysId.BusinessMap] = {btn = moudle:Get("Shapan"),btnClick = moudle:Get("Shapan")}
+	homeBtns[Define.SysId.Talent] = {btn = moudle:Get("talent"),btnClick = moudle:Get("talent"),notOpen = moudle:Get("talentNotOpen")}
+	CCommon.CreateEffect(moudle:Get("TalentActor"), 10254)
+	homeBtns[Define.SysId.Cabinet] = {btn = moudle:Get("cabinet"),btnClick = moudle:Get("cabinet")}
 	homeBtns[Define.SysId.Girl_Baby] = {btn = moudle:Get("Child"),btnClick = moudle:Get("Child_Click"),redpoint = moudle:Get("QP_2")}
 	local car = moudle:Get("Car")
 	homeBtns[Define.SysId.Car] = {btn = car,btnClick = moudle:Get("Car_Click"),canChange = true,actor = moudle:Get("ActorCar"),redpoint = moudle:Get("red1"),scale = moudle:Get("scale2"),tips = moudle:Get("tip2")}
@@ -580,6 +606,8 @@ function _M:OnCreate()
 	moudle:Get("GN_Text9").Text = Csv.Text("home_btn14")
 	moudle:Get("GN_Text10").Text = Csv.Text("home_btn16")
 	moudle:Get("GN_Text11").Text = Csv.Text("home_btn17")
+	moudle:Get("GN_Text12").Text = Csv.Text("home_btn18")
+	moudle:Get("GN_Text13").Text = Csv.Text("home_btn19")
 
 	moudle:Get("text1_0").Text = Csv.Text("home_tip5")
 	if MPlayer.GetSex() == 1 then
@@ -627,6 +655,9 @@ function _M:OnCreate()
 	CCommon.CreateEffect(videoActor,10031)
 	self:RegistRedpoint(videoActor, Define.SysId.Patrol)
 	self:RegistRedpoint(moudle:Get("red9"), Define.SysId.BusinessMap)
+	self:RegistRedpoint(moudle:Get("red10"), Define.SysId.Talent)
+	self:RegistRedpoint(moudle:Get("red11"), Define.SysId.Cabinet)
+	self:RegistRedpoint(moudle:Get("red12"), Define.SysId.DressUp)
 	CCommon.CreateEffect(penquanActor,10149)
 
 	local shuActor = moudle:Get("ShuActor")
@@ -649,6 +680,25 @@ function _M:OnCreate()
 	self.mYacht:AddOnTime(function()
 		SoundMgr.Play(5002)
 	end, nil, 5)
+end
+
+-- 设置别墅秘书动画
+function _P.SetMissAnimData(self, itemId)
+	if self.DB_SecretaryGirl.CachedTran.childCount > 0 then
+		self.DB_SecretaryGirl:DestroyChildren()
+	end
+
+	if itemId ~= nil then
+		local itemConf = Csv.Item[itemId]
+		if itemConf and itemConf.attrId ~= nil then
+			local dressConf = Csv.SecretaryDress[itemConf.attrId]
+			if dressConf and dressConf.actorId then
+				CCommon.CreateEffect(self.DB_SecretaryGirl, dressConf.actorId)
+			end
+		end
+	else
+		CCommon.CreateEffect(self.DB_SecretaryGirl, 20003)
+	end
 end
 
 function _P.RefreshPoolGirl(self)
@@ -759,6 +809,7 @@ function _P.ChangeDressingState(self,state)
 	end
 	moudle:Get("Btn").Activity = state
 	moudle:Get("Tips").Activity = not state
+	moudle:Get("red13").Activity = (state and MPlayer.SecretaryRed)
 	if WindowMgr.IsCreated("UMain") then
 		WindowMgr.Call("UMain","ChangeState",state)
 	end
@@ -801,13 +852,17 @@ function _R.RefreshDress(self,dress)
 	local homeBtns = self.mHomeBtns
 	if homeBtns[dress.sysId] ~= nil then
 		local csvItem = Csv.Item[dress.itemId]
-		if csvItem ~= nil and homeBtns[dress.sysId].btn then
-			homeBtns[dress.sysId].btn.SpriteName = csvItem.asset
-			if dress.sysId == Define.SysId.Aircraft then
-				local csvAirPos = Csv.AircraftAnimation[csvItem.asset]
-				if csvAirPos ~= nil then
-					local pos = csvAirPos.villa_pos
-					homeBtns[dress.sysId].btn.LocalPosition = Vector2(pos[1],pos[2])
+		if dress.sysId == Define.SysId.Manage then
+			_P.SetMissAnimData(self, dress.itemId)
+		else
+			if csvItem ~= nil and homeBtns[dress.sysId].btn then
+				homeBtns[dress.sysId].btn.SpriteName = csvItem.asset
+				if dress.sysId == Define.SysId.Aircraft then
+					local csvAirPos = Csv.AircraftAnimation[csvItem.asset]
+					if csvAirPos ~= nil then
+						local pos = csvAirPos.villa_pos
+						homeBtns[dress.sysId].btn.LocalPosition = Vector2(pos[1],pos[2])
+					end
 				end
 			end
 		end

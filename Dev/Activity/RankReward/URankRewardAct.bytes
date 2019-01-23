@@ -42,7 +42,7 @@ local _R = {}
 --事件派发
 function _M:Dispatch(funcName, ...)
 	local fun = _R[funcName]
-	if fun ~= nil then 
+	if fun then 
 		fun(self, ...)
 	end
 end
@@ -69,8 +69,8 @@ function _M:OnCreate(actId, rankType, sysID)
 
 	if MActivity.CommerceRank[rankType] and not self.isCross then
 		CActivity.GetInfoReq(actId)
-	elseif self.isCross then
-		CRank.GetRankList(rankType, false)
+	else
+		CRank.GetRankList(rankType, not self.isCross)
 	end
 end
 
@@ -157,7 +157,7 @@ end
 
 --创建档位项
 function _P.CreateItem(self, index, data)
-	if nil == self.listCache[index] then
+	if self.listCache[index] == nil then
 		_P.InitItem(self, index, data)
 	end
 
@@ -170,22 +170,38 @@ function _P.InitItem(self, index, data)
 	local item = {}
 
 	item.item = itemMoudle.SelfRect
-	if nil == self.defaultHeight then
-		self.defaultHeight = item.item.SizeDelta.y
-	end
 	item.textTitle = itemMoudle:Get("textTitle")
-	item.content = itemMoudle:Get("GoodsItem")
-	if nil == self.rewardColumnCount then
-		if item.content then
-			local layout = item.content:AddGridLayoutGroup()
-			if layout then
-				self.rewardColumnCount =  layout.constraintCount
-				self.rewardRowHeight = layout.cellSize.y + layout.spacing.y
-			end
-		end
-	end
+	item.content = itemMoudle:Get("goodsItem")
+	item.baseTextBg = itemMoudle:Get("baseTextBg")
+	item.textTarget = itemMoudle:Get("textTarget")
+	item.baseContent = itemMoudle:Get("baseGoodsItem")
+	itemMoudle:Get("textRank").Text = Csv.Text("rankreward_rank_reward")
 
+	_P.InitDefaultData(self, item)
 	self.listCache[index] = item
+end
+
+--初始化预设默认数据
+function _P.InitDefaultData(self, item)
+	if self.isInitDefaultData then
+		return
+	end
+	self.defaultHeight = item.item.SizeDelta.y
+	local layout = item.content:AddGridLayoutGroup()
+	if layout then
+		self.rewardColumnCount =  layout.constraintCount
+		self.rewardRowSpace = layout.spacing.y
+		self.rewardRowHeight = layout.cellSize.y + self.rewardRowSpace
+	end
+	self.defaultBaseTextPosY = item.baseTextBg.LocalPosition.y
+	self.defaultBaseRewardPosY = item.baseContent.LocalPosition.y
+	local layout = item.baseContent:AddGridLayoutGroup()
+	if layout then
+		self.baseRewardColumnCount =  layout.constraintCount
+		self.baseRewardRowHeight = layout.cellSize.y + layout.spacing.y
+	end
+	self.defaultBaseRectY = self.defaultHeight - math.abs(self.defaultBaseTextPosY)
+	self.isInitDefaultData = true
 end
 
 --刷新Item
@@ -196,31 +212,43 @@ function _P.RefreshItem(self, index, item, data)
 
 	item.textTitle.Text = data.title
 	
+	local itemHeight = self.defaultHeight
 	if data.rewards then
-		if nil == self.listRewardCache then
-			self.listRewardCache = {}
-		end
-		if self.listRewardCache[index] then
-			for num, rewardItem in ipairs(self.listRewardCache[index]) do
-				rewardItem:Destroy()
-				rewardItem = nil
-			end
-		end
-		self.listRewardCache[index] = {}
-		local num = 0
-		for k, reward in pairs(data.rewards) do
-			local rewardItem = CCommon.CreateItem(item.content, reward.key, CCommon.ShowItemTips, 
-												  {num = reward.value}, self.sysID)
-			num = num + 1
-			self.listRewardCache[index][num] = rewardItem
-		end
-		local row, rest = math.modf(num / self.rewardColumnCount)
-		if rest > 0 then
-			row = row + 1
-		end
-		local width = item.item.SizeDelta.x
-		item.item.SizeDelta = Vector2(width, self.defaultHeight + (row - 1) * self.rewardRowHeight)
+		itemHeight = _P.RefreshContentCommonItem(self, item.content, data.rewards, 
+													self.rewardColumnCount, self.rewardRowHeight, itemHeight)
 	end
+	item.baseTextBg.Activity = data.isBaseReward
+	item.baseContent.Activity = data.isBaseReward
+	if data.isBaseReward then
+		local fixHeight = itemHeight - self.defaultHeight
+		local width = item.baseTextBg.LocalPosition.x
+		item.baseTextBg.LocalPosition = Vector2(width, self.defaultBaseTextPosY - fixHeight)
+		item.textTarget.Text = Csv.Text("rankreward_target", {num = data.basePro})
+		width = item.baseContent.LocalPosition.x
+		item.baseContent.LocalPosition = Vector2(width, self.defaultBaseRewardPosY - fixHeight)
+		itemHeight = _P.RefreshContentCommonItem(self, item.baseContent, data.baseRewards, 
+													self.baseRewardColumnCount, self.baseRewardRowHeight, itemHeight)
+	else
+		itemHeight = itemHeight - self.defaultBaseRectY + self.rewardRowSpace
+	end
+
+	item.item.SizeDelta = Vector2(item.item.SizeDelta.x, itemHeight)
+end
+
+--刷新通用物品列表
+function _P.RefreshContentCommonItem(self, content, rewardList, columnCount, rowHeight, itemHeight)
+	content:DestroyChildren()
+	local num = 0
+	for _, reward in pairs(rewardList) do
+		CCommon.CreateItem(content, reward.key, CCommon.ShowItemTips, 
+							{num = reward.value}, self.sysID)
+		num = num + 1
+	end
+	local row, rest = math.modf(num / columnCount)
+	if rest > 0 then
+		row = row + 1
+	end
+	return itemHeight + (row - 1) * rowHeight
 end
 
 --初始化底部信息
@@ -365,7 +393,11 @@ function _R.RefreshGetState(self, data, sysID)
 			self.getPos.Activity = true
 		end)
 		if data.index and self.listData.list[data.index] and self.listData.list[data.index].rewards then
-			WindowMgr.Create("URankRewardActGet", self.listData.selfRank, self.listData.list[data.index].rewards, self.sysID)
+			local baseRewards
+			if self.listData.list[data.index].basePro and self.listData.rankPro >= self.listData.list[data.index].basePro then
+				baseRewards = self.listData.list[data.index].baseRewards
+			end
+			WindowMgr.Create("URankRewardActGet", self.listData.selfRank, self.listData.list[data.index].rewards, self.sysID, baseRewards)
 		else
 			error("冲榜活动返回奖励 index 为 " .. (data.index or "nil"))
 		end

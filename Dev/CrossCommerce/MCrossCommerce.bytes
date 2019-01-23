@@ -1,0 +1,99 @@
+--[[
+	@desc :
+    2019-01-08 17:06:44
+]]
+
+local _M = {}
+
+--活动状态
+_M.STATE = 
+{
+    Waiting = 1,	--未开始
+	Open = 2,		--进行中
+	Finish = 3,		--已结束（显示界面）
+	Close = 4,		--关闭（不显示界面）
+}
+--活动阶段
+_M.STAGE_TYPE = 
+{
+	None = 0,	
+	PVE = 1,	--中午阶段
+	GVG = 2,	--晚上阶段
+}
+_M.RewardState = 
+{
+	--可领取
+	CanGet = 1,
+	--已领取
+	Geted = 2,
+	--未参与
+	NotJoin = 3,
+	--不可领取(进行中时不可以领取)
+	NotGet = 4
+}
+
+--变量初始化
+local function init()
+	--活动状态
+	_M.State = _M.STATE.Close
+	--活动id
+	_M.ActID = 0
+	--活动开启时间
+	_M.StartTime = 0
+	--活动结束时间
+	_M.EndTime = 0
+	--活动关闭时间
+	_M.CloseTime = 0
+	--当前阶段
+	_M.StageType = _M.STAGE_TYPE.None
+	
+	----------第一阶段----------
+	_M.PVE = 
+	{
+		--我的战斗次数信息
+		FightTimes = 0,	--可以战斗的次数
+		FightMax = 0,	--可以战斗次数的最大值, 每天重置
+		FightBuy = 0,	--已经购买的次数
+		FightBuyMax = 0,--可购买的最大次数	
+		FightBuyCost = 0,--下次购买的钻石消耗
+		FightAutoBuy = false,--自动购买
+		--我的商会的BOSS信息
+		BossId = 0,		--当前的BOSS id
+		BossBlood = 0,	--当前BOSS的血量值
+		--兑换商店信息
+		ShopList = {},	--已经兑换过的物品列表
+		ShopScore = 0,	--商店积分
+		--伤害排名
+		MyHurt = 0,		--我的伤害值
+		MyRank = 0,		--我的伤害排名
+		
+	}
+	--商会金币
+	_M.CommerceGold = 0	--BUFF金币, GVG的时候使用
+	----------第二阶段----------
+	_M.GVG = 
+	{
+		FightTimes = 0,		--可以战斗的次数
+		FightMax = 0,		--挑战最大值
+		CommerceLadderId = 0,--商会会长id
+		CommerceScore = 0,	--商会积分
+		Fighters = {},		--阵容列表
+		MyRank = 0,			--我的积分排行
+		MyReward = _M.RewardState.NotGet,	--是否是可领取状态
+	}
+end
+init()
+
+function _M.Clean()
+	init()
+end
+
+function _M.GetGVGAllForce(  )
+	local allForce = 0
+	for k,v in pairs(_M.GVG.Fighters) do
+		allForce = allForce + v.force
+	end
+	return allForce
+end
+
+return _M

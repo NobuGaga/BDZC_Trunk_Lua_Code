@@ -1,0 +1,541 @@
+-- 展览柜主界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCabinet = JRequire "Dev.Cabinet.CCabinet"
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+-- 展览品位置
+local CabinetPos = {2, 1, 3}
+
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(...)
+	local module = self:CreateMoudle(self._RootNode, "M_Showcase_UMain")
+	self.mModule = module
+
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+	module:Get("C_Text").Text = Csv.Text("showcase_1")
+	module:Get("AddText").Text = Csv.Text("showcase_6")
+	
+	self.NoneTips = module:Get("NoneTips")
+	self.NoneTips.Text = Csv.Text("showcase_9")
+	self.CurChooseImg = module:Get("H")
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self.SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self.SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	
+	self.ChooseRect = module:Get("ChooseBlack")
+	self.ShowRect = module:Get("BottomBG2")
+	self.ChooseRect.Activity = false
+	_P.SetCabinetData(self)
+
+	local closeBtn1 = module:Get("Close")
+	closeBtn1:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		_P.OnCloseChoosePanel(self)
+	end, nil, 1.2)
+end
+
+
+function _P.SetCabinetData(self)
+	self.mRawTableItems = {}
+	for k,layerData in pairs(Csv.ShowcaseLayer) do
+		local titleText = self.mModule:Get("Title" .. layerData.id)
+		titleText.Text = layerData.name
+
+		local contentTransform = self.mModule:Get("Content" .. layerData.id)
+		contentTransform:DestroyChildren()
+
+		for i=1, layerData.gridNum do
+			if self.mRawTableItems[layerData.id] == nil then
+				self.mRawTableItems[layerData.id] = {}
+			end
+
+			self.mRawTableItems[layerData.id][i] = _P.OnCreateGridItem(self, layerData.id, i, layerData.openNum, contentTransform)
+		end
+	end
+
+	_P.SetInfoListData(self)
+end
+
+
+function _P.SetInfoListData(self)
+	if next(MCabinet.AllCabinetTable) ~= nil then
+		self.NoneTips.Activity = false
+
+		local addContent = self.mModule:Get("AddContent")
+		addContent:DestroyChildren()
+		
+		for k,v in pairs(MCabinet.AllCabinetTable) do
+			if v.layerId ~= nil and v.gridId ~= nil then
+				local showcaseConf = Csv.Showcase[v.itemId]
+				if showcaseConf ~= nil then
+					local showText = Csv.Text("showcase_14", {name = showcaseConf.name, desc = showcaseConf.addStr})
+					_P.OnCreateInfoItem(self, showText, addContent)
+				end
+			end
+		end
+
+		addContent:AddContentSizeFitter():SetLayoutVertical()
+	else
+		self.NoneTips.Activity = true
+	end
+end
+
+
+function _P.OnCreateGridItem(self, layerId, gridId, openNum, content)
+	local itemMoudle = JGuiManager.GetMoudle(content, "M_Showcase_Item", WindowType.UI)
+	if itemMoudle == nil then return end
+	gridId = CabinetPos[gridId]
+	local gridData = MCabinet.GetThisGridData(layerId, gridId)
+
+	itemMoudle:Get("WkqText").Text = Csv.Text("showcase_10")
+	local iconImg = itemMoudle:Get("Icon")
+	local unOpenRect = itemMoudle:Get("WeikaiqiBg")
+	local addImg = itemMoudle:Get("Add")
+	local redImg = itemMoudle:Get("redpoint")
+	local isOpen = gridId <= openNum
+	if isOpen then
+		if gridData then
+			-- 格子已装备
+			iconImg.Activity = true
+
+			local showcaseConf = Csv.Showcase[gridData.itemId]
+			if showcaseConf ~= nil then
+				iconImg.SpriteName = showcaseConf.showIcon
+			end
+
+			addImg.Activity = false
+			redImg.Activity = false
+			unOpenRect.Activity = false
+		else
+			-- 开启但未装备
+			iconImg.Activity = false
+			addImg.Activity = true
+			unOpenRect.Activity = false
+
+			local isShowRed = MCabinet.CheckHasCabinetShow(layerId)
+			redImg.Activity = isShowRed
+		end
+
+		itemMoudle.SelfRect:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			self.CurSelectGrid = gridId
+			_P.OnOpenChoosePanel(self, layerId, gridId)
+		end, nil, 0.95)
+	else
+		-- 格子未开启
+		iconImg.Activity = false
+		addImg.Activity = false
+		redImg.Activity = false
+		unOpenRect.Activity = true
+	end
+
+	return itemMoudle
+end
+
+
+function _P.OnCreateInfoItem(self, addStr, addContent)
+	local itemMoudle = JGuiManager.GetMoudle(addContent, "M_Showcase_Item2", WindowType.UI)
+	if itemMoudle == nil then return end
+
+	itemMoudle.SelfRect.Text = addStr or ''
+	itemMoudle.SelfRect:AddContentSizeFitter():SetLayoutVertical()
+end
+
+
+-- 打开选择展览品框
+function _P.OnOpenChoosePanel(self, layerId, gridId)
+	local listData, selectKey = _P.GetCurLayerData(layerId)
+	self.CurSelectIndex = selectKey
+	self.ShowListData = listData
+	local showContent = self.mModule:Get("content")
+	showContent:DestroyChildren()
+	
+	self.ShowTable = {}
+	for k,v in pairs(listData) do
+		self.ShowTable[k] = _P.OnCreateShowItem(self, v, showContent, k)
+	end
+
+	if self.CurSelectIndex >= 3 then
+		showContent:DOAnchorPosX((self.CurSelectIndex - 2) * -220, 0.01)
+	else
+		showContent.LocalPosition = Vector2.zero
+	end
+
+	local layerConf = Csv.ShowcaseLayer[layerId]
+	if layerConf ~= nil then
+		self.mModule:Get("CurTitle").Text = layerConf.name
+		self.mModule:Get("TypeText").Text = Csv.Text("showcase_2", {name = layerConf.name})
+	end
+
+	self.mModule:Get("C_text").Text = Csv.Text("showcase_4")
+	local showBtn = self.mModule:Get("BtnUse")
+	showBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		local curSelectData = self.ShowListData[self.CurSelectIndex]
+		if curSelectData ~= nil then
+
+			local curGridData = MCabinet.GetThisGridData(layerId, gridId)
+			if curGridData and curGridData.itemId == curSelectData.id then
+				CCommon.ShowError(Csv.Text("showcase_12"))
+			else
+				CCabinet.PutOnReq(layerId, gridId, curSelectData.id)
+			end
+		end
+	end, nil, 0.95)
+	self.ShowBtn = showBtn
+	self.NotGetText = self.mModule:Get("NotGet")
+
+	_P.OnSetShowData(self, self.ShowListData[self.CurSelectIndex])
+	self.ChooseRect.Activity = true
+	self.ShowRect.Activity = false
+end
+
+
+-- 获取该层所有的展览品，排序：获得已装备-获得未装备-未获得
+function _P.GetCurLayerData(layerId)
+	local sortList = {}
+	for k,v in pairs(Csv.Showcase) do
+		if v.type == layerId then
+			local putOnData = MCabinet.CheckIsHasGet(v.id)
+			v.isGet = (putOnData ~= nil)
+			v.isEquip = MCabinet.CheckCabinetIsPutOn(v.id)
+			v.expireTime = (putOnData and putOnData.expireTime) or 0
+			sortList[#sortList + 1] = v
+		end
+	end
+
+	table.sort(sortList, function (a, b)
+		if a.isGet then
+			if b.isGet then
+				if a.isEquip then
+					if b.isEquip then
+						return a.id < b.id
+					end
+					return true
+				else
+					if not b.isEquip then
+						return a.id < b.id
+					end
+					return false
+				end
+			end
+			return true
+		else
+			if not b.isGet then
+				if a.isEquip then
+					if b.isEquip then
+						return a.id < b.id
+					end
+					return true
+				else
+					if not b.isEquip then
+						return a.id < b.id
+					end
+					return false
+				end
+			end
+			return false
+		end
+	end)
+
+	local isSelectKey = 1
+	for i,v in ipairs(sortList) do
+		if v.isGet and (not v.isEquip) then
+			isSelectKey = i
+			break
+		end
+	end
+
+	return sortList,isSelectKey
+end
+
+
+function _P.OnCreateShowItem(self, data, showContent, index)
+	local itemMoudle = JGuiManager.GetMoudle(showContent, "M_Showcase_Item", WindowType.UI)
+	if itemMoudle == nil then return end
+
+	local iconImg = itemMoudle:Get("Icon")
+	iconImg.Activity = true
+	iconImg.SpriteName = data.showIcon
+	iconImg.IsGray = not data.isGet
+
+	itemMoudle:Get("Add").Activity = false
+	itemMoudle:Get("redpoint").Activity = false
+	itemMoudle:Get("WeikaiqiBg").Activity = false
+
+	itemMoudle.SelfRect:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		if self.CurSelectIndex ~= index then
+			self.CurSelectIndex = index
+			_P.OnSetShowData(self, data)
+		end
+	end, nil, 0.95)
+	itemMoudle.SelfRect.SpriteName = 'sh_027'
+
+	return itemMoudle
+end
+
+
+function _P.OnSetShowData(self, data)
+	if data == nil then return end
+
+	local module = self.mModule
+	module:Get("Name").Text = data.name
+	module:Get("Condition").Text = data.getStr
+	module:Get("Addition").Text = Csv.Text("showcase_14", {name = data.name, desc = data.addStr})
+
+	self.ShowBtn.Activity = data.isGet and (not data.isEquip)
+	self.NotGetText.Activity = (not data.isGet) or (data.isEquip)
+	if data.isEquip then
+		self.NotGetText.Text = Csv.Text("showcase_13")
+	else
+		self.NotGetText.Text = Csv.Text("showcase_8")
+	end
+
+	_P.OnClearTimer(self)
+	if data.isGet then
+		local leftTime = data.expireTime - HeartBeat.ServSecond()
+		if leftTime <= 0 then
+			leftTime = 0
+		else
+			self.UpdateShowTimer = self.mModule.SelfRect:AddOnUpdate(function()
+				_P.OnUpdateTime(self)
+			end, nil, 1)
+		end
+		self.mModule:Get("GoodsTime").Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+	else
+		module:Get("GoodsTime").Text = Csv.Text("showcase_7", {time = LuaUtil.GetTimeHMS(data.holdTime)})
+	end
+
+	local itemMoudle = self.ShowTable[self.CurSelectIndex]
+	if self.CurChooseImg ~= nil and self.ShowTable ~= nil and itemMoudle ~= nil then
+		self.CurChooseImg.Activity = true
+		self.CurChooseImg:SetParent(self.mModule.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(0)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+		self.CurChooseImg:SetParent(itemMoudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(1)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local curSelectData = self.ShowListData[self.CurSelectIndex]
+	if curSelectData == nil then return end
+
+	local leftTime = curSelectData.expireTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearTimer(self)
+	end
+
+	self.mModule:Get("GoodsTime").Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateShowTimer ~= nil then
+		self.UpdateShowTimer:Destroy()
+		self.UpdateShowTimer = nil
+	end
+end
+
+
+-- 关闭选择界面
+function _P.OnCloseChoosePanel(self, isNotSee)
+	if not isNotSee then
+		self.ChooseRect.Activity = false
+		self.ShowRect.Activity = true
+	end
+	_P.OnClearTimer(self)
+
+	if self.CurChooseImg ~= nil then
+		self.CurChooseImg.Activity = false
+		self.CurChooseImg:SetParent(self.mModule.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(0)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+	end
+end
+
+
+-- 穿戴返回
+function _R.OnPutOnBack(self, data, lastEquipItemData)
+	CCommon.ShowError(Csv.Text("showcase_11"))
+	_P.OnCloseChoosePanel(self)
+
+	if lastEquipItemData ~= nil then
+		local lastGridId = CabinetPos[lastEquipItemData.gridId]
+		local lastItemMoudle = self.mRawTableItems[lastEquipItemData.layerId][lastGridId]
+		if lastItemMoudle ~= nil then
+			lastItemMoudle:Get("Icon").Activity = false
+			lastItemMoudle:Get("Add").Activity = true
+			lastItemMoudle:Get("WeikaiqiBg").Activity = false
+
+			local isShowRed = MCabinet.CheckHasCabinetShow(lastEquipItemData.layerId)
+			lastItemMoudle:Get("redpoint").Activity = isShowRed
+		end
+	end
+
+	local gridId = CabinetPos[data.gridId]
+	local itemMoudle = self.mRawTableItems[data.layerId][gridId]
+	if itemMoudle ~= nil then
+		local iconImg = itemMoudle:Get("Icon")
+		local unOpenRect = itemMoudle:Get("WeikaiqiBg")
+		local addImg = itemMoudle:Get("Add")
+		local redImg = itemMoudle:Get("redpoint")
+		if data then
+			local showcaseConf = Csv.Showcase[data.itemId]
+			if showcaseConf ~= nil then
+				iconImg.SpriteName = showcaseConf.showIcon
+			end
+
+			iconImg.Activity = true
+			addImg.Activity = false
+			redImg.Activity = false
+			unOpenRect.Activity = false
+		end
+	end
+
+	for k,itemMoudle in pairs(self.mRawTableItems[data.layerId]) do
+		local addRect = itemMoudle:Get("Add")
+		if addRect.Activity == true then
+			local isShowRed = MCabinet.CheckHasCabinetShow(data.layerId)
+			itemMoudle:Get("redpoint").Activity = isShowRed
+		end
+	end
+
+	_P.SetInfoListData(self)
+end
+
+
+-- 卸下返回
+function _R.OnTakeOffBack(self, data)
+	_P.OnCloseChoosePanel(self)
+
+	local lastGridId = CabinetPos[data.gridId]
+	local lastItemMoudle = self.mRawTableItems[data.layerId][lastGridId]
+	if lastItemMoudle == nil then return end
+
+	lastItemMoudle:Get("Icon").Activity = false
+	lastItemMoudle:Get("Add").Activity = true
+	lastItemMoudle:Get("WeikaiqiBg").Activity = false
+
+	for k,itemMoudle in pairs(self.mRawTableItems[data.layerId]) do
+		local addRect = itemMoudle:Get("Add")
+		if addRect.Activity == true then
+			local isShowRed = MCabinet.CheckHasCabinetShow(data.layerId)
+			itemMoudle:Get("redpoint").Activity = isShowRed
+		end
+	end
+	_P.SetInfoListData(self)
+end
+
+
+-- 添加纪念品
+function _R.OnAddItemBack(self, data)
+	CCommon.ShowError(Csv.Text("showcase_3"))
+	if self.ChooseRect.Activity == true then
+		for k,v in pairs(self.ShowListData) do
+			if v.isGet == false and v.id == data.itemId then
+				_P.OnCloseChoosePanel(self, true)
+				_P.OnOpenChoosePanel(self, v.type, self.CurSelectGrid)
+				break
+			end
+		end
+	end
+
+	local showcaseConf = Csv.Showcase[data.itemId]
+	if showcaseConf ~= nil then
+		for k,itemMoudle in pairs(self.mRawTableItems[showcaseConf.type]) do
+			local addRect = itemMoudle:Get("Add")
+			if addRect.Activity == true then
+				local isShowRed = MCabinet.CheckHasCabinetShow(showcaseConf.type)
+				itemMoudle:Get("redpoint").Activity = isShowRed
+			end
+		end
+	end
+end
+
+
+-- 删除纪念品
+function _R.OnDelItemBack(self, data)
+	CCommon.ShowError(Csv.Text("showcase_3"))
+	-- 先刷新展览柜数据
+	_P.SetCabinetData(self)
+
+	-- 若打开了更换界面，更新数据
+	if self.ChooseRect.Activity == true then
+		for k,v in pairs(self.ShowListData) do
+			if v.isGet == true and v.id == data.itemId then
+				_P.OnCloseChoosePanel(self, true)
+				_P.OnOpenChoosePanel(self, v.type, self.CurSelectGrid)
+				break
+			end
+		end
+	end
+
+	local showcaseConf = Csv.Showcase[data.itemId]
+	if showcaseConf ~= nil then
+		for k,itemMoudle in pairs(self.mRawTableItems[showcaseConf.type]) do
+			local addRect = itemMoudle:Get("Add")
+			if addRect.Activity == true then
+				local isShowRed = MCabinet.CheckHasCabinetShow(showcaseConf.type)
+				itemMoudle:Get("redpoint").Activity = isShowRed
+			end
+		end
+	end
+end
+
+
+-- 刷新纪念品（假如是重新获得，需要更新时间）
+function _R.OnUpdateItemBack(self, data)
+	CCommon.ShowError(Csv.Text("showcase_3"))
+	if self.ChooseRect.Activity == true then
+		for k,v in pairs(self.ShowListData) do
+			if v.isGet == true and v.id == data.itemId then
+				v.expireTime = data.expireTime
+				break
+			end
+		end
+	end
+end
+
+
+return _M

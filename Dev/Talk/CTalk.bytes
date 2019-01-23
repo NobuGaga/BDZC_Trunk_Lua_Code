@@ -152,6 +152,13 @@ function _P.OnGetNewTalk(data)
 					WindowMgr.Call("UMain","OnTalkUpdate",data.sendername, data.voiceTime .. "\"")
 				end
 			end
+		elseif data.inviteType == 3 or data.inviteType == 4 then
+			local csvInvite = Csv.TalkInvite[data.inviteType]	
+			if data.channel == MTalk.Channel.UnionsMsg then
+				WindowMgr.Call("UCommerce", "OnTalkUpdate", data.sendername,csvInvite.value[1])
+			else
+				WindowMgr.Call("UMain","OnTalkUpdate",data.sendername,csvInvite.value[1])
+			end
 		end	
 	end
 	if data.redPacket then

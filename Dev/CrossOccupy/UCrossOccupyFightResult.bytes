@@ -1,0 +1,41 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+function _M:OnCreate(buildId, isSuccess, callBack)
+	self.OnCloseCall = callBack
+	self._EventNode:AddOnClick(function(  )
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Development_Success")
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
+
+	if isSuccess then
+		SoundMgr.PlayNonStopUI(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10179)	
+		if buildId ~= nil and buildId > 0 then
+			local csvLine = Csv.CrossOccupyBuilding[buildId]
+			moudle:Get("Score").Text = Csv.Text("occupy_21", {name = csvLine.name})
+		end		
+	else
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10180)
+		moudle:Get("Score").Text = Csv.Text("occupy_33")
+	end
+end
+
+return _M

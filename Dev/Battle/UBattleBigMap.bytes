@@ -50,7 +50,7 @@ function _R.OnBattleMapBoxGet(self, data)
 		local info = self.CachedList[data.id]
 		if info ~= nil and info.buildMoudle ~= nil then
 			for index,item in pairs(data.rewards) do
-				CCommon.ShowFlyItem(info.buildMoudle.SelfRect, item.id, item.count, (index - 1) * 0.4)
+				CCommon.ShowFlyItem(self.TopCanvas, item.id, item.count, (index - 1) * 0.4, info.buildMoudle.SelfRect.RootCanvasPos)
 			end
 		end
 	end
@@ -211,6 +211,8 @@ end
 
 --界面构建
 function _M:OnCreate()
+	CBattle.UpdateBusinessMapOpen(false)
+
 	local moudle = self:CreateMoudle(self._RootNode, "M_Word_Map_Main")
 	self.Moudle = moudle
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
@@ -234,6 +236,7 @@ function _M:OnCreate()
 	moudle:Get("C_text").Text = Csv.Text('battle_map_11')
 	moudle:Get("C_text_0").Text = Csv.Text('battle_map_12')
 	self.AssetsTitle = moudle:Get("Tips")
+	self.TopCanvas = moudle:Get("infoCanvas")
 	self.AssetsGetBtn = moudle:Get("C_Btn_a")
 	self.AssetsGetBtn:AddOnButton(function (  )
 		CBattle.MapAllGetReq()
@@ -290,13 +293,17 @@ function _M:OnCreate()
 			t:Play()
 
 			local flyNode = buildMoudle:Get("flyNode")
+			local flyItem = buildMoudle:Get("flyItem")
+			if csvLine.flyOffset ~= nil then
+				flyItem.LocalPosition = Vector2(csvLine.flyOffset[1], csvLine.flyOffset[2])
+			end
 			self.CachedList[csvId] = {
 				buildMoudle = buildMoudle,
 				csvLine = csvLine,			
 				lastItemIndex = 0,	--飘物品列表
 				flyNode = flyNode,
 				flyAlphaComp = flyNode:AddCanvasGroup(),
-				flyItem = buildMoudle:Get("flyItem"),
+				flyItem = flyItem,
 				flyText = buildMoudle:Get("flyText"),
 				Time = buildMoudle:Get("Time"),
 				IconBox = IconBox,

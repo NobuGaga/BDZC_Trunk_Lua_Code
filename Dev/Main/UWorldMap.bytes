@@ -25,6 +25,7 @@ local FINANCE_ACTORID = 10016
 local FINANCE_BUILDID = 6
 local BUILD_ACTORID = 10026
 local FACTORY_FX_ID = 10042
+local SNOW_ACTORID = 10216
 local SEND_FX_ID = 10043 
 local PEN_QUAN_FX_ID = 10052
 local CLICK_FX = 10054
@@ -315,7 +316,9 @@ function _M:OnCreate()
 
 	CCommon.CreateEffect(moudle:Get("SkyActorPanel"), BUILD_ACTORID)
 	CCommon.CreateEffect(moudle:Get("FountainNode"), PEN_QUAN_FX_ID)
-
+	if tonumber(Csv.Const(157)) == 1 then
+		CCommon.CreateEffect(moudle:Get("SnowNode"), SNOW_ACTORID)
+	end
 	-- 别墅红点
 	local company = moudle:Get("Iconbox3")
 	-- 码头红点
@@ -334,6 +337,8 @@ function _M:OnCreate()
 	local clubRed = moudle:Get("Iconbox13_0")
 	--商会小红点
 	local commerceStudy = moudle:Get("Iconbox6")
+	--商业会议红点
+	local expeditionRed = moudle:Get("Iconbox15")
 
 	self:RegistRedpoint(parliament, Define.SysId.Parliament)
 	self:RegistRedpoint(wharf, Define.SysId.Wharf)
@@ -342,7 +347,8 @@ function _M:OnCreate()
 	self:RegistRedpoint(equipRobRed, Define.SysId.EquipRot)
 	self:RegistRedpoint(arenaRed, Define.SysId.Arena)
 	self:RegistRedpoint(clubRed, Define.SysId.Club)
-	self:RegistRedpoint(commerceStudy, Define.SysId.Commerce)
+	self:RegistRedpoint(commerceStudy, Define.SysId.Commerce, Define.SysId.Commerce_Study)
+	self:RegistRedpoint(expeditionRed, Define.SysId.Expedition)
 
 	local tCompany = company.CachedTran:GetJTweener("T_Effect_Guodong")
 	tCompany:Play()
@@ -362,6 +368,8 @@ function _M:OnCreate()
 	tClub:Play()
 	local tCommerce = commerceStudy.CachedTran:GetJTweener("T_Effect_Guodong")
 	tCommerce:Play()
+	local tExpedition = expeditionRed.CachedTran:GetJTweener("T_Effect_Guodong")
+	tExpedition:Play()
 
 	self.skyRect = moudle:Get("SkyRect")
 	self.medRect = moudle:Get("MediumRect")

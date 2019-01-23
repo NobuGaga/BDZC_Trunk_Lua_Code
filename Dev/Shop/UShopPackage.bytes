@@ -61,7 +61,10 @@ function _P.OnCreateList(self)
 			end
 			shopMoudle:Get("TitleText1").Text = csvShop.name
 			shopMoudle:Get("PriceText").Text = csvShop.price
-			shopMoudle:Get("Diamonds1").SpriteName = Csv.Item[csvShop.buytype].miniIcon
+			shopMoudle:Get("textOrigin").Text = csvShop.oriPrice
+			local minIcon = Csv.Item[csvShop.buytype].miniIcon
+			shopMoudle:Get("Diamonds1").SpriteName = minIcon
+			shopMoudle:Get("OriginDiamond").SpriteName = minIcon
 			shopMoudle:Get("C_text").Text = Csv.Text("shop_buy")
 			shopMoudle:Get("tj").Text = Csv.Text("shop_jiage1")
 			shopMoudle:Get("C_Btn_b"):AddOnButton(function(...)

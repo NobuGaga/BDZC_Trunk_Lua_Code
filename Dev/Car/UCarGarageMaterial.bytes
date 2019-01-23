@@ -233,6 +233,11 @@ function _P.SetItemData(self, data)
 	self.mModule:Get("GoodsDesc").Text = itemConf.tips
 	self.mModule:Get("IconColor").SpriteName = itemConf.colorIcon
 	self.mModule:Get("Icon").SpriteName = itemConf.icon
+	if isShowSell then
+		self.mModule:Get("textDesc").Text = ""
+	else
+		self.mModule:Get("textDesc").Text = itemConf.description or ""
+	end
 
 	_P.SetBtnData(self, sellConf)
 end

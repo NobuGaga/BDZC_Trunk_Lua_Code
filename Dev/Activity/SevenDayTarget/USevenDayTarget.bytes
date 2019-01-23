@@ -237,6 +237,7 @@ function _P.InitActivityInfo(self)
 		SoundMgr.Play(10001)
 		WindowMgr.Create("USevenDayTargetJump", self.selectActData.jumpTitle, self.selectActData.jumpIDName)
 	end)
+	self.moudle:Get("textTips").Text = Csv.Text("sevendaytarget_tips")
 end
 
 --刷新活动信息
@@ -374,14 +375,14 @@ function _P.RefreshTargetItem(self, index, targetData)
 		if not targetData.isGeted then
 			local isCanGet = false
 			if self.selectActData.curPro then
-				isCanGet = self.selectActData.curPro >= targetData.target
+				isCanGet = self.selectActData.curPro >= targetData.target and MActivity.ActivityState.Waiting ~= self.selectActData.state.state
 			end
 			item.btnGet.IsGray = not isCanGet
 			item.btnGet.RaycastTarget = isCanGet
-			if isCanGet then
-				item.textGet.Text = Csv.Text("quest_get")
-			elseif MActivity.ActivityState.Waiting == self.selectActData.state.state then
+			if MActivity.ActivityState.Waiting == self.selectActData.state.state then
 				item.textGet.Text = Csv.Text("err_relarions_not_open")
+			elseif isCanGet then
+				item.textGet.Text = Csv.Text("quest_get")
 			elseif self.selectActData.state.lefttime - HeartBeat.ServSecond() <= 0 then
 				item.textGet.Text = Csv.Text("sevendaytarget_overdue")
 			else

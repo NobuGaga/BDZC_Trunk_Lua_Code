@@ -1,8 +1,7 @@
 --商会管理界面
 
 ----------------------文件引用--------------------------
---@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
-local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
 --@RefType [Libs.WindowMgr.WindowOpen.bytes#_M]
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 --@RefType [Dev.Commerce.CCommerce.bytes#_M]
@@ -12,42 +11,120 @@ local MCommerce = JRequire "Dev.Commerce.MCommerce"
 --@RefType [Dev.Common.CCommon.bytes#_M]
 local CCommon = JRequire "Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
+local MBag = JRequire "Dev.Bag.MBag"
+
 ----------------------常量定义--------------------------
 
---外部接口模块 *** 只放置共有接口, 禁止放变量
-local _M = Class(WindowBase)
---私有函数模块 *** 只放置私有函数, 禁止放变量
-local _P = {}
---外部刷新接口 *** 只放置外部Call的接口, 禁止放变量
-local _R = {}
 
-function _R.OnUpdatemeMyInfo(self)
-	local myInfo = MCommerce.MyCommerceInfo.myInfo
-	if self.Job ~= myInfo.job then
+local _M = Class()
+local _P = {}
+
+
+--界面构建
+function _M:ctor(parent)
+	self._RootNode = parent
+	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_Gang_Main_Administration")
+	self.Moudle = moudle
+	if MCommerce.MyCommerceInfo ~= nil then
+		local myInfo = MCommerce.MyCommerceInfo.myInfo
 		self.Job = myInfo.job
 
-		if self.Job == MCommerce.JobType.HuiZhang or self.Job == MCommerce.JobType.FuHuiZhang then
-			_P.UpdateBtns(self)
-		else
-			self:Destroy()
+		--入会申请
+		moudle:Get("text3").Text = Csv.Text("commerce_manager2")
+		moudle:Get("function3"):AddOnButton(function ()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceOperateApply")
+		end)
+
+		-- 查看成员信息
+		moudle:Get("text1").Text = Csv.Text("commerce_member1")
+		moudle:Get("function1"):AddOnButton(function ()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceMembers")
+		end)
+
+		-- 商会展览品信息
+		_P.OnSetShowItemData(self)
+
+		local changeBtn = moudle:Get("C_Btn_a")
+		changeBtn:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			_P.OnOpenChoosePanel(self)
+		end, nil, 0.9)
+		changeBtn.Activity = self.Job == MCommerce.JobType.HuiZhang
+		moudle:Get("C_text_0").Text = Csv.Text("player_change6")
+
+		self.ChooseRect = moudle:Get("ChooseBlack")
+		self.ChooseRect.Activity = false
+		self.CurChooseImg = moudle:Get("H")
+
+		local closeBtn1 = moudle:Get("Close")
+		closeBtn1:AddOnButton(function ( ... )
+			SoundMgr.Play(10002)
+			_P.OnCloseChoosePanel(self)
+		end, nil, 1.2)
+
+		_P.UpdateBtns(self)
+		moudle:Get("applyRed").Activity = (MCommerce.MyCommerceInfo.haveApply ~= nil and MCommerce.MyCommerceInfo.haveApply == true)
+	end
+end
+
+function _P.OnSetShowItemData(self)
+	local moudle = self.Moudle
+	_P.OnClearShowTimer(self)
+
+	local curStudyData = MCommerce.MyCommerceInfo.showItem
+	local questionImg = moudle:Get("Wenhao")
+	local nameText = moudle:Get("ExhibitsText")
+	if curStudyData == nil or curStudyData.itemId == nil or curStudyData.itemId == 0 then
+		questionImg.Activity = true
+		nameText.Text = Csv.Text("research_14")
+	else
+		questionImg.Activity = false
+		local showConf = Csv.CommerceShowItem[curStudyData.itemId]
+		if showConf ~= nil then
+			moudle:Get("Exhibits").SpriteName = showConf.icon
+			nameText.Text = showConf.name
+			moudle:Get("ExhibitsInfo2").Text = showConf.addStr
+		end
+
+		if curStudyData.expireTime ~= nil then
+			_P.OnUpdateShowTime(self, curStudyData.expireTime)
+			self.UpdateShowTimer = nameText:AddOnUpdate(function()
+				_P.OnUpdateShowTime(self, curStudyData.expireTime)
+			end, nil, 1)
 		end
 	end
 end
 
 function _P.UpdateBtns(self)
 	local moudle = self.Moudle
+	local changeTextRect = moudle:Get("TextBg5")
+	local overTextRect = moudle:Get("TextBg2")
+	local infoTextRect = moudle:Get("TextBg4")
 	if self.Job == MCommerce.JobType.HuiZhang then
-		moudle:Get("Btn3").Activity = true
-		moudle:Get("Btn4").Activity = true
+		changeTextRect.Activity = true
+		overTextRect.Activity = true
+		infoTextRect.Activity = true
+
+		--商会信息
+		moudle:Get("text4").Text = Csv.Text("commerce_detail1")
+		moudle:Get("function4"):AddOnButton(function ()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UCommerceUpdateInfo")
+		end)
+
 		--会长转让
-		moudle:Get("BtnText3").Text = Csv.Text("commerce_manager3")
-		moudle:Get("Btn3"):AddOnButton(function()
+		moudle:Get("text5").Text = Csv.Text("commerce_manager3")
+		moudle:Get("function5"):AddOnButton(function()
 			SoundMgr.Play(10001)
 			WindowMgr.Create("UCommerceTransfer")
 		end)
 		--解散商会
-		moudle:Get("BtnText4").Text = Csv.Text("commerce_manager4")
-		moudle:Get("Btn4"):AddOnButton(function()
+		moudle:Get("text2").Text = Csv.Text("commerce_manager4")
+		moudle:Get("function2"):AddOnButton(function()
 			SoundMgr.Play(10001)
 			local info = MCommerce.MyCommerceInfo
 			if info ~= nil then
@@ -61,55 +138,280 @@ function _P.UpdateBtns(self)
 			end
 		end)
 	else
-		moudle:Get("Btn1").Activity = false
-		moudle:Get("Btn3").Activity = false
-		moudle:Get("Btn4").Activity = false
+		infoTextRect.Activity = false
+		changeTextRect.Activity = false
+		overTextRect.Activity = false
 	end
 end
 
---外部调用派发器
-function _M:Dispatch(funcName, ...)
-	local fun = _R[funcName]
-	if fun ~= nil then
-		fun(self, ...)
+function _P.OnClearShowTimer(self)
+	if self.UpdateShowTimer ~= nil then
+		self.UpdateShowTimer:Destroy()
+		self.UpdateShowTimer = nil
 	end
 end
 
---界面构建
-function _M:OnCreate()
-	local moudle = self:CreateMoudle(self._RootNode, "M_Gang_Main_Administration")
-	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
-		SoundMgr.Play(10002)
-		self:Destroy()
-	end, nil, 1.2)
+function _P.OnUpdateShowTime(self, endTime)
+	local leftTime = endTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearShowTimer(self)
+	end
 
-	self.Moudle = moudle
-	if MCommerce.MyCommerceInfo ~= nil then
-		local myInfo = MCommerce.MyCommerceInfo.myInfo
+	self.Moudle:Get("ExhibitsTime").Text = Csv.Text("research_15", {time = LuaUtil.GetTimeHMS(leftTime)})
+end
+
+-- 更换展览品
+function _P.OnOpenChoosePanel(self)
+	local listData, selectKey = _P.GetCurLayerData()
+	self.CurSelectIndex = selectKey
+	self.ShowListData = listData
+	local showContent = self.Moudle:Get("content")
+	showContent:DestroyChildren()
+	
+	self.ShowTable = {}
+	for k,v in pairs(listData) do
+		self.ShowTable[k] = _P.OnCreateShowItem(self, v, showContent, k)
+	end
+
+	if self.CurSelectIndex >= 3 then
+		showContent:DOAnchorPosX((self.CurSelectIndex - 2) * -220, 0.01)
+	else
+		showContent.LocalPosition = Vector2.zero
+	end
+
+	self.Moudle:Get("CurTitle").Text = Csv.Text("research_16")
+	self.Moudle:Get("C_text").Text = Csv.Text("showcase_4")
+	self.Moudle:Get("Notice").Text = Csv.Text("research_17")
+	self.Moudle:Get("CostText").Text = Csv.Text("research_18")
+	local showBtn = self.Moudle:Get("BtnUse")
+	showBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		local curData = self.ShowListData[self.CurSelectIndex]
+		if curData.isGet then
+			local curShowData = MCommerce.MyCommerceInfo.showItem
+			if curShowData == nil or curShowData.itemId == 0 then
+				if not MBag.CheckItemEnough(curData.price[1], curData.price[2]) then
+					return
+				end
+
+				CCommerce.ShowItemReq(curData.id)
+			else
+				if curShowData and curShowData.itemId == curData.id then
+					CCommon.ShowError(Csv.Text("showcase_12"))
+				else
+					CCommon.CheckTips(function(isSure,rg)
+						if isSure == true then
+							if not MBag.CheckItemEnough(curData.price[1], curData.price[2]) then
+								return
+							end
+
+							CCommerce.ShowItemReq(curData.id)
+						end
+					end, {content = Csv.Text("research_20")})
+				end
+			end
+		else
+			CCommon.ShowError(Csv.Text("research_19"))
+		end
+	end, nil, 0.95)
+	self.ShowBtn = showBtn
+	self.NotGetText = self.Moudle:Get("NotGet")
+
+	_P.OnSetShowData(self, self.ShowListData[self.CurSelectIndex])
+	self.ChooseRect.Activity = true
+end
+
+function _P.OnCreateShowItem(self, data, showContent, index)
+	local itemMoudle = JGuiManager.GetMoudle(showContent, "M_Showcase_Item", WindowType.UI)
+	if itemMoudle == nil then return end
+
+	local iconImg = itemMoudle:Get("Icon")
+	iconImg.Activity = true
+	iconImg.SpriteName = data.icon
+	iconImg.IsGray = not data.isGet
+
+	itemMoudle:Get("Add").Activity = false
+	itemMoudle:Get("redpoint").Activity = false
+	itemMoudle:Get("WeikaiqiBg").Activity = false
+
+	itemMoudle.SelfRect:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		if self.CurSelectIndex ~= index then
+			self.CurSelectIndex = index
+			_P.OnSetShowData(self, data)
+		end
+	end, nil, 0.95)
+	itemMoudle.SelfRect.SpriteName = 'sh_027'
+
+	return itemMoudle
+end
+
+
+function _P.OnSetShowData(self, data)
+	if data == nil then return end
+
+	local module = self.Moudle
+	module:Get("Name").Text = data.name
+	module:Get("ShowText").Text = data.name .. ':' .. data.addStr
+
+	self.ShowBtn.Activity = data.isGet and (not data.isEquip)
+	self.NotGetText.Activity = (not data.isGet) or (data.isEquip)
+	if data.isEquip then
+		self.NotGetText.Text = Csv.Text("showcase_13")
+	else
+		self.NotGetText.Text = Csv.Text("showcase_8")
+	end
+
+	_P.OnClearTimer(self)
+	if data.isEquip then
+		local leftTime = MCommerce.MyCommerceInfo.showItem.expireTime - HeartBeat.ServSecond()
+		if leftTime <= 0 then
+			leftTime = 0
+		else
+			self.UpdateTimer = module.SelfRect:AddOnUpdate(function()
+				_P.OnUpdateTime(self)
+			end, nil, 1)
+		end
+		module:Get("GoodsTime").Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+	else
+		module:Get("GoodsTime").Text = Csv.Text("showcase_7", {time = LuaUtil.GetTimeHMS(data.holdTime)})
+	end
+	module:Get("CostNum").Text = data.price[2]
+
+	local itemMoudle = self.ShowTable[self.CurSelectIndex]
+	if self.CurChooseImg ~= nil and self.ShowTable ~= nil and itemMoudle ~= nil then
+		self.CurChooseImg.Activity = true
+		self.CurChooseImg:SetParent(self.Moudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(0)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+		self.CurChooseImg:SetParent(itemMoudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(1)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+	end
+end
+
+function _P.OnClearTimer(self)
+	if self.UpdateTimer ~= nil then
+		self.UpdateTimer:Destroy()
+		self.UpdateTimer = nil
+	end
+end
+
+-- 每s更新
+function _P.OnUpdateTime(self)
+	local leftTime = MCommerce.MyCommerceInfo.showItem.expireTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearTimer(self)
+	end
+
+	self.Moudle:Get("GoodsTime").Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+end
+
+-- 获取该层所有的展览品，排序：获得已装备-获得未装备-未获得
+function _P.GetCurLayerData()
+	local sortList = {}
+	for k,v in pairs(Csv.CommerceShowItem) do
+		local putOnData = MCabinet.CheckIsHasGet(v.id)
+		v.isGet = v.needCommerceLevel <= MCommerce.CommerceLevel
+		v.isEquip = MCommerce.MyCommerceInfo.showItem and MCommerce.MyCommerceInfo.showItem.itemId == v.id
+		sortList[#sortList + 1] = v
+	end
+
+	table.sort(sortList, function (a, b)
+		if a.isGet then
+			if b.isGet then
+				if a.isEquip then
+					if b.isEquip then
+						return a.id < b.id
+					end
+					return true
+				else
+					if not b.isEquip then
+						return a.id < b.id
+					end
+					return false
+				end
+			end
+			return true
+		else
+			if not b.isGet then
+				if a.isEquip then
+					if b.isEquip then
+						return a.id < b.id
+					end
+					return true
+				else
+					if not b.isEquip then
+						return a.id < b.id
+					end
+					return false
+				end
+			end
+			return false
+		end
+	end)
+
+	local isSelectKey = 1
+	for i,v in ipairs(sortList) do
+		if v.isGet and (not v.isEquip) then
+			isSelectKey = i
+			break
+		end
+	end
+
+	return sortList,isSelectKey
+end
+
+-- 关闭选择界面
+function _P.OnCloseChoosePanel(self, isNotSee)
+	if not isNotSee then
+		self.ChooseRect.Activity = false
+	end
+	_P.OnClearTimer(self)
+
+	if self.CurChooseImg ~= nil then
+		self.CurChooseImg.Activity = false
+		self.CurChooseImg:SetParent(self.Moudle.SelfRect.CachedTran)
+		self.CurChooseImg.CachedTran:SetSiblingIndex(0)
+		self.CurChooseImg.LocalPosition = Vector2.zero
+	end
+end
+
+
+function _M:SetRedpointHidden()
+	self.Moudle:Get("applyRed").Activity = (MCommerce.MyCommerceInfo.haveApply ~= nil and MCommerce.MyCommerceInfo.haveApply == true)
+end
+
+function _M:OnUpdatemeMyInfo()
+	local myInfo = MCommerce.MyCommerceInfo.myInfo
+	if self.Job ~= myInfo.job then
 		self.Job = myInfo.job
-		moudle:Get("title").Text = Csv.Text("commerce_manager1")
 
-		--商会信息
-		moudle:Get("BtnText1").Text = Csv.Text("commerce_detail1")
-		moudle:Get("Btn1"):AddOnButton(function ()
-			SoundMgr.Play(10001)
-			WindowMgr.Create("UCommerceUpdateInfo")
-		end)
-		--入会申请
-		moudle:Get("BtnText2").Text = Csv.Text("commerce_manager2")
-		moudle:Get("Btn2"):AddOnButton(function ()
-			SoundMgr.Play(10001)
-			WindowMgr.Create("UCommerceOperateApply")
-		end)
-		_P.UpdateBtns(self)
-
-		moudle:Get("redPoint").Activity = (MCommerce.MyCommerceInfo.haveApply ~= nil and MCommerce.MyCommerceInfo.haveApply == true)
+		if self.Job == MCommerce.JobType.HuiZhang or self.Job == MCommerce.JobType.FuHuiZhang then
+			_P.UpdateBtns(self)
+		else
+			self:Destroy()
+		end
 	end
 end
 
-function _R.SetRedpointHidden(self)
+-- 展出商会展览品返回
+function _M:OnShowItemBack(data)
+	CCommon.ShowError(Csv.Text("showcase_11"))
+	_P.OnCloseChoosePanel(self)
+
+	_P.OnSetShowItemData(self)
+end
+
+function _M:Destroy()
 	local moudle = self.Moudle
-	moudle:Get("redPoint").Activity = (MCommerce.MyCommerceInfo.haveApply ~= nil and MCommerce.MyCommerceInfo.haveApply == true)
+	if moudle ~= nil then
+		moudle:Destroy()
+	end
 end
 
 return _M

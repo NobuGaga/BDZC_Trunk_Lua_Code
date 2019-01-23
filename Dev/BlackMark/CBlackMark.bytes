@@ -1,0 +1,94 @@
+--@RefType [Dev.EventCenter.bytes#_M]
+local EventCenter = JRequire "Dev.EventCenter"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.BlackMark.MBlackMark.bytes#_M]
+local MBlackMark = JRequire "Dev.BlackMark.MBlackMark"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+local ECmdId = {
+	cBlackMarkRefresh 	= 1,	--手动消耗钻石刷新请求 
+	cBlackMarkBuy		= 2,	--购买请求 PBlackMark.CBlackMarkBuy
+
+	sBlackMarkInit		= 1,	--初始化信息 PBlackMark.SBlackMarkInit
+	sBlackMarkBuy		= 2,	--购买返回 PBlackMark.PBlackMarkInfo
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[ECmdId.cBlackMarkBuy] 	= "PBlackMark.CBlackMarkBuy",
+	}
+	local recv = {
+		[ECmdId.sBlackMarkInit] = { proto = "PBlackMark.SBlackMarkInit", handle = _P.OnInit},
+		[ECmdId.sBlackMarkBuy] 	= { proto = "PBlackMark.PBlackMarkInfo", handle = _P.OnBuy},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.BlackMark, send, recv, isReload)
+end
+
+--清空模块
+function _M.ModuleClean()
+	MBlackMark.Clean()
+	if _P.TimeHandle then
+		EventCenter.UnRegistCallEvent(_P.TimeHandle)
+		_P.TimeHandle = nil
+	end
+end
+
+----------------------------- Client -> Server -----------------------------
+function _M.Refresh()
+	_M.Send(ECmdId.cBlackMarkRefresh)
+end
+
+function _M.Buy(index)
+	_M.Send(ECmdId.cBlackMarkBuy, {index = index})
+end
+
+----------------------------- Server -> Client -----------------------------
+function _P.OnInit(data)
+	MBlackMark.Init(data)
+	_P.StartUpdateCloseTime()
+	WindowMgr.Call("UBlackMark", "RefreshView")
+end
+
+function _P.OnBuy(data)
+	if MBlackMark.RefreshProductData(data) then
+		WindowMgr.Call("UBlackMark", "OnBuy", data.index)
+	end
+end
+
+-----------------------------   Data Concrol   -----------------------------
+--开始黑市关闭倒计时
+function _P.StartUpdateCloseTime()
+	if MBlackMark.IsOpen and _P.TimeHandle == nil then
+		_P.TimeHandle = EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate, 
+			function (eventHandle, now)
+				_P.UpdateCloseTime()
+			end)
+		WindowMgr.Call("UMain", "RefreshTopBtns")
+	elseif not MBlackMark.IsOpen and _P.TimeHandle then
+		EventCenter.UnRegistCallEvent(_P.TimeHandle)
+		_P.TimeHandle = nil
+		if WindowMgr.IsCreated("UBlackMark") then
+			WindowMgr.Call("UBlackMark", "OnClose")
+		end
+		WindowMgr.Call("UMain", "RefreshTopBtns")
+	end
+end
+
+--黑市关闭倒计时
+function _P.UpdateCloseTime()
+	local lessTime = MBlackMark.CloseTimestamp - HeartBeat.ServSecond()
+	if WindowMgr.IsCreated("UBlackMark") then
+		WindowMgr.Call("UBlackMark", "RefreshCloseTime", lessTime)
+	end
+	if lessTime <= 0 then
+		MBlackMark.IsOpen = false
+		_P.StartUpdateCloseTime()
+	end
+end
+
+return _M

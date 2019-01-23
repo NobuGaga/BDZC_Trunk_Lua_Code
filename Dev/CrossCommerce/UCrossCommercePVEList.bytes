@@ -1,0 +1,144 @@
+--[[
+	@desc :
+    2019-01-10 14:49:32
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+function _P.pressPVEFight(self, commerceId, serverId, bossId, bossBlood)
+	local bossCsv = Csv.crossCommerceBoss[MCrossCommerce.PVE.BossId]
+	local startFight = function()			
+		WindowMgr.Create("UBattleBossNew",
+			{
+				bossBlood = bossBlood,
+				bossFullBlood = bossCsv.blood,
+				bossImg = bossCsv.body,
+				bossTab = bossCsv.smallbg,
+				bossBg = bossCsv.bg
+			},
+			function()
+				CCrossCommerce.AFightOtherBossReq(commerceId, serverId, bossId)
+			end,
+			function(data,param)
+				WindowMgr.Create("UCrossCommercePVEResult", data.result, function (  )
+					WindowMgr.Destroy("UBattleBossNew")
+				end)
+			end
+		)
+	end
+	local pressFunc = function ()
+		if MCrossCommerce.PVE.FightTimes <= 0 then
+			if MCrossCommerce.PVE.FightBuy < MCrossCommerce.PVE.FightBuyMax then
+				if MCrossCommerce.PVE.FightAutoBuy then
+					if MCrossCommerce.PVE.FightBuyCost > MBag.GetItemNum(Define.AssetsType.Gold) then
+						CCommon.ShowError(Csv.Text("err_club_no_gold"))
+					else
+						startFight()
+					end
+				else
+					local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+					CCommon.CheckTips(
+						function(isSure, arg)
+							if isSure then
+								if MCrossCommerce.PVE.FightBuyCost > haveGode then
+									CCommon.ShowError(Csv.Text("err_club_no_gold"))
+								else
+									startFight()
+								end
+							end
+						end, 
+						{
+							items = {[Define.AssetsType.Gold] = haveGode},
+							content = Csv.Text("cross_commerce_17",{num = MCrossCommerce.PVE.FightBuyCost, max = (MCrossCommerce.PVE.FightBuyMax - MCrossCommerce.PVE.FightBuy)})
+						}
+					)
+				end				
+			else
+				CCommon.ShowError(Csv.Text("cross_commerce_16"))
+			end
+		else
+			startFight()
+		end	
+	end
+	if self.LastPressTime + 2 < CS.UnityEngine.Time.time then
+		self.LastPressTime = CS.UnityEngine.Time.time
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			pressFunc()
+		else
+			CCommon.ShowError(Csv.Text("cross_commerce_18"))
+		end
+	end
+end
+
+function _R.OnPVEBossList(self, list)
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+	local isNone = true
+	if list ~= nil then
+		local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+		if actCsv ~= nil then
+			for k,v in pairs(list) do
+				isNone = false
+	
+				local oneMoudle = self:CreateMoudle(content, "M_GangPK_Boss_Item")
+				oneMoudle:Get("BossName").Text = Csv.Text("cross_commerce_31")
+				oneMoudle:Get("BossXueliang").Text = Csv.Text("cross_commerce_32")
+				oneMoudle:Get("ShName").Text = Csv.Text("cross_commerce_29", {name = v.commerceName, level = v.commerceLevel})  
+				oneMoudle:Get("NameText").Text = Csv.Text("cross_commerce_30", {name = "S" .. v.serverId .. "." .. v.ladderName})
+				local bossCsv = Csv.crossCommerceBoss[v.bossId]
+				oneMoudle:Get("BossNameText").Text = bossCsv.name
+				local endValue = (v.blood / bossCsv.blood) * 100
+				local per = math.floor(endValue + 0.5)
+				if per == 0 and endValue > 0 then
+					per = 1
+				end
+				oneMoudle:Get("BossXueliangText").Text = per .. "%"
+				oneMoudle:Get("Jianngli").Text = Csv.Text("cross_commerce_19")
+				oneMoudle:Get("JianngliText1").Text = Csv.Text("cross_commerce_33", {num = actCsv.killPoint})
+				oneMoudle:Get("JianngliText2").Text = Csv.Text("cross_commerce_34", {num = actCsv.killCoin})
+				oneMoudle:Get("C_text_1").Text = Csv.Text("cross_commerce_3")
+				oneMoudle:Get("Head").SpriteName = bossCsv.icon
+				oneMoudle:Get("Btn1"):AddOnButton(function (  )
+					_P.pressPVEFight(self, v.commerceId, v.serverId, v.bossId, v.blood)
+				end)
+			end
+		end		
+	end
+	if isNone then
+		moudle:Get("None").Text = Csv.Text("cross_commerce_28")
+	end
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Boss")
+	self.mMoudle = moudle
+	self.LastPressTime = 0
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+    moudle:Get("C_Text").Text = Csv.Text("cross_commerce_7")
+    
+	if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+		CCrossCommerce.ABossListReq()
+	else
+		moudle:Get("None").Text = Csv.Text("cross_commerce_18")
+	end
+end
+
+return _M

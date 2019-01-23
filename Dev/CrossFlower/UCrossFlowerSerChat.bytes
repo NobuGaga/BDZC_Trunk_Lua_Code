@@ -1,0 +1,96 @@
+--[[
+	@desc :
+    2018-12-19 14:59:34
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local CCrossFlower = JRequire "Dev.CrossFlower.CCrossFlower"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateSerChat(self)
+	local actCsv = Csv.CrossFlower[MCrossFlower.ActID]
+	local myNum = actCsv.mySerChatNum - MCrossFlower.MySerChatNum
+	if myNum < 0 then myNum = 0 end
+	self.MySerNumNode.Text = Csv.Text("flower_32", {num = myNum})
+	local myCost = actCsv.mySerChatCost[#actCsv.mySerChatCost]
+	if actCsv.mySerChatCost[MCrossFlower.MySerChatNum  + 1] ~= nil then
+		myCost = actCsv.mySerChatCost[MCrossFlower.MySerChatNum  + 1]
+	end
+	self.MyCostNode.Text = Csv.Text("flower_17", {num = myCost})
+	if myNum > 0 then
+		self.MyBtn.IsGray = false
+		self.MyBtn.RaycastTarget = true
+		self.MyBtn:AddOnButton(function(  )
+			if MBag.CheckItemEnough(Define.AssetsType.Gold, myCost) then
+				CCrossFlower.ReqSerChat(1)
+				self.MyBtn.IsGray = true
+				self.MyBtn.RaycastTarget = false
+			end
+		end)
+	else
+		self.MyBtn.IsGray = true
+		self.MyBtn.RaycastTarget = false
+	end
+
+	local crossNum = actCsv.crossSerChatNum - MCrossFlower.CrossSerChatNum
+	if crossNum < 0 then crossNum = 0 end
+	self.CrossSerNumNode.Text = Csv.Text("flower_32", {num = crossNum})
+	local crossCost = actCsv.crossSerChatCost[#actCsv.crossSerChatCost]
+	if actCsv.crossSerChatCost[MCrossFlower.CrossSerChatNum  + 1] ~= nil then
+		crossCost = actCsv.crossSerChatCost[MCrossFlower.CrossSerChatNum  + 1]
+	end
+	self.CrossCostNode.Text = Csv.Text("flower_17", {num = crossCost})
+	if crossNum > 0 then		
+		self.CrossBtn.IsGray = false
+		self.CrossBtn.RaycastTarget = true
+		self.CrossBtn:AddOnButton(function(  )
+			if MBag.CheckItemEnough(Define.AssetsType.Gold, crossCost) then
+				CCrossFlower.ReqSerChat(2)
+				self.CrossBtn.IsGray = true
+				self.CrossBtn.RaycastTarget = false
+			end
+		end)
+	else
+		self.CrossBtn.IsGray = true
+		self.CrossBtn.RaycastTarget = false
+	end
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_FlowerList_Canvass")
+	self.mMoudle = moudle
+	moudle:Get("C_backBtn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+    moudle:Get("title").Text = Csv.Text("flower_3")
+    moudle:Get("Title1").Text = Csv.Text("flower_12")
+	moudle:Get("Title2").Text = Csv.Text("flower_13")
+	moudle:Get("Tips1").Text = Csv.Text("flower_14")
+	moudle:Get("Tips2").Text = Csv.Text("flower_15")
+	moudle:Get("C_text").Text = Csv.Text("flower_16")
+	moudle:Get("C_text_0").Text = Csv.Text("flower_16")
+	self.MySerNumNode = moudle:Get("Tips11")
+	self.MyCostNode = moudle:Get("consumeText1")
+	self.CrossSerNumNode = moudle:Get("Tips22")
+	self.CrossCostNode = moudle:Get("consumeText2")
+	self.MyBtn = moudle:Get("C_Btn_b")
+	self.CrossBtn = moudle:Get("C_Btn_d")
+
+	_R.OnUpdateSerChat(self)
+end
+
+return _M

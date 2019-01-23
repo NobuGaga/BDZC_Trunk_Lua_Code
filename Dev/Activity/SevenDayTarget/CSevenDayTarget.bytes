@@ -194,7 +194,7 @@ function _M.CheckRepoint()
 				for index, data in ipairs(actData.targetData) do
 					local isIndexRedPoint
 					if actData.curPro then
-						isIndexRedPoint = actData.curPro >= data.target and not data.isGeted
+						isIndexRedPoint = actData.curPro >= data.target and not data.isGeted and actData.state.state ~= MActivity.ActivityState.Waiting
 					end
 					isActRedPoint = isActRedPoint or isIndexRedPoint
 					if MActivity.ActRedpoint(actData.actId, index, isIndexRedPoint) then
@@ -285,25 +285,6 @@ function _M.OnUpdatePro(actData, proData)
 	WindowMgr.Call("USevenDayTarget", "OnRefreshTargetViewAndProcess", proData.actId)
 end
 
-function _P.OnUpdateSevenRank(data)
-	local actId = data.actId
-	local actData = MActivity.GetFromId(actId)
-	if actData then
-		actData.rankPro = data.rankPro
-		actData.selfRank = data.rank
-		WindowMgr.Call("USevenDayTarget", "OnRefreshRankBottomInfo")
-	end
-end
-
 ------------------------------非通用接口注册(需要放到最下面进行)------------------------------
-_M.CMD_ID = 
-{
-	sSevenDayRank = 21,		--(七日目标)返回排名PActivity.SSevenDayRank
-}
-
-_M.func_recv = 
-{
-	[_M.CMD_ID.sSevenDayRank]	= {proto = "PActivity.SSevenDayRank",	handle = _P.OnUpdateSevenRank},
-}
 
 return _M

@@ -40,6 +40,8 @@ end
 function _M:OnCreate(index,staffid)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Checkpoint_ChooseStaff")
 	self.mMoudle = moudle
+	MLineUp.IsChange = false
+	MLineUp.GetLineAllPower()
 	local csvItem = Csv.Item[itemid]
 	moudle:Get("btnClose"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)

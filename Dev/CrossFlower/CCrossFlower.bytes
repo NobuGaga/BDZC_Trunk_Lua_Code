@@ -1,0 +1,318 @@
+--[[
+    @moudle name : 
+	@desc :开服鲜花榜
+    2018-12-17 14:34:05
+]]
+
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = {}
+local _P = {}
+
+--系统id: Define.SysId.CrossFlower = 147
+local CMD_ID = 
+{
+	--C --> S
+	cGetListByPlayer = 1,	--通过玩家打开鲜花榜界面或列表信息	PCrossFlower.CListByPlayer, 返回sGetList
+	cGetListByType = 2,		--通过类型获取鲜花榜列表信息 PCrossFlower.CListByType, 返回sGetList
+	cSendListByType = 3,	--通过玩家打开送花榜 PCrossFlower.CListByType, 返回sSendList
+	cSendFlower = 4,		--送鲜花 PCrossFlower.CSendFlower, 返回sSendFlower
+	cOpenSearch = 5,		--打开搜索界面, 返回参加了的好友和商会列表, 返回sOpenSearch
+	cSearch = 6,			--搜索玩家 PCrossFlower.CSearch, 返回sSearch
+	cOpenUI = 7,			--打开界面的时候进行报名, 报名专用
+	cShopBuy = 9,			--商店购买 PCrossFlower.CShopBuy, 返回sShopBuy
+	cSerChat = 10,			--拉票 PCrossFlower.CSerChat, 返回sSerChat
+	cGetReward = 11,		--领取鲜花榜奖励
+	cSendReward = 12,		--领取送花榜奖励
+	cSendListByPlayer = 13,	--通过玩家打开送花榜界面 PCrossFlower.CListByPlayer, 返回sSendList
+	--S --> C
+	sInit = 1,				--进入游戏初始化 PCrossFlower.SInit, 12点的时候刷新等
+	sUpdateState = 2,		--刷新活动状态 PCrossFlower.SState
+	sUpdateInfo = 3,		--刷新我的信息 PCrossFlower.SInfo	
+	sGetList = 4,			--鲜花榜列表 PCrossFlower.SRankList
+	sSendList = 5,			--鲜花榜列表 PCrossFlower.SRankList
+	sSendFlower = 6,		--送出鲜花后返回 PCrossFlower.SRankList
+	sOpenSearch = 7,		--打开搜索界面返回 PCrossFlower.SOpenSearch
+	sSearch = 8,			--通过id搜索返回 PCrossFlower.SPlayerInfo, 只有报过名的才有效
+	sShopBuy = 9,			--商店购买 PIntInt
+	sSerChat = 10,			--拉票信息返回 PCrossFlower.SSerChat
+	sGetReward = 11,		--鲜花榜领取奖励返回 PCrossFlower.SReward
+	sSendReward = 12,		--送花榜领取奖励返回 PCrossFlower.SReward
+	sDropItem = 13,			--物品掉落 PCrossFlower.SDropItem
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[CMD_ID.cGetListByPlayer] = "PCrossFlower.CListByPlayer",
+		[CMD_ID.cGetListByType] = "PCrossFlower.CListByType",
+		[CMD_ID.cSendListByType] = "PCrossFlower.CListByType",
+		[CMD_ID.cSendFlower] = "PCrossFlower.CSendFlower",
+		[CMD_ID.cOpenSearch] = "",
+		[CMD_ID.cSearch] = "PCrossFlower.CSearch",
+		[CMD_ID.cOpenUI] = "",
+		[CMD_ID.cShopBuy] = "PCrossFlower.CShopBuy",
+		[CMD_ID.cSerChat] = "PCrossFlower.CSerChat",
+		[CMD_ID.cGetReward] = "",
+		[CMD_ID.cSendReward] = "",
+		[CMD_ID.cSendListByPlayer] = "PCrossFlower.CListByPlayer",
+	}
+	local recv = {
+		[CMD_ID.sInit]          =		{proto = "PCrossFlower.SInit",		handle = _P.OnInit			},
+		[CMD_ID.sUpdateState]   =		{proto = "PCrossFlower.SState",		handle = _P.OnUpdateState	},
+		[CMD_ID.sUpdateInfo]    =		{proto = "PCrossFlower.SInfo",		handle = _P.OnUpdateInfo	},
+		[CMD_ID.sGetList]       =		{proto = "PCrossFlower.SRankList",	handle = _P.OnGetList		}, 
+		[CMD_ID.sSendList]      =		{proto = "PCrossFlower.SRankList",	handle = _P.OnSendList		},
+		[CMD_ID.sSendFlower]    =		{proto = "PCrossFlower.SRankList",	handle = _P.OnSendFlower	},
+		[CMD_ID.sOpenSearch]    =		{proto = "PCrossFlower.SOpenSearch",handle = _P.OnOpenSearch	},
+		[CMD_ID.sSearch]        =		{proto = "PCrossFlower.SPlayerInfo",handle = _P.OnSearch		},
+		[CMD_ID.sShopBuy]       =		{proto = "PIntInt",					handle = _P.OnShopBuy		},
+		[CMD_ID.sSerChat]       =		{proto = "PCrossFlower.SSerChat",	handle = _P.OnSerChat		},
+		[CMD_ID.sGetReward]     =		{proto = "PCrossFlower.SInfo",		handle = _P.OnGetReward		},
+		[CMD_ID.sSendReward]    =		{proto = "PCrossFlower.SInfo",		handle = _P.OnSendReward	},
+		[CMD_ID.sDropItem]    	=		{proto = "PCrossFlower.SDropItem",	handle = _P.OnDropItem		},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.CrossFlower, send, recv, isReload)
+end
+
+EventCenter.RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+	if itemId == MCrossFlower.FlowerItemID then
+		_P.checkRedpoint()
+	end
+end, true)
+
+function _M.ModuleClean()
+	MCrossFlower.Clean()
+end
+
+--Client -- Server
+
+	function _M.ReqGetListByPlayer(playerid, oriServerId)
+		-- print("------ReqGetListByPlayer------", playerid, oriServerId)
+
+		_M.Send(CMD_ID.cGetListByPlayer, {playerid = playerid, oriServerId = oriServerId})
+	end
+	function _M.ReqSendListByPlayer(playerid, oriServerId)
+		-- print("------ReqSendListByPlayer------", playerid, oriServerId)
+
+		_M.Send(CMD_ID.cSendListByPlayer, {playerid = playerid, oriServerId = oriServerId})
+	end
+	function _M.ReqGetListByType(rankType)
+		-- print("------ReqGetListByType------", rankType)
+
+		_M.Send(CMD_ID.cGetListByType, {rankType = rankType})
+	end
+	function _M.ReqSendListByType(rankType)
+		-- print("------ReqSendListByType------", rankType)
+
+		_M.Send(CMD_ID.cSendListByType, {rankType = rankType})
+	end
+	function _M.ReqSendFlower(playerid, serverid, index)
+		-- print("------ReqSendFlower------", playerid, serverid, index)
+
+		_M.Send(CMD_ID.cSendFlower, {playerid = playerid, serverid = serverid, num = index})
+	end
+	function _M.ReqOpenSearch()
+		-- print("------ReqOpenSearch------")
+
+		_M.Send(CMD_ID.cOpenSearch)
+	end
+	function _M.ReqSearch(playerid)
+		-- print("------ReqSearch------", playerid)
+
+		_M.Send(CMD_ID.cSearch, {playerid = playerid})
+	end
+	function _M.ReqOpenUI()
+		-- print("------ReqOpenUI------")
+
+		_M.Send(CMD_ID.cOpenUI)
+	end
+	function _M.ReqShopBuy(id)
+		-- print("------ReqShopBuy------", id)
+
+		_M.Send(CMD_ID.cShopBuy, {id = id})
+	end
+	function _M.ReqSerChat(type)
+		-- print("------ReqSerChat------", type)
+
+		_M.Send(CMD_ID.cSerChat, {type = type})
+	end
+	function _M.ReqGetReward()
+		-- print("------ReqGetReward------")
+
+		_M.Send(CMD_ID.cGetReward)
+	end
+	function _M.ReqSendReward()
+		-- print("------ReqSendReward------")
+
+		_M.Send(CMD_ID.cSendReward)
+	end
+
+function _M.CheckRedPoint()
+	_P.checkRedpoint()
+end
+
+function _M.TalkToFlower(sender, serverId)
+	if MMain.FuncIsOpen(Define.SysId.CrossFlower) then
+		if MCrossFlower.State == MCrossFlower.STATE.Open then
+			WindowMgr.Create("UCrossFlower", sender, serverId)
+			-- CCommon.ShowLoading()
+		else
+			CCommon.ShowError(Csv.Text("siege_main_close"))
+		end
+	else
+		local funcCsv = Csv.Func[Define.SysId.CrossFlower]
+		if funcCsv.openType == 1 and funcCsv.openParam > MPlayer.GetLevel() then
+			local showStr = funcCsv.conditionDesc
+			if showStr == nil or showStr == "" then
+				showStr = Csv.Text("flower_26")
+			end
+			CCommon.ShowError(showStr)
+		else
+			CCommon.ShowError(Csv.Text("timelimit_close"))
+		end		
+	end
+end
+
+--Server -- Client
+
+function _P.OnInit(data)
+	-- LuaUtil.DumpTable(data, "------OnInit---->>>")
+	_P.OnUpdateState(data.state)
+	_P.OnUpdateShop(data.shop)
+	_P.OnUpdateSerChat(data.serChat)
+end
+function _P.OnUpdateState(data)
+	-- LuaUtil.DumpTable(data, "------OnUpdateState---->>>")
+	local lastState = MCrossFlower.State
+	MCrossFlower.State = data.state
+	MCrossFlower.ActID = data.actId or 0
+	MCrossFlower.StartTime = data.starttime or 0
+	MCrossFlower.EndTime = data.endtime or 0
+	MCrossFlower.CloseTime = data.closetime or 0
+	if lastState ~= MCrossFlower.State then
+		WindowMgr.Call("UMain", "RefreshTopBtns")
+
+		if WindowMgr.IsCreated("UCrossFlower") then
+			if MCrossFlower.State == MCrossFlower.STATE.Close or MCrossFlower.State == MCrossFlower.STATE.Waiting then
+				WindowMgr.Destroy("UCrossFlower")
+			else
+				WindowMgr.Call("UCrossFlower", "OnUpdateState")
+			end
+		end
+	end
+	_P.checkRedpoint()
+end
+function _P.OnUpdateInfo(data)
+	-- LuaUtil.DumpTable(data, "------OnUpdateInfo---->>>")
+	if data.type == MCrossFlower.RankType.Get then
+		--鲜花榜排名
+		MCrossFlower.MyGetRank = data.Rank
+		--鲜花榜阶段
+		MCrossFlower.MyGetStageType = data.RankType
+		if MCrossFlower.MyGetStageType <= 0 then
+			MCrossFlower.MyGetStageType = MCrossFlower.StageType.Stage_5
+		end
+		--鲜花榜奖励状态
+		MCrossFlower.MyGetRewardState = data.RewardState
+	else
+		--送花榜排名
+		MCrossFlower.MySendRank = data.Rank
+		--送花榜阶段
+		MCrossFlower.MySendStageType = data.RankType
+		if MCrossFlower.MySendStageType <= 0 then
+			MCrossFlower.MySendStageType = MCrossFlower.StageType.Stage_5
+		end
+		--送花榜奖励状态
+		MCrossFlower.MySendRewardState = data.RewardState
+	end	
+	WindowMgr.Call("UCrossFlower", "OnUpdateInfo")
+	_P.checkRedpoint()
+end
+function _P.OnUpdateShop(data)
+	MCrossFlower.ShopList = {}
+	if data ~= nil then
+		for k,v in pairs(data) do
+			MCrossFlower.ShopList[v.key] = v.value
+		end
+	end
+	WindowMgr.Call("UCrossFlowerShop", "OnUpdateShop")
+end
+function _P.OnUpdateSerChat(data)
+	if data ~= nil then
+		MCrossFlower.MySerChatNum = data.mySerChatNum
+		MCrossFlower.CrossSerChatNum = data.corssSerChatNum
+	else
+		MCrossFlower.MySerChatNum = 0
+		MCrossFlower.CrossSerChatNum = 0
+	end
+	WindowMgr.Call("UCrossFlowerSerChat", "OnUpdateSerChat")
+end
+function _P.checkRedpoint()
+	local funcIsOpen = MMain.FuncIsOpen(Define.SysId.CrossFlower)
+	CMain.UpdateRedpoint(funcIsOpen and MCrossFlower.State == MCrossFlower.STATE.Finish and MCrossFlower.MyGetRewardState == MCrossFlower.RewardState.CanGet, 
+		Define.SysId.CrossFlower, MCrossFlower.RankType.Get, 1)
+
+	CMain.UpdateRedpoint(funcIsOpen and MCrossFlower.State == MCrossFlower.STATE.Finish and MCrossFlower.MySendRewardState == MCrossFlower.RewardState.CanGet,
+		Define.SysId.CrossFlower, MCrossFlower.RankType.Send)
+
+	CMain.UpdateRedpoint(funcIsOpen and MCrossFlower.State == MCrossFlower.STATE.Open and MCrossFlower.EnterRed,
+		Define.SysId.CrossFlower, 999)
+
+	CMain.UpdateRedpoint(funcIsOpen and MCrossFlower.State == MCrossFlower.STATE.Open and MBag.GetItemNum(MCrossFlower.FlowerItemID) > 0,
+		Define.SysId.CrossFlower, MCrossFlower.RankType.Get, 2)
+
+	WindowMgr.Call("UCrossFlower", "UpdateRedPoint")	
+end
+function _P.OnGetList(data)
+	-- LuaUtil.DumpTable(data, "------OnGetList---->>>")
+	CCommon.HideLoading()
+	WindowMgr.Call("UCrossFlower", "OnUpdateList", MCrossFlower.RankType.Get, data)
+end
+function _P.OnSendList(data)
+	-- LuaUtil.DumpTable(data, "------OnSendList---->>>")
+	WindowMgr.Call("UCrossFlower", "OnUpdateList", MCrossFlower.RankType.Send, data)
+end
+function _P.OnSendFlower(data)
+	-- LuaUtil.DumpTable(data, "------OnSendFlower---->>>")
+	WindowMgr.Call("UCrossFlower", "OnSendFlowerBack", MCrossFlower.RankType.Get, data)
+end
+function _P.OnOpenSearch(data)
+	-- LuaUtil.DumpTable(data, "------OnOpenSearch---->>>")
+	WindowMgr.Call("UCrossFlowerSearch", "OnOpenSearch", data)
+end
+function _P.OnSearch(data)
+	-- LuaUtil.DumpTable(data, "------OnSearch---->>>")
+	WindowMgr.Call("UCrossFlowerSearch", "OnSearch", data)
+end
+function _P.OnShopBuy(data)
+	-- LuaUtil.DumpTable(data, "------OnShopBuy---->>>")
+	MCrossFlower.ShopList[data.key] = data.value
+	WindowMgr.Call("UCrossFlowerShop", "OnShopBuy", data)
+end
+function _P.OnSerChat(data)
+	-- LuaUtil.DumpTable(data, "------OnSerChat---->>>")
+	_P.OnUpdateSerChat(data)
+	CCommon.ShowRight(Csv.Text("flower_29"))
+end
+function _P.OnGetReward(data)
+	-- LuaUtil.DumpTable(data, "------OnGetReward---->>>")
+	_P.OnUpdateInfo(data)
+	WindowMgr.Call("UCrossFlowerReward", "OnReward", MCrossFlower.RankType.Get)
+end
+function _P.OnSendReward(data)
+	-- LuaUtil.DumpTable(data, "------OnSendReward---->>>")
+	_P.OnUpdateInfo(data)
+	WindowMgr.Call("UCrossFlowerReward", "OnReward", MCrossFlower.RankType.Send)
+end
+function _P.OnDropItem(data)
+	-- LuaUtil.DumpTable(data, "------OnDropItem---->>>")
+	WindowMgr.Call("UCrossFlower", "OnDropItem", data)
+end
+
+return _M

@@ -1,5 +1,7 @@
 local MExpedition = JRequire"Dev.Expedition.MExpedition"
 local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
 
 local _M = {}
 local _P = {}
@@ -30,18 +32,18 @@ function _M.ModuleInit(isReload)
 	local send = {
 		[ECmdId.cMeetingBossInfo] = "",
 		[ECmdId.cMeetingFight] = "",
-		[ECmdId.cMeetingShopInfo] = "",
+		[ECmdId.cMeetingShopInfo] = "PMeeting.CMeetingShop",
 		[ECmdId.cMettingExchange] = "PMeeting.CMeetingExchange",
 		[ECmdId.CMeetingReset] = "",
 		[ECmdId.CMeetingReward] = "PMeeting.CMeetingReward",
 	}
 	local recv = {
-		[ECmdId.sMeetingInit]	=	{proto = "PMeeting.SAMeetingInIt",	handle = _P.RepMeetingInit},
+		[ECmdId.sMeetingInit]	=	{proto = "PMeeting.SMettingInit",	handle = _P.RepMeetingInit},
 		[ECmdId.sMeetingBossInfo]	=	{proto = "PMeeting.SMeetingBossInfo",	handle = _P.RepBossInfo},
 		[ECmdId.sMeetingFight]	=	{proto = "PMeeting.SMeetingFight",	handle = _P.RepMeetingFight},
 		[ECmdId.sMeetingShopInfo]	=	{proto = "PMeeting.SMeetingShopInfo",	handle = _P.RepShopInfo},
 		[ECmdId.sMettingExchange]	=	{proto = "PMeeting.SMeetingShopInfo",	handle = _P.RepExchange},
-		[ECmdId.sMeetingReset]	=	{proto = "PMeeting.SMeetingReset",	handle = _P.RepReset},
+		[ECmdId.sMeetingReset]	=	{proto = "PMeeting.SMettingInit",	handle = _P.RepReset},
 		[ECmdId.sMeetingReward]	=	{proto = "PMeeting.SMeetingReward",	handle = _P.RepReward},
 
 	}
@@ -51,74 +53,115 @@ end
 
 --注册12点重置监听
 EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function( ... )
-		MExpedition.OnDayout()
+		--刷新商店
+		if WindowMgr.IsCreated("UExpeditionShop") then
+			_M.ReqShopInfo(false)
+		end
 end, true)
 
 ---------------------------------------------------
 --Client -> Server 
 ----------------------------------------------------\
 function _M.ReqBossInfo()
-	print("请求boss数据————")
 	_M.Send(ECmdId.cMeetingBossInfo)
 end
 
 function _M.ReqFight()
-	print("请求战斗————")
 	_M.Send(ECmdId.cMeetingFight)
 end
 
-function _M.ReqShopInfo()
-	print("请求商店数据————")
-	_M.Send(ECmdId.cMeetingShopInfo)
+function _M.ReqShopInfo(isRefresh)
+	_M.Send(ECmdId.cMeetingShopInfo, {refresh = isRefresh})
 end
 
 function _M.ReqExchange(_id)
-	print("请求兑换————",_id)
 	_M.Send(ECmdId.cMettingExchange,{id = _id})
 end
 
 function _M.ReqReset()
-	print("请求重置————")
 	_M.Send(ECmdId.CMeetingReset)
 end
 
 function _M.ReqReward(_id)
-	print("请求礼包奖励————",_id)
 	_M.Send(ECmdId.CMeetingReward,{id = _id})
 end
 
 ---------------------------------------------------
 -- Server -> Client
-----------------------------------------------------\
+----------------------------------------------------
 function _P.RepMeetingInit(data)
-	print("商业会议初始化信息！")
-	MExpeditionm.Init(data)
+	local lastId = MExpedition.CurID
+
+	MExpedition.Init(data)
+
+	if lastId ~= MExpedition.CurID then
+		WindowMgr.Call("UExpeditionBattle","RefreshReset")
+	end
+
+	WindowMgr.Call("UExpedition","RefreshReset")
+
+	_P.CheckRed()
 end
 
 function _P.RepBossInfo(data)
-	print("boss数据")
+	WindowMgr.Call("UExpedition","RepBossInfo",data)
 end
 
 function _P.RepMeetingFight(data)
-	print("战斗信息")
+	WindowMgr.Call("UExpeditionBattle","RepMeetingFight",data)
+
+	--胜利直接开通下一关卡
+	MExpedition.Score = data.score
+	if data.result then
+		MExpedition.CurID = data.id + 1
+	end
+
+	_P.CheckRed()
 end
 
 function _P.RepShopInfo(data)
-	print("商店信息")
+	MExpedition.OnShopInfo(data)
+
+	WindowMgr.Call("UExpeditionShop","RefreshShop")
 end
 
 function _P.RepExchange(data)
-	print("兑换返回")
+	MExpedition.OnShopInfo(data)
+
+	WindowMgr.Call("UExpeditionShop","RepExchange")
 end
 
 function _P.RepReset(data)
-	print("重置")
-	MExpeditionm.SetResetTimes(data)
+	_P.RepMeetingInit(data)
+	_P.CheckRed()
 end
 
 function _P.RepReward(data)
-	print("领取奖励")
-	MExpeditionm.SetRewards(data)
+	MExpedition.SetRewards(data)
+
+	WindowMgr.Call("UExpedition","FlyRewardItem",data)
+	_P.CheckRed()
+	--WindowMgr.Call("UExpedition","RefreshRward")
+end
+
+function _P.CheckRed()
+	local isRed = false
+	if MMain.FuncIsOpen(Define.SysId.Expedition) then
+		if MExpedition.ResetTimes > 0 then
+			isRed = true
+		else
+			for i = 1,12,1 do
+				local csvMeeting = Csv.Meeting[i]
+				if csvMeeting ~= nil and csvMeeting.award2 ~= nil then
+					if MExpedition.CurID > i and not MExpedition.CheckGotReward(i) then
+						isRed = true
+						break
+					end
+				end
+			end
+		end
+	end
+	CMain.UpdateRedpoint(isRed,Define.SysId.Expedition)
 end
 
 

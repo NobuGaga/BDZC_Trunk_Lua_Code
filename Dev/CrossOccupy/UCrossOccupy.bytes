@@ -1,0 +1,377 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossOccupy = JRequire "Dev.CrossOccupy.MCrossOccupy"
+local CCrossOccupy = JRequire "Dev.CrossOccupy.CCrossOccupy"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:BeforeDestroy( ... )
+	CCrossOccupy.ReqCloseUI()
+end
+
+function _R.OnUpdateInfo(self)
+	_P.updateMyInfo(self)
+end
+
+function _R.OnUpdateUI(self, data)
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		if self.CloseNode ~= nil then
+			self.CloseNode:Destroy()
+			self.CloseNode = nil
+		end
+		local moudle = self.mMoudle
+		local usedList = {}
+		for _,info in pairs(data.goodList) do
+			local id = info.id
+			local csvLine = Csv.CrossOccupyBuilding[id]
+			usedList[csvLine.pos] = true
+			local buildMoudle = self.BuildingList[id]
+			if buildMoudle == nil then
+				local node = moudle:Get("Build_" .. csvLine.pos)
+				node.Activity = true
+				buildMoudle = self:CreateMoudle(node, "M_BuildItem_1")
+				self.BuildingList[id] = buildMoudle
+				buildMoudle.SelfRect.SpriteNameAutoScale = csvLine.icon
+				buildMoudle:Get("BuildName").Text = csvLine.name
+				buildMoudle.SelfRect.Alpha = 0
+				buildMoudle.SelfRect:AddOnPress(function(btn, _, data)
+					if data.isPress then
+						local t = btn:DOFade(1, 0.6)
+						t:SetEase(CS.DG.Tweening.Ease.Linear)
+						t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+					else
+						if btn ~= nil then
+							btn:DOKill()
+						end
+						btn.Alpha = 0
+					end
+				end)
+			end
+			if info.playerId ~= nil and info.playerId > 0 then
+				buildMoudle:Get('PeopleName').Text = info.playerName
+				if info.playerTitle ~= nil and info.playerTitle > 0 then
+					local titleCsv = Csv.Title[info.playerTitle]
+					if titleCsv.rankIcon ~= nil then
+						buildMoudle:Get("Title").SpriteName = titleCsv.rankIcon
+					else
+						buildMoudle:Get("Title").SpriteName = ""
+					end
+				else
+					buildMoudle:Get("Title").SpriteName = ""
+				end
+
+				buildMoudle.SelfRect:AddOnClick(function()
+					CCrossOccupy.ReqOpenBuilding(id)
+				end)
+			else
+				buildMoudle:Get('PeopleName').Text = Csv.Text("occupy_20")
+				buildMoudle:Get("Title").SpriteName = ""
+				buildMoudle.SelfRect:AddOnClick(function()
+					CCommon.CheckTips(
+						function(isSure, arg)
+							if isSure then
+								_P.pressToOccupy(self, id)
+							end
+						end,
+						{content = Csv.Text("occupy_34")}
+					)
+				end)
+			end
+		end
+
+		for _,info in pairs(data.commonList) do
+			local id = info.id
+			local csvLine = Csv.CrossOccupyBuilding[id]
+			usedList[csvLine.pos] = true
+			local buildMoudle = self.BuildingList[id]
+			if buildMoudle == nil then
+				local node = moudle:Get("Build_" .. csvLine.pos)
+				node.Activity = true
+				buildMoudle = self:CreateMoudle(node, "M_BuildItem_2")
+				self.BuildingList[id] = buildMoudle
+				buildMoudle.SelfRect.SpriteNameAutoScale = csvLine.icon
+				buildMoudle.SelfRect:AddOnClick(function()
+					CCrossOccupy.ReqOpenBuilding(id)
+				end)
+				buildMoudle.SelfRect.Alpha = 0
+				buildMoudle.SelfRect:AddOnPress(function(btn, _, data)
+					if data.isPress then
+						local t = btn:DOFade(1, 0.6)
+						t:SetEase(CS.DG.Tweening.Ease.Linear)
+						t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+					else
+						if btn ~= nil then
+							btn:DOKill()
+						end
+						btn.Alpha = 0
+					end
+				end)
+			end
+			buildMoudle:Get("BuildName").Text = csvLine.name .. " (" .. info.num .. "/" .. csvLine.count .. ")"
+		end
+		for i=1,100 do
+			local node = moudle:Get("Build_" .. i)
+			if node == nil then
+				break
+			elseif not usedList[i] then
+				node.Activity = false
+			end
+		end
+		_P.updateMyInfo(self)
+	end
+end
+
+function _R.OnFight(self, data)
+	WindowMgr.Create("UBattlePvp", data.fightInfo, function ()
+		if self.mMoudle ~= nil then
+			WindowMgr.Create("UCrossOccupyFightResult", data.buildId, data.isSuccess, function (  )
+				WindowMgr.Destroy("UBattlePvp")
+			end)
+		end
+	end)
+end
+
+function _R.OnUpdateState(self)
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		CCrossOccupy.ReqOpenUI()	
+	else
+		if self.CloseNode == nil then
+			local closeNode = self:CreateMoudle(self._RootNode, "M_Development_Close")
+			self.CloseNode = closeNode
+			closeNode:Get('Tips').Text = Csv.Text("occupy_9")
+			closeNode:Get('new_image'):AddOnClick(function()
+				self:Destroy()
+			end)
+			closeNode:Get("Bg").RaycastTarget = true
+			closeNode:Get("Icon"):AddOnButton(function()
+				CCrossOccupy.ReqOpenShop()
+			end)
+			LuaUtil.TextAddThreePoint(closeNode:Get("Close"), Csv.Text("common_close2"))
+		end
+
+		self.TimeNode.Text = Csv.Text("occupy_10") .. "00:00:00"
+		for k,v in pairs(self.BuildingList) do
+			v:Destroy()
+		end
+		self.BuildingList = {}
+	end
+
+	_P.updateMyInfo(self)
+end
+
+function _P.pressToOccupy(self, buildingId)
+	local pressFunc = function (  )
+		local fightTimes = MCrossOccupy.GetFightTimes()
+		if fightTimes <= 0 then
+			local buyTimes,buyMax = MCrossOccupy.GetFightBuyCount()
+			if buyTimes < buyMax then
+				local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+				local needCost = MCrossOccupy.GetFightBuyCost()
+				CCommon.CheckTips(
+					function(isSure, arg)
+						if isSure then
+							if needCost > haveGode then
+								CCommon.ShowError(Csv.Text("err_club_no_gold"))
+							else
+								-- CCrossOccupy.ReqFightBuy()
+								CCrossOccupy.ReqOccupy(buildingId)
+							end
+						end
+					end, 
+					{
+						items = {[Define.AssetsType.Gold] = haveGode},
+						content = Csv.Text("occupy_15",{num = needCost, max = (buyMax - buyTimes)})
+					}
+				)
+			else
+				CCommon.ShowError(Csv.Text("occupy_14"))
+			end
+		else
+			CCrossOccupy.ReqOccupy(buildingId)
+		end	
+	end
+	if self.LastPressTime + 1 < CS.UnityEngine.Time.time then
+		self.LastPressTime = CS.UnityEngine.Time.time
+		if MCrossOccupy.MyBuildID ~= nil and MCrossOccupy.MyBuildID > 0 then
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						pressFunc()
+					end
+				end,
+				{content = Csv.Text("occupy_32")}
+			)
+		else
+			pressFunc()
+		end
+	end
+end
+
+function _P.pressMyBuilding(self)
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		if MCrossOccupy.MyBuildID > 0 then
+			CCrossOccupy.ReqOpenBuilding(MCrossOccupy.MyBuildID)
+		else
+			CCommon.ShowError(Csv.Text("occupy_12"))
+		end
+	else
+		CCommon.ShowError(Csv.Text("occupy_9"))
+	end
+end
+
+function _P.pressFightTimesNode(self)
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		local buyTimes,buyMax = MCrossOccupy.GetFightBuyCount()
+		if buyTimes < buyMax then
+			local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+			local needCost = MCrossOccupy.GetFightBuyCost()
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						if needCost > haveGode then
+							CCommon.ShowError(Csv.Text("err_club_no_gold"))
+						else
+							CCrossOccupy.ReqFightBuy()
+						end
+					end
+				end, 
+				{
+					items = {[Define.AssetsType.Gold] = haveGode},
+					content = Csv.Text("occupy_15",{num = needCost, max = (buyMax - buyTimes)})
+				}
+			)
+		else
+			CCommon.ShowError(Csv.Text("occupy_14"))
+		end
+	end
+end
+
+function _P.updateTime(self)
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		local curTime = HeartBeat.ServSecond()
+		local sub = MCrossOccupy.EndTime - curTime
+		if sub > 0 then
+			self.TimeNode.Text = Csv.Text("occupy_10") .. LuaUtil.GetTimeHMS(sub)
+		else
+			self.TimeNode.Text = Csv.Text("occupy_10") .. "00:00:00"
+		end
+
+		local fightTimes = MCrossOccupy.GetFightTimes()
+		local fightTotal = MCrossOccupy.FightTotal()
+		if fightTimes > 0 then
+			self.FightTimesNode.Text = Csv.Text("occupy_16", {cur = fightTimes, max = fightTotal})
+		else
+			sub = MCrossOccupy.FightRefTime - curTime
+			if sub > 0 then
+				self.FightTimesNode.Text = Csv.Text("occupy_11") .. LuaUtil.GetTimeHMS(sub)
+			else
+				self.FightTimesNode.Text = Csv.Text("occupy_11") .. "00:00:00"
+			end
+		end
+		if fightTimes < fightTotal then
+			self.FightTimesAddNode.Activity = true
+		else
+			self.FightTimesAddNode.Activity = false
+		end
+	end
+end
+
+function _P.updateMyInfo(self)
+	_P.updateTime(self)
+
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		if MCrossOccupy.MyBuildID > 0 then
+			self.MyBuildBtnNode.IsGray = false
+			self.MyBuildBtnNode.RaycastTarget = true
+
+			local myBuildCsv = Csv.CrossOccupyBuilding[MCrossOccupy.MyBuildID]
+			if myBuildCsv.myIcon ~= nil and self.BuildingList[MCrossOccupy.MyBuildID] ~= nil then
+				self.MyBuildIcon.Activity = true
+				self.MyBuildIcon.SpriteNameAutoScale = myBuildCsv.myIcon
+				local buildMoudle = self.BuildingList[MCrossOccupy.MyBuildID]
+				self.MyBuildIcon.LocalPosition = buildMoudle.SelfRect.Parent.LocalPosition
+			else
+				self.MyBuildIcon.Activity = false
+			end
+		else
+			self.MyBuildBtnNode.IsGray = true
+			self.MyBuildBtnNode.RaycastTarget = false
+			self.MyBuildIcon.Activity = false
+		end
+	else
+		self.FightTimesNode.Text = Csv.Text("occupy_11") .. "0/0"
+		self.FightTimesAddNode.Activity = false
+		self.MyBuildBtnNode.IsGray = true
+		self.MyBuildBtnNode.RaycastTarget = false
+		self.MyBuildIcon.Activity = false
+	end
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_Development_Main")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	self.LastPressTime = 0
+	self.MapNode = moudle:Get("Map")
+	self.MyBuildBtnNode = moudle:Get("C_Btn_a")
+	self.TimeNode = moudle:Get("Time")
+	self.FightTimesNode = moudle:Get('CsNum')
+	self.FightTimesAddNode = moudle:Get("Add")
+	self.MyBuildIcon = moudle:Get("MyBuild")
+	self.BuildingList = {}
+	self.CloseNode = nil
+	_R.OnUpdateState(self)
+
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local funcCsv = Csv.Func[self._SysId]
+	moudle:Get("C_Text").Text = funcCsv.name
+	--防守记录
+	moudle:Get("Icon1"):AddOnButton(function(  )
+		CCrossOccupy.ReqMessage()
+	end)
+	--兑换商店
+	moudle:Get("Icon2"):AddOnButton(function(  )
+		CCrossOccupy.ReqOpenShop()
+	end)
+	--我的建筑
+	moudle:Get("C_text").Text = Csv.Text("occupy_8")	
+	self.MyBuildBtnNode:AddOnButton(function(  )
+		_P.pressMyBuilding(self)
+	end)
+	_P.updateMyInfo(self)
+	self.FightTimesAddNode:AddOnButton(function(  )
+		_P.pressFightTimesNode(self)
+	end)
+	self.TimeNode:AddOnUpdate(function(  )
+		_P.updateTime(self)
+	end, nil, 1)
+end
+
+return _M

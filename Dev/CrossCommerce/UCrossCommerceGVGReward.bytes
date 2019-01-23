@@ -1,0 +1,158 @@
+--[[
+	@desc :
+    2019-01-10 15:01:52
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local GTE_EFFECT_ID = 5
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnGVGReward(self, items)
+	if MCrossCommerce.GVG.MyReward == MCrossCommerce.RewardState.Geted then
+		SoundMgr.Play(10004)
+		self.GetBtn.Activity = true
+		self.mMoudle:Get("GetPos").Activity = false
+		local animRect = self.mMoudle:Get("GetAnim")
+		CCommon.CreateEffect(animRect, GTE_EFFECT_ID, nil, function( ... ) 
+			_P.updateRewardState(self)
+			if items ~= nil then
+				for index,v in pairs(items) do
+					CCommon.ShowFlyItem(animRect, v.key, v.value, 0.6 * (index - 1))
+				end
+			end
+		end)
+	end
+end
+
+function _R.OnInitReward(self)
+	_P.updateRewardState(self)
+end
+
+function _R.OnGVGRank(self, msg)
+	local moudle = self.mMoudle
+	moudle:Get("btnRank"):AddOnButton(function (  )
+		WindowMgr.Create("UCrossCommerceGVGRank", msg)
+	end)
+	moudle:Get("rankNum").Text = msg.myRank
+end
+
+function _P.updateRewardState(self)
+	local moudle = self.mMoudle
+	if MCrossCommerce.GVG.MyReward == MCrossCommerce.RewardState.CanGet then
+		self.GetBtn.Activity = true
+		moudle:Get("GetPos").Activity = false
+		self.GetBtn:AddOnButton(function (  )
+			CCrossCommerce.BRewardReq()
+		end)
+		self.GetBtn.IsGray = false
+		self.GetBtn.RaycastTarget = true
+	elseif MCrossCommerce.GVG.MyReward == MCrossCommerce.RewardState.Geted then
+		self.GetBtn.Activity = false
+		moudle:Get("GetPos").Activity = true
+	else
+		self.GetBtn.Activity = true
+		moudle:Get("GetPos").Activity = false
+		self.GetBtn.IsGray = true
+		self.GetBtn.RaycastTarget = false
+	end
+end
+
+function _M:OnCreate()
+	CCrossCommerce.BRankReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Xgsr_Ranking")
+	self.mMoudle = moudle
+	moudle:Get("Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end)
+	moudle:Get("textSelfRank").Text = Csv.Text("charitable_my_rank")
+	moudle:Get("Btn_c2").Activity = false
+	moudle:Get("C_text1").Text = Csv.Text("cross_commerce_4")
+	moudle:Get('textBtnRank').Text = Csv.Text("cross_commerce_53")
+	moudle:Get("textBtnGet").Text = Csv.Text("cross_commerce_54")
+	self.GetBtn = moudle:Get("btnGet")
+	_P.updateRewardState(self)
+
+	self:RegistRedpoint(moudle:Get("redpoint"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG, 2)
+
+	local content = moudle:Get("content")
+	if MCrossCommerce.ActID > 0 then
+		local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+		for k,v in pairs(actCsv.rewardTitle) do
+			local oneMoudle = self:CreateMoudle(content, "M_Xgsr_Ranking_Item1")
+			oneMoudle:Get("textTitle").Text = v
+			oneMoudle:Get("huizhang").Text = Csv.Text("xinguan_rank_mengzhu")
+			local memberRect = oneMoudle:Get("huiyuan")
+			memberRect.Text = Csv.Text("xinguan_rank_member")
+
+			local gangContent = oneMoudle:Get("GoodsItem1")
+			local memberContent = oneMoudle:Get("GoodsItem2")
+
+			local selfLayout = memberContent:AddGridLayoutGroup()
+			local columnLimitNum1 = selfLayout.constraintCount
+			local selfItemHeight = selfLayout.cellSize.y + selfLayout.spacing.y
+
+			local gangLayout = gangContent:AddGridLayoutGroup()
+			local columnLimitNum2 = gangLayout.constraintCount
+			local gangItemHeight = gangLayout.cellSize.y + gangLayout.spacing.y
+
+			local num1 = 0
+			for _, item in pairs(actCsv.teamReward[k]) do
+				CCommon.CreateItem(memberContent, item[1], CCommon.ShowItemTips, {num = item[2]}, Define.SysId.CrossCommerce)
+				num1 = num1 + 1
+			end
+
+			local remNum1 = num1 % columnLimitNum1
+			if remNum1 ~= 0 then
+				for i=1, (columnLimitNum1 - remNum1) do
+					local rewardItem = CCommon.CreateItem(memberContent, 1)
+					rewardItem.SelfRect.SpriteName = "ty_023"
+					rewardItem:Get("Icon").Activity = false
+					num1 = num1 + 1
+				end
+			end
+
+			local num2 = 0
+			for _, item in pairs(actCsv.reward[k]) do
+				CCommon.CreateItem(gangContent, item[1], CCommon.ShowItemTips, {num = item[2]}, Define.SysId.CrossCommerce)
+				num2 = num2 + 1
+			end
+			local remNum2 = num2 % columnLimitNum2
+			if remNum2 ~= 0 then
+				for i=1, (columnLimitNum2 - remNum2) do
+					local rewardItem = CCommon.CreateItem(gangContent, 1)
+					rewardItem.SelfRect.SpriteName = "ty_023"
+					rewardItem:Get("Icon").Activity = false
+					num2 = num2 + 1
+				end
+			end
+
+			local row1, rest1 = math.modf(num1 / columnLimitNum1)
+			local row2, rest2 = math.modf(num2 / columnLimitNum2)
+			local rowHeight2 = (row2 - 1) * gangItemHeight
+			local memberRectPos = memberRect.LocalPosition
+			memberRectPos.y = memberRectPos.y - rowHeight2
+			memberRect.LocalPosition = memberRectPos
+			local moudleSize = oneMoudle.SelfRect.SizeDelta
+			moudleSize.y = moudleSize.y + (row1 - 1) * selfItemHeight + rowHeight2
+			oneMoudle.SelfRect.SizeDelta = moudleSize
+		end
+	end
+end
+
+return _M

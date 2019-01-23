@@ -31,7 +31,7 @@ function _R.ShowRedpacket(self,data)
 	end
 end
 
-function _M:OnCreate(data, onCloseCallback)
+function _M:OnCreate(data, onCloseCallback, showTips)
 	self._EventNode:AddOnClick(function ()
 		--SoundMgr.Play(10001)
 		--self:Destroy()
@@ -63,7 +63,12 @@ function _M:OnCreate(data, onCloseCallback)
 	headIcon.SpriteName = MPlayer.GetOtherHeadYuanIcon(data.headid, data.gender)
 	nameText.Text = data.sendername
 	tips1.Text = Csv.Text("redpacket_split_tips1")
-	tips2.Text = Csv.Text("redpacket_split_tips2")
+
+	if showTips ~= nil and showTips ~= "" then
+		tips2.Text = showTips
+	else
+		tips2.Text = Csv.Text("redpacket_split_tips2")
+	end
 
 	CCommon.CreateEffect(effectNode,EFFECT_WALLET_1)
 	local isClick = false

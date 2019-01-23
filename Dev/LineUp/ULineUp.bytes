@@ -39,7 +39,8 @@ end
 --界面构建
 function _M:ctor(root)
 	self._RootNode = root
-
+	MLineUp.IsChange = false
+	MLineUp.GetLineAllPower()
 	local moudle = JGuiManager.GetMoudle(self._RootNode, "M_NewBossPK_Array", WindowType.UI, 0)
 	self.mMoudle = moudle
 	self.NowSelectIndex = nil
@@ -61,7 +62,7 @@ function _M:ctor(root)
 		CCommon.CheckTips(function(isSure, arg)
 			if isSure then
 				CLineUp.ClickAutoChange()
-
+				MLineUp.IsChange = true
 				btn2.IsGray = true
 				btn2.RaycastTarget = false
 				btn2:AddOnTime(function (  )
@@ -483,6 +484,11 @@ end
 
 function _R.UpdateEquip(self)
 	_P.RefreshEquips(self)
+end
+
+function _M:ChangeStaffColor(staffid)
+	_P.SetList(self)
+	_R.StaffChange(self)
 end
 
 function _R.StaffChange(self)

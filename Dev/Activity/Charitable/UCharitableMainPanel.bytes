@@ -18,6 +18,12 @@ local COLOR_GREEN = Color(76 / 255, 255 / 255, 89 / 255, 1)
 local COLOR_RED = Color(255 / 255, 76 / 255, 76 / 255, 1)
 
 function _M:BeforeDestroy( ... )
+	if MActivity.CharityFirstRed == true then
+		MActivity.CharityFirstRed = false
+		if self.ActId ~= nil then
+			CActivity.CheckCharityRedPoint(self.ActId)
+		end
+	end
 	_P.DestroyBgMusic(self)
 end
 
@@ -65,7 +71,7 @@ end
 
 function _R.UpdateRed(self)
 	local redRect = self.mModule:Get("redpoint")
-	redRect.Activity = MActivity.CharitableRed
+	redRect.Activity = MActivity.CharitableRankRed
 end
 
 --设置进入按钮状态

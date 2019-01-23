@@ -9,6 +9,9 @@ local SDKMgr = JRequire "SDK.SDKMgr"
 local CParliament = JRequire "Dev.Parliament.CParliament"
 local CRank = JRequire "Dev.Rank.CRank"
 local CActivity = JRequire "Dev.Activity.CActivity"
+local CBattle = JRequire "Dev.Battle.CBattle"
+local CCrossOccupy = JRequire "Dev.CrossOccupy.CCrossOccupy"
+local CCabinet = JRequire "Dev.Cabinet.CCabinet"
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -117,6 +120,12 @@ function _P.OnFuncUpdate(msg)
 				or v.funcId == Define.SysId.SiegeWall 
 				or v.funcId == Define.SysId.GlobalTraval then
 					CActivity.CheckLimitRed(v.funcId,v.isOpen)
+			elseif v.funcId == Define.SysId.BusinessMap then
+				CBattle.UpdateBusinessMapOpen(true)
+			elseif v.funcId == Define.SysId.CrossOccupy then
+				CCrossOccupy.UpdateRedpoint()
+			elseif v.funcId == Define.SysId.Cabinet then
+				CCabinet.CheckRedPoint()
 			end
 		end
 	end

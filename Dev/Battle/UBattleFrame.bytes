@@ -57,7 +57,6 @@ end
 
 function _P.InitData(self)
 	_P.InitDebugData(self)
-	self.curChapter = math.modf(MBattle.CurId / 100)
 	self.csvBattleFrame = MBattle.GetCurrentCsvBattleFrameData()
 	self.curPassNode = 0
 	self.totalNode = 1
@@ -100,8 +99,14 @@ function _P.InitData(self)
 	end
 	self.rewardNode = {}
 	if self.csvBattleFrame.rewardNode then
-		local node_Num = LuaUtil.StringSplit(self.csvBattleFrame.rewardNode, "_")
-		self.rewardNode[node_Num[1]] = node_Num[2]
+		local splitStr = LuaUtil.StringSplit(self.csvBattleFrame.rewardNode, ",")
+		for _, nodeNum in ipairs(splitStr) do
+			local nodeNum = LuaUtil.StringSplit(nodeNum, "_")
+			if self.rewardNode[nodeNum[1]] == nil then
+				self.rewardNode[nodeNum[1]] = {}
+			end
+			table.insert(self.rewardNode[nodeNum[1]], nodeNum[2])
+		end
 	end
 end
 
@@ -109,16 +114,11 @@ function _P.InitProcess(self)
 	self.moudle:Get("textProcessTips").Text = Csv.Text("battle_process_tips")
 	self.moudle:Get("process").FillAmount = self.curPassNode / self.totalNode
 	self.moudle:Get("textProcess").Text = Csv.Text("battle_process_text", {cur = self.curPassNode, max = self.totalNode})
-	local btnReward = self.moudle:Get("btnReward")
-	if self.curChapter > MBattle.CsvBattleReward[#MBattle.CsvBattleReward].maxChapter then
-		btnReward.Activity = false
-	else
-		btnReward:AddOnButton(function()
-			SoundMgr.Play(10002)
-			WindowMgr.Create("UBattleFrameReward")
-		end)
-		self.moudle:Get("textReward").Text = Csv.Text("battle_frame_reward")
-	end
+	self.moudle:Get("btnReward"):AddOnButton(function()
+		SoundMgr.Play(10002)
+		WindowMgr.Create("UBattleFrameReward")
+	end)
+	self.moudle:Get("textReward").Text = Csv.Text("battle_frame_reward")
 end
 
 function _P.InitBossInfo(self)
@@ -127,31 +127,45 @@ function _P.InitBossInfo(self)
 	self.moudle:Get("bossSprite").SpriteName = self.csvBattleFrame.bossIcon
 	self.moudle:Get("companyIcon").SpriteName = self.csvBattleFrame.icon
 	self.moudle:Get("textCompany").Text = self.csvBattleFrame.companyName
-	self.moudle:Get("bossFighting").Activity = self.curChapter == self.csvBattleFrame.bossID
+	self.moudle:Get("bossFighting").Activity = MBattle.CurId == csvBattleFrameNode.battleID
 end
 
 function _P.InitBottomTree(self)
 	local bottomMaxNode = 6
-	local lastIndex = 0
-	for index, nodeID in ipairs(self.csvBattleFrame.bottom) do
+	local bottomNodeCache = {}
+	for index, nodeID in pairs(self.csvBattleFrame.bottom) do
 		local csvBattleFrameNode = Csv.BattleFrameNode[nodeID]
 		self.moudle:Get("bottomHead" .. index).SpriteName = csvBattleFrameNode.icon
 		self.moudle:Get("bottomName" .. index).Text = csvBattleFrameNode.name
 		self.moudle:Get("bottomFighting" .. index).Activity = self.curPassingNode.bottom == index
 		self["bottomFighted" .. index] = self.moudle:Get("bottomFighted" .. index)
 		self["bottomFighted" .. index].Activity = MBattle.CurId > csvBattleFrameNode.battleID
-		local isHaveReward = self.rewardNode.bottom == index
+		local isHaveReward = false
+		if self.rewardNode.bottom then
+			for _, nodeIndex  in ipairs(self.rewardNode.bottom) do
+				if index == tonumber(nodeIndex) then
+					isHaveReward = true
+					break
+				end
+			end
+		end
 		self["bottomReward" .. index] = self.moudle:Get("bottomReward" .. index)
 		self["bottomReward" .. index].Activity = isHaveReward
 		if isHaveReward then
 			self.moudle:Get("textBottomReward" .. index).Text = Csv.Text("battle_reward")
 		end
-		lastIndex = index
+		bottomNodeCache[index] = true
 		self["bottomBoss" .. index] = self.moudle:Get("bottomBoss" .. index)
 	end
-	for index = lastIndex + 1, bottomMaxNode do
+	for index = 1, bottomMaxNode do
 		self["bottomBoss" .. index] = self.moudle:Get("bottomBoss" .. index)
-		self["bottomBoss" .. index].Activity = false
+		if not bottomNodeCache[index] then
+			local midIndex, rest = math.modf(index / 2)
+			if rest ~= 0 and not bottomNodeCache[index + 1] then
+				self.moudle:Get("lineMid" .. (midIndex + 1)).Activity = false
+			end
+			self["bottomBoss" .. index].Activity = false
+		end
 	end
 end
 
@@ -163,7 +177,15 @@ function _P.InitMiddleTree(self)
 		self.moudle:Get("midHead" .. index).SpriteName = csvBattleFrameNode.icon
 		self.moudle:Get("midName" .. index).Text = csvBattleFrameNode.name
 		self.moudle:Get("midOffer" .. index).Text = csvBattleFrameNode.posName
-		local isHaveReward = self.rewardNode.mid == index
+		local isHaveReward = false
+		if self.rewardNode.mid then
+			for _, nodeIndex  in ipairs(self.rewardNode.mid) do
+				if index == tonumber(nodeIndex) then
+					isHaveReward = true
+					break
+				end
+			end
+		end
 		self.moudle:Get("midFighting" .. index).Activity = self.curPassingNode.mid == index
 		self.moudle:Get("midFighted" .. index).Activity = MBattle.CurId > csvBattleFrameNode.battleID
 		self.moudle:Get("midReward" .. index).Activity = isHaveReward

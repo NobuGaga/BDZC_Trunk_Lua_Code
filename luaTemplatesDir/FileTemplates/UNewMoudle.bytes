@@ -1,0 +1,56 @@
+--[[
+	@desc :
+    {time}
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local M{moudleName} = JRequire "Dev.{moudleName}.M{moudleName}"
+local C{moudleName} = JRequire "Dev.{moudleName}.C{moudleName}"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+--删除前回收
+function _M:BeforeDestroy( ... )
+
+end
+
+--删除后回调
+function _M:EndDestroy( ... )
+
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_MOUDLE_NAME_")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local funcCsv = Csv.Func[self._SysId]
+    moudle:Get("C_Text").Text = funcCsv.name
+    
+
+end
+
+return _M

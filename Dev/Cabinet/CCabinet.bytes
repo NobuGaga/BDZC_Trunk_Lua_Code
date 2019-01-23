@@ -1,0 +1,188 @@
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cPutOn = 1,		-- 装备展览品 PShowcase.CPutOn
+	cTakeOff = 2,	-- 卸下展览品 PShowcase.CTakeOff
+	
+	sInit = 1,		-- 初始化
+	sPutOn = 2,		-- 装备展览品 PShowcase.SPutOn
+	sTakeOff = 3,	-- 装备展览品 PShowcase.STakeOff
+	sAddItem = 4,	-- 添加纪念品 PShowcase.PShowItem
+	sUpdateItem = 5,-- 刷新纪念品 PShowcase.PShowItem
+	sDelItem = 6,	-- 删除纪念品 PShowcase.SDelItem
+}
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cPutOn] = "PShowcase.CPutOn",
+		[ECmdId.cTakeOff] = "PShowcase.CTakeOff",
+	}
+
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sInit]			= {proto = "PShowcase.SInit",		handle = _P.OnInitData},
+		[ECmdId.sPutOn]			= {proto = "PShowcase.SPutOn",		handle = _P.OnPutOnBack},
+		[ECmdId.sTakeOff]		= {proto = "PShowcase.STakeOff",	handle = _P.OnTakeOffBack},
+		[ECmdId.sAddItem]		= {proto = "PShowcase.PShowItem",	handle = _P.OnAddItemBack},
+		[ECmdId.sUpdateItem]	= {proto = "PShowcase.PShowItem",	handle = _P.OnUpdateItemBack},
+		[ECmdId.sDelItem]		= {proto = "PShowcase.SDelItem",	handle = _P.OnDelItemBack},
+	}
+
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Cabinet, func_send, func_recv, isReload)
+end
+
+
+function _M.ModuleClean()
+	MCabinet.Clean()
+end
+
+
+-- C2S
+function _M.PutOnReq(layerId, gridId, itemId)
+	_M.Send(ECmdId.cPutOn, {layerId = layerId, gridId = gridId, itemId = itemId})
+end
+
+
+function _M.TakeOffReq(layerId, gridId)
+	_M.Send(ECmdId.cTakeOff, {layerId = layerId, gridId = gridId})
+end
+
+
+-- S2C
+function _P.OnInitData(data)
+	if data == nil or data.itemList == nil then return end
+
+	for k,v in pairs(data.itemList) do
+		MCabinet.AllCabinetTable[v.itemId] = v
+	end
+	
+	_M.CheckRedPoint()
+end
+
+
+function _P.OnPutOnBack(data)
+	if data == nil then return end
+
+	-- 先删除上一个数据
+	local lastItemData = MCabinet.GetThisGridData(data.layerId, data.gridId)
+	if lastItemData ~= nil then
+		MCabinet.AllCabinetTable[lastItemData.itemId].layerId = nil
+		MCabinet.AllCabinetTable[lastItemData.itemId].gridId = nil
+	end
+
+	-- 再添加新数据
+	local lastEquipItemData = nil
+	local curItemData = MCabinet.AllCabinetTable[data.itemId]
+	if curItemData ~= nil then
+		if curItemData.layerId ~= nil and curItemData.gridId ~= nil then
+			lastEquipItemData = {layerId = curItemData.layerId, gridId = curItemData.gridId}
+		end
+
+		curItemData.layerId = data.layerId
+		curItemData.gridId = data.gridId
+	end
+
+	_M.CheckRedPoint()
+	if WindowMgr.IsCreated("UCabinet") then
+		WindowMgr.Call("UCabinet", "OnPutOnBack", data, lastEquipItemData)
+	end
+end
+
+
+function _P.OnTakeOffBack(data)
+	if data == nil then return end
+
+	local updateData = MCabinet.AllCabinetTable[data.itemId]
+	if updateData ~= nil then
+		updateData.layerId = nil
+		updateData.gridId = nil
+	end
+
+	_M.CheckRedPoint()
+	if WindowMgr.IsCreated("UCabinet") then
+		WindowMgr.Call("UCabinet", "OnTakeOffBack", data)
+	end
+end
+
+
+function _P.OnAddItemBack(data)
+	if data == nil then
+		return
+	end
+
+	MCabinet.AllCabinetTable[data.itemId] = data
+	_M.CheckRedPoint()
+	if WindowMgr.IsCreated("UCabinet") then
+		WindowMgr.Call("UCabinet", "OnAddItemBack", data)
+	end
+
+	WindowMgr.Call("UCommerce", "OnGetOrDelCabinet", data)
+end
+
+
+function _P.OnUpdateItemBack(data)
+	if data == nil then
+		return
+	end
+
+	MCabinet.AllCabinetTable[data.itemId] = data
+	if WindowMgr.IsCreated("UCabinet") then
+		WindowMgr.Call("UCabinet", "OnUpdateItemBack", data)
+	end
+end
+
+
+function _P.OnDelItemBack(data)
+	if data == nil then
+		return
+	end
+
+	MCabinet.AllCabinetTable[data.itemId] = nil
+	_M.CheckRedPoint()
+	if WindowMgr.IsCreated("UCabinet") then
+		WindowMgr.Call("UCabinet", "OnDelItemBack", data)
+	end
+
+	WindowMgr.Call("UCommerce", "OnGetOrDelCabinet", data)
+end
+
+
+-- 设置红点
+function _M.CheckRedPoint()
+	local isShowRed = false
+
+	if MMain.FuncIsOpen(Define.SysId.Cabinet) then
+		for k,layerData in pairs(Csv.ShowcaseLayer) do
+			local isHasShowPos = false
+			for i=1,layerData.openNum do
+				if not MCabinet.GetThisGridData(k, i) then
+					isHasShowPos = true
+					break
+				end
+			end
+
+			if isHasShowPos then
+				local isLayerShow = MCabinet.CheckHasCabinetShow(layerData.id)
+				if isLayerShow then
+					isShowRed = true
+					break
+				end
+			end
+		end
+	end
+
+	CMain.UpdateRedpoint(isShowRed, Define.SysId.Cabinet)
+end
+
+
+return _M

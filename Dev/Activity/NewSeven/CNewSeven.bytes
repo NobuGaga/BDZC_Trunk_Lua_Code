@@ -1,0 +1,290 @@
+----------------------文件引用--------------------------
+--@RefType [Dev.Activity.BaseCActivity.bytes#_M]
+local BaseCActivity = JRequire "Dev.Activity.BaseCActivity"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Main.CMain.bytes#_M]
+local CMain = JRequire "Dev.Main.CMain"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+------------------------------通用接口------------------------------
+function _M.DoUpdate(actType, data)
+	if _P.JudgeReceiveDataValid(data) then
+		return
+	end
+	local csvSevenDayTarget = _P.GetActCsvGroupData(data[1].actId)
+	if not csvSevenDayTarget then 
+		return 
+	end
+
+	local tempData = data
+	data = {}
+	for _, receiveActData in pairs(tempData) do
+		data[receiveActData.actId] = receiveActData
+	end
+
+	for actId, csvValue in pairs(csvSevenDayTarget) do
+		local receiveActData = data[actId]
+		local isOpen = nil ~= receiveActData
+		local actData
+		if isOpen then
+			actData = BaseCActivity.GetStateInfo(receiveActData, actType)
+			--因为proto require 字段服务端不传, 所以赋值时设置默认值
+			actData.rankPro = receiveActData.rankPro or 0
+			actData.selfRank = receiveActData.selfRank or 0
+			actData.getState = receiveActData.getState or MActivity.RewardGetState.CanNotGet
+			actData.curPro = receiveActData.curPro or 0
+			actData.getedRewards = receiveActData.getedRewards
+		else
+			actData = BaseCActivity.GetDefaultStateInfo(actId, actType)
+			actData.rankPro = 0
+			actData.selfRank = 0
+			actData.getState = MActivity.RewardGetState.CanNotGet
+			actData.curPro = 0
+		end
+		_P.SetCsvDataToActData(actData, csvValue)
+		MActivity.UpdateAct(actData.actId, actType, actData)
+	end
+	_M.CheckRepoint()
+	WindowMgr.Call("UNewSeven", "OnRefreshView")
+end
+
+--判断接收到数据是否有效
+function _P.JudgeReceiveDataValid(data)
+	if nil == data then
+		error("16-1 or 2 接收数据为空")
+		return true
+	elseif 0 == #data then
+		error("16-1 or 2 接收数据为空表")
+		return true
+	end
+	return false
+end
+
+--获取同组七日目标活动表数据
+function _P.GetActCsvGroupData(actId)
+	local csvSevenDayTarget = {}
+	local csvActData = Csv.SevenDayTarget[actId]
+	if csvActData then
+		local group = csvActData.group
+		for _, csvValue in pairs(Csv.SevenDayTarget) do
+			if group == csvValue.group then
+				csvSevenDayTarget[csvValue.id] = csvValue
+			end
+		end
+		return csvSevenDayTarget
+	else
+		error("16-1 or 2 接收到不存在活动ID " .. actId or "nil")
+		return
+	end
+end
+
+--设置表数据填充到活动数据
+function _P.SetCsvDataToActData(actData, csvValue)
+	actData.pageName = csvValue.title
+	actData.rankType = csvValue.rankType
+	actData.type = csvValue.type
+	actData.rankTitle = csvValue.rankTitle
+	actData.JumpSysId = csvValue.sysId
+	actData.poster = csvValue.poster
+	actData.posterFont = csvValue.posterFont
+	actData.targetTitle = csvValue.targetTitle
+	actData.targetItemTitle = csvValue.targetItemTitle
+	actData.jumpTitle = csvValue.jumpTitle
+	actData.jumpIDName = csvValue.jumpIDName
+	actData.openTips = csvValue.openTips
+
+	_P.SetTargetRewardData(actData, csvValue)
+	_P.SetRankRewardData(actData, csvValue)
+end
+
+--设置每日目标奖励数据
+function _P.SetTargetRewardData(actData, csvValue)
+	local GetedRewardIndex = {}
+	--因为后端传的是目标值而不是索引所以这里建个目标值映射index表
+	local targetValueToIndex = {}
+	for index, targetNum in ipairs(csvValue.targetValue) do
+		targetValueToIndex[targetNum] = index
+	end
+	if actData.getedRewards then
+		for _, targetNum in pairs(actData.getedRewards) do
+			if targetValueToIndex[targetNum] then
+				GetedRewardIndex[targetValueToIndex[targetNum]] = true
+			else
+				error("SevenDayTarget receive getedRewards data not exist in csv, index " .. (targetNum or "nil"))
+			end
+		end
+	end
+
+	if csvValue.targetValue and csvValue.targetReward then
+		actData.targetData = {}
+		for index, targetNum in ipairs(csvValue.targetValue) do
+			if csvValue.targetReward[index] then
+				actData.targetData[index] = {}
+				actData.targetData[index].target = targetNum
+				actData.targetData[index].isGeted = nil ~= GetedRewardIndex[index]
+				actData.targetData[index].targetRewards = {}
+				for rewardIndex, rewardValue in pairs(csvValue.targetReward[index]) do
+					local ItemIDAndNum = {
+						key = rewardValue[1],
+						value = rewardValue[2],
+					}
+					actData.targetData[index].targetRewards[rewardIndex] = ItemIDAndNum
+				end
+			end
+		end
+	end
+end
+
+--设置每日排名奖励数据
+function _P.SetRankRewardData(actData, csvValue)
+	if csvValue.rankInterval and csvValue.rankReward then
+		actData.rankData = {}
+		for index, fromToData in ipairs(csvValue.rankInterval) do
+			if csvValue.rankReward[index] then
+				actData.rankData[index] = {}
+				actData.rankData[index].from = fromToData[1]
+				actData.rankData[index].to = fromToData[2]
+				actData.maxRewardRank = 0
+				if fromToData[2] > actData.maxRewardRank then
+					actData.maxRewardRank = fromToData[2]
+				end
+				actData.rankData[index].rankRewards = {}
+				for rewardIndex, rewardValue in pairs(csvValue.rankReward[index]) do
+					local ItemIDAndNum = {
+						key = rewardValue[1],
+						value = rewardValue[2],
+					}
+					actData.rankData[index].rankRewards[rewardIndex] = ItemIDAndNum
+				end
+			end
+		end
+		if actData.selfRank then
+			for index, rankData in pairs(actData.rankData) do
+				if actData.rankGetIndex then
+					if actData.selfRank > rankData.to and index < actData.rankGetIndex then
+						actData.rankGetIndex = index
+					end
+				else
+					actData.rankGetIndex = index
+				end
+			end
+		end
+	end
+end
+
+function _M.CheckRepoint()
+	local listActData = MActivity.GetListFromType(Define.ActivityType.NewSeven)
+	if listActData then
+		for actId, actData in pairs(listActData) do
+			local isActRedPoint = MActivity.RewardGetState.CanGet == actData.getState
+			if MActivity.ActRedpoint(actData.actId, 0, isActRedPoint) then
+				CMain.UpdateRedpoint(isActRedPoint, Define.SysId.NewSeven, actData.actId, 0)
+				CMain.UpdateRedpoint(isActRedPoint, Define.SysId.NewSeven, actData.actId, 0, 0)
+			end
+			if actData.targetData then
+				--重置红点标识, 专门用来做今日目标页签红点
+				isActRedPoint = false
+				for index, data in ipairs(actData.targetData) do
+					local isIndexRedPoint
+					if actData.curPro then
+						isIndexRedPoint = actData.curPro >= data.target and not data.isGeted and actData.state.state ~= MActivity.ActivityState.Waiting
+					end
+					isActRedPoint = isActRedPoint or isIndexRedPoint
+					if MActivity.ActRedpoint(actData.actId, index, isIndexRedPoint) then
+						CMain.UpdateRedpoint(isIndexRedPoint, Define.SysId.NewSeven, actData.actId, index)
+					end
+				end
+				if MActivity.ActRedpoint(actData.actId, MActivity.SevenDayTargetPageRedIndex, isActRedPoint) then
+					CMain.UpdateRedpoint(isActRedPoint, Define.SysId.NewSeven, actData.actId, MActivity.SevenDayTargetPageRedIndex)
+				end
+			end	
+		end
+	end
+end
+
+function _M.OnDayout()
+	local listData = MActivity.GetListFromType(Define.ActivityType.NewSeven)
+	local isNeedRefresh = false
+	if listData then
+		for index, data in pairs(listData) do
+			if data.state.lefttime and data.state.lefttime - HeartBeat.ServSecond() <= 1 then
+				local isOutRank = data.selfRank > data.maxRewardRank or 0 == data.selfRank
+				if MActivity.RewardGetState.Geted ~= data.getState and not isOutRank then
+					data.getState = MActivity.RewardGetState.CanGet
+					isNeedRefresh = true
+				end
+			end
+		end
+	end
+	if isNeedRefresh then
+		_M.CheckRepoint()
+	end
+end
+
+function _M.OnGetSuccess(getData, actData)
+	if getData.isGeted then
+		if getData.index < 0 then
+			actData.getState = MActivity.RewardGetState.Geted
+		else
+			local getIndex
+			for index, targetData in pairs(actData.targetData) do
+				if targetData.target == getData.index then
+					getIndex = index
+					break
+				end	
+			end
+			if getIndex then
+				local targetData = actData.targetData[getIndex]
+				getData.index = getIndex
+				targetData.isGeted = getData.isGeted
+			else
+				local isGetedTips = "false"
+				if getData.isGeted then
+					isGetedTips = "true"
+				elseif nil == getData.isGeted then
+					isGetedTips = "nil"
+				end
+				error("活动领取奖励接口返回数据错误 index " .. (getData.index or "nil") .. " isGeted " .. isGetedTips)
+				return
+			end
+		end
+		_M.CheckRepoint()
+		WindowMgr.Call("UNewSeven", "OnRefreshGetState", getData)
+	end
+end
+
+function _M.OnUpdateState(oldActData, actData)
+	if actData.state.state == MActivity.ActivityState.Close then
+		MActivity.ClearForId(actData.actId)
+		CMain.UpdateRedpoint(false, Define.SysId.NewSeven, actData.actId)
+		if nil == MActivity.GetListFromType(oldActData.actType) then
+			WindowMgr.Call("UMain", "RefreshTopBtns")
+		end
+	else
+		local newState = actData.state
+		oldActData.state = {
+			state = newState.state,
+			startTime = newState.startTime,
+			endTime = newState.endTime,
+		}
+	end
+	_M.CheckRepoint()
+	WindowMgr.Call("UNewSeven", "OnRefreshView")
+end
+
+function _M.OnUpdatePro(actData, proData)
+	actData.curPro = proData.pro
+	_M.CheckRepoint()
+	WindowMgr.Call("UNewSeven", "OnRefreshTargetViewAndProcess", proData.actId)
+end
+
+------------------------------非通用接口注册(需要放到最下面进行)------------------------------
+
+return _M

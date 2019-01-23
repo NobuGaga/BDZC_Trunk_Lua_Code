@@ -1,0 +1,405 @@
+-- 金融天赋界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local CTalent = JRequire "Dev.Talent.CTalent"
+local MTalent = JRequire "Dev.Talent.MTalent"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MaxTalentNums = 9
+local ShowItemId = Csv.Const(20173)[1]
+local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
+local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Talent")
+	self.mModule = module
+	
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	self.ActiveActorPanel = {}
+	for i=1,8 do
+		local actorPanel = module:Get("ActiveActorPanel" .. i)
+		self.ActiveActorPanel[i] = {actorPanel = actorPanel}
+		CCommon.CreateEffect(actorPanel, 10250)
+	end
+
+	module:Get("C_Text").Text = Csv.Text("talent_title")
+	module:Get("Title").Text = Csv.Text("talent_totalAdd")
+	module:Get("Tips").Text = Csv.Text("talent_show")
+	module:Get("PassText").Text = Csv.Text("talent_passTip")
+
+	if ShowItemId ~= nil then
+		local itemConf = Csv.Item[ShowItemId]
+		if itemConf ~= nil then
+			module:Get("AssetNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(ShowItemId))
+			module:Get("AssetIcon").SpriteName = itemConf.icon
+		end
+	end
+
+	local upBtn = module:Get("C_Btn_a")
+	upBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickUp(self)
+	end, nil, 0.9)
+	module:Get("C_text").Text = Csv.Text("common_levelUp")
+	self.UpBtn = upBtn
+
+	self.ArrowImg = module:Get("JT")
+	self.CurActorPanel = module:Get("CurActorPanel")
+	CCommon.CreateEffect(self.CurActorPanel, 10252)
+	self.CurBigActorPanel = module:Get("CurBigActorPanel") -- 菱形选中
+	CCommon.CreateEffect(self.CurBigActorPanel, 10251)
+
+	_P.SetActorPanelActive(self)
+	_P.SetTalentData(self)
+
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle , itemid , itemcount , isAdd )
+		if self.mModule ~= nil and itemid == ShowItemId then
+			self.mModule:Get("AssetNum").Text = LuaUtil.NumberFormat(MBag.GetItemNum(ShowItemId))
+
+			local hasNum = MBag.GetItemNum(ShowItemId)
+			local needNum = MTalent.TalentTable.talentConf.costItem[1][2]
+			if hasNum >= needNum then
+				self.mModule:Get("consumetext").Text = Csv.Text("talent_greenShow", {num = needNum})
+			else
+				self.mModule:Get("consumetext").Text = Csv.Text("talent_redShow", {num = needNum})
+			end
+		end
+	end)
+end
+
+
+function _P.SetActorPanelActive(self)
+	for k,v in pairs(self.ActiveActorPanel) do
+		v.actorPanel.Activity = false
+	end
+end
+
+
+function _P.SetTalentData(self)
+	local talentData = MTalent.TalentTable
+	if talentData == nil then return end
+	local module = self.mModule
+
+	if talentData.isPass then
+		self.CurActorPanel.Activity = false
+		self.CurBigActorPanel.Activity = false
+	end
+
+	module:Get("Img").SpriteName = talentData.talentConf.bg
+	module:Get("StageText").Text = Csv.Text("talent_stage", {num = talentData.curStage})
+	local talentList = MTalent.GetCurStageData(talentData.curStage)
+	local talentNums = #talentList
+	if talentList ~= nil then
+		for k,v in pairs(talentList) do
+			local talentImg = module:Get("Talent" .. k)
+			talentImg.SpriteNameAutoScale = v.talentIcon
+			talentImg.LocalPosition = Vector2(v.talentPos[1], v.talentPos[2])
+			talentImg.Activity = true
+
+			if talentData.isPass then
+				talentImg.IsGray = false
+			else
+				if v.level < talentData.curLevel then
+					talentImg.IsGray = false
+
+					local actorRect = self.ActiveActorPanel[k].actorPanel
+					actorRect.LocalPosition = Vector2(talentImg.RootCanvasPos.x - 6, talentImg.RootCanvasPos.y)
+					actorRect.Activity = true
+				else
+					if v.level == talentData.curLevel then
+						self.CurActorPanel.Activity = k ~= talentNums
+						self.CurBigActorPanel.Activity = k == talentNums
+						self.CurActorPanel.LocalPosition = Vector2(talentImg.RootCanvasPos.x - 5, talentImg.RootCanvasPos.y + 4)
+						self.CurBigActorPanel.LocalPosition = Vector2(talentImg.RootCanvasPos.x - 5, talentImg.RootCanvasPos.y + 8)
+					end
+
+					talentImg.IsGray = true
+				end
+			end
+
+			local attrText = module:Get("attribute" .. k)
+			attrText.LocalPosition = Vector2(v.attrPos[1], v.attrPos[2])
+			local curAttrData = nil
+			if v.addAttr then
+				curAttrData = v.addAttr[1]
+				if curAttrData then
+					attrText.Text = Csv.Text("talent_showatt" .. curAttrData[1], {num = curAttrData[2]})
+				end
+			elseif v.addAttrRate then
+				curAttrData = v.addAttrRate[1]
+				if curAttrData then
+					if #v.addAttrRate == 4 then
+						attrText.Text = Csv.Text("talent_allAttr", {num = curAttrData[2] / 100})
+					else
+						attrText.Text = Csv.Text("talent_addShowProb" .. curAttrData[1], {prob = curAttrData[2] / 100})
+					end
+				end
+			end
+		end
+	end
+
+	self.TalentNums = talentNums
+	if talentNums < MaxTalentNums then
+		for i=talentNums + 1,MaxTalentNums do
+			module:Get("Talent" .. i).Activity = false
+		end
+	end
+
+	local lineConf = Csv.TalentLine[talentData.curStage]
+	local lineNums = 0
+	if lineConf and lineConf.linePos ~= nil then
+		for k,v in pairs(lineConf.linePos) do
+			local lineImg = module:Get("Line" .. k)
+			lineImg.LocalPosition = Vector2(v[1], v[2])
+
+			local sizeData = lineConf.lineSize[k]
+			lineImg.SizeDelta = Vector2(sizeData[1], sizeData[2])
+			lineImg.LocalEulerAngles = Vector3(0, 0, lineConf.lineRotZ[k])
+			lineImg.Activity = true
+
+			if talentData.isPass then
+				lineImg.IsGray = false
+			else
+				if _P.GetIsInTable(talentData.talentConf.activeLines, k) then
+					lineImg.IsGray = false
+				else
+					lineImg.IsGray = true
+				end
+			end
+		end
+		lineNums = #lineConf.linePos
+		self.LineNums = lineNums
+	end
+
+	if lineNums < MaxTalentNums - 1 then
+		for i=lineNums + 1, MaxTalentNums - 1 do
+			local lineImg = module:Get("Line" .. i)
+			lineImg.Activity = false
+		end
+	end
+	_P.SetAttrData(self, talentData)
+end
+
+
+function _P.SetAttrData(self, talentData)
+	local totalAttrData = _P.GetTotalActiveAttr(self)
+	if totalAttrData ~= nil then
+		for k,v in pairs(totalAttrData) do
+			self.mModule:Get("AttrText" .. k).Text = Csv.Text("talent_att" .. k, {num = v.attrNum or 0})
+			self.mModule:Get("ProbText" .. k).Text = Csv.Text("talent_addProb" .. k, {prob = v.addAttrRate or 0})
+		end
+	end
+
+	local passRect = self.mModule:Get("PassRect")
+	local upRect = self.mModule:Get("UpRect")
+	passRect.Activity = talentData.isPass
+	upRect.Activity = not talentData.isPass
+
+	if not talentData.isPass then
+		if talentData.talentConf.costItem ~= nil then
+			local iconImg = self.mModule:Get("consume")
+			local costItemId = talentData.talentConf.costItem[1][1]
+			local itemConf = Csv.Item[costItemId]
+			if itemConf then
+				iconImg.SpriteName = itemConf.icon
+				iconImg:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					if costItemId then
+						WindowMgr.Create("UBagDetailPop", costItemId)
+					end
+				end, nil, 1)
+			end
+
+			local hasNum = MBag.GetItemNum(costItemId)
+			local needNum = talentData.talentConf.costItem[1][2]
+			if hasNum >= needNum then
+				self.mModule:Get("consumetext").Text = Csv.Text("talent_greenShow", {num = needNum})
+			else
+				self.mModule:Get("consumetext").Text = Csv.Text("talent_redShow", {num = needNum})
+			end
+		end
+
+		_P.UpdateUpData(self, talentData)
+	end
+end
+
+
+function _P.UpdateUpData(self, talentData)
+	local probText = self.mModule:Get("probability")
+	if talentData.addSuccProb ~= nil and talentData.addSuccProb ~= 0 then
+		probText.Text = Csv.Text("talent_success1", {num = talentData.talentConf.succProb / 100, addNum = talentData.addSuccProb})
+		self.ArrowImg.Activity = true
+	else
+		probText.Text = Csv.Text("talent_success", {num = talentData.talentConf.succProb / 100})
+		self.ArrowImg.Activity = false
+	end
+end
+
+
+function _P.GetIsInTable(listData, lineId)
+	if listData == nil then return false end
+
+	local isHas = false
+	for k,v in pairs(listData) do
+		if v == lineId then
+			isHas = true
+			break
+		end
+	end
+
+	return isHas
+end
+
+
+function _P.GetAttrNumInTable(listData, attrId)
+	if listData == nil then return end
+
+	for k,attrData in pairs(listData) do
+		if #attrData == 2 and attrData[1] == attrId then
+			return attrData[2]
+		end
+	end
+end
+
+
+function _P.OnClickUp(self)
+	local talentData = MTalent.TalentTable
+	if talentData ~= nil then
+		local costData = talentData.talentConf.costItem[1]
+		if not MBag.CheckItemEnough(costData[1], costData[2]) then
+			return
+		end
+
+		self.UpBtn.RaycastTarget = false
+		CTalent.LevelUpReq()
+	end
+end
+
+
+-- 升级成功返回
+function _R.OnLevelUpBack(self, data, isNeedChangeStage)
+	if self.UpBtn ~= nil then
+		self.UpBtn.RaycastTarget = true
+	end
+
+	if data.isSuccess then
+		self:Lock()
+		local effectPos = self.CurActorPanel.RootCanvasPos
+		if isNeedChangeStage then
+			_P.SetLastTalentData(self)
+		else
+			_P.SetTalentData(self)
+		end
+
+		CCommon.CreateEffect(self.mModule:Get("ActorPanel"), 10249, effectPos, function(  )
+			if isNeedChangeStage then
+				_P.SetActorPanelActive(self)
+				local tween = self.mModule:Get("TweenRect").CachedTran:GetJTweener(MOUDLE_FADEOUT)
+				tween:Play()
+				self.CurActorPanel.Activity = false
+				self.CurBigActorPanel.Activity = false
+			
+				self.mModule.SelfRect:AddOnTime(function()
+					_P.SetTalentData(self)
+			
+					local tween = self.mModule:Get("TweenRect").CachedTran:GetJTweener(MOUDLE_FADEIN)
+					tween:SetOnComplete(function()
+						self:Unlock()
+					end)
+					tween:Play()
+				end, nil, 1)
+			else
+				self:Unlock()
+			end
+		end)
+	else
+		CCommon.ShowError(Csv.Text("talent_upError"))
+		_P.UpdateUpData(self, MTalent.TalentTable)
+	end
+end
+
+
+function _P.SetLastTalentData(self)
+	local talentConf = Csv.Talent[MTalent.TalentTable.curLevel - 1]
+	if talentConf ~= nil and self.TalentNums ~= nil then
+		self.mModule:Get("Talent" .. self.TalentNums).IsGray = false
+	end
+	
+	if self.LineNums ~= nil then
+		local lineConf = Csv.TalentLine[MTalent.TalentTable.curStage]
+		self.mModule:Get("Line" .. self.LineNums).IsGray = false
+	end
+end
+
+
+-- 得到当前已经激活天赋的总属性值
+function _P.GetTotalActiveAttr(self)
+	local attrData = {}
+	for i=1,4 do
+		attrData[i] = {attrNum = 0, addAttrRate = 0}
+	end
+	
+	if MTalent.TalentTable.curLevel > 1 then
+		local maxNum = 0
+		if MTalent.TalentTable.isPass then
+			maxNum = MTalent.TalentTable.curLevel
+		else
+			maxNum = MTalent.TalentTable.curLevel - 1
+		end
+
+		for i=1, maxNum do
+			local talentConf = Csv.Talent[i]
+			if talentConf then
+				if talentConf.addAttr ~= nil then
+					for k,v in pairs(talentConf.addAttr) do
+						attrData[v[1]].attrNum = attrData[v[1]].attrNum + v[2]
+					end
+				end
+
+				if talentConf.addAttrRate ~= nil then
+					for k,v in pairs(talentConf.addAttrRate) do
+						attrData[v[1]].addAttrRate = attrData[v[1]].addAttrRate + (v[2] / 100)
+					end
+				end
+			end
+		end
+	end
+
+	return attrData
+end
+
+
+return _M

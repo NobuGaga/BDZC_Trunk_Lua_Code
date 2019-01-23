@@ -271,8 +271,9 @@ function _R.OnBattleInfo(self, info)
 		self.STAFF.Root.Activity = false
 		self.BeginBtn.Activity = false
 		self.BottomMsg.Root.Activity = false
-		self.KILLED.Activity = true	
-		WindowMgr.Create("UCommerceBattleList")
+		self.KILLED.Activity = true
+
+		WindowMgr.Call("UCommerce", "OnOpenBattleList", 2)
 	else
 		self.LastEnemyBlood = info.blood
 		self.BeginBtn.Activity = true

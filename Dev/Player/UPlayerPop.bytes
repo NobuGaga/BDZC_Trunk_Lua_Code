@@ -97,6 +97,8 @@ function _M:OnCreate(data)
 	moudle:Get("B2attrNum3").Text = Csv.Text("battle_title",{index = partCsv.id,name = partCsv.name .. MRank.GetNumText(battleCsv.chapter%10)})
 	
 	local titleTable = {}
+	local scrollView = moudle:Get("scrollView")
+	local cabinetShowRect = moudle:Get("infoBg")
 	if data.titleList ~= nil then
 		local content = moudle:Get("content")
 		for k,v in pairs(data.titleList) do 
@@ -108,6 +110,13 @@ function _M:OnCreate(data)
 			end
 			titleTable[v] = titleMoudle
 		end
+
+		local isShow = next(data.titleList) ~= nil
+		scrollView.Activity = isShow
+		cabinetShowRect.LocalPosition = (isShow and Vector2(-173, 70)) or Vector2(-173, -56)
+	else
+		scrollView.Activity = false
+		cabinetShowRect.LocalPosition = Vector2(-173, -56)
 	end
 	self.TitleTable = titleTable
 
@@ -134,6 +143,15 @@ function _M:OnCreate(data)
 		WindowMgr.Create("UCarGarageGive", MCar.GarageTypeEnum.Give, nil, data)
 	end,nil,0.9)
 	sellBtn.Activity = (data.id ~= MPlayer.GetId() and data.serverId == MPlayer.GetServerId())
+
+	-- 展览品相关信息
+	cabinetShowRect.Activity = false
+	cabinetShowRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickShowDesc(self)
+	end, nil, 0.9)
+	self.CabinetShowRect = cabinetShowRect
+	_P.SetCabinetData(self, data.cabinetList)
 end
 
 function _P.RefreshDress(self,data)
@@ -185,6 +203,57 @@ function _P.GetAvatar(data)
 	end
 
 	return bodyCsv["asset_"..sex]
+end
+
+-- 当前展出纪念品数据
+function _P.SetCabinetData(self, cabinetList)
+	local module = self.Moudle
+	local scrollView = module:Get("scrollView2")
+	if cabinetList ~= nil then
+		local content = module:Get("content2")
+		for k,itemId in pairs(cabinetList) do
+			if itemId ~= nil then
+				local cabinetModule = JGuiManager.GetMoudle(content, "M_Role_UMain_Item2")
+				local showcaseConf = Csv.Showcase[itemId]
+				if showcaseConf ~= nil then
+					local icon = cabinetModule:Get("Icon")
+					icon.SpriteName = showcaseConf.icon
+					cabinetModule:Get("name").Text = showcaseConf.name
+					icon:AddOnButton(function()
+						SoundMgr.Play(10001)
+						_P.OnClickShowDesc(self, showcaseConf, k)
+					end, nil, 1)
+				end
+			end
+		end
+		scrollView.Activity = next(cabinetList) ~= nil
+	else
+		scrollView.Activity = false
+	end
+end
+
+
+-- 展示该纪念品信息
+function _P.OnClickShowDesc(self, showcaseConf, index)
+	local isShowActivity = false
+	if index == nil or self.CurSelectIndex == index then
+		isShowActivity = self.CabinetShowRect.Activity
+	end
+	if index ~= nil then
+		self.CurSelectIndex = index
+	end
+	self.CabinetShowRect.Activity = not isShowActivity
+
+	-- 2秒后自动关闭
+	if self.CabinetShowRect.Activity then
+		if showcaseConf ~= nil then
+			self.Moudle:Get("InfoTex").Text = Csv.Text("showcase_15", {name = showcaseConf.name, desc = showcaseConf.addStr})
+		end
+
+		self.CabinetShowRect:AddOnTime(function()
+			self.CabinetShowRect.Activity = false
+		end, nil, 2)
+	end
 end
 
 return _M

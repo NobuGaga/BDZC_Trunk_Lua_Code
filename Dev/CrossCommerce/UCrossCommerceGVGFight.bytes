@@ -1,0 +1,148 @@
+--[[
+	@desc :
+    2019-01-10 14:53:08
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+function _R.OnGVGLook(self, msg)
+	WindowMgr.Create("UBattlePvp", msg.fight, function()
+		WindowMgr.Destroy("UBattlePvp")
+	end, true)
+end
+
+function _P.startFight(self, content, list, index)
+	local oneMoudle = self:CreateMoudle(content, "M_M_GangPK_PK_Item")
+	oneMoudle.SelfRect.Name = index
+	oneMoudle.SelfRect.LocalPosition = Vector2(0, -334 * (index - 1) + 10)
+	local info = list[index]
+	if index > 3 then
+		content.SizeDelta = Vector2(750, 334 * index - 10)
+		content.LocalPosition = Vector2(0, 334 * (index - 3) - 10)
+	end
+	oneMoudle:Get("Text1").Text = info.my.name
+	oneMoudle:Get("Text2").Text = Csv.Text("common_power", {num = info.my.force})
+	oneMoudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(info.my.head,info.my.sex)
+	oneMoudle:Get("HeadBox").SpriteName = MPlayer.GetOtherHeadBG(info.my.chatBg, info.my.vip)
+	oneMoudle:Get("VIPNUM").SpriteNameAutoScale = "friend_num_"..info.my.vip
+	if info.my.titleid ~= nil and info.my.titleid > 0 then
+		local titleCsv = Csv.Title[info.my.titleid]
+		if titleCsv then
+			oneMoudle:Get("chIMG").SpriteName = titleCsv.chatIcon
+		end
+	end
+
+	oneMoudle:Get("Text11").Text = info.that.name
+	oneMoudle:Get("Text22").Text = Csv.Text("common_power", {num = info.that.force})
+	oneMoudle:Get("Head2").SpriteName = MPlayer.GetOtherHeadIcon(info.that.head,info.that.sex)
+	oneMoudle:Get("HeadBox2").SpriteName = MPlayer.GetOtherHeadBG(info.that.chatBg, info.that.vip)
+	oneMoudle:Get("VIPNUM2").SpriteNameAutoScale = "friend_num_"..info.that.vip
+	if info.that.titleid ~= nil and info.that.titleid > 0 then
+		local titleCsv = Csv.Title[info.that.titleid]
+		if titleCsv then
+			oneMoudle:Get("chIMG2").SpriteName = titleCsv.chatIcon
+		end
+	end
+	oneMoudle:Get("C_text").Text = Csv.Text("cross_commerce_50")
+	oneMoudle:Get("C_Btn_a"):AddOnButton(function (  )
+		CCrossCommerce.BLookReq(info.my.id)
+	end)
+
+	local tweener = oneMoudle.SelfRect.CachedTran:GetJTweener("T_CrossCommerce_GVGFight")
+	tweener:SetOnComplete(function (  )
+		if oneMoudle ~= nil then
+			local winObj
+			if info.result then
+				winObj = oneMoudle:Get("SLSBIMG1")
+			else
+				winObj = oneMoudle:Get("SLSBIMG2")
+			end
+			winObj.Activity = true
+			local winTween = winObj.CachedTran:GetJTweener("T_CrossCommerce_GVGFight_Win")
+			winTween:SetOnComplete(function (  )
+				if content ~= nil then
+					oneMoudle:Get("C_Btn_a").Activity = true
+
+					if #list > index then
+						_P.startFight(self, content, list, index + 1)
+					else
+						WindowMgr.Create("UCrossCommerceGVGFightResult", self.FightResult, self.FightSoceAdd)
+					end
+				end
+			end)
+			winTween:Play()
+		end
+	end)
+	tweener:Play()
+end
+
+function _M:OnCreate(data, closeCall)
+	self.FightResult = data.result
+	self.FightSoceAdd = data.socreAdd
+	self.OnCloseCall = closeCall
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_PK")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossCommerce)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	moudle:Get("C_Text").Text = Csv.Text("cross_commerce_48")
+	moudle:Get("name1").Text = MCommerce.CommerceName
+	moudle:Get("qufu1").Text = Csv.Text("rank_server") .. "S" .. MPlayer.GetServerId()
+	moudle:Get("name2").Text = data.commerceName
+	moudle:Get("qufu2").Text = Csv.Text("rank_server") .. "S" .. data.serverId
+	local myAllForce = 0
+	local thatAllForce = 0
+	local list = data.list
+	if list ~= nil and #list > 0 then
+		for index,info in pairs(list) do
+			myAllForce = myAllForce + info.my.force
+			thatAllForce = thatAllForce + info.that.force
+		end
+
+		self:Lock()
+		moudle.SelfRect:AddOnTime(function()
+			self:Unlock()
+		end, nil, 1)
+		local content = moudle:Get("Content")
+
+		_P.startFight(self, content, list, 1)
+	end
+	moudle:Get("zhanli1").Text = Csv.Text("lineup_19", {num = myAllForce})
+	moudle:Get("zhanli2").Text = Csv.Text("lineup_19", {num = thatAllForce})
+end
+
+return _M

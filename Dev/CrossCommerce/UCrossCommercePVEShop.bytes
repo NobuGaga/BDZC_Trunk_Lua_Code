@@ -1,0 +1,89 @@
+--[[
+	@desc :
+    2019-01-10 14:48:51
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnPVEShop(self)
+	local moudle = self.mMoudle
+	moudle:Get("JFNum").Text = Csv.Text("cross_commerce_46") .. MCrossCommerce.PVE.ShopScore
+	moudle:Get("JinBiNum").Text = Csv.Text("cross_commerce_26") .. MCrossCommerce.CommerceGold
+	for k,oneMoudle in pairs(self.NodeList) do
+		local shopCsv = Csv.crossCommerceExchange[k]
+		oneMoudle:Get("NumText").Text = shopCsv.limit - (MCrossCommerce.PVE.ShopList[k] or 0)
+	end
+end
+
+function _R.OnPVEShopBuy(self, msg)
+	_R.OnPVEShop(self)
+	local shopCsv = Csv.crossCommerceExchange[msg.info.key]
+	CCommon.ShowFlyItem(self._RootNode, shopCsv.itemid, shopCsv.count, 0, self.NodeList[msg.info.key]:Get("C_Btn_b").RootCanvasPos)
+end
+
+function _M:OnCreate(  )
+	CCrossCommerce.AShopReq()
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Shop")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_Text").Text = Csv.Text("cross_commerce_10")
+
+	local list = {}
+	self.NodeList = list
+	local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+	if actCsv ~= nil then
+		local content = moudle:Get("content")
+		for k,v in pairs(actCsv.shopid) do
+			local shopCsv = Csv.crossCommerceExchange[v]
+			local itemCsv = Csv.Item[shopCsv.itemid]
+			local costNum = shopCsv.Point
+			local oneMoudle = self:CreateMoudle(content, "M_GangPK_Shop_Item")
+			oneMoudle:Get("IconBox").SpriteName = itemCsv.colorIcon
+			oneMoudle:Get("icon").SpriteName = itemCsv.icon
+			if shopCsv.count > 1 then
+				oneMoudle:Get("IconNum").Text = shopCsv.count
+			end			
+			oneMoudle:Get("iconName").Text = itemCsv.name
+			oneMoudle:Get("spend").Text = Csv.Text("cross_commerce_44")
+			oneMoudle:Get("spendNum").Text = costNum
+			oneMoudle:Get("canExchange").Text = Csv.Text("cross_commerce_45")
+			oneMoudle:Get("C_text").Text = Csv.Text("finance_exchange")
+			oneMoudle:Get("C_Btn_b"):AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				local canChangeCount = shopCsv.limit - (MCrossCommerce.PVE.ShopList[v] or 0)
+				if canChangeCount > 0 then
+					if costNum <= MCrossCommerce.PVE.ShopScore then
+						CCrossCommerce.AShopBuyReq(v)
+					else
+						CCommon.ShowError(Csv.Text("finance_noJifen"))
+					end
+				else
+					CCommon.ShowError(Csv.Text("finance_noExchangeCount"))
+				end
+			end)
+
+			list[v] = oneMoudle
+		end
+	end
+	_R.OnPVEShop(self)
+end
+
+return _M

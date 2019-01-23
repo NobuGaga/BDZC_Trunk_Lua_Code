@@ -1,0 +1,43 @@
+--[[
+	@desc :
+    2019-01-14 14:09:03
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+
+local _M = Class(WindowBase)
+
+function _M:OnCreate(result, scoreAdd)
+	self._EventNode:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_M_GangPK_PK_Success")
+	self.Moudle = moudle
+	self:Lock()
+	moudle.SelfRect:AddOnTime(function()
+		self:Unlock()
+		LuaUtil.TextAddThreePoint(moudle:Get("Tips"), Csv.Text("common_close2"))
+	end, nil, 1)
+
+	moudle:Get("Score").Text = Csv.Text("cross_commerce_51")
+	if result == 1 then
+		moudle:Get("ScoreNum").Text = "+" .. scoreAdd
+
+		SoundMgr.PlayNonStopUI(10014)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10179)	
+	else
+		moudle:Get("ScoreNum").Color = Color.red
+		moudle:Get("ScoreNum").Text = "-" .. scoreAdd
+
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(moudle:Get("ActorPanel"), 10180)
+	end	
+end
+
+return _M

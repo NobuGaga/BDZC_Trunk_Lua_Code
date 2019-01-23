@@ -13,6 +13,7 @@ local MBag = JRequire "Dev.Bag.MBag"
 local _M = Class(WindowBase)
 local _P = {}
 
+local MAX_REWARD_NUM = 4
 local ITEM_LIGHT_SIZE = Vector2(170, 170)
 local GTE_EFFECT_ID = 5
 local TenNum = 10
@@ -104,6 +105,7 @@ function _M:ctor(parent, actId, lockNode)
 		SoundMgr.Play(10001)
 		_P.OnClickTenFire(self)
 	end, nil, 0.9)
+	self.TenBtn = tenBtn
 	module:Get("C_text").Text = self.FireworkConf.tenBtnText
 
 	-- 设置自动购买数据
@@ -128,6 +130,19 @@ function _M:ctor(parent, actId, lockNode)
 			local clickIcon = module:Get("Dianwo" .. k)
 			CCommon.CreateEffect(clickIcon, CanGetActorId, Vector2.zero, nil, self.FireworkConf.effectParam)
 		end
+	end
+
+	-- local bgActorPanel = module:Get("BgActorPanel")
+	-- if bgActorPanel ~= nil then
+	-- 	CCommon.CreateEffect(bgActorPanel, 10253)
+	-- end
+	local Yulan = module:Get("Yulan")
+	if Yulan then
+		module:Get("Yulantext").Text = Csv.Text("quest_actPre")
+		Yulan:AddOnButton(function ()
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UFireworksReward", actId)
+		end)
 	end
 end
 
@@ -222,7 +237,7 @@ function _P.UpdateThreeFireData(self, fireListData, isShow)
 			end
 
 			for k,v in pairs(fireListData) do
-				TimeDelay.DelayCall((k - 1) * 0.2, false, function( ... )
+				TimeDelay.DelayCall((k - 1) * 0.08, false, function( ... )
 					if module then
 						local itemRect = module:Get("Fireworks" .. k)
 						local clickIcon = module:Get("NumBg" .. k)
@@ -270,6 +285,7 @@ function _P.OnClickToOpen(self, index)
 
 	local fireNum = MBag.GetItemNum(self.FireworkConf.costItem[1])
 	if self.ActInfo.leftFreeTimes > 0 or fireNum > 0 then
+		_P.SetFireworkClickState(self, false)
 		CActivity.IngniteFireReq(self.ActId, false, index)
 	elseif self.ExtraBuyMaxNum - self.ActInfo.buyTimes <= 0 then
 		CCommon.ShowError(Csv.Text("equipRob_qd_buyErr"))
@@ -294,6 +310,13 @@ function _P.CheckIsCanIngnite(self, needPrice, index, isTen)
 	if hasGold < needPrice then
 		CCommon.ShowError(Csv.Text("err_shop_buytype"))
 	else
+		if isTen then
+			self.TenBtn.IsGray = true
+			self.TenBtn.RaycastTarget = false
+		else
+			_P.SetFireworkClickState(self, false)
+		end
+
 		CActivity.IngniteFireReq(self.ActId, isTen, index)
 	end
 end
@@ -303,6 +326,8 @@ end
 function _P.OnClickTenFire(self)
 	local fireNum = MBag.GetItemNum(self.FireworkConf.costItem[1])
 	if self.ActInfo.leftFreeTimes + fireNum >= TenNum then
+		self.TenBtn.IsGray = true
+		self.TenBtn.RaycastTarget = false
 		CActivity.IngniteFireReq(self.ActId, true, 0)
 	elseif self.ExtraBuyMaxNum - self.ActInfo.buyTimes < TenNum then
 		CCommon.ShowError(Csv.Text("midAutumn_tenBuyMax"))
@@ -351,31 +376,55 @@ function _P.SetRewardData(self)
 		end
 	end
 
+	local content = self.mModule:Get("itemGird")
+
 	self.ItemLight = {}
+	self.mItemTable = {}
+	self.mIsInitItem = true
+	local fireworkConf = Csv.ActivityFireworks[self.ActId]
+
 	local totalNums = #self.ActInfo.rewardedList
 	if self.ActInfo.rewardedList ~= nil then
 		local module = self.mModule
-		for k,v in pairs(self.ActInfo.rewardedList) do
-			local index = v.index
-			local reward = self.FireworkConf.getReward[index]
-			local itemId = reward[1]
+		local fireworkConf = Csv.ActivityFireworks[self.ActId]
+		local index = 0
+		for k,v in pairs(fireworkConf.needNum)do
+			index = index +1
+			local itemMoudle = JGuiManager.GetMoudle(content, "M_LuckItem", WindowType.UI, 0)
+			local _bg = itemMoudle.SelfRect
+			local _icon = itemMoudle:Get("Num_Icon")
+			local _num = itemMoudle:Get("Num_Text")
+			local _getImg = itemMoudle:Get("getBG")
+			local _getBg = itemMoudle:Get("get")
+			local _frequency = itemMoudle:Get("frequency")
+		--for k,v in pairs(self.ActInfo.rewardedList) do
+			--local index = v.index
+			--local reward = self.FireworkConf.getReward[index]
+			--local itemId = reward[1]
+			local itemId = fireworkConf.getReward[index][1]
+			local getNum = fireworkConf.getReward[index][2]
 			local itemConf = Csv.Item[itemId]
-			local itemImg = module:Get("Num_Item" .. index)
-			itemImg.SpriteName = itemConf.colorIcon
-			module:Get("Num_Icon" .. index).SpriteName = itemConf.icon
-			module:Get("Num_Text" .. index).Text = tostring(reward[2])
-			itemImg:AddOnButton(function ( ... )
+			--local itemImg = module:Get("Num_Item" .. index)
+			_bg.SpriteName = itemConf.colorIcon
+			_icon.SpriteName = itemConf.icon
+			_num.Text = tostring(getNum)
+			--module:Get("Num_Icon" .. index).SpriteName = itemConf.icon
+			--module:Get("Num_Text" .. index).Text = tostring(getNum)
+			_bg:AddOnButton(function ( ... )
 				SoundMgr.Play(10001)
 				CCommon.ShowItemTips(itemId)
 			end)
 
-			local itemLightImg = CCommon.CreateItemLight(itemImg, Define.SysId.MidAFestival, itemId)
+			self.mItemTable[index] = {bg = _bg,icon = _icon,num = _num,getImg = _getImg,getBg = _getBg,frequency = _frequency}
+
+			local itemLightImg = CCommon.CreateItemLight(_bg, Define.SysId.MidAFestival, itemId)
 			if itemLightImg ~= nil then
 				itemLightImg.SelfRect.SizeDelta = ITEM_LIGHT_SIZE
 				itemLightImg.SelfRect.CachedTran:SetSiblingIndex(1)
 				table.insert(self.ItemLight, itemLightImg)
 			end
 		end
+		MAX_REWARD_NUM = index	
 	end
 
 	if totalNums < 4 then
@@ -392,17 +441,24 @@ end
 function _P.UpdateRewardState(self)
 	local hasNum = self.ActInfo.igniteTimes
 	local isCanClick = false
+	local gotIndex = 0
 	if self.ActInfo.rewardedList ~= nil then
 		for k,v in pairs(self.ActInfo.rewardedList) do
+	--if self.mItemTable ~= nil then
+		--local index = 0
+		--for k,v in pairs(self.mItemTable)do
+			--index = index +1
 			local index = v.index
-			local getImg = self.mModule:Get("get" .. index)
-			local numText = self.mModule:Get("frequency" .. index)
+			local getImg = self.mItemTable[index].getBg--self.mModule:Get("get" .. index)
+			local numText = self.mItemTable[index].frequency--self.mModule:Get("frequency" .. index)
 			
 			local needNum = v.needNum
 			if hasNum >= needNum then
 				numText.Text = Csv.Text("lottery_8", {cur = hasNum, max = needNum})
 				if v.isGeted then 
 					getImg.Activity = true
+					--移动
+					gotIndex = index
 				else
 					getImg.Activity = false
 					isCanClick = true
@@ -413,6 +469,23 @@ function _P.UpdateRewardState(self)
 				isCanClick = true
 			end
 		end
+
+		--移动
+		local content = self.mModule:Get("itemGird")
+		local targartPos = 0
+		if gotIndex > 0 and gotIndex<= MAX_REWARD_NUM - 4 then
+			targartPos =-(120+30)*gotIndex
+		elseif gotIndex > MAX_REWARD_NUM - 4 then
+			targartPos = -(120+30)*(MAX_REWARD_NUM - 4)
+		end
+
+		if self.mIsInitItem then
+			content:DOAnchorPosX(targartPos,0)
+			self.mIsInitItem = false
+		else
+			content:DOAnchorPosX(targartPos,0.2)
+		end
+
 	end
 
 	_P.SetGetBtnState(self, isCanClick)
@@ -501,9 +574,10 @@ function _M:GetRewardBack(data)
 
 	SoundMgr.PlaySystem(10004)
 	SoundMgr.Play(11000)
-	local itemBgImg = self.mModule:Get("Num_Item" .. data.index)
+	local itemBgImg = self.mItemTable[data.index].bg--self.mModule:Get("Num_Item" .. data.index)
+	local getBg = self.mItemTable[data.index].getBg
 	local effect = nil
-	effect = CCommon.CreateEffect(itemBgImg, GTE_EFFECT_ID, self.mModule:Get("get" .. data.index).LocalPosition, function( ... )	
+	effect = CCommon.CreateEffect(itemBgImg, GTE_EFFECT_ID, getBg.LocalPosition, function( ... )	
 		if effect ~= nil then
 			effect:Destroy()
 		end
@@ -522,15 +596,15 @@ end
 -- 点燃烟花返回
 function _M:OnIngniteFireBack(data)
 	self.LockNode.RaycastTarget = true
-	_P.SetFireworkClickState(self, false)
 
 	local module = self.mModule
 	local isShowRank = self.RankBtn.Activity
 	local actorIds = self.FireworkConf.actorIds
-	local actorId = (data.isTen and self.FireworkConf.tenActorId) or actorIds[data.results[1].type]
+	local actorId = (data.isTen and self.FireworkConf.tenActorData[1]) or actorIds[data.results[1].type]
 	local actorPos = nil
 	if data.isTen then
-		actorPos = Vector2.zero
+		actorPos = Vector2(self.FireworkConf.tenActorData[2], self.FireworkConf.tenActorData[3])
+		_P.SetFireworkClickState(self, false)
 	else
 		local posData = self.FireworkConf.actorPos[data.results[1].index]
 		actorPos = Vector2(posData[1], posData[2])
@@ -549,44 +623,71 @@ function _M:OnIngniteFireBack(data)
 		CCommon.CreateEffect(actorRect, actorId, actorPos)
 	end
 
-	-- 播放彩带
 	local resultData = data.results[#data.results]
-	if ((resultData.type == 2 and actorIds[1] == actorIds[2]) or data.isTen) and self.FireworkConf.otherActorId ~= nil then
-		actorRect:AddOnTime(function()
-			CCommon.CreateEffect(actorRect, self.FireworkConf.otherActorId[1])
+	local sashActorRect = module:Get("SashActorPanel")
+	if sashActorRect and ((resultData.type == 2 and actorIds[1] == actorIds[2]) or data.isTen) and self.FireworkConf.otherActorId ~= nil then
+		sashActorRect:AddOnTime(function()
+			CCommon.CreateEffect(sashActorRect, self.FireworkConf.otherActorId[1])
 		end, nil, self.FireworkConf.otherActorId[2])
 	end
 
+	local isShow = self.FireworkConf.isShowFire ~= nil
 	if data.isTen then
+		if self.ActInfo.fireworksList ~= nil then
+			for k,v in pairs(self.ActInfo.fireworksList) do
+				local fireImg = self.mModule:Get("Fireworks" .. k)
+				local itemRect = self.mModule:Get("NumBg" .. k)
+				itemRect.Activity = false
+				if not isShow then
+					fireImg.SpriteName = ''
+				else
+					fireImg.SpriteName = self.FireworkConf.fireOpenBg[resultData.type]
+				end
+			end
+		end
+
 		module.SelfRect:AddOnTime(function()
 			actorRect:DestroyChildren()
+			sashActorRect:DestroyChildren()
 			for k,v in pairs(threeActors) do
 				v:DestroyChildren()
 			end
 			self.LockNode.RaycastTarget = false
+			self.TenBtn.IsGray = false
+			self.TenBtn.RaycastTarget = true
 
 			WindowMgr.Create("UMidautumnTenReward", isShowRank, data.results, function()
 				if data.fireworksList ~= nil and next(data.fireworksList) ~= nil then
 					self.ActInfo.fireworksList = {}
 					for k,v in pairs(data.fireworksList) do
 						self.ActInfo.fireworksList[k] = v
+						local fireImg = self.mModule:Get("Fireworks" .. k)
+						fireImg.SpriteName = self.FireworkConf.fireOpenBg[resultData.type]
 					end
 
 					_P.UpdateThreeFireData(self, self.ActInfo.fireworksList, true)
 				end
 			end)
 			_P.UpdateIgniteNumData(self)
-		end, nil, 2.5)
+		end, nil, 2)
 	else
-		local fireImg = module:Get("Fireworks" .. resultData.index)
 		local itemRect = module:Get("NumBg" .. resultData.index)
-		fireImg.SpriteName = self.FireworkConf.fireOpenBg[resultData.type]
+		local fireImg = module:Get("Fireworks" .. resultData.index)
+		if not isShow then
+			fireImg.SpriteName = ''
+		else
+			fireImg.SpriteName = self.FireworkConf.fireOpenBg[resultData.type]
+		end
 		fireImg.RaycastTarget = false
 		itemRect.Activity = false
 
-		local animTime = (resultData.type == 1 and 1) or 1.5
+		local delayTime = (resultData.type == 1 and 1.3) or 2
 		module.SelfRect:AddOnTime(function()
+			if not isShow then
+				fireImg.SpriteName = self.FireworkConf.fireOpenBg[resultData.type]
+			end
 			actorRect:DestroyChildren()
+			sashActorRect:DestroyChildren()
 			self.LockNode.RaycastTarget = false
 
 			local showTip = (resultData.type == 1 and '') or self.FireworkConf.highRewardTip
@@ -603,7 +704,7 @@ function _M:OnIngniteFireBack(data)
 
 				_P.UpdateIgniteNumData(self)
 			end)
-		end, nil, animTime)
+		end, nil, delayTime)
 	end
 
 	self.AssetNum = MBag.GetItemNum(Define.AssetsType.Gold)

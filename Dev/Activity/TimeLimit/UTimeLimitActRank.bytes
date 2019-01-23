@@ -41,6 +41,18 @@ local space = 12
 local pageNum = 11
 local pageHeight = 802
 
+local SpecialType = {}
+for _, type_Name in ipairs(Csv.Const(89)) do
+	local splitStr = LuaUtil.StringSplit(type_Name, "_")
+	SpecialType[tonumber(splitStr[1])] = splitStr[2]
+end
+
+local CrossSpecialType = {}
+for _, type_Name in ipairs(Csv.Const(92)) do
+	local splitStr = LuaUtil.StringSplit(type_Name, "_")
+	CrossSpecialType[tonumber(splitStr[1])] = splitStr[2]
+end
+
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
 --私有函数模块 *** 只放置私有函数, 禁止放变量
@@ -81,6 +93,7 @@ function _M:OnCreate(rankType, text, title, name, closeCallback, isCross, isShow
 		self:Destroy()
 	end, nil, 1.2)
 	self.isCross = isCross or false
+	local tipsText
 	if isCross then
 		self.moudle:Get("District").Text = Csv.Text("rankreward_rank_server")
 		self.moudle:Get("textServerTips").Text = Csv.Text("rank_server")
@@ -90,6 +103,12 @@ function _M:OnCreate(rankType, text, title, name, closeCallback, isCross, isShow
 				self.moudle:Get("textServerName").Text = serverData.name
 			end
 		end
+		tipsText = CrossSpecialType[rankType]
+	else
+		tipsText = SpecialType[rankType]
+	end
+	if tipsText then
+		self.moudle:Get("Tips").Text = Csv.Text("rank_type_tips", {text = tipsText})
 	end
 	self.isShowLimit = isShowLimit
 	self.isBattleRank = Csv.Const(BattleRank) == rankType
@@ -115,6 +134,7 @@ function _P.InitText(self, text, title, name)
 	self.moudle:Get("OwnRanking").Text = Csv.Text("rank_rankT")
 	self.fractionTipsText = self.moudle:Get("OwnFraction")
 	self.fractionTipsText.Text = text .. "："
+	self.fractionTipsText.Activity = false
 
 	self.rankingText = self.moudle:Get("RankingText")
 	self.fractionText = self.moudle:Get("FractionText")

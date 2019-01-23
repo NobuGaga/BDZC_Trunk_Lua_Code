@@ -1,0 +1,93 @@
+local _M = {}
+
+_M.STATE = 
+{
+    Waiting = 1,	--未开始
+	Open = 2,		--进行中
+	Finish = 3,		--已结束（显示界面）
+	Close = 4,		--关闭（不显示界面）
+}
+
+_M.BUILDING_TYPE = 
+{
+    Stage_1 = 1,    --超豪华
+    Stage_2 = 2,    --大型
+    Stage_3 = 3,    --高档
+    Stage_4 = 4,    --经济
+}
+
+local function init()
+    _M.IsInGame = false
+    --活动按钮是否显示
+    _M.IsShopOpen = false
+    --活动状态
+    _M.State = _M.STATE.Close
+    --活动id
+    _M.ActID = 0
+    --活动开启时间
+    _M.StartTime = 0
+    --活动关闭时间
+    _M.EndTime = 0
+
+    --我的建筑id
+    _M.MyBuildID = 0
+    --可以战斗的次数
+    _M.FightTimes = 0
+    --战斗购买的次数
+    _M.FightBuyTimes = 0
+    --战斗次数下次的刷新时间
+    _M.FightRefTime = 0
+    --等待自动刷新返回
+    _M.IsWaitInfoRefreshAuto = false
+end
+init()
+
+function _M.Clean()
+	init()
+end
+
+
+function _M.GetFightBuyCount()
+    local csv = Csv.CrossOccupy[_M.ActID]
+    if csv ~= nil then
+        return _M.FightBuyTimes, csv.buyMax
+    end
+	return _M.FightBuyTimes, 0
+end
+
+function _M.GetFightTimes()
+	return _M.FightTimes
+end
+
+function _M.GetRefreshTime()
+	return _M.FightRefTime
+end
+
+function _M.GetFightBuyCost()
+    local csv = Csv.CrossOccupy[_M.ActID]
+    if csv ~= nil and csv.buyCost ~= nil and #csv.buyCost > 0 then
+        return csv.buyCost[_M.FightBuyTimes + 1] or csv.buyCost[#csv.buyCost]
+    end
+end
+
+function _M.FightTotal()
+    local csv = Csv.CrossOccupy[_M.ActID]
+    if csv ~= nil then
+        return csv.pkMax
+    end
+	return 0
+end
+
+function _M.GetBuildingTypeStr(type)
+    if type == _M.BUILDING_TYPE.Stage_1 then
+        return Csv.Text("occupy_23")
+    elseif type == _M.BUILDING_TYPE.Stage_2 then
+        return Csv.Text("occupy_24")
+    elseif type == _M.BUILDING_TYPE.Stage_3 then
+        return Csv.Text("occupy_25")
+    elseif type == _M.BUILDING_TYPE.Stage_4 then
+        return Csv.Text("occupy_26")
+    end
+end
+
+return _M

@@ -1,0 +1,50 @@
+--[[
+	@desc :
+    2019-01-10 14:54:24
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _M:OnCreate(playerId)
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Lineup")
+	self.mMoudle = moudle
+	moudle:Get("BackBtn"):AddOnButton(function()
+		self:Destroy()
+	end)
+	moudle:Get("title").Text = Csv.Text("cross_commerce_6")
+	local content = moudle:Get("content")
+	for k,v in pairs(MCrossCommerce.GVG.Fighters) do
+		if v.id ~= playerId then
+			local oneMoudle = self:CreateMoudle(content, "M_GangPK_Lineup_Item")
+			oneMoudle:Get("textName").Text = v.name
+			oneMoudle:Get("zhanliImg").Text = Csv.Text("lineup_6")
+			oneMoudle:Get("zhanli").Text = v.force
+			oneMoudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(v.head,v.sex)
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
+			oneMoudle:Get("Vip").SpriteNameAutoScale = "friend_num_"..v.vip
+			oneMoudle:Get("C_text").Text = Csv.Text("cross_commerce_61")
+			oneMoudle:Get("C_Btn_b"):AddOnButton(function (  )
+				CCrossCommerce.BChangeSortReq(playerId, v.id)
+				self:Destroy()
+			end)
+		end
+	end
+end
+
+return _M

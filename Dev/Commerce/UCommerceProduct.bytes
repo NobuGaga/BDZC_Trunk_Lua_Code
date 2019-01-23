@@ -1,0 +1,509 @@
+-- 商会生产主界面
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class()
+local _P = {}
+
+local GTE_EFFECT_ID = 5
+
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Gang_Shenchan", WindowType.UI, 0)
+	self.mModule = module
+
+	self.GongLevel = MCommerce.MyCommerceInfo.productGangLv
+	if self.GongLevel ~= nil then
+		self.ProduceConf = Csv.CommerceProduce[self.GongLevel]
+	end
+	self.CurProduceConf = Csv.CommerceProduce[MCommerce.CommerceLevel]
+	CCommon.CreateEffect(module:Get("ActorPanel"), 10263)
+
+	-- 设置投资相关信息
+	module:Get("Text").Text = Csv.Text("product_7")
+	_P.SetInvestData(self)
+	local goodInvestBtn = module:Get("C_Btn_1")
+	goodInvestBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickGoodInvest(self)
+	end, nil, 0.9)
+	self.GoodInvestBtn = goodInvestBtn
+	module:Get("C_text").Text = Csv.Text("product_1")
+
+	local goldInvestBtn = module:Get("C_Btn_2")
+	goldInvestBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickGoldInvest(self)
+	end, nil, 0.9)
+	self.GoldInvestBtn = goldInvestBtn
+	module:Get("C_text_0").Text = Csv.Text("product_2")
+
+	-- 设置自动生产数据
+	_P.SetAutoProductData(self)
+	module.SelfRect:AddOnUpdate(function()
+		_P.OnUpdateAutoData(self)
+	end, nil, 1)
+
+	-- 公告
+	_P.SetLogData(self)
+	CCommerce.GetDonateLogReq()
+end
+
+
+function _P.OnClickGoodInvest(self)
+	if self.ProduceConf.donateProductTimes > MCommerce.MyCommerceInfo.myInfo.donateTable.timesByProduct then
+		if not MBag.CheckItemEnough(Define.AssetsType.Food, self.ProduceConf.donateProductPrice) then
+			return
+		end
+
+		CCommerce.DonateReq(MCommerce.DonateType.Goods)
+	else
+		CCommon.ShowError(Csv.Text("product_3"))
+	end
+end
+
+
+function _P.OnClickGoldInvest(self)
+	if self.ProduceConf.donateGoldTimes > MCommerce.MyCommerceInfo.myInfo.donateTable.timesByGold then
+		local needGold = _P.GetGoldPriceNum(self)
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needGold) then
+			return
+		end
+
+		CCommerce.DonateReq(MCommerce.DonateType.Gold)
+	else
+		CCommon.ShowError(Csv.Text("product_4"))
+	end
+end
+
+
+-- 设置投资价格、次数等
+function _P.SetInvestData(self)
+	if self.ProduceConf == nil then
+		return
+	end
+
+	local module = self.mModule
+	module:Get("Num1").Text = (self.ProduceConf.donateProductTimes - MCommerce.MyCommerceInfo.myInfo.donateTable.timesByProduct) .. '/' .. self.ProduceConf.donateProductTimes
+	module:Get("Num2").Text = (self.ProduceConf.donateGoldTimes - MCommerce.MyCommerceInfo.myInfo.donateTable.timesByGold) .. '/' .. self.ProduceConf.donateGoldTimes
+	module:Get("ZuansText1").Text = tostring(self.ProduceConf.donateProductPrice)
+	module:Get("ZuansText2").Text = _P.GetGoldPriceNum(self)
+
+	_P.SetInvestRewData(self)
+end
+
+
+-- 得到钻石投资价格
+function _P.GetGoldPriceNum(self)
+	local maxNum = 0
+	local needBuyNum = MCommerce.MyCommerceInfo.myInfo.donateTable.timesByGold + 1
+	
+	if self.ProduceConf.donateGoldPrice ~= nil then
+		for k,v in pairs(self.ProduceConf.donateGoldPrice) do
+			if k == #self.ProduceConf.donateGoldPrice then
+				maxNum = v[3]
+			end
+
+			if needBuyNum >= v[1] and needBuyNum <= v[2] then
+				return v[3]
+			end
+		end
+	end
+
+	return maxNum
+end
+
+
+-- 投资奖励相关信息
+function _P.SetInvestRewData(self)
+	if self.ProduceConf == nil then
+		return
+	end
+
+	local module = self.mModule
+	if self.ShakeTween ~= nil and next(self.ShakeTween) ~= nil then
+		for k,v in pairs(self.ShakeTween) do
+			v:DOKill()
+			v = nil
+		end
+	end
+	self.ShakeTween = {}
+
+	local curScore = MCommerce.MyCommerceInfo.productScore
+	module:Get("TextNum").Text = '(' .. curScore .. ')'
+
+	if self.ProduceConf.donateReward ~= nil then
+		local rewardList = self.ProduceConf.donateReward
+		local maxScore = rewardList[#rewardList][1]
+		for k,rewardData in pairs(rewardList) do
+			local itemConf = Csv.Item[rewardData[2]]
+			local iconBoxImg = module:Get("IconBox" .. k)
+			iconBoxImg.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 0, 1)
+
+			if itemConf ~= nil then
+				iconBoxImg:AddOnButton(function(...)
+					SoundMgr.Play(10001)
+					_P.OnClickIcon(self, k, rewardData)
+				end, nil, 0.9)
+
+				iconBoxImg.SpriteName = itemConf.colorIcon
+				module:Get("Icon" .. k).SpriteName = itemConf.icon
+				module:Get("IconNum" .. k).Text = 'x' .. rewardData[3]
+			end
+
+			local pointText = module:Get("Point" .. k)
+			pointText.Text = rewardData[1]
+
+			local getImg = module:Get("YLQBG" .. k)
+			local isGet = _P.CheckThisRewIsGet(k)
+			if isGet then
+				getImg.Activity = true
+			else
+				getImg.Activity = false
+
+				local pointImg = module:Get("Yuan" .. k)
+				if curScore >= rewardData[1] then -- 可领
+					pointImg.IsGray = false
+
+					self.ShakeTween[k] = iconBoxImg.CachedTran:GetJTweener("T_Effect_Guodong")
+					self.ShakeTween[k]:Play()
+				else
+					pointImg.IsGray = true
+				end
+			end
+		end
+
+		module:Get("Slider").FillAmount = curScore / maxScore
+	end
+end
+
+
+function _P.OnClickIcon(self, rewIndex, rewardData)
+	local curScore = MCommerce.MyCommerceInfo.productScore
+	local isGet = _P.CheckThisRewIsGet(rewIndex)
+	if (not isGet) and curScore >= rewardData[1] then
+		CCommerce.GetDonateRewReq(rewIndex)
+	else
+		if rewardData[2] ~= nil then
+			WindowMgr.Create("UBagDetailPop", rewardData[2])
+		end
+	end
+end
+
+
+-- 判定该档奖励是否已经领取
+function _P.CheckThisRewIsGet(index)
+	local isGet = false
+	if MCommerce.MyCommerceInfo.myInfo.donateTable.rewardedList ~= nil then
+		for k,v in pairs(MCommerce.MyCommerceInfo.myInfo.donateTable.rewardedList) do
+			if v == index then
+				isGet = true
+				break
+			end
+		end
+	end
+	return isGet
+end
+
+
+-- 设置自动生成数据
+function _P.SetAutoProductData(self)
+	if self.CurProduceConf == nil then
+		return
+	end
+
+	local module = self.mModule
+	local itemConf = Csv.Item[self.CurProduceConf.produceItemId]
+	if itemConf then
+		local iconBoxImg = module:Get("IconBox")
+		iconBoxImg:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			if itemConf.id ~= nil then
+				WindowMgr.Create("UBagDetailPop", itemConf.id)
+			end
+		end, nil, 0.9)
+
+		iconBoxImg.SpriteName = itemConf.colorIcon
+		module:Get("Icon").SpriteName = itemConf.icon
+	end
+
+	local getBtn = module:Get("C_Btn_11")
+	getBtn:AddOnButton(function(...)
+		SoundMgr.Play(10001)
+
+		if self.CurItemNum and self.CurItemNum > 0 then
+			CCommerce.GetProductRewReq()
+		else
+			CCommon.ShowError(Csv.Text("product_10"))
+		end
+	end, nil, 0.9)
+	module:Get("C_text11").Text = Csv.Text("welfare_sign_get")
+
+	_P.OnUpdateAutoData(self, true)
+end
+
+
+function _P.OnUpdateAutoData(self, isInit)
+	if MCommerce.MyCommerceInfo.myInfo == nil or MCommerce.MyCommerceInfo.myInfo.productTable == nil then return end
+
+	local productTable = MCommerce.MyCommerceInfo.myInfo.productTable
+	local midTimes = HeartBeat.ServSecond() - productTable.startTime
+	local getNum = (midTimes / self.CurProduceConf.interval) * self.CurProduceConf.produceItemCount
+	local curNum = math.min(math.floor(productTable.stockCount + getNum), self.CurProduceConf.produceItemMax)
+
+	local isMax = curNum >= self.CurProduceConf.produceItemMax
+	local fillNum = 0
+	if isMax then
+		fillNum = 1
+	else
+		local rodNum = (midTimes % self.CurProduceConf.interval)
+		if rodNum == 0 then
+			fillNum = 1
+		else
+			fillNum = rodNum / self.CurProduceConf.interval
+		end
+	end
+	
+	local sliderRect = self.mModule:Get("Slider2")
+	if sliderRect.FillAmount >= 1 then
+		sliderRect.FillAmount = 0
+	end
+	if isMax then
+		sliderRect.FillAmount = fillNum
+	else
+		sliderRect:DOFillAmount(fillNum, 0.25)
+	end
+
+	if (not isInit) and (not self.IsGetProduct) and (not isMax) and fillNum == 1 then
+		local iconBoxImg = self.mModule:Get("IconBox")
+		CCommon.ShowFlyText(iconBoxImg, '+' .. self.CurProduceConf.produceItemCount, nil, nil, nil, iconBoxImg.RootCanvasPos + Vector2(100, 0))
+	end
+
+	if isInit or isMax or fillNum == 1 then
+		self.CurItemNum = curNum
+		self.mModule:Get("IconNum").Text = curNum ..'/' .. self.CurProduceConf.produceItemMax
+	end
+
+	self.IsGetProduct = false
+	
+	local redPoint = self.mModule:Get("productRed")
+	redPoint.Activity = isMax
+end
+
+
+function _P.SetLogData(self)
+	local module = self.mModule
+	local zwText = module:Get("ZW")
+	zwText.Text = Csv.Text("commerce_main8")
+	zwText.Activity = false
+
+	local arrow = module:Get("Arrow")
+	arrow.LocalScale = Vector3(1, -1, 1)
+	local t = arrow.CachedTran:GetJTweener("T_Commerce_Arrow")
+	t:Play()
+
+	local messageRoot = module:Get("messageRoot")
+	messageRoot:AddOnClick(function ()
+		SoundMgr.Play(10001)
+		messageRoot.Activity = false
+		_P.UpdateMessage(self, false)
+		zwText.Activity = true
+		arrow.LocalScale = Vector3(1, -1, 1)
+	end)
+
+	module:Get("More"):AddOnButton(function()
+		SoundMgr.Play(10001)
+
+		local isActivity = not messageRoot.Activity
+		messageRoot.Activity = isActivity
+		_P.UpdateMessage(self, isActivity)
+
+		zwText.Activity = not isActivity
+		if isActivity then
+			arrow.LocalScale = Vector3.one
+		else
+			arrow.LocalScale = Vector3(1, -1, 1)
+		end
+	end)
+end
+
+
+function _P.UpdateMessage(self, isActivity)
+	local module = self.mModule
+	local content = module:Get("content")
+	content:DestroyChildren()
+
+	if isActivity then
+		local logTable = self.LogList
+		local count = (logTable and #logTable) or 0
+		if count > 0 then
+			local maxIndex = math.min(20, count)
+			for i = 1, maxIndex do
+				local info = logTable[i]
+				local childMoudle = JGuiManager.GetMoudle(content, "M_MoreInfo_Item")
+				childMoudle:Get("Index").Text = tostring(i)
+				childMoudle:Get("position").Text = Csv.Text("commerce_main8")
+				childMoudle:Get("Name").Text = info.playerName
+				if info.type == MCommerce.DonateType.Goods then
+					childMoudle:Get("InfoText").Text = Csv.Text("product_8", {score = info.score, num = info.contribution})
+				else
+					childMoudle:Get("InfoText").Text = Csv.Text("product_9", {score = info.score, num = info.contribution})
+				end
+				childMoudle:Get("TimeText").Text = Csv.Text("commerce_main9")
+				childMoudle:Get("TimeNum").Text = LuaUtil.TransToYearMonthDayHMS(info.time)
+			end
+		end
+	end
+end
+
+
+-- 捐赠返回
+function _M:OnDonateBack(data)
+	local rewardRect = self.mModule:Get("InvestRewRect")
+	local btnRect = (data.type == MCommerce.DonateType.Goods and self.GoodInvestBtn) or self.GoldInvestBtn
+	if data.score then
+		CCommon.ShowFlyText(rewardRect, Csv.Text("product_5", {num = data.score}), nil, nil, nil, btnRect.RootCanvasPos)
+	end
+	if data.contribution then
+		CCommon.ShowFlyText(rewardRect, Csv.Text("product_6", {num = data.contribution}), 0.5, nil, nil, btnRect.RootCanvasPos)
+	end
+end
+
+
+-- 领取生产奖励返回
+function _M:OnGetProduceBack(data)
+	-- 弹奖励
+	self.CurItemNum = 0
+	self.IsGetProduct = true
+	self.mModule:Get("IconNum").Text = '0/' .. self.CurProduceConf.produceItemMax
+
+	local iconBoxImg = self.mModule:Get("IconBox")
+	CCommon.ShowFlyItem(iconBoxImg, self.CurProduceConf.produceItemId, data.itemCount, nil, iconBoxImg.RootCanvasPos + Vector2(100, 0), true)
+end
+
+
+-- 领取捐赠奖励返回
+function _M:OnGetDonateBack(data)
+	SoundMgr.Play(11000)
+
+	local itemBgImg = self.mModule:Get("IconBox" .. data.index)
+	if self.ShakeTween ~= nil and self.ShakeTween[data.index] ~= nil then
+		self.ShakeTween[data.index]:DOKill()
+		self.ShakeTween[data.index] = nil
+		itemBgImg.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 0, 1)
+	end
+
+	local effect = nil
+	effect = CCommon.CreateEffect(itemBgImg, GTE_EFFECT_ID, Vector2.zero, function( ... )
+		if effect ~= nil then
+			effect:Destroy()
+		end
+		
+		self.mModule:Get("YLQBG" .. data.index).Activity = true
+	end)
+	effect.SelfRect.SizeDelta = Vector2(102, 102)
+
+	local getRewards = self.ProduceConf.donateReward[data.index]
+	if getRewards ~= nil then
+		local rewardRect = self.mModule:Get("RewardRect")
+		CCommon.ShowFlyItem(rewardRect, getRewards[2], getRewards[3], 0.3, itemBgImg.RootCanvasPos)
+	end
+end
+
+
+-- 获取捐赠信息返回
+function _M:OnGetLogBack(logList)
+	if logList == nil then return end
+	self.LogList = logList
+
+	local module = self.mModule
+	local lastInfo = logList[1]
+	if lastInfo ~= nil then
+		if lastInfo.type == MCommerce.DonateType.Goods then
+			module:Get("Info").Text = Csv.Text("product_8", {score = lastInfo.score, num = lastInfo.contribution})
+		else
+			module:Get("Info").Text = Csv.Text("product_9", {score = lastInfo.score, num = lastInfo.contribution})
+		end
+		module:Get("NameText").Text = lastInfo.playerName
+		module:Get("ZW").Activity = true
+	end
+end
+
+
+function _M:OnNewLogPush(logList)
+	if self.LogList == nil then
+		self.LogList = {}
+	end
+	for k,v in pairs(logList) do
+		table.insert(self.LogList, 1, v)
+	end
+	self:OnGetLogBack(self.LogList)
+
+	local messageRoot = self.mModule:Get("messageRoot")
+	if messageRoot.Activity == true then
+		_P.UpdateMessage(self, true)
+	end
+end
+
+
+-- 捐赠信息更新返回
+function _M:OnUpdateDonate()
+	CCommon.ShowError(Csv.Text("showcase_3"))
+
+	self.GongLevel = MCommerce.MyCommerceInfo.productGangLv
+	if self.GongLevel ~= nil then
+		self.ProduceConf = Csv.CommerceProduce[self.GongLevel]
+	end
+	_P.SetInvestData(self)
+end
+
+
+-- 商会捐献积分、等级发生变化
+function _M:OnUpdateProduct()
+	if self.GongLevel ~= MCommerce.MyCommerceInfo.productGangLv then
+		self.GongLevel = MCommerce.MyCommerceInfo.productGangLv
+		if self.GongLevel ~= nil then
+			self.ProduceConf = Csv.CommerceProduce[self.GongLevel]
+		end
+	end
+
+	_P.SetInvestData(self)
+end
+
+
+-- 更新商会等级返回
+function _M:OnUpdateCommerceLevel()
+	self.CurProduceConf = Csv.CommerceProduce[MCommerce.CommerceLevel]
+
+	local module = self.mModule
+	local itemConf = Csv.Item[self.CurProduceConf.produceItemId]
+	if itemConf then
+		local iconBoxImg = module:Get("IconBox")
+		iconBoxImg:AddOnButton(function(...)
+			SoundMgr.Play(10001)
+			if itemConf.id ~= nil then
+				WindowMgr.Create("UBagDetailPop", itemConf.id)
+			end
+		end, nil, 0.9)
+
+		iconBoxImg.SpriteName = itemConf.colorIcon
+		module:Get("Icon").SpriteName = itemConf.icon
+	end
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

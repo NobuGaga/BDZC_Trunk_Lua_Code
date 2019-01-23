@@ -67,13 +67,30 @@ function _P.refreshList(self, isNeedCheckFull)
 		local movePos = (spacing + (itemWidth or 0)) * upNum + left - (scrollViewWidth - itemWidth)
 		content:DOAnchorPosX(-movePos, 0)
 	end
+
+	local fightText = moudle:Get("ZDL")
+	local teamPower = MLineUp.GetLineAllPower()
+	local textStr = 'lineup_19'
+	if otherData and otherData.enemyFight then
+		local multipleNum = Csv.Const(20170)[1]
+		if otherData.enemyFight / teamPower > multipleNum then
+			textStr = 'lineup_33'
+		end
+	end
+	fightText.Text = Csv.Text(textStr, {num = teamPower})
+	if MLineUp.GetLineStaffNum() >= MLineUp.SeatNum then
+		moudle:Get("NUM").Text = Csv.Text("lineup_20",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	else
+		moudle:Get("NUM").Text = Csv.Text("lineup_25",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
+	end
 end
 
 --界面构建,otherData隔外数据
 function _M:OnCreate(call, isNeedCheckFull, otherData)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Jiban")
 	self.mMoudle = moudle
-
+	MLineUp.IsChange = false
+	MLineUp.GetLineAllPower()
 	moudle:Get("C_Text").Text = Csv.Text("lineup_14")
 	--moudle:Get("Tips").Text = Csv.Text("lineup_15")
 	moudle:Get("C_text").Text = Csv.Text("lineup_37")
@@ -81,16 +98,9 @@ function _M:OnCreate(call, isNeedCheckFull, otherData)
 
 	_P.refreshList(self, isNeedCheckFull)
 
-	-- if isNeedCheckFull and seatNum > upNum then
-	-- 	CCommon.CheckTips(function(isSure, arg)
-	-- 		if isSure then
-	-- 			WindowOpen.Open(Define.SysId.LineUp)
-	-- 		end
-	-- 	end, {content = Csv.Text("lineup_32")})
-	-- end
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		SoundMgr.Play(10002)
-		if isNeedCheckFull and seatNum > upNum then
+		if isNeedCheckFull and not MLineUp.CheckIsFull() then
 			CCommon.CheckTips(function(isSure, arg)
 				if isSure then
 					self:Destroy()
@@ -114,7 +124,7 @@ function _M:OnCreate(call, isNeedCheckFull, otherData)
 		CCommon.CheckTips(function(isSure, arg)
 			if isSure then
 				CLineUp.ClickAutoChange()
-
+				MLineUp.IsChange = true
 				btn2.IsGray = true
 				btn2.RaycastTarget = false
 				btn2:AddOnTime(function (  )
@@ -132,23 +142,6 @@ function _M:OnCreate(call, isNeedCheckFull, otherData)
 		SoundMgr.Play(10002)
 		self:Destroy()
 	end,nil,0.9)
-
-	local fightText = moudle:Get("ZDL")
-	local teamPower = MLineUp.GetLineAllPower()
-	local textStr = 'lineup_19'
-	if otherData and otherData.enemyFight then
-		local multipleNum = Csv.Const(20170)[1]
-		if otherData.enemyFight / teamPower > multipleNum then
-			textStr = 'lineup_33'
-		end
-	end
-	fightText.Text = Csv.Text(textStr, {num = teamPower})
-
-	if MLineUp.GetLineStaffNum() >= MLineUp.SeatNum then
-		moudle:Get("NUM").Text = Csv.Text("lineup_20",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
-	else
-		moudle:Get("NUM").Text = Csv.Text("lineup_25",{num = MLineUp.GetLineStaffNum(),max = MLineUp.SeatNum})
-	end
 end
 
 return _M

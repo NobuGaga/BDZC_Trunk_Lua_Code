@@ -1,0 +1,92 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MExpedition = JRequire"Dev.Expedition.MExpedition"
+local CExpedition = JRequire"Dev.Expedition.CExpedition"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.ShowReward(self,data)
+	local rewardTab = data.reward
+	local delayCount = 0
+	if rewardTab ~= nil then
+		for k,v in pairs(rewardTab)do
+			CCommon.ShowFlyItem(self.mMoudle.SelfRect,v.id,v.count,delayCount)
+			delayCount = delayCount + 0.5
+		end
+	end
+	self.mGetBtn.Activity = false
+	self.mGetImg.Activity = true
+end
+
+--界面构建
+function _M:OnCreate(index,id)
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Expedition_Reward")
+	self.mMoudle = moudle
+
+	moudle:Get("Title").Text = Csv.Text("expedition_reward_show")
+	moudle:Get("C_text").Text = Csv.Text("expedition_reward_btn")
+	
+	moudle:Get("tips2").Text = Csv.Text("common_clickanywayToclose")
+	local getBtn = moudle:Get("C_Btn_a")
+	local getImg = moudle:Get("getImg")
+	self.mGetBtn = getBtn
+	self.mGetImg = getImg
+	self.TipNode = moudle:Get("tips")
+
+	getImg.Activity = false
+
+	if index < MExpedition.CurID then
+		getBtn.Activity = true
+	else
+		getBtn.Activity = false
+		self.TipNode.Text = Csv.Text("expedition_build_tips3")
+	end
+
+	getBtn:AddOnButton(function()
+		--发送领取协议
+		CExpedition.ReqReward(index)
+	end)
+
+	local content = moudle:Get("GoodsItem")
+	self.mScroll = moudle:Get("scrollView")
+	self.mContent = content
+
+	--[[
+	local csvRewardGroup = Csv.ItemGroup[id]
+
+	local rewardItes = csvRewardGroup.rewards
+	if rewardItes ~= nil then
+		for k,v in pairs(rewardItes) do
+			CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]})
+		end
+	end
+	--]]
+	local csvMeeting = Csv.Meeting[index]
+	if csvMeeting.boxshow ~= nil then
+		for k,v in pairs(csvMeeting.boxshow)do
+			CCommon.CreateItem(content, v[1], CCommon.ShowItemTips, {num = v[2]})
+		end
+	end
+
+end
+
+return _M

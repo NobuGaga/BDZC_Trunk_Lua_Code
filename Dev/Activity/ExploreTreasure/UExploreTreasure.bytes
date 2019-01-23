@@ -1,0 +1,589 @@
+-- 探险寻宝界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CActivity = JRequire "Dev.Activity.CActivity"
+local MActivity = JRequire "Dev.Activity.MActivity"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local MOUDLE_FADEOUT = "T_MOUDLE_FADEOUT"
+local MOUDLE_FADEIN = "T_MOUDLE_FADEIN"
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate()
+	local module = self:CreateMoudle(self._RootNode, "M_Mining_Main")
+	self.mModule = module
+	
+	local closeBtn = module:Get("C_Back_Btn")
+	closeBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	local helpBtn = module:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local actId = MActivity.ActIdForType[Define.ActivityType.Explore]
+	if actId ~= nil then
+		self.ActInfo = MActivity.GetFromId(actId)
+		self.ActId = actId
+		self.ExploreConf = Csv.Explore[self.ActId]
+	end
+	if self.ActInfo == nil or self.ExploreConf == nil then return end
+
+	local vipLv = MPlayer.GetVip()
+	self.ExploreBuyTimes = Csv.Vip[vipLv].buyExploreTimes
+
+	module:Get("C_Text").Text = Csv.Text("explore_title")
+	module:Get("Time").Text = Csv.Text("midAutumn_timeShow", {day1 = LuaUtil.TransToMD(self.ActInfo.state.startTime),day2 = LuaUtil.TransToMD(self.ActInfo.state.endTime)})
+	module:Get("AutoText").Text = Csv.Text("global_autoTip")
+	module:Get("text1").Text = Csv.Text("explore_showTitle")
+	module:Get("Text3").Text = Csv.Text("explore_layer")
+
+	if self.ExploreConf.costItem ~= nil then
+		local iconImg = module:Get("chutou")
+		local costItemId = self.ExploreConf.costItem[1]
+		local itemConf = Csv.Item[costItemId]
+		if itemConf then
+			iconImg.SpriteName = itemConf.icon
+			iconImg:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				if costItemId then
+					WindowMgr.Create("UBagDetailPop", costItemId)
+				end
+			end, nil, 1)
+		end
+
+		local costNumText = module:Get("CTnum")
+		self.CostNumText = costNumText
+	end
+
+	self.AutoGouImg = module:Get("gou")
+	self.AutoGouImg.Activity = MActivity.IsExploreAutoBuy
+	local autoAddBtn = module:Get("AutoBtn")
+	autoAddBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		MActivity.IsExploreAutoBuy = not MActivity.IsExploreAutoBuy
+		self.AutoGouImg.Activity = MActivity.IsExploreAutoBuy
+	end, nil, 0.9)
+	_P.SetAutoData(self)
+
+	local helpBtn = module:Get("HelpBtn2")
+	helpBtn:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnShowExploreInfo(self)
+	end, nil, 1.2)
+	self.HelpBtn = helpBtn
+
+	module:Get("Tips").Text = self.ExploreConf.desc
+
+	local helpRect = module:Get("TipsBox")
+	helpRect.Activity = false
+	helpRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnShowExploreInfo(self)
+	end, nil, 0.9)
+	self.HelpInfoRect = helpRect
+
+	local rewardPosXList = {}
+	if self.ExploreConf.layerShow ~= nil then
+		for k,v in pairs(self.ExploreConf.layerShow) do
+			module:Get("NumText" .. k).Text = tostring(v)
+
+			local numRect = module:Get("Num" .. k)
+			if k ~= 1 and k ~= #self.ExploreConf.layerShow then
+				numRect.LocalPosition = Vector2(math.ceil(-240 + (v / self.ExploreConf.maxLayers * 480)), 0)
+			end
+			rewardPosXList[k] = numRect.LocalPosition.x
+		end
+	end
+
+	if self.ExploreConf.bigRewards ~= nil then
+		for k,itemData in pairs(self.ExploreConf.bigRewards) do
+			local itemConf = Csv.Item[itemData[1]]
+			if itemConf then
+				module:Get("Icon" .. k).SpriteName = itemConf.icon
+
+				local iconBox = module:Get("Box" .. k)
+				iconBox.SpriteName = itemConf.colorIcon
+				iconBox:AddOnButton(function ( ... )
+					SoundMgr.Play(10001)
+					if itemConf.id then
+						WindowMgr.Create("UBagDetailPop", itemConf.id)
+					end
+				end, nil, 1)
+			end
+			module:Get("IconNum" .. k).Text = 'x' .. itemData[2]
+
+			local itemLight = CCommon.CreateItemLight(module:Get("EffectRect" .. k), Define.SysId.ExploreTreasure, itemData[1])
+			if itemLight ~= nil then
+				itemLight.SelfRect.SizeDelta = Vector2(120, 120)
+			end
+
+			local layerTipText = module:Get("LayerTip" .. k)
+			local rangeList = _P.GetCurRewardRange(self)
+			if layerTipText ~= nil and rangeList ~= nil and rangeList[k] ~= nil then
+				layerTipText.Text = Csv.Text("explore_layerTip", {min = rangeList[k].min, max = rangeList[k].max})
+			end
+
+			local iconRect = module:Get("IconBox" .. k)
+			if iconRect ~= nil and next(rewardPosXList) ~= nil then
+				local curPosX = (rewardPosXList[k + 1] - rewardPosXList[k]) / 2 + rewardPosXList[k]
+				iconRect.LocalPosition = Vector2(curPosX, 70)
+			end
+		end
+	end
+	_P.SetLayerInfoData(self)
+
+	if self.ActInfo.stoneList then
+		for k,v in pairs(self.ActInfo.stoneList) do
+			local stoneBtn = module:Get("Stone" .. k)
+			stoneBtn:AddOnButton(function()
+				_P.OnClickStone(self, k)
+			end, nil, 0.95)
+		end
+	end
+	_P.SetLayerData(self)
+	module:Get("Yulan"):AddOnButton(function ()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UExploreReward", self.ActId)
+	end)
+end
+
+
+-- 设置自动购买信息
+function _P.SetAutoData(self)
+	local needCost = _P.GetNeedCostNum(self)
+	local hasBuyCount = self.ExploreBuyTimes - self.ActInfo.buyDigTimes
+	local costText = self.mModule:Get("CostText")
+	if hasBuyCount <= 0 then
+		costText.Text = Csv.Text("explore_buyMax")
+	else
+		costText.Text = Csv.Text("explore_cost", {num = needCost})
+	end
+
+	local costItemId = self.ExploreConf.costItem[1]
+	self.CostNumText.Text = MBag.GetItemNum(costItemId)
+	_P.SetFreeData(self)
+end
+
+
+-- 购买所需价格
+function _P.GetNeedCostNum(self)
+	local nextBuyCount = self.ActInfo.buyDigTimes + 1
+	local maxNum = 0
+	if self.ExploreConf.buyItemCost ~= nil then
+		for k,v in pairs(self.ExploreConf.buyItemCost) do
+			if k == #self.ExploreConf.buyItemCost then
+				maxNum = v[3]
+			end
+
+			if nextBuyCount >= v[1] and nextBuyCount <= v[2] then
+				return v[3]
+			end
+		end
+	end
+
+	return maxNum
+end
+
+
+function _P.SetLayerInfoData(self, isShowAnim)
+	local module = self.mModule
+	module:Get("Text2").Text = self.ActInfo.layerId
+
+	local layerInfoConf = _P.GetCurLayerData(self, self.ActInfo.layerId)
+	if layerInfoConf == nil then return end
+
+	-- if self.ShakeTween ~= nil then
+	-- 	self.ShakeTween:DOKill()
+	-- 	self.ShakeTween = nil
+	-- end
+
+	module:Get("Banner").SpriteName = layerInfoConf.layerBg
+	local rangeList = _P.GetCurRewardRange(self)
+	if rangeList ~= nil then
+		for k,itemData in pairs(rangeList) do
+			local effectRect = module:Get("EffectRect" .. k)
+			local getImg = module:Get("YHD" .. k)
+			local noneImg = module:Get("WFX" .. k)
+			-- local iconBox = module:Get("Box" .. k)
+			-- iconBox.LocalRotation = CS.UnityEngine.Quaternion(0, 0, 0, 1)
+			if self.ActInfo.layerId < itemData.min then		-- 未到达
+				effectRect.Activity = false
+				getImg.Activity = false
+				noneImg.Activity = false
+			elseif self.ActInfo.layerId > itemData.max then	-- 已经过
+				effectRect.Activity = false
+				local isGet = self.ActInfo.bigReward[k] ~= nil
+				getImg.Activity = isGet
+				noneImg.Activity = not isGet
+			else	-- 当前
+				effectRect.Activity = true
+				local isGet = self.ActInfo.bigReward[k] ~= nil
+				getImg.Activity = isGet
+				noneImg.Activity = false
+
+				-- if not isGet then
+				-- 	self.ShakeTween = iconBox.CachedTran:GetJTweener("T_Effect_Guodong")
+				-- 	self.ShakeTween:Play()
+				-- end
+			end
+		end
+	end
+
+	local fillRect = module:Get("Fill")
+	local fillNum = self.ActInfo.layerId / self.ExploreConf.maxLayers
+	if isShowAnim then
+		fillRect:DOFillAmount(fillNum, 1)
+	else
+		fillRect.FillAmount = fillNum
+	end
+end
+
+
+function _P.GetCurRewardRange(self)
+	local listData = {}
+	for i=1,#self.ExploreConf.bigRewards do
+		if i == 1 then
+			listData[i] = {min = self.ExploreConf.layerShow[i], max = self.ExploreConf.layerShow[i + 1]}
+		else
+			listData[i] = {min = self.ExploreConf.layerShow[i] + 1, max = self.ExploreConf.layerShow[i + 1]}
+		end
+	end
+
+	return listData
+end
+
+
+function _P.GetCurLayerData(self, layerId)
+	for k,v in pairs(Csv.ExploreMine) do
+		if v.activityId == self.ActId and v.layer == layerId then
+			return v
+		end
+	end
+end
+
+
+function _P.OnShowExploreInfo(self)
+	local isShow = self.HelpInfoRect.Activity
+	self.HelpInfoRect.Activity = not isShow
+
+	-- 2秒后自动关闭
+	if self.HelpInfoRect.Activity then
+		self.HelpInfoRect:AddOnTime(function()
+			self.HelpInfoRect.Activity = false
+		end, nil, 2)
+	end
+end
+
+
+function _P.SetLayerData(self)
+	for k,v in pairs(self.ActInfo.stoneList) do
+		_P.SetOneStoneData(self, k, v)
+	end
+end
+
+
+function _P.SetOneStoneData(self, index, data, isNotSetTag)
+	local stoneImg = self.mModule:Get("mineral" .. index)
+	local stoneBtn = self.mModule:Get("Stone" .. index)
+	local getRect = self.mModule:Get("Black" .. index)
+
+	if data.digTimes == nil or data.digTimes == 0 then -- 未挖掘
+		stoneBtn.RaycastTarget = true
+		getRect.Activity = false
+		stoneBtn.SpriteName = 'wk_002'
+		stoneImg.SpriteName = ''
+	else -- 已挖掘
+		if data.type == 3 then -- 下一层入口
+			stoneBtn.RaycastTarget = true
+			getRect.Activity = false
+			stoneBtn.SpriteName = 'wk_002_1'
+
+			if self.ActInfo.layerId == self.ExploreConf.maxLayers then
+				stoneImg.SpriteName = 'wk_003_10' -- 重置门
+			else
+				stoneImg.SpriteName = 'wk_003_8'
+			end
+		elseif data.type == 2 then -- 挑战boss
+			stoneBtn.RaycastTarget = true
+			stoneBtn.SpriteName = 'wk_002_1'
+			local bossConf = Csv.ExploreBoss[data.bossId]
+			stoneImg.SpriteName = (data.isDefeatBoss and '') or bossConf.icon
+			getRect.Activity = (not isNotSetTag) and (not data.isDefeatBoss)
+			stoneBtn.RaycastTarget = not data.isDefeatBoss
+		else
+			getRect.Activity = false
+			stoneBtn.SpriteName = data.mineConf.icons[1]
+			if data.digTimes >= data.needDigTimes  then -- 已挖掘完
+				stoneBtn.RaycastTarget = false
+				stoneImg.SpriteName = ''
+			else
+				stoneBtn.RaycastTarget = true
+				stoneImg.SpriteName = data.mineConf.icons[data.digTimes + 1]
+			end
+		end
+	end
+end
+
+
+function _P.OnClickStone(self, layer, isNotPlay)
+	local curLayerData = self.ActInfo.stoneList[layer]
+	if curLayerData == nil then return end
+
+	if not isNotPlay and (curLayerData.digTimes <= 0 or curLayerData.type ~= 3) then
+		SoundMgr.Play(10001)
+	end
+
+	if curLayerData.digTimes > 0 then -- 挖掘过
+		if curLayerData.type == 3 then
+			if _P.CheckIsHasNotDig(self) then
+				local showContent = (self.ActInfo.layerId == self.ExploreConf.maxLayers and 'explore_reset') or 'explore_hasNotDig'
+				CCommon.CheckTips(function(isSure, rg)
+					if isSure == true then
+						CActivity.OnEnterNextReq(self.ActId, layer)
+					end
+				end, {content = Csv.Text(showContent)})
+			else
+				CActivity.OnEnterNextReq(self.ActId, layer)
+			end
+		elseif curLayerData.type == 2 and not curLayerData.isDefeatBoss then
+			local bossConf = Csv.ExploreBoss[curLayerData.bossId]
+			_P.OpenFightView(self, layer, curLayerData, bossConf.maxHp, bossConf.maxHp, bossConf.fightIcon, bossConf.tableImg, bossConf.sceneImg, function(  )
+				CActivity.OnFightBossReq(self.ActId, layer)
+			end)
+		elseif curLayerData.type == 1 then
+			_P.CheckToDig(self, layer)
+		end
+	else
+		_P.CheckToDig(self, layer)
+	end
+end
+
+
+-- 判断是否还有未挖的矿石
+function _P.CheckIsHasNotDig(self)
+	local isHas = false
+	for k,v in pairs(self.ActInfo.stoneList) do
+		if v.digTimes == 0 or (v.digTimes < v.needDigTimes) or (v.type == 2 and not v.isDefeatBoss) then
+			isHas = true
+			break
+		end
+	end
+
+	return isHas
+end
+
+
+function _P.CheckToDig(self, layer)
+	local hasBuyCount = self.ExploreBuyTimes - self.ActInfo.buyDigTimes
+	if self.ActInfo.freeTimes <= 0 and hasBuyCount <= 0 then
+		CCommon.ShowError(Csv.Text("explore_vipNoneShow"))
+		return
+	end
+
+	local itemNum = MBag.GetItemNum(self.ExploreConf.costItem[1])
+	local needCost = _P.GetNeedCostNum(self)
+	local hasNum = MBag.GetItemNum(Define.AssetsType.Gold)
+	if self.ActInfo.freeTimes <= 0 and itemNum <= 0 then
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, needCost) then
+			return
+		end
+
+		if MActivity.IsExploreAutoBuy == false then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure == true then
+					CActivity.OnDigReq(self.ActId, layer)
+				end
+			end, {content = Csv.Text("explore_buyShow", {num = needCost})})
+		else
+			CActivity.OnDigReq(self.ActId, layer)
+		end
+	else
+		CActivity.OnDigReq(self.ActId, layer)
+	end
+end
+
+
+-- 打开战斗界面
+function _P.OpenFightView(self, layerId, curLayerData, blood, bossFullBlood, bossImg, bossTab, bossBg, startCallBack)
+	local csvBattleTab = Csv.BattleIcon[bossTab]
+	local csvBattleScene = Csv.BattleIcon[bossBg]
+	WindowMgr.Create("UBattleBossNew", {bossBlood = blood, bossFullBlood = bossFullBlood, bossImg = bossImg, bossTab = csvBattleTab.str, bossBg = csvBattleScene.str},
+		function()
+			if startCallBack ~= nil then startCallBack() end
+		end,
+		function(data,param)
+			if data.result == nil or data.result == false then
+				WindowMgr.Create("UAdventureBattleFail", function( ... )
+					WindowMgr.Destroy("UBattleBossNew")
+
+					self.ActInfo = MActivity.GetFromId(self.ActId)
+					_P.SetOneStoneData(self, layerId, curLayerData)
+				end)
+			else
+				WindowMgr.Create("UExploreBattleSuccess", self.ActInfo.bossReward, function( ... )
+					WindowMgr.Destroy("UBattleBossNew")
+
+					self.ActInfo = MActivity.GetFromId(self.ActId)
+					_P.SetOneStoneData(self, layerId, curLayerData)
+				end)
+			end
+		end
+	)
+end
+
+
+function _P.SetFreeData(self)
+	local freeText = self.mModule:Get("FreeNum")
+	freeText.Text = Csv.Text("explore_free", {num = self.ActInfo.freeTimes})
+	freeText.Activity = self.ActInfo.freeTimes > 0
+end
+
+
+-- 更新界面数据
+function _R.OnUpdateViewData(self, data, isOnViewUpdate)
+	self.ActInfo = MActivity.GetFromId(data.actId)
+	_P.SetLayerInfoData(self, true)
+	_P.SetLayerData(self)
+
+	if not isOnViewUpdate then
+		_P.SetAutoData(self)
+	end
+end
+
+
+-- 更新活动状态
+function _R.OnUpdateActState(self, data)
+	if data.state.state == MActivity.ActivityState.Close then
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	else
+		self.ActInfo = MActivity.GetFromId(self.ActId)
+	end
+end
+
+
+-- 挖掘返回
+function _R.OnDigBack(self, data)
+	SoundMgr.Play(10072)
+	self:Lock()
+	local oneActorRect = self.mModule:Get("ActorPanel")
+	if data.stone.type == 1 then
+		local stoneRect = self.mModule:Get("Stone" .. data.pos)
+		local posData = stoneRect.RootCanvasPos
+		local stoneData = self.ActInfo.stoneList[data.pos]
+		if data.stone.digTimes == 1 then
+			CCommon.CreateEffect(oneActorRect, 10246, posData, function(  )
+				self:Unlock()
+
+				-- 发奖励
+				if data.reward ~= nil then
+					CCommon.ShowFlyItem(stoneRect, data.reward.id, data.reward.count, nil, Vector2(-50, -40), true)
+				end
+			end)
+			_P.SetOneStoneData(self, data.pos, self.ActInfo.stoneList[data.pos])
+		else
+			CCommon.CreateEffect(oneActorRect, stoneData.mineConf.digEffectId, posData, function(  )
+				self:Unlock()
+				_P.SetOneStoneData(self, data.pos, self.ActInfo.stoneList[data.pos])
+
+				-- 发奖励
+				if data.reward ~= nil then
+					CCommon.ShowFlyItem(stoneRect, data.reward.id, data.reward.count, nil, Vector2(-50, -40), true)
+				end
+			end)
+		end
+
+		-- 是否中奖
+		if data.isBigReward then
+			_P.SetLayerInfoData(self)
+		end
+	else
+		local isBoss = data.stone.type == 2
+		local posData = self.mModule:Get("Stone" .. data.pos).RootCanvasPos
+		CCommon.CreateEffect(oneActorRect, 10246, posData, function(  )
+			self:Unlock()
+			if isBoss then-- boss自动挑战
+				_P.OnClickStone(self, data.pos, true)
+				-- 为了一开始挖出boss不显示挑战中图标
+				self.mModule.SelfRect:AddOnTime(function()
+					_P.SetOneStoneData(self, data.pos, self.ActInfo.stoneList[data.pos])
+				end, nil, 0.2)
+			end
+		end)
+		_P.SetOneStoneData(self, data.pos, self.ActInfo.stoneList[data.pos], isBoss)
+	end
+
+	-- 更新消耗数据
+	_P.SetAutoData(self)
+end
+
+
+-- 进入下一层
+function _R.OnEnterNextMine(self, data)
+	self:Lock()
+	for k,v in pairs(self.ActInfo.stoneList) do
+		local stoneRect = self.mModule:Get("Stone" .. k)
+		local stoneImg = self.mModule:Get("mineral" .. k)
+		local tabImg = self.mModule:Get("Tab" .. k)
+		if stoneRect ~= nil then
+			local tween = stoneRect.CachedTran:GetJTweener(MOUDLE_FADEOUT)
+			tween:Play()
+
+			local tween1 = stoneImg.CachedTran:GetJTweener(MOUDLE_FADEOUT)
+			tween1:Play()
+
+			local tween2 = tabImg.CachedTran:GetJTweener(MOUDLE_FADEOUT)
+			tween2:Play()
+		end
+	end
+
+	self.mModule.SelfRect:AddOnTime(function()
+		_R.OnUpdateViewData(self, data, true)
+
+		for k,v in pairs(self.ActInfo.stoneList) do
+			local stoneRect = self.mModule:Get("Stone" .. k)
+			local stoneImg = self.mModule:Get("mineral" .. k)
+			local tabImg = self.mModule:Get("Tab" .. k)
+			if stoneRect ~= nil then
+				local tween = stoneRect.CachedTran:GetJTweener(MOUDLE_FADEIN)
+				tween:Play()
+
+				stoneImg.Alpha = 1
+				tabImg.Alpha = 1
+			end
+		end
+	end, nil, 1)
+
+	self.mModule:Get("Rect3"):AddOnTime(function()
+		self:Unlock()
+	end, nil, 2)
+end
+
+
+return _M

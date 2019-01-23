@@ -10,6 +10,7 @@ local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MActivity = JRequire "Dev.Activity.MActivity"
 local CArena = JRequire "Dev.Arena.CArena"
 local CCrossArena = JRequire "Dev.CrossArena.CCrossArena"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
 
 local _M = {}
 
@@ -212,6 +213,9 @@ function _M.Open(sysId, ...)
 		--七日目标
 		elseif sysId == _SysId.SevenDayTarget then
 			WindowMgr.Create("USevenDayTarget", sysId)
+		--新七日目标
+		elseif sysId == _SysId.NewSeven then
+			WindowMgr.Create("UNewSeven", sysId)
 		--自由城入口(世界) 150 ~ 199
 		--金融机构
 		elseif sysId == _SysId.Finance then
@@ -261,6 +265,9 @@ function _M.Open(sysId, ...)
 		--直升飞机
 		elseif sysId == _SysId.Aircraft then
 			WindowMgr.Create("UAircraft", sysId)
+		--黑市
+		elseif sysId == _SysId.BlackMark then
+			WindowMgr.Create("UBlackMark", sysId)
 		--市场调研
 		elseif sysId == _SysId.Research then
 
@@ -341,9 +348,22 @@ function _M.Open(sysId, ...)
 		elseif sysId == _SysId.SuperVIP then
 			WindowMgr.Create("USuperVIP")
 		elseif sysId == _SysId.Expedition then
-			WindowMgr.Create("UExpedition", sysId) 
+			WindowMgr.Create("UExpedition", sysId)
+		elseif sysId == _SysId.ExploreTreasure then
+			WindowMgr.Create("UExploreTreasure")
+		elseif sysId == _SysId.CrossOccupy then
+			WindowMgr.Create("UCrossOccupy")
+		elseif sysId == _SysId.Talent then
+			WindowMgr.Create("UTalentPanel")
+		elseif sysId == _SysId.Cabinet then
+			WindowMgr.Create("UCabinet")
+		elseif sysId == _SysId.CrossFlower then
+			WindowMgr.Create("UCrossFlower", ...)
+		elseif sysId == _SysId.CrossCommerce then
+			CCrossCommerce.Open()
 		end
 	end
 end
+
 
 return _M

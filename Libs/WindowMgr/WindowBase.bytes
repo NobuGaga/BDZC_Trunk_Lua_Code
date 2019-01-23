@@ -83,10 +83,7 @@ end
 --
 function _M:BaseBeforeDestroy(...)
 	--移除弱引导
-	if self.mWeakGuide ~= nil then
-		self.mWeakGuide:Destroy()
-		self.mWeakGuide = nil
-	end
+	self:DestroyWeakGuide()
 
 	self:BeforeDestroy( ... )
 end
@@ -111,21 +108,23 @@ function _M:Dispatch(funcName, ...)
 	
 end
 
+function _M:DestroyWeakGuide()
+	if self.mWeakGuide ~= nil then
+		self.mWeakGuide:Destroy()
+		self.mWeakGuide:delete()
+		self.mWeakGuide = nil
+	end
+end
+
 --创建弱引导
 function _M:CreateWakeGuide(id,doneBlack)
 
 	local callBack = function()
-		self.mWeakGuide:Destroy()
-		self.mWeakGuide = nil
+		self:DestroyWeakGuide()
 		doneBlack()
 	end
-	if self.mWeakGuide ~= nil then
-		self.mWeakGuide:Destroy()
-		self.mWeakGuide = nil
-		self.mWeakGuide = UWeakGuide.new(self, id,callBack)
-	else
-		self.mWeakGuide = UWeakGuide.new(self, id,callBack)
-	end
+	self:DestroyWeakGuide()
+	self.mWeakGuide = UWeakGuide.new(self, id,callBack)
 end
 
 --弱引导更新

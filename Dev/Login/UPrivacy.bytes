@@ -33,6 +33,14 @@ function _M:OnCreate()
 		gameName = Csv.PrivacyText[4].str
 	end
 	moudle:Get("Content").Text = LuaUtil.Format(Csv.PrivacyText[5].str, {gameName = gameName})
+	CS.Plugin.LoadStreamingAssets.Load(CS.GameManager.Inst, 
+										false, 
+										GameSetting.PackageName .. "privacy.txt",
+										function (isOk, bytes, text)
+											if text then
+												moudle:Get("Content").Text = text
+											end
+										end)
 	moudle:Get("Sure"):AddOnButton(function( ... )
 		CS.UnityEngine.PlayerPrefs.SetInt("_login_Privacy_", 1)
 		self:Destroy()

@@ -1,5 +1,7 @@
 local MCrossLotteryActivity = JRequire "Dev.CrossActivity.CrossDiamondLottery.MCrossLotteryActivity"
+local EventCenter = JRequire "Dev.EventCenter"
 local MActivity = JRequire "Dev.Activity.MActivity"
+local MPlayer = JRequire "Dev.Player.MPlayer"
 local CMain = JRequire "Dev.Main.CMain"
 
 local _M = {}
@@ -56,6 +58,12 @@ function _M.ModuleInit(isReload)
 	-- 调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.CrossActivity, func_send, func_recv, isReload)
 end
+
+-- vip等级
+EventCenter.RegistCallEvent(Define.EventListenId.PlayerVipUpdate, function (eventHandle)
+	local actId = MCrossLotteryActivity.ActTypeCached[Define.CrossActivityType.CrossDiamondLottery]
+	_P.CheckLotteryRepoint(actId)
+end, true)
 
 -- C2S
 -- 抽奖请求
@@ -189,16 +197,19 @@ function _P.CheckLotteryRepoint(actId)
 	if data == nil then return end
 
 	local isNeedRedpoint = false
-	if data.isFree then
-		isNeedRedpoint = true
-	else
-		local csvLine = Csv.CrossLottery[actId]
-		if csvLine ~= nil then
-			if csvLine.num ~= nil and csvLine.reward ~= nil then
-				for _,v in pairs(csvLine.num) do
-					if v <= data.totalNum and data.numGets[v] ~= true then
-						isNeedRedpoint = true
-						break
+	local csvLine = Csv.CrossLottery[actId]
+	local curVipLv = MPlayer.GetVip()
+	if curVipLv >= csvLine.vipLv then
+		if data.isFree then
+			isNeedRedpoint = true
+		else
+			if csvLine ~= nil then
+				if csvLine.num ~= nil and csvLine.reward ~= nil then
+					for _,v in pairs(csvLine.num) do
+						if v <= data.totalNum and data.numGets[v] ~= true then
+							isNeedRedpoint = true
+							break
+						end
 					end
 				end
 			end
@@ -224,8 +235,9 @@ function _P.OnLotteryBack(data)
 	lotteryData.totalNum = data.totalNum
 	lotteryData.isFree = data.isFree
 
+	MCrossLotteryActivity.IsDrawing = true
 	_P.CheckLotteryRepoint(lotteryData.actId)
-	WindowMgr.Call("UCrossDiamondLottery", "OnLottery", lotteryData.actId, data.rewardList)
+	WindowMgr.Call("UCrossDiamondLottery", "OnLottery", lotteryData.actId, data.rewardList, data.poolGoldBefore)
 end
 
 
@@ -248,7 +260,7 @@ end
 
 
 function _P.OnNewMessagePush(data)
-	table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = data.itemId, playerName = data.playerName, itemCount = data.itemCount})
+	table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = data.itemId, playerName = data.playerName, itemCount = data.itemCount, lotteryItemId = data.lotteryItemId})
 	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryMsg", data.actId)
 end
 
@@ -257,7 +269,7 @@ function _P.OnGetMessageList(data)
 	MCrossLotteryActivity.LotteryMessage = {}
 	if data.list ~= nil then
 		for k,v in pairs(data.list) do
-			table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = v.itemId, playerName = v.playerName, itemCount = v.itemCount})
+			table.insert(MCrossLotteryActivity.LotteryMessage, {itemId = v.itemId, playerName = v.playerName, itemCount = v.itemCount, lotteryItemId = v.lotteryItemId})
 		end
 	end
 	WindowMgr.Call("UCrossDiamondLottery", "OnLotteryMsg", data.actId)

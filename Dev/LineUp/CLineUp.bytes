@@ -2,7 +2,6 @@ local MLineUp = JRequire "Dev.LineUp.MLineUp"
 local EventCenter = JRequire "Dev.EventCenter"
 local CMain = JRequire "Dev.Main.CMain"
 local MMain = JRequire "Dev.Main.MMain"
-local CStaff = JRequire "Dev.Staff.CStaff"
 local MStaff = JRequire"Dev.Staff.MStaff"
 local MEquipt = JRequire "Dev.Equipt.MEquipt"
 
@@ -27,7 +26,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.cPLineUpAuto] = "",
 	}
 	local recv = {
-		[ECmdId.sPLineUpInit]		=		{proto = "PLineUp.SPLineUpInit",		handle = _P.OnLineUpInit},
+		[ECmdId.sPLineUpInit]		=		{proto = "PLineUp.SPLineUpInit",		handle = _M.OnLineUpInit},
 		[ECmdId.sPLineUpOpen]		=		{proto = "PLineUp.SPLineUpOpen",		handle = _P.OnLineUpOpen}
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.LineUp, send, recv, isReload)
@@ -80,8 +79,8 @@ function _M.LineUpOpen()
 	_M.Send(ECmdId.cPLineUpOpen)
 end
 
-function _P.OnLineUpInit(data)
-	print("OnLineUpInit!!!")
+function _M.OnLineUpInit(data)
+	-- print("OnLineUpInit!!!")
 	MLineUp.InitLine(data)
 	_M.CheckRedpoint()
 

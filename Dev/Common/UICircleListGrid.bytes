@@ -1,0 +1,285 @@
+local _M = Class()
+
+local isLog = true
+local print = function(...)
+	if isLog then
+		print(...)
+	end
+end
+
+--[==[
+	默认正常人观察顺序为由上往下顺序查看垂直网格列表, 排列从左上角开始打横排列, 其他情况不考虑
+]==]
+local UpperLeft = Vector2(0, 1)
+
+function _M:ctor(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local isDataValid = self:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	if not isDataValid then
+		return
+	end
+	self:InitDataList()
+	self:InitView()
+end
+
+function _M:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local wrongMessage
+	if scrollView == nil or scrollView.OnValueChanged == nil then
+		error("CheckReceiveDataValid Wrong Parameter scrollView is Unvalid")
+		return false
+	end
+	if content == nil or content.AddGridLayoutGroup == nil then
+		error("CheckReceiveDataValid Wrong Parameter content is Unvalid")
+		return false
+	end
+	if dataList == nil or type(dataList) ~= "table" then
+		error("CheckReceiveDataValid Wrong Parameter dataList is Unvalid")
+		return false
+	end
+	if itemName == nil or type(itemName) ~= "string" then
+		error("CheckReceiveDataValid Wrong Parameter itemName is Unvalid")
+		return false
+	end
+	if updateFunc == nil or type(updateFunc) ~= "function" then
+		error("CheckReceiveDataValid Wrong Parameter updateFunc is Unvalid")
+		return false
+	end
+	self.scrollView = scrollView
+	self.content = content
+	self.dataList = dataList
+	self.itemName = itemName
+	self.updateFunc = updateFunc
+	-- 可选参数检查
+	if listSortFunc and type(listSortFunc) == "function" then
+		self.listSortFunc = listSortFunc
+	end
+	return true
+end
+
+function _M:InitDataList()
+	self.dataListLength = #self.dataList 
+	if self.dataListLength > 0 then
+		self:SortDataList()
+		return
+	end
+	local dataList = {}
+	for _, data in pairs(self.dataList) do
+		table.insert(dataList, data)
+	end
+	self.dataList = dataList
+	self.dataListLength = #dataList
+	self:SortDataList()
+end
+
+function _M:SortDataList()
+	if self.listSortFunc then
+		table.sort(self.dataList, self.listSortFunc)
+	end
+end
+
+function _M:InitView()
+	self.viewHeight = self.scrollView.SizeDelta.y
+	if not self:InitAndCheckContentData() then
+		return
+	end
+	self:CalculateItemListLength()
+	local itemListLength = math.min(self.dataListLength, self.itemListLength)
+	self.itemListCache = {}
+	for index = 1, itemListLength do
+		self:CreateItem(index)
+	end
+	self:InitViewContent()
+	self:CalculateDataListMaxIndex()
+	self:SetScrollViewListener()
+end
+
+function _M:InitAndCheckContentData()
+	local layout = self.content:AddGridLayoutGroup()
+	self.itemWidth = layout.cellSize.x
+	self.itemHeight = layout.cellSize.y
+	self.itemSpaceX = layout.spacing.x
+	self.itemSpaceY = layout.spacing.y
+	self.itemWidthSpace = self.itemWidth + self.itemSpaceX
+	self.itemHeightSpace = self.itemHeight + self.itemSpaceY
+	self.contentTop = layout.padding.top
+	self.contentBottom = layout.padding.bottom
+	self.contentLeft = layout.padding.left
+	self.contentRight = layout.padding.right
+	self.contentChildAlign = UpperLeft
+	self.contentColumnCount = layout.constraintCount
+	self.contentWidth = self.contentLeft + self.contentColumnCount * self.itemWidthSpace -self.itemSpaceX + self.contentRight
+	if self.contentWidth > self.scrollView.SizeDelta.x then
+		error("InitAndCheckContentData Content Size Width exceed Scroll View Size Width")
+		return false
+	end
+	if layout.startCorner.value__ ~= 0 then -- UpperLeft
+		error("InitAndCheckContentData Wrong Parameter GridLayoutGroup StartCorner is not UpperLeft")
+		return false
+	end
+	if layout.startAxis.value__ ~= 0 then -- Horizontal
+		error("InitAndCheckContentData Wrong Parameter GridLayoutGroup StartAxis is not Horizontal")
+		return false
+	end
+	if layout.constraint.value__ ~= 1 then -- FixedColumnCount
+		error("InitAndCheckContentData Wrong Parameter GridLayoutGroup Constraint is not FixedColumnCount")
+		return false
+	end
+	if layout.childAlignment ~= CS.UnityEngine.TextAnchor.UpperLeft then
+		error("InitAndCheckContentData Wrong Parameter GridLayoutGroup ChildAlignment is not UpperLeft")
+		return false
+	end
+	self.content:DelGridLayoutGroup()
+	self.content:DelContentSizeFitter()
+	return true
+end
+
+function _M:CalculateItemListLength()
+	self.contentRowCount = math.modf(self.viewHeight / self.itemHeightSpace)
+	if self.contentRowCount == 0 then
+		if self.itemHeight > self.viewHeight then
+			self.contentRowCount = 2
+		else
+			self.contentRowCount = 3
+		end
+	else
+		self.contentRowCount = self.contentRowCount + 2
+	end
+	self.itemListLength = self.contentRowCount * self.contentColumnCount
+	self.itemMovePosY = self.contentRowCount * self.itemHeightSpace
+end
+
+function _M:CreateItem(dataIndex)
+	local itemRowIndex = math.modf(dataIndex / self.contentColumnCount) + 1
+	local itemColumnIndex = dataIndex % self.contentColumnCount
+	if itemColumnIndex == 0 then
+		itemRowIndex = itemRowIndex - 1
+		itemColumnIndex = self.contentColumnCount
+	end
+	local itemMoudle = JGuiManager.GetMoudle(self.content, self.itemName)
+	if self.itemListCache[itemRowIndex] == nil then
+		self.itemListCache[itemRowIndex] = {}
+	end
+	self.itemListCache[itemRowIndex][itemColumnIndex] = itemMoudle
+	local itemMoudleRect = itemMoudle.SelfRect
+	itemMoudleRect.AnchorMax = self.contentChildAlign
+	itemMoudleRect.AnchorMin = self.contentChildAlign
+	itemMoudleRect.Pivot = self.contentChildAlign
+	local itemPosY = (1 - itemRowIndex) * self.itemHeightSpace - self.contentTop
+	itemMoudleRect.LocalPosition = Vector2((itemColumnIndex - 1) * self.itemWidthSpace, itemPosY)
+	itemMoudleRect.SizeDelta = Vector2(self.itemWidth, self.itemHeight)
+	self.updateFunc(itemMoudle, self.dataList[dataIndex])
+end
+
+function _M:RefreshItem(itemRowIndex, itemColumnIndex, dataIndex)
+	if self.itemListCache[itemRowIndex] == nil then
+		error("RefreshItem Wrong Parameter itemRowIndex " .. itemRowIndex .. " is not exit")
+		return
+	end
+	if self.itemListCache[itemRowIndex][itemColumnIndex] == nil then
+		error("RefreshItem Wrong Parameter itemRowIndex " .. itemRowIndex .. " itemColumnIndex " .. itemColumnIndex .. " is not exit")
+		return
+	end
+	local isExitData = self.dataList[dataIndex] ~= nil
+	local itemMoudle = self.itemListCache[itemRowIndex][itemColumnIndex]
+	itemMoudle.SelfRect.Activity = isExitData
+	if isExitData then
+		self.updateFunc(itemMoudle, self.dataList[dataIndex])
+	end
+end
+
+function _M:InitViewContent()
+	local dataListRowCount = math.modf(self.dataListLength / self.contentColumnCount) + 1
+	if self.dataListLength % self.contentColumnCount == 0 then
+		dataListRowCount = dataListRowCount - 1
+	end
+	local contentItemsRowHeight = dataListRowCount * self.itemHeightSpace - self.itemSpaceY
+	self.content.SizeDelta = Vector2(self.contentWidth, self.contentTop + contentItemsRowHeight + self.contentBottom)
+	self.itemListRowIndex = 1 -- item 列表行索引, 用于移动整行 item 实现无限滚动的列表, 该索引指向列表第一行是原来列表的第几行
+	self.dataListRowIndex = 1 -- 数据列表索引, 该索引值为当前 Item 列表第一行第一个 Item 的数据索引值
+end
+
+function _M:CalculateDataListMaxIndex()
+	self.maxDataListRowIndex = math.modf(self.dataListLength / self.contentColumnCount) + 1
+	if self.dataListLength % self.contentColumnCount == 0 then
+		self.maxDataListRowIndex = self.maxDataListRowIndex - 1
+	end
+	self.maxDataListRowIndex = self.maxDataListRowIndex - self.contentRowCount + 1
+end
+
+function _M:SetScrollViewListener()
+	-- AddListener 可以重复加(委托队列), 作个标记位避免重复添加
+	if self.dataListLength > self.itemListLength and not self.isCircleList then
+		self.isCircleList = true
+		self.scrollView.OnValueChanged:AddListener(function () self:OnValueChanged() end)
+	end
+end
+
+--[==[]
+	方法二 通过移动整行 item 实现, 超过屏幕上方的整行 item 移动到列表底端, 超过屏幕下方的移动到列表顶端
+--]==]
+_M.OnValueChanged = function (self)
+	local contentPosY = self.content.LocalPosition.y
+	local dataListRowIndex = math.modf((contentPosY - self.contentTop) / self.itemHeightSpace) + 1
+	if self.dataListRowIndex == dataListRowIndex then
+		return
+	end
+	if dataListRowIndex > self.maxDataListRowIndex then
+		if self.dataListRowIndex == self.maxDataListRowIndex then
+			return
+		end
+		dataListRowIndex = self.maxDataListRowIndex
+	end
+	if contentPosY <= 0 then
+		if self.dataListRowIndex == 1 then
+			return
+		end
+		dataListRowIndex = 1
+	end
+	local dataRowIndexFix = self.dataListRowIndex - dataListRowIndex
+	local isTopRemoveToBottom = dataRowIndexFix < 0
+	dataRowIndexFix = math.abs(dataRowIndexFix)
+	self:OnValueChangedMoveAndRefreshItem(dataRowIndexFix, isTopRemoveToBottom)
+	if isTopRemoveToBottom then
+		self.itemListRowIndex = (self.itemListRowIndex + dataRowIndexFix) % self.contentRowCount
+	else
+		self.itemListRowIndex = self.itemListRowIndex - dataRowIndexFix
+	end
+	if self.itemListRowIndex <= 0 then
+		self.itemListRowIndex = self.itemListRowIndex + self.contentRowCount
+	end
+	self.dataListRowIndex = dataListRowIndex
+end
+
+function _M:OnValueChangedMoveAndRefreshItem(dataRowIndexFix, isTopRemoveToBottom)
+	local currentDataIndex = (self.dataListRowIndex - 1) * self.contentColumnCount + 1
+	local itemMovePosY = self.itemMovePosY
+	if isTopRemoveToBottom then
+		itemMovePosY = -itemMovePosY
+	end
+	for index = 1, dataRowIndexFix do
+		local itemRowIndex
+		if isTopRemoveToBottom then
+			itemRowIndex = (index + self.itemListRowIndex - 1) % self.contentRowCount
+		else
+			itemRowIndex = self.itemListRowIndex - index
+		end
+		if itemRowIndex <= 0 then
+			itemRowIndex = itemRowIndex + self.contentRowCount
+		end
+		local dataIndexFix = (index - 1) * self.contentColumnCount
+		for itemColumnIndex, itemMoudle in ipairs(self.itemListCache[itemRowIndex]) do
+			local itemMoudleRect = itemMoudle.SelfRect
+			local itemPosX = itemMoudleRect.LocalPosition.x
+			local itemPosY = itemMoudleRect.LocalPosition.y + itemMovePosY
+			itemMoudleRect.LocalPosition = Vector2(itemPosX, itemPosY)
+			local dataIndex
+			if isTopRemoveToBottom then
+				dataIndex = currentDataIndex + dataIndexFix + self.itemListLength + itemColumnIndex - 1
+			else
+				dataIndex = currentDataIndex - dataIndexFix - self.contentColumnCount + itemColumnIndex - 1
+			end
+			self:RefreshItem(itemRowIndex, itemColumnIndex, dataIndex)
+		end
+	end
+end
+
+return _M

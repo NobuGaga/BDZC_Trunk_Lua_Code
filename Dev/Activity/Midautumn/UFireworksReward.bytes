@@ -1,0 +1,90 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_Mining_Yulan"
+local textTitle = "textTitle"
+local csvTitleText = "midAutumn_reward_title"
+local btnClose = "btnClose"
+local ItemName = "M_Fireworks_Yulan_Item"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate(actID)
+	_P.InitMoudleTopInfo(self)
+	_P.InitView(self, actID)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+end
+
+--初始化窗口
+function _P.InitView(self, actID)
+	local content = self.moudle:Get("content")
+	local ItemDefaultHeight, RewardColumnCount, RewardRowHeight
+	local csvActRewward = {}
+	for _, csvValue in ipairs(Csv.ActivityFireworksReward) do
+		if actID == csvValue.actID then
+			csvActRewward[#csvActRewward + 1] = csvValue
+		end
+	end
+	table.sort(csvActRewward, function (left, right)
+		return left.id < right.id
+	end)
+	for _, csvValue in ipairs(csvActRewward) do
+		local itemMoudle = JGuiManager.GetMoudle(content, ItemName)
+		itemMoudle:Get("textName").Text = csvValue.name
+		itemMoudle:Get("textGet").Text = csvValue.get
+		itemMoudle:Get("textTips").Text = Csv.Text("midAutumn_reward_tips")
+		local itemContent = itemMoudle:Get("itemContent")
+		if ItemDefaultHeight == nil or RewardColumnCount == nil or RewardRowHeight == nil then
+			local layout = itemContent:AddGridLayoutGroup()
+			RewardColumnCount = layout.constraintCount
+			RewardRowHeight = layout.cellSize.y + layout.spacing.y
+			ItemDefaultHeight = itemMoudle.SelfRect.SizeDelta.y
+		end
+		if csvValue.rewards then
+			for _, rewardData in pairs(csvValue.rewards) do
+				CCommon.CreateItem(itemContent, rewardData[1], CCommon.ShowItemTips, {num = rewardData[2]}, Define.SysId.ExploreTreasure)
+			end
+			local row, rest = math.modf(#csvValue.rewards / RewardColumnCount)
+			if rest > 0 then
+				row = row + 1
+			end
+			local width = itemMoudle.SelfRect.SizeDelta.x
+			itemMoudle.SelfRect.SizeDelta = Vector2(width, ItemDefaultHeight + (row - 1) * RewardRowHeight)
+		end
+	end
+end
+
+return _M

@@ -1,5 +1,7 @@
 local WindowBase = JRequire"Libs.WindowMgr.WindowBase"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CExpedition = JRequire"Dev.Expedition.CExpedition"
+local MExpedition = JRequire"Dev.Expedition.MExpedition"
 local CCommon = JRequire"Dev.Common.CCommon"
 local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MBag = JRequire "Dev.Bag.MBag"
@@ -9,6 +11,10 @@ local JTweenerManager = CS.JTween.JTweenerManager
 
 local MAP_WIDTH = 1500
 local MAP_HEIGHT = 1468
+
+local BOX_TWEEN = "T_Effect_Guodong"
+local VS_EFFECT_ID = 10248
+
 
 local _M = Class(WindowBase)
 local _P = {}
@@ -21,8 +27,45 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _R.FlyRewardItem(self,data)
+	local rewardTab = data.reward
+	local delayCount = 0
+
+	local flyRect = self.Moudle:Get("IconBox_"..data.id)
+	if rewardTab ~= nil then
+		for k,v in pairs(rewardTab)do
+			CCommon.ShowFlyItem(flyRect,v.id,v.count,delayCount)
+			delayCount = delayCount + 0.5
+		end
+	end
+	self.Moudle.SelfRect:AddOnTime(function()
+		_P.RefreshBuild(self)
+	end,nil,(delayCount+2)*0.5)
+end
+
+function _R.RefreshReset(self)
+	self.Moudle:Get("count").Text = MExpedition.ResetTimes .. "/"..MExpedition.MAX_RESET_TIMES
+	_P.RefreshInfo(self)
+	--重新选中建筑
+	_P.RefreshBuild(self)
+	_P.LookToBuild(self,0.5)
+end
+
+function _R.RefreshNext(self)
+	_P.RefreshInfo(self)
+	_P.RefreshBuild(self)
+	_P.LookToBuild(self,0.5)
+end
+
+function _R.RefreshRward(self)
+	_P.RefreshBuild(self)
+end
+
+function _R.RepBossInfo(self,data)
+	WindowMgr.Create("UExpeditionBattle",data)
+end
+
 function _M:OnCreate(sysId)
-	print("______________",sysId)
 	local moudle = self:CreateMoudle(self._RootNode,"M_Expedition_Main")
 	self.Moudle = moudle
 
@@ -39,39 +82,178 @@ function _M:OnCreate(sysId)
 	end, nil, 1.2)
 	helpBtn:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
-		WindowMgr.Create("URuleTips",Define.SysId.Wharf)
+		WindowMgr.Create("URuleTips",Define.SysId.Expedition)
 	end, nil, 1.2)
 
 	moudle:Get("ShpoBtn"):AddOnButton(function()
-		--打开兑换商店
+		WindowMgr.Create("UExpeditionShop")
 	end)
 
 	moudle:Get("C_text").Text = Csv.Text("expedition_refresh_btn")
 	moudle:Get("C_Btn_a"):AddOnButton(function()
 		--重置
+		if MExpedition.ResetTimes > 0 then
+			CCommon.CheckTips(function(isSure,rg)
+				if isSure then
+					CExpedition.ReqReset()
+				end
+			end,{content = Csv.Text("expedition_reset_tips")})
+		else
+			CCommon.ShowError(Csv.Text("expedition_reset_tips2"))
+		end
 	end,nil,0.9)
-
+	moudle:Get("count").Text = MExpedition.ResetTimes .. "/"..MExpedition.MAX_RESET_TIMES
 	--------------------------------------------------------------------
-	local buildTable = {}
+	self.VSEffect = moudle:Get("VSEffect")
+	self.VsRect = moudle:Get("vsEffectCanvas")
+	CCommon.CreateEffect(self.VSEffect, VS_EFFECT_ID)
+	self.VSEffect.Activity = false
+	self.TopText1 = moudle:Get("text1")
+	self.TopText2 = moudle:Get("text2")
+	self.HardBg = moudle:Get("TextBg")
 	local map = moudle:Get("Map")
 	map.SizeDelta = Vector2(MAP_WIDTH, MAP_HEIGHT)
-
-	for i = 1,12,1 do
-		local buildRect = moudle:Get("build"..i)
-		if buildRect ~= nil then
-			local buildMoudle = JGuiManager.GetMoudle(buildRect, "M_Expedition_Main_Content", WindowType.UI, 10)
-
-
-		end
-		buildTable[i] = buildRect
-	end
-	
-
-	self.mBuilds = buildTable
 	self.Map = map
 	self.mScrollView = moudle:Get("scrollView")
-	
 
+	local buildTable = {}
+	for i = 1,12,1 do
+		local buildRect = moudle:Get("Architecture"..i)
+		buildRect:AddOnClick(function()
+			if i == MExpedition.CurID then
+				--进入战斗
+				CExpedition.ReqBossInfo()
+			elseif i < MExpedition.CurID then
+				CCommon.ShowError(Csv.Text("expedition_build_tips2"))
+			end
+		end)
+		buildRect:AddOnPress(function(btn, funcId, data)
+			if data.isPress then
+				local t = btn:DOFade(1, 0.6)
+				t:SetEase(CS.DG.Tweening.Ease.Linear)
+				t:SetLoops(-1, CS.DG.Tweening.LoopType.Yoyo)
+			else
+				if btn ~= nil then
+					btn:DOKill()
+				end
+				btn.Alpha = 0		
+			end
+		end)
+		_P.SetBuild(self,i)
+		buildTable[i] = {rect = buildRect}
+	end
+	self.mBuilds = buildTable
+	_P.RefreshInfo(self)
+	_P.LookToBuild(self,0.1)
+end
+
+function _P.RefreshInfo(self)
+	local csvLine = Csv.MeetingFloor[MExpedition.FloodId]
+	if csvLine ~= nil then
+		self.HardBg.SpriteName = csvLine.hardBg
+		self.TopText1.Text = csvLine.name
+		self.TopText2.Text = csvLine.rewardPer
+	end
+end
+
+function _P.RefreshBuild(self)
+	self.VSEffect.Activity = false
+
+	local buildTabs = self.mBuilds
+	if buildTabs ~= nil then
+		for k,v in pairs(buildTabs)do
+			_P.SetBuild(self,k)
+		end
+	end
+end
+
+function _P.LookToBuild(self,time)
+	local targetIndex = MExpedition.CurID
+	local buildsTab = self.mBuilds
+	local content = self.Map
+	local scrollView =  self.mScrollView
+
+	local pos = nil
+	if buildsTab ~= nil then
+		if buildsTab[targetIndex] ~= nil then
+			pos = buildsTab[targetIndex].rect.LocalPosition
+		end
+	end
+
+	local SWeight = scrollView.SizeDelta.x --视图高度
+	local contentPOSX = content.LocalPosition.x 
+
+	if pos ~= nil then
+		local moveTo = SWeight - pos.x - SWeight/2
+		if moveTo > 0 then
+			moveTo = 0
+		elseif moveTo <= SWeight-content.SizeDelta.x then
+			moveTo = SWeight-content.SizeDelta.x
+		end
+		content:DOAnchorPosX(moveTo,time)
+	end
+end
+
+function _P.SetBuild(self,index)
+	local moudle = self.Moudle
+
+	local icon = moudle:Get("Architecture"..index)
+	local getImg = moudle:Get("YLQ_"..index)
+	local buildNameBg = moudle:Get("NameBG_"..index)
+	local buildName = moudle:Get("IconName_"..index)
+	local powerBg = moudle:Get("ZZLBg_"..index)
+	local power = moudle:Get("ZZL_"..index)
+	local rewardBox = moudle:Get("IconBox_"..index)
+	local rewardIcon = moudle:Get("Tubiao_"..index)
+
+	buildNameBg.Activity = false
+	getImg.Activity = false
+	rewardBox.Activity = false
+	powerBg.Activity = false
+	icon.RaycastTarget = false
+
+	local csvMeeting = Csv.Meeting[index]
+
+	buildName.Text = csvMeeting.name
+
+	local boxTween = rewardBox.CachedTran:GetJTweener(BOX_TWEEN)
+	boxTween:DOKill()
+	if csvMeeting.award2 ~= nil then
+		if not MExpedition.CheckGotReward(index) then
+			rewardBox.Activity = true
+			rewardIcon.SpriteName = csvMeeting.boxIcon
+			rewardBox:AddOnButton(function()
+				if index < MExpedition.CurID then
+					--直接领取奖励
+					CExpedition.ReqReward(index)
+					--关闭按钮
+					rewardBox.RaycastTarget = false
+				else
+					WindowMgr.Create("UExpeditionRewardShow",index,csvMeeting.award2)
+				end
+			end)
+
+			if index < MExpedition.CurID then
+				boxTween:Play()
+			end
+		end
+	end
+	
+	if index == MExpedition.CurID then
+		powerBg.Activity = true
+		icon.RaycastTarget = true
+		buildNameBg.Activity = true
+		power.Text = Csv.Text("expedition_build_power",{num = MExpedition.GetBuildPower(index)}) 
+		--特效
+		local pos = icon.LocalPosition
+		self.VsRect.LocalPosition = pos
+		self.VSEffect.Activity = true
+
+	elseif index < MExpedition.CurID then
+		icon.RaycastTarget = true
+		getImg.Activity = true
+		buildNameBg.Activity = true
+	end
 end
 
 

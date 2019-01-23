@@ -19,14 +19,14 @@ local _M = Class(WindowBase)
 local _P = {}
 
 --界面构建
-function _M:OnCreate(rank, rewards, sysID)
+function _M:OnCreate(rank, rewards, sysID, baseRewards)
 	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
 	self.sysID = sysID
 	self.moudle:Get("text").Text = Csv.Text("rankreward_get_reward", {rank = rank})
 	if rewards then
 		SoundMgr.Play(11000)
 		_P.InitData(self)
-		_P.InitRewardList(self, rewards)
+		_P.InitRewardList(self, rewards, baseRewards)
 	end
 
 	self._EventNode:AddOnClick(function()
@@ -57,18 +57,18 @@ function _P.InitData(self)
 end
 
 --初始化奖励列表
-function _P.InitRewardList(self, rewards)
-	for k, reward in pairs(rewards) do
-		local rewardItem, effect = CCommon.CreateItem(self.content, reward.key, CCommon.ShowItemTips, 
-													  {num = reward.value}, self.sysID)
-		if effect then
-			local originSize = effect.SelfRect.SizeDelta
-			local sizeX = self.layout.cellSize.x / ItemSizeX * originSize.x
-			local sizeY = self.layout.cellSize.y / ItemSizeY * originSize.y
-			effect.SelfRect.SizeDelta = Vector2(sizeX, sizeY)
-		end
+function _P.InitRewardList(self, rewards, baseRewards)
+	for _, reward in pairs(rewards) do
+		_P.CreateItem(self, reward.key, reward.value)
 	end
-	local row, rest = math.modf(#rewards / self.rewardColumnCount)
+	local itemNum = #rewards
+	if baseRewards then
+		for _, reward in pairs(baseRewards) do
+			_P.CreateItem(self, reward.key, reward.value)
+		end
+		itemNum = itemNum + #baseRewards
+	end
+	local row, rest = math.modf(itemNum / self.rewardColumnCount)
 	if rest > 0 then
 		row = row + 1
 	end
@@ -76,6 +76,17 @@ function _P.InitRewardList(self, rewards)
 	for index, background in ipairs(self.backgroundGroup) do
 		local width = background.SizeDelta.x
 		background.SizeDelta = Vector2(width, self.bgDefaultHeight[index] + offsetHeight)
+	end
+end
+
+function _P.CreateItem(self, itemID, itemNum)
+	local rewardItem, effect = CCommon.CreateItem(self.content, itemID, CCommon.ShowItemTips, 
+													{num = itemNum}, self.sysID)
+	if effect then
+		local originSize = effect.SelfRect.SizeDelta
+		local sizeX = self.layout.cellSize.x / ItemSizeX * originSize.x
+		local sizeY = self.layout.cellSize.y / ItemSizeY * originSize.y
+		effect.SelfRect.SizeDelta = Vector2(sizeX, sizeY)
 	end
 end
 

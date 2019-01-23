@@ -76,10 +76,12 @@ function _M:OnCreate()
 	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title9")
 	moudle:Get("TopText").Text = Csv.Text("cross_arena_reward1")
 	moudle:Get("CoursText").Text = Csv.Text("cross_arena_reward")
-	moudle:Get("CourseBtn"):AddOnButton(function(...)
-		--奖励
-		WindowMgr.Create("UCrossArenaKnockoutReward")
-	end, nil, 1.2)
+	-- moudle:Get("CourseBtn"):AddOnButton(function(...)
+	-- 	--奖励
+	-- 	WindowMgr.Create("UCrossArenaKnockoutReward")
+	-- end, nil, 1.2)
+	-- moudle:Get("CourseBtn").Activity = false
+	
 	self.countdown = moudle:Get("TimeText2")
 	local function doUpdate(self)
 		self.countdown.Text = MCrossArena.GetStageUpdateTimeText(MCrossArena.GetArenaStageType(), HeartBeat.ServSecond())
@@ -88,7 +90,7 @@ function _M:OnCreate()
 	self.countdown:AddOnUpdate(function()
 		doUpdate(self)
 	end, nil, 1)
-	self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 2, 2)
+	-- self:RegistRedpoint(moudle:Get("Red"), Define.SysId.CrossArena, 2, 2)
 	--16强
 	self.Sixteen = {}
 	local rect1 = moudle:Get("rect1")
@@ -357,13 +359,13 @@ function _R.RefreshData(self)
 		moudle:Get("ResultHead").SpriteName = IMG_CONST
 	end
 
-
 	local stage = MCrossArena.GetArenaStageType()
 	if stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle or stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
-		_R.RefreshNextVsData(self, data and  data.fight2)
+		_P.realRefreshNextVsData(self, data and  data.fight2)
+	else
+		_R.RefreshNextVsData(self)
 	end
 end
-
 
 function _P.DoRefreshNextVsData(self, groupList, data)
 	if data == nil or #data <= 0 then
@@ -397,8 +399,8 @@ function _P.DoRefreshNextVsData(self, groupList, data)
 		end	
 	end
 end
-function _R.RefreshNextVsData(self, data)
-	self.NextVSData = data
+
+function _P.realRefreshNextVsData(self, data)
 	local stage = MCrossArena.GetArenaStageType()
 	local contentPosX = 0
 	if stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady then
@@ -439,7 +441,12 @@ function _R.RefreshNextVsData(self, data)
 		local pos = viewContentNode.LocalPosition
 		pos.x = contentPosX
 		viewContentNode.LocalPosition = pos
-	end	
+	end
+end
+
+function _R.RefreshNextVsData(self)
+	self.NextVSData = MCrossArena.GetKnockoutNextVsPalyer()
+	_P.realRefreshNextVsData(self, self.NextVSData)
 end
 
 return _M

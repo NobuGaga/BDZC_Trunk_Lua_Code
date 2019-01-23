@@ -1,0 +1,227 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MCrossArena = JRequire "Dev.CrossArena.MCrossArena"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local OpenBattleTime = Csv.Const(155)
+
+local T_Cross_Fly = "T_Cross_Fly"
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.UpdateState(self)
+	local moudle = self.mMoudle
+
+	local stage = MCrossArena.GetArenaStageType()
+	local battleRedImg = moudle:Get("red_1")
+	battleRedImg.Activity = false
+
+
+	local serverTime = HeartBeat.ServSecond()
+	local todayPassed = serverTime - LuaUtil.TodayStartTime(serverTime)
+	local lastEndTime = 0
+	local nextStarTime = 0
+
+	local CrossArenaTimeCsv = Csv.Const(146)
+
+	if stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_openTime_16")
+
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_opening_16")
+		battleRedImg.Activity = true
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.EightReady then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_openTime_8")
+		
+		--准备时间
+		lastEndTime,nextStarTime = MCrossArena.Get8ReadyTime()
+
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.EightBattle then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_opening_8")
+		battleRedImg.Activity = true
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.FourReady then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_openTime_4")
+
+		--准备时间
+		lastEndTime,nextStarTime = MCrossArena.Get4ReadyTime()
+
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.FourBattle then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_opening_4")
+		battleRedImg.Activity = true
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.FinalReady then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_openTime_2")
+
+		--准备时间
+		lastEndTime,nextStarTime = MCrossArena.GetFinalReadyTime()
+
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_opening_2")
+		battleRedImg.Activity = true
+	elseif stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+		moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_end")
+	end
+
+	--还没过12点
+	if lastEndTime ~= 0 and nextStarTime ~= 0 then
+		if LuaUtil.TodayStartTime(serverTime) < LuaUtil.TodayStartTime(nextStarTime) then
+			--直播结束后
+			if serverTime - lastEndTime > 0 then
+				moudle:Get("Time").Text = Csv.Text("cross_arena_Knockout_battleEnd")
+			end
+		end
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	local moudle = self:CreateMoudle(self._RootNode, "M_CrossSports_Main")
+	self.mMoudle = moudle
+
+	moudle:Get("C_Text").Text = Csv.Text("cross_arena_title7")
+
+	moudle:Get("C_Back_Btn"):AddOnButton(function(...)
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end,nil,1.2)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[Define.SysId.CrossArena] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.CrossArena)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+
+	local flyImg = moudle:Get("Fly")
+	local t = flyImg.CachedTran:GetJTweener(T_Cross_Fly)--动画
+	t:Play()
+
+	--领奖红点（发奖NPC）
+	self:RegistRedpoint(moudle:Get("red_2"), Define.SysId.CrossArena, 2)
+	--投票领取红点
+	self:RegistRedpoint(moudle:Get("red_4"), Define.SysId.CrossArena, 4)
+
+	moudle:Get("Title_Name_1").Text = Csv.Text("cross_arena_Knockout_title1")
+	moudle:Get("Title_Name_2").Text = Csv.Text("cross_arena_Knockout_title2")
+	moudle:Get("Title_Name_3").Text = Csv.Text("cross_arena_Knockout_title3")
+	moudle:Get("Title_Name_4").Text = Csv.Text("cross_arena_Knockout_title4")
+	moudle:Get("Title_Name_5").Text = Csv.Text("cross_arena_Knockout_title5")
+
+	_R.UpdateState(self)
+
+	moudle:Get("Img1"):AddOnButton(function()
+		--进入会场
+		local _stage = MCrossArena.GetArenaStageType()
+		if _stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle then
+			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle)
+		elseif _stage == MCrossArena.ARENA_STAGE_TYPE.EightBattle then
+			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.EightBattle)
+		elseif _stage == MCrossArena.ARENA_STAGE_TYPE.FourBattle then
+			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.FourBattle)
+		elseif _stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.FinalBattle)
+		elseif _stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+			CCommon.ShowError(Csv.Text("cross_arena_main_noBattle2"))
+		else
+			CCommon.ShowError(Csv.Text("cross_arena_main_noBattle1"))
+		end
+	end)
+
+	moudle:Get("Img2"):AddOnButton(function()
+		--进入发奖
+		WindowMgr.Create("UCrossArenaKnockoutReward")
+	end)
+
+	moudle:Get("Img3"):AddOnButton(function()
+		--进入备战室
+		local _stage = MCrossArena.GetArenaStageType()
+
+		if _stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.EightBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FourBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+			CCommon.ShowError(Csv.Text("cross_arena_main_noReadly3"))
+			return
+		end
+
+		local serverTime = HeartBeat.ServSecond()
+		local todayPassed = serverTime - LuaUtil.TodayStartTime(serverTime)
+
+		if todayPassed - OpenBattleTime > 0 then
+			--超过比赛开始时间不给予进入备战室
+			if _stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+				CCommon.ShowError(Csv.Text("cross_arena_main_noReadly4"))
+			else
+				CCommon.ShowError(Csv.Text("cross_arena_main_noReadly2"))
+			end
+		else
+			if MCrossArena.GetIsCanKnockoutMatch() and _stage ~= MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+				WindowMgr.Create("UCrossArenaKnockoutReady")
+			elseif MCrossArena.GetIsCanKnockoutMatch() and  _stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+				CCommon.ShowError(Csv.Text("cross_arena_main_noReadly4"))
+			else
+				CCommon.ShowError(Csv.Text("cross_arena_main_noReadly"))
+			end			
+		end
+	end)
+
+	moudle:Get("Img4"):AddOnButton(function()
+		local _stage = MCrossArena.GetArenaStageType()
+		if _stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.EightBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FourBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+			CCommon.ShowError(Csv.Text("cross_arena_main_noReadly3"))
+			return
+		end
+
+		--进入投注		
+		if _stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.EightReady or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FourReady or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FinalReady then
+				WindowMgr.Create("UCrossArenaKnockoutToday")
+		else
+			CCommon.ShowError(Csv.Text("cross_arena_main_noVote1"))
+		end
+	end)
+
+	moudle:Get("Fly"):AddOnClick(function()
+		local _stage = MCrossArena.GetArenaStageType()
+		if _stage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.EightBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FourBattle or
+			_stage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+			CCommon.ShowError(Csv.Text("cross_arena_main_noReadly3"))
+			return
+		end
+
+		--进入对阵表
+		WindowMgr.Create("UCrossArenaKnockoutAll")
+	end)
+
+
+	---更新状态（气球）
+	moudle.SelfRect:AddOnUpdate(function()
+		_R.UpdateState(self)
+	end,nil,1)
+end
+
+
+return _M

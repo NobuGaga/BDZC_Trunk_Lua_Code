@@ -1,0 +1,533 @@
+--[[
+	@desc :
+    2019-01-08 17:06:35
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MStaff = JRequire "Dev.Staff.MStaff"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateState(self)
+	if MCrossCommerce.State == MCrossCommerce.STATE.Open then
+		self.TimeNode.Text = Csv.Text("flower_10") .. LuaUtil.TransToYearMonthDay(MCrossCommerce.EndTime)
+	else
+		self.TimeNode.Text = Csv.Text("siege_main_close")
+	end
+	_P.refresh(self)
+end
+
+function _R.OnUpdateStage(self)
+	if self.StageType ~= MCrossCommerce.StageType then
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.Choose(self, MCrossCommerce.STAGE_TYPE.GVG)
+		else
+			_P.refresh(self)
+		end
+	else
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			CCrossCommerce.BInfoReq()
+		end
+		_P.refresh(self)
+	end
+end
+
+----------第一阶段----------
+	function _R.OnPVEInfo(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			_P.refreshPVE_info(self)
+		end
+	end
+	function _R.OnPVEMyBoss(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			_P.refreshPVE_myBoss(self)
+		end
+	end
+	function _R.OnPVEFightMyBoss(self, fightInfo)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			_P.refreshPVE_info(self)
+			_P.refreshPVE_myBoss(self)
+		end
+		WindowMgr.Call("UBattleBossNew","OnResult",fightInfo)
+	end
+	function _R.OnPVEFightOtherBoss(self, fightInfo)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			_P.refreshPVE_info(self)
+		end
+		WindowMgr.Call("UBattleBossNew","OnResult",fightInfo)
+	end
+	function _P.refreshPVE_info(self)
+		local oneMoudle = self.PVEMoudle
+		oneMoudle:Get("BtnNum").Text = MCrossCommerce.PVE.FightTimes .. "/" .. MCrossCommerce.PVE.FightMax
+		oneMoudle:Get("CostText").Text = Csv.Text("cross_commerce_15", {num = MCrossCommerce.PVE.FightBuyCost})
+	end
+	function _P.refreshPVE_myBoss(self)
+		local oneMoudle = self.PVEMoudle
+		if self.LastPVEBossID ~= MCrossCommerce.PVE.BossId then
+			self.LastPVEBossID = MCrossCommerce.PVE.BossId
+			if self.LastPVEBossID > 0 then
+				local bossCsv = Csv.crossCommerceBoss[MCrossCommerce.PVE.BossId]
+				oneMoudle:Get("BossName").Text = bossCsv.name
+				oneMoudle:Get("BossIcon").SpriteName = bossCsv.body
+			else
+				oneMoudle:Get("BossName").Text = "??????"
+				oneMoudle:Get("BossIcon").SpriteName = ""
+			end
+		end
+		if self.LastPVEBossID > 0 then
+			local bossCsv = Csv.crossCommerceBoss[MCrossCommerce.PVE.BossId]
+			oneMoudle:Get("BossBold").FillAmount = MCrossCommerce.PVE.BossBlood / bossCsv.blood
+			local endValue = (MCrossCommerce.PVE.BossBlood / bossCsv.blood) * 100
+			local per = math.floor(endValue + 0.5)
+			if per == 0 and endValue > 0 then
+				per = 1
+			end
+			oneMoudle:Get("BoldNum").Text = per.. "%"
+		else
+			oneMoudle:Get("BossBold").FillAmount = 1
+			oneMoudle:Get("BoldNum").Text = "100%"
+		end
+	end
+	function _P.refreshPVE(self)
+		_P.refreshPVE_info(self)
+		_P.refreshPVE_myBoss(self)
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			self.WaitNode.Activity = false
+		else
+			self.WaitNode.Activity = true
+		end
+		local oneMoudle = self.PVEMoudle
+		if MCrossCommerce.ActID > 0 then
+			local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+			oneMoudle:Get("Jiangli1").Text = Csv.Text("cross_commerce_19") .. Csv.Text("cross_commerce_22", {num = actCsv.killPoint})
+			oneMoudle:Get("Jiangli11").Text = Csv.Text("cross_commerce_23", {num = actCsv.killCoin})
+			oneMoudle:Get("Jiangli2").Text = Csv.Text("cross_commerce_20") .. Csv.Text("cross_commerce_22", {num = actCsv.joinPoint})
+			oneMoudle:Get("Jiangli22").Text = Csv.Text("cross_commerce_23", {num = actCsv.jionCoin})
+			oneMoudle:Get("Jiangli3").Text = Csv.Text("cross_commerce_21") .. Csv.Text("cross_commerce_23", {num = actCsv.coin})
+		else
+			oneMoudle:Get("Jiangli1").Text = Csv.Text("cross_commerce_19") .. Csv.Text("cross_commerce_22", {num = "???"})
+			oneMoudle:Get("Jiangli11").Text = Csv.Text("cross_commerce_23", {num = "???"})
+			oneMoudle:Get("Jiangli2").Text = Csv.Text("cross_commerce_20") .. Csv.Text("cross_commerce_22", {num = "???"})
+			oneMoudle:Get("Jiangli22").Text = Csv.Text("cross_commerce_23", {num = "???"})
+			oneMoudle:Get("Jiangli3").Text = Csv.Text("cross_commerce_21") .. Csv.Text("cross_commerce_23", {num = "???"})
+		end
+	end
+	function _P.pressPVEFight(self)
+		local startFight = function(bossCsv, bossBlood)			
+			WindowMgr.Create("UBattleBossNew",
+				{
+					bossBlood = bossBlood,
+					bossFullBlood = bossCsv.blood,
+					bossImg = bossCsv.body,
+					bossTab = bossCsv.smallbg,
+					bossBg = bossCsv.bg
+				},
+				function()
+					CCrossCommerce.AFightMyBossReq(bossCsv.id)
+				end,
+				function(data,param)
+					WindowMgr.Create("UCrossCommercePVEResult", data.result, function (  )
+						WindowMgr.Destroy("UBattleBossNew")
+					end)
+				end
+			)
+		end
+		local pressFunc = function (bossCsv, bossBlood)
+			if MCrossCommerce.PVE.FightTimes <= 0 then
+				if MCrossCommerce.PVE.FightBuy < MCrossCommerce.PVE.FightBuyMax then
+					if MCrossCommerce.PVE.FightAutoBuy then
+						if MCrossCommerce.PVE.FightBuyCost > MBag.GetItemNum(Define.AssetsType.Gold) then
+							CCommon.ShowError(Csv.Text("err_club_no_gold"))
+						else
+							startFight(bossCsv, bossBlood)
+						end
+					else
+						local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+						CCommon.CheckTips(
+							function(isSure, arg)
+								if isSure then
+									if MCrossCommerce.PVE.FightBuyCost > haveGode then
+										CCommon.ShowError(Csv.Text("err_club_no_gold"))
+									else
+										startFight(bossCsv, bossBlood)
+									end
+								end
+							end, 
+							{
+								items = {[Define.AssetsType.Gold] = haveGode},
+								content = Csv.Text("cross_commerce_17",{num = MCrossCommerce.PVE.FightBuyCost, max = (MCrossCommerce.PVE.FightBuyMax - MCrossCommerce.PVE.FightBuy)})
+							}
+						)
+					end
+				else
+					CCommon.ShowError(Csv.Text("cross_commerce_16"))
+				end
+			else
+				startFight(bossCsv, bossBlood)
+			end	
+		end
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			if MCrossCommerce.PVE.BossId > 0 then
+				local bossCsv = Csv.crossCommerceBoss[MCrossCommerce.PVE.BossId]
+				if self.LastPressTime + 1 < CS.UnityEngine.Time.time then
+					self.LastPressTime = CS.UnityEngine.Time.time
+					pressFunc(bossCsv, MCrossCommerce.PVE.BossBlood)
+				end
+			else
+				CCommon.ShowError(Csv.Text("cross_commerce_47"))
+			end
+		else
+			CCommon.ShowError(Csv.Text("cross_commerce_18"))
+		end		
+	end
+	function _P.createPVE(self)
+		local oneMoudle = self:CreateMoudle(self.NodeRoot, "M_GangPK_BossPK")
+		self.PVEMoudle = oneMoudle
+		oneMoudle:Get("Icon1"):AddOnButton(function (  )
+			if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+				WindowMgr.Create("UCrossCommercePVEList")
+			else
+				CCommon.ShowError(Csv.Text("cross_commerce_18"))
+			end	
+		end)
+		oneMoudle:Get("Icon2"):AddOnButton(function (  )
+			WindowMgr.Create("UCrossCommercePVEShop")
+		end)
+		oneMoudle:Get("Icon3"):AddOnButton(function (  )
+			WindowMgr.Create("UCrossCommercePVERank")
+		end)
+		oneMoudle:Get("C_text").Text = Csv.Text("cross_commerce_3")
+		oneMoudle:Get("C_Btn_a"):AddOnButton(function (  )
+			_P.pressPVEFight(self)
+		end)
+		oneMoudle:Get("AutoText").Text = Csv.Text("cross_commerce_2")
+		oneMoudle:Get("AutoBtn"):AddOnButton(function (  )
+			MCrossCommerce.PVE.FightAutoBuy = not MCrossCommerce.PVE.FightAutoBuy
+			oneMoudle:Get("gou").Activity = MCrossCommerce.PVE.FightAutoBuy
+		end)
+		self:RegistRedpoint(oneMoudle:Get("red"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.PVE, 1)
+		oneMoudle:Get("gou").Activity = MCrossCommerce.PVE.FightAutoBuy
+	end
+
+----------第二阶段----------
+	function _R.OnGVGFightTimes(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.refresGVG_info(self)
+		end
+	end
+	function _R.OnGVGInfo(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.refreshGVG(self)
+		end
+	end
+	function _R.OnGVGBuyBuff(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.refresGVG_info(self)
+			_P.refresgGVG_buff(self)
+		end
+	end
+	function _R.OnGVGChangeSort(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.refresGVG_fighters(self)
+		end
+	end
+	function _R.OnUpdateCommerceScore(self)
+		if self.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			_P.refresGVG_info(self)
+		end
+	end
+	function _R.OnGVGFight(self, msg)
+		WindowMgr.Create('UCrossCommerceGVGFight', msg, function (  )
+			_P.refresGVG_info(self)
+		end)
+	end
+	function _P.refresGVG_info(self)
+		local gvgMoudle = self.GVGMoudle
+		gvgMoudle:Get("PkNum").Text = Csv.Text("cross_commerce_63", {num = MCrossCommerce.GVG.FightTimes, max = MCrossCommerce.GVG.FightMax})
+		gvgMoudle:Get("zhanli").Text = MCrossCommerce.GetGVGAllForce()
+		gvgMoudle:Get("chuzhanyuangong").Text = Csv.Text("cross_commerce_51") .. MCrossCommerce.GVG.CommerceScore
+		gvgMoudle:Get("BuffTips33").Text = MCrossCommerce.CommerceGold
+	end
+	function _P.refresgGVG_buff(self)
+		if self.GVGChoosePlayer > 0 then
+			local tab = self.GVGFighters[self.GVGChoosePlayer]
+			if tab ~= nil then
+				local gvgMoudle = self.GVGMoudle
+				gvgMoudle:Get("BuffText_1").Text = Csv.Text("cross_commerce_65", {num = tab.info.forcePer / 100})
+				gvgMoudle:Get("BuffText_2").Text = Csv.Text("cross_commerce_66", {num = tab.info.forceAdd})
+			end
+		end
+	end
+	function _P.chooseGVGFighter(self)
+		local gvgMoudle = self.GVGMoudle
+		for k,v in pairs(self.GVGFighters) do
+			if k == self.GVGChoosePlayer then
+				local fighterMoudle = v.fighterMoudle
+				local info = v.info
+				fighterMoudle:Get("H").Activity = true
+				gvgMoudle:Get("zhanli2").Text = info.force
+				local staffContent = gvgMoudle:Get("Content2")
+				staffContent:DestroyChildren()
+				local staffCount = 0
+				if info.staffs ~= nil then
+					for k,v in pairs(info.staffs) do
+						staffCount = staffCount + 1
+						local staffMoudle = self:CreateMoudle(staffContent, "M_NewBossPK_Item")
+						staffMoudle:Get("Black").Activity = false
+						local csvStaff = Csv.Personnel[v.id]
+						staffMoudle.SelfRect.SpriteName = MStaff.Color2Image[v.color]
+						staffMoudle:Get("BSX").SpriteName = csvStaff.asset
+					end
+				end
+				gvgMoudle:Get("chuzhanyuangong2").Text = Csv.Text("cross_commerce_64", {num = staffCount})
+			else
+				v.fighterMoudle:Get("H").Activity = false
+			end
+		end
+		_P.refresgGVG_buff(self)
+	end
+	function _P.refresGVG_fighters(self)
+		local gvgMoudle = self.GVGMoudle
+		local fighterContent = gvgMoudle:Get("Content")
+		fighterContent:DestroyChildren()
+		self.GVGFighters = {}
+		local isHave = false
+		for k,v in pairs(MCrossCommerce.GVG.Fighters) do
+			if v.id == self.GVGChoosePlayer then
+				isHave = true
+			end
+			local fighterMoudle = self:CreateMoudle(fighterContent, "M_GangPK_JifenPK_Item")
+			fighterMoudle:Get("Name").Text = v.name
+			fighterMoudle:Get("head").SpriteName = MPlayer.GetOtherHeadIcon(v.head,v.sex)
+			fighterMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(v.chatBg, v.vip)
+			fighterMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..v.vip
+
+			self.GVGFighters[v.id] = {fighterMoudle = fighterMoudle, info = v}
+			fighterMoudle:Get("HeadBox"):AddOnButton(function (  )
+				self.GVGChoosePlayer = v.id
+				_P.chooseGVGFighter(self)
+			end)
+		end
+		if not isHave then
+			self.GVGChoosePlayer = 0
+			if #MCrossCommerce.GVG.Fighters > 0 then
+				self.GVGChoosePlayer = MCrossCommerce.GVG.Fighters[1].id
+			end
+		end
+		_P.chooseGVGFighter(self)
+	end
+	function _P.refreshGVG(self)
+		_P.refresGVG_info(self)
+		_P.refresGVG_fighters(self)
+		
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			self.WaitNode.Activity = false
+		else
+			self.WaitNode.Activity = true
+		end
+		local oneMoudle = self.GVGMoudle
+		if MCrossCommerce.ActID > 0 then
+			local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+			oneMoudle:Get("BuffText1").Text = Csv.Text("cross_commerce_24", {num = actCsv.buffPer / 100})
+			oneMoudle:Get("BuffText2").Text = Csv.Text("cross_commerce_25", {num = actCsv.buffAdd})
+			oneMoudle:Get("BuffTips22").Text = actCsv.buffCost
+		else
+			oneMoudle:Get("BuffText1").Text = Csv.Text("cross_commerce_24", {num = "??"})
+			oneMoudle:Get("BuffText2").Text = Csv.Text("cross_commerce_25", {num = "????"})
+			oneMoudle:Get("BuffTips22").Text = "????"
+		end
+	end
+	function _P.pressGVGBuyBuff(self)
+		if self.GVGChoosePlayer > 0 then
+			local gvgMoudle = self.GVGMoudle
+			if gvgMoudle:Get("gou1").Activity then
+				CCrossCommerce.BBuyBuffReq(self.GVGChoosePlayer, 1)
+			else
+				CCrossCommerce.BBuyBuffReq(self.GVGChoosePlayer, 2)
+			end
+		end
+	end
+	function _P.checkGVGCommerceLadder(self)
+		if MCrossCommerce.StageType ~= MCrossCommerce.STAGE_TYPE.GVG then
+			CCommon.ShowError(Csv.Text("cross_commerce_18"))
+			return false
+		end
+		if MCrossCommerce.GVG.CommerceLadderId ~= MPlayer.GetId() then
+			CCommon.ShowError(Csv.Text("cross_commerce_62"))
+			return false
+		end
+		return true
+	end
+	function _P.createGVG(self)
+		local oneMoudle = self:CreateMoudle(self.NodeRoot, "M_GangPK_JifenPK")
+		self.GVGMoudle = oneMoudle
+		--排行奖励
+		oneMoudle:Get("C_text6").Text = Csv.Text("cross_commerce_4")
+		oneMoudle:Get("C_Btn_6"):AddOnButton(function (  )
+			WindowMgr.Create("UCrossCommerceGVGReward")
+		end)
+		self:RegistRedpoint(oneMoudle:Get("red"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG, 2)
+		--战斗记录
+		oneMoudle:Get("C_text5").Text = Csv.Text("cross_commerce_5")
+		oneMoudle:Get("C_Btn_5"):AddOnButton(function (  )
+			WindowMgr.Create("UCrossCommerceGVGRecord")
+		end)
+		--调整阵容
+		oneMoudle:Get("C_text_3").Text = Csv.Text("cross_commerce_6")
+		oneMoudle:Get("C_Btn_3"):AddOnButton(function (  )
+			if self.GVGChoosePlayer ~= nil and self.GVGChoosePlayer > 0 then
+				if _P.checkGVGCommerceLadder(self) then
+					WindowMgr.Create("UCrossCommerceGVGSort", self.GVGChoosePlayer)
+				end
+			else
+				CCommon.ShowError(Csv.Text("cross_commerce_67"))
+			end
+		end)
+		--挑战
+		oneMoudle:Get("C_Btn_4"):AddOnButton(function ()
+			if _P.checkGVGCommerceLadder(self) then
+				WindowMgr.Create("UCrossCommerceGVGList")
+			end
+		end)
+		self:RegistRedpoint(oneMoudle:Get("red2"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG, 1)
+		--购买BUFF
+		oneMoudle:Get("gou2").Activity = false
+		oneMoudle:Get("C_text_2").Text = Csv.Text("cross_commerce_11")
+		oneMoudle:Get("C_Btn_2"):AddOnButton(function (  )
+			if self.GVGChoosePlayer ~= nil and self.GVGChoosePlayer > 0 then
+				if _P.checkGVGCommerceLadder(self) then
+					_P.pressGVGBuyBuff(self)
+				end
+			else
+				CCommon.ShowError(Csv.Text("cross_commerce_67"))
+			end
+		end)
+		oneMoudle:Get("BuffTips3").Text = Csv.Text("cross_commerce_26")
+		oneMoudle:Get("BuffTips2").Text = Csv.Text("cross_commerce_27")
+		oneMoudle:Get("Buff1"):AddOnButton(function()
+			oneMoudle:Get("gou1").Activity = true
+			oneMoudle:Get("gou2").Activity = false
+		end)
+		oneMoudle:Get("Buff2"):AddOnButton(function()
+			oneMoudle:Get("gou1").Activity = false
+			oneMoudle:Get("gou2").Activity = true
+		end)
+	end
+
+function _P.refresh(self)
+	if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+		_P.refreshPVE(self)
+	else
+		_P.refreshGVG(self)
+	end
+end
+
+function _P.Choose(self, stageType)
+	if self.StageType ~= stageType then
+		self.StageType = stageType
+		if stageType == MCrossCommerce.STAGE_TYPE.PVE then
+			_P.update(self)
+			if self.GVGMoudle ~= nil then
+				self.GVGMoudle.SelfRect.Activity = false
+			end
+			if self.PVEMoudle ~= nil then
+				self.PVEMoudle.SelfRect.Activity = true
+			else
+				_P.createPVE(self)
+			end
+			_P.refreshPVE(self)
+		else
+			self.GVGChoosePlayer = 0
+			CCrossCommerce.BInfoReq()
+			if self.PVEMoudle ~= nil then
+				self.PVEMoudle.SelfRect.Activity = false
+			end
+			if self.GVGMoudle ~= nil then
+				self.GVGMoudle.SelfRect.Activity = true
+			else
+				_P.createGVG(self)				
+			end
+			_P.refreshGVG(self)
+		end
+	end
+end
+
+function _P.update(self)
+	if self.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE then
+			CCrossCommerce.AMyBossReq()
+		end
+	else
+		if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+			CCrossCommerce.BCommerceScoreReq()
+		end
+	end
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Main")
+	self.mMoudle = moudle
+	moudle:Get("BackBtn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	local helpBtn = moudle:Get("helpBtn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local funcCsv = Csv.Func[self._SysId]
+	moudle:Get("Title").Text = funcCsv.name
+	self.TimeNode = moudle:Get("TimeText")
+	moudle.SelfRect:AddOnUpdate(function (  )
+		_P.update(self)
+	end, nil, 3)
+	self.StageType = MCrossCommerce.STAGE_TYPE.None
+	self.LastPressTime = 0
+	self.PVEMoudle = nil
+	self.GVGMoudle = nil
+	self.GVGChoosePlayer = 0
+	self.NodeRoot = moudle:Get("Tree")
+	self.WaitNode = moudle:Get("WaitTextBG")
+	moudle:Get("WaitText").Text = Csv.Text("cross_commerce_18")
+	if MCrossCommerce.ActID > 0 then
+		local actCsv = Csv.CrossCommerceFight[MCrossCommerce.ActID]
+		moudle:Get("Time1").Text = actCsv.pveShowTime
+		moudle:Get("Time2").Text = actCsv.gvgShowTime
+	end
+	moudle:Get("Scene1"):AddOnButton(function (  )
+		_P.Choose(self, MCrossCommerce.STAGE_TYPE.PVE)
+	end)
+	moudle:Get("Scene2"):AddOnButton(function (  )
+		_P.Choose(self, MCrossCommerce.STAGE_TYPE.GVG)
+	end)
+	self:RegistRedpoint(moudle:Get("Red1"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.PVE)
+	self:RegistRedpoint(moudle:Get("Red2"), Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG)
+	if MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG then
+		_P.Choose(self, MCrossCommerce.STAGE_TYPE.GVG)
+	else
+		_P.Choose(self, MCrossCommerce.STAGE_TYPE.PVE)
+	end
+end
+
+return _M

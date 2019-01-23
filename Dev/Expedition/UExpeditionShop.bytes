@@ -1,0 +1,157 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommon = JRequire "Dev.Common.CCommon"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MExpedition = JRequire"Dev.Expedition.MExpedition"
+local CExpedition = JRequire"Dev.Expedition.CExpedition"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.RepExchange(self)
+	_P.ExchangeItem(self)
+	_R.RefreshShop(self)
+end
+
+function _R.RefreshShop(self)
+	local data = MExpedition.ShopInfo
+	if data == nil then
+		return
+	end
+	local moudle = self.Moudle
+	local jifenText = moudle:Get("Num")
+	jifenText.Text = Csv.Text("expedition_exchange_score",{num = MExpedition.Score})
+	self.mJifen = jifenText
+	
+	local content = moudle:Get("content")
+	content:DestroyChildren()
+
+	local gifts = {}
+	if data.times ~= nil then
+		for k,v in pairs(data.times) do
+			local _shopData ={id = v.key,count = v.value}
+
+			local itemMoudle = _P.CreatItem(self,content,_shopData)
+			gifts[v.key] = {item = itemMoudle,data = _shopData}
+		end
+	end
+	self.mGifts = gifts
+end
+
+--界面构建
+function _M:OnCreate()
+	CExpedition.ReqShopInfo(false)
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Expedition_Exchange")
+	self.Moudle = moudle
+
+	local BtnClose = moudle:Get("C_Back_Btn")
+	BtnClose:AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	--标题
+	moudle:Get("C_Text").Text = Csv.Text("expedition_exchange_title")
+	moudle:Get("C_text").Text = Csv.Text("club_exchange_refresh")
+	local refCost = Csv.Const(153)[9]
+	moudle:Get("Tips").Text = Csv.Text("expedition_shop_costTips", {num = refCost})
+	local refBtn = moudle:Get('C_Btn_a')
+	refBtn:AddOnButton(function ()
+		if MExpedition.Score >= refCost then
+			CExpedition.ReqShopInfo(true)
+
+			refBtn.IsGray = true
+			refBtn.RaycastTarget = false
+			refBtn:AddOnTime(function(  )
+				refBtn.IsGray = false
+				refBtn.RaycastTarget = true
+			end, nil, 1)
+		else
+			CCommon.ShowError(Csv.Text("finance_noJifen"))
+		end
+	end)
+	_R.RefreshShop(self)
+end
+
+function _P.CreatItem(self,parent,data)
+	local csvShop = Csv.MeetingShop[data.id]
+	if csvShop == nil then
+		return nil
+	end
+
+	local moudle = JGuiManager.GetMoudle(parent,"M_Expedition_Exchange_Item", WindowType.UI, 10)
+
+	local iconBg = moudle:Get("IconBox")
+	local iconImg = moudle:Get("icon")
+	local iconNum = moudle:Get("IconNum")
+	local name = moudle:Get("iconName")
+	local spend = moudle:Get("spendNum")
+	local changeNum = moudle:Get("NumText")
+
+	moudle:Get("spend").Text = Csv.Text("expedition_exchange_spend")
+	moudle:Get("canExchange").Text = Csv.Text("expedition_exchange_count")
+
+	local csvItem = Csv.Item[csvShop.itemid]
+	local canChangeNum = csvShop.limit - data.count
+	local spendNum = csvShop.score
+	
+	if csvShop.count > 1 then
+		iconNum.Text = LuaUtil.NumberFormat(csvShop.count)
+	end
+	
+	if csvItem ~= nil then
+		iconBg.SpriteName = csvItem.colorIcon
+		iconImg.SpriteName = csvItem.icon
+		name.Text = csvItem.name
+		spend.Text = spendNum
+		changeNum.Text = canChangeNum
+	end
+
+	local btn = moudle:Get("C_Btn_b")
+	moudle:Get("C_text").Text = Csv.Text("expedition_exchange_btn")
+	btn:AddOnButton(function()
+		--发送兑换消息
+		if MExpedition.Score >= spendNum then
+			CExpedition.ReqExchange(csvShop.id)
+			self.mChangeId = csvShop.id
+		else
+			CCommon.ShowError(Csv.Text("finance_noJifen"))--"积分不足！")
+		end
+	end)
+
+	if canChangeNum <= 0 then
+		btn.IsGray = true
+		btn.RaycastTarget = false
+	end
+	
+	return moudle
+end
+
+function _P.ExchangeItem(self)
+	if self.mChangeId ~= nil then
+		local csvId = self.mChangeId
+		local gifts = self.mGifts
+		if gifts[csvId] ~= nil then
+			--飞道具
+			local csvShop = Csv.MeetingShop[csvId]
+			CCommon.ShowFlyItem(self.Moudle.SelfRect,csvShop.itemid,csvShop.count)
+		end
+		self.mChangeId = nil
+	end
+end
+
+return _M

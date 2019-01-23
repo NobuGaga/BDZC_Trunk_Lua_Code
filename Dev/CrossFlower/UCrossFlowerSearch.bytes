@@ -1,0 +1,173 @@
+--[[
+	@desc :
+    2018-12-19 15:22:53
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local CCrossFlower = JRequire "Dev.CrossFlower.CCrossFlower"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local VECTOR_ONE = Vector3.one
+local VECTOR3_DOWN = Vector3(1,-1,1)
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnOpenSearch(self, data)
+	self.commerceList = data.commerce or {}
+	self.friendList = data.friend or {}
+	_P.OnClickToggle(self, self.SearchIndex)
+end
+
+function _R.OnSearch(self, data)
+	self.searchInfo = data
+
+	_P.OnClickToggle(self,3)
+end
+
+-- isClickBg为true才是切换箭头上下的
+function _P.OnClickToggle(self, index, isClickBg)
+	if index == 1 and (self.commerceList == nil or next(self.commerceList) == nil) then
+		CCommon.ShowError(Csv.Text("parliament_tip18"))
+		return
+	end
+	if index == 2 and (self.friendList == nil or next(self.friendList) == nil) then
+		CCommon.ShowError(Csv.Text("parliament_tip19"))
+		return
+	end
+
+	self.SearchIndex = index
+	for k,v in pairs(self.NodeList) do
+		if v.index == index then
+			v.oneMoudle:Destroy()
+			self.NodeList[k] = nil
+		end
+	end
+	if self.NodeList == nil then
+		self.NodeList = {}
+	end
+
+	local moudle = self.mMoudle
+	local content = moudle:Get("content")
+	if index == 1 then
+		local arrow1 = moudle:Get("JT1")
+		if (not isClickBg) or arrow1.LocalScale.y == -1 then
+			arrow1.LocalScale = VECTOR_ONE
+
+			local curSibIndex = self.ToggleRect[1].CachedTran:GetSiblingIndex()
+			for k,v in pairs(self.commerceList) do
+				_P.createItem(self, v, k + curSibIndex, content, true, index)
+			end
+		else
+			arrow1.LocalScale = VECTOR3_DOWN
+		end
+	elseif index == 2 then
+		local arrow2 = moudle:Get("JT2")
+		if (not isClickBg) or arrow2.LocalScale.y == -1 then
+			arrow2.LocalScale = VECTOR_ONE
+
+			local curSibIndex = self.ToggleRect[2].CachedTran:GetSiblingIndex()
+			for k,v in pairs(self.friendList) do
+				_P.createItem(self, v, k + curSibIndex, content, false, index)
+			end
+		else
+			arrow2.LocalScale = VECTOR3_DOWN
+		end
+	else
+		local arrow3 = moudle:Get("JT3")
+		local rect = moudle:Get("rect")
+		if (not isClickBg) or arrow3.LocalScale.y == -1 then
+			arrow3.LocalScale = VECTOR_ONE
+			rect.Activity = true
+
+			if self.searchInfo ~= nil then
+				local curSibIndex = self.ToggleRect[3].CachedTran:GetSiblingIndex()
+				_P.createItem(self, self.searchInfo, curSibIndex + 1, content, false, index)
+			end
+		else
+			arrow3.LocalScale = VECTOR3_DOWN
+			rect.Activity = false
+		end
+
+		moudle:Get("input").Text = ""
+	end
+end
+
+function _P.createItem(self, info, siblingIndex, content, isCommerce, toggleIndex)
+	local oneMoudle = self:CreateMoudle(content, "M_Parliament_Gift_Item")
+	table.insert(self.NodeList, {oneMoudle = oneMoudle, index = toggleIndex})
+
+	oneMoudle.SelfRect.CachedTran:SetSiblingIndex(siblingIndex)
+	oneMoudle:Get("name").Text = info.name
+	oneMoudle:Get("Head").SpriteName = MPlayer.GetOtherHeadIcon(info.head,info.sex)
+	oneMoudle:Get("VipBox").SpriteName = MPlayer.GetOtherHeadBG(info.chatBg, info.vip)
+	oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..info.vip
+	oneMoudle:Get("SL").Text = Csv.Text("parliament_tip23",{str = tostring(info.force)})
+	oneMoudle:Get("TX").Text = Csv.Text("parliament_tip13",{str = Csv.Company[info.level].name})
+	oneMoudle:Get("GX").Text = Csv.Text("parliament_tip15",{str = tostring(info.id)})
+	oneMoudle:Get("SJ").Text = Csv.Text("flower_38", {str = info.oriServerId or 0})
+	oneMoudle:Get("C_text").Text = Csv.Text("flower_21")
+	oneMoudle:Get("C_Btn_b"):AddOnButton(function()
+		CCrossFlower.ReqGetListByPlayer(info.id, info.oriServerId)
+		self:Destroy()
+	end)
+	oneMoudle:Get("YZS").Activity = false
+end
+
+function _M:OnCreate()
+	CCrossFlower.ReqOpenSearch()
+
+	self.commerceList = {}
+	self.friendList = {}
+	self.searchInfo = nil
+	self.SearchIndex = 0
+	self.NodeList = {}
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_Parliament_Gift")
+	self.mMoudle = moudle
+	moudle:Get("BackBtn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("Title").Text = Csv.Text("flower_2")
+	moudle:Get("title1").Text = Csv.Text("parliament_tip6")
+	moudle:Get("title2").Text = Csv.Text("parliament_tip7")
+	moudle:Get("title3").Text = Csv.Text("parliament_tip8")
+	moudle:Get("C_text").Text = Csv.Text("parliament_tip9")
+	moudle:Get("C_text_1").Text = Csv.Text("flower_21")
+	moudle:Get("C_text_2").Text = Csv.Text("parliament_tip10")
+	moudle:Get("Placeholder").Text = Csv.Text("flower_22")
+	moudle:Get("Tips").Text = Csv.Text("flower_37")
+	moudle:Get("rect").Activity = false
+
+	self.ToggleRect = {}
+	for i = 1,3 do
+		self.ToggleRect[i] = moudle:Get("toggle"..i)
+		moudle:Get("bg"..i):AddOnClick(function()
+			_P.OnClickToggle(self,i,true)
+		end)
+		moudle:Get("JT" .. i).LocalScale = VECTOR3_DOWN
+	end
+	moudle:Get("C_Btn_b"):AddOnButton(function()
+		local palyerId = moudle:Get("input").Text
+		if string.len(palyerId) > 0 then
+			CCrossFlower.ReqSearch(palyerId)
+		else
+			CCommon.ShowError(Csv.Text("relations_findtip"))
+		end
+	end)
+	_P.OnClickToggle(self,3)
+end
+
+return _M

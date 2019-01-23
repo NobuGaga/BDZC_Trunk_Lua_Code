@@ -1,0 +1,84 @@
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = {}
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+
+_M.IsOpen = false
+_M.CloseTimestamp = 0
+_M.NextTimeText = nil
+_M.RefreshTime = 0
+_M.MaxRefreshTime = Csv.Const(154)
+_M.RefreshCost = 0
+_M.ProductList = nil
+
+_P.MaxOpenTime = 0
+for _, __ in ipairs(Csv.BlackMarkOpen) do
+	_P.MaxOpenTime = _P.MaxOpenTime + 1
+end
+
+function _M.Clean()
+	_M.IsOpen = false
+	_M.CloseTimestamp = 0
+	_M.NextTimeText = nil
+	_M.RefreshTime = 0
+	_M.RefreshCost = 0
+	_M.ProductList = nil
+end
+
+function _M.Init(data)
+	_M.IsOpen = data.type ~= 0
+	if _M.IsOpen then
+		local csvBlackMarkOpen = Csv.BlackMarkOpen[data.type]
+		local todayZeroStamp = LuaUtil.TodayStartTime(HeartBeat.ServSecond())
+		_M.CloseTimestamp = todayZeroStamp + csvBlackMarkOpen.open + csvBlackMarkOpen.last
+		local nextType = (data.type + 1) % _P.MaxOpenTime
+		if nextType == 0 then
+			nextType = 1
+		end
+		_M.NextTimeText = csvBlackMarkOpen.next
+	end
+	_M.RefreshTime = data.refreshTime or 0
+	local csvBlackMarkRefresh = Csv.BlackMarkRefresh[_M.RefreshTime + 1]
+	_M.RefreshCost =  (csvBlackMarkRefresh and csvBlackMarkRefresh.cost) or 0
+	_M.ProductList = nil
+	if data.list then
+		_M.ProductList = {}
+		for _, listData in ipairs(data.list) do
+			_P.CreateProductData(listData)	
+		end
+	end
+end
+
+function _P.CreateProductData(data)
+	local csvBlackMark = Csv.BlackMark[data.id]
+	local csvItem = Csv.Item[csvBlackMark.itemID]
+	local productData = {}
+	productData.name = csvItem.name
+	productData.itemID = csvItem.id
+	productData.icon = csvItem.icon
+	productData.colorIcon = csvItem.colorIcon
+	productData.count = csvBlackMark.count
+	productData.cost = csvBlackMark.cost
+	productData.discount = csvBlackMark.discount
+	productData.isDiscountEffect = csvBlackMark.discountEffect == 1
+	_M.ProductList[data.index] = productData
+	_M.RefreshProductData(data, csvBlackMark)
+end
+
+function _M.RefreshProductData(data, csvBlackMark)
+	local productData = _M.ProductList[data.index]
+	csvBlackMark = csvBlackMark or Csv.BlackMark[data.id]
+	local canBuyCount = csvBlackMark.maxBuy - data.buyCount
+	local isBuySuccess = canBuyCount < (productData.canBuyCount or 0)
+	productData.canBuyCount = canBuyCount
+	return isBuySuccess
+end
+
+function _M.IsMaxRefreshTime()
+	return _M.RefreshTime >= _M.MaxRefreshTime
+end
+
+return _M

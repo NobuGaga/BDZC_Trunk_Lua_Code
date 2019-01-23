@@ -1,0 +1,223 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossOccupy = JRequire "Dev.CrossOccupy.MCrossOccupy"
+local CCrossOccupy = JRequire "Dev.CrossOccupy.CCrossOccupy"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnShopExchange(self, data)
+	self.Score = data.socre
+	self.ShopList[data.id] = data.lessTimes
+
+	_P.refreshScore(self)
+	_P.refreshTime(self)
+	local itemModule = self.ItemList[data.id]
+	if data.lessTimes <= 0 then
+		_P.setItemGray(self, itemModule)
+	elseif data.lessTimes > 1 then
+		itemModule:Get("Red").Activity = true
+		itemModule:Get("ItemNum").Text = tostring(data.lessTimes)
+	else
+		itemModule:Get("Red").Activity = false
+	end
+	local shopCsv = Csv.CrossOccupyShop[data.id]
+	CCommon.ShowFlyItem(itemModule:Get("Score"), shopCsv.itemId, shopCsv.itemCount)
+end
+
+function _R.OnShopRefresh(self, data)
+	_P.updateShopInfo(self, data)
+
+	_P.refreshTime(self)
+	_P.refreshItems(self)
+end
+
+function _P.pressRefreshBtn(self)
+	if self.ShopTimes >= self.ShopMaxTimes then
+		CCommon.ShowError(Csv.Text("club_exchange_refreshError"))
+	else
+		local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+		local needCost = self.ShopRefreshCost
+		CCommon.CheckTips(
+			function(isSure, arg)
+				if isSure then
+					if needCost > haveGode then
+						CCommon.ShowError(Csv.Text("err_club_no_gold"))
+					else
+						CCrossOccupy.ReqShopRefresh()
+					end	
+				end			
+			end, 
+			{
+				items = {[Define.AssetsType.Gold] = haveGode},
+				content = Csv.Text("club_exchange_tip",{num = needCost})
+			},Define.NoTipsAgainType.CrossOccupyShop
+		)		
+	end
+end
+
+function _P.setItemGray(self, itemModule)
+	itemModule:Get("Icon").IsGray = true
+	itemModule:Get("IconBox").IsGray = true
+	itemModule:Get("Red").Activity = false
+	itemModule:Get("Corner").IsGray = true
+	local exchangeBtn = itemModule:Get("C_Btn_b")
+	exchangeBtn.IsGray = true
+	exchangeBtn.RaycastTarget = false
+end
+
+function _P.refreshItems(self)
+	local moudle = self.mMoudle
+	local content = moudle:Get("List")
+	content:DestroyChildren()
+	self.ItemList = {}
+	local shopList = {}
+	for shopId,num in pairs(self.ShopList) do
+		local shopCsv = Csv.CrossOccupyShop[shopId]
+		if shopCsv ~= nil then
+			table.insert(shopList, shopCsv)
+		else
+			error("cont find CrossOccupyShop id", shopId)
+		end
+	end
+	table.sort(shopList, function(a, b)
+		return a.sort < b.sort
+	end)
+	for _,shopCsv in pairs(shopList) do
+		local itemModule = self:CreateMoudle(content, "M_Club_Exchange_Item")
+		self.ItemList[shopCsv.id] = itemModule
+		local itemConf = Csv.Item[shopCsv.itemId]
+		local strColor = Csv.ItemColor[itemConf.color].str
+		itemModule:Get("GoodName").Text = Csv.Text("common_color",{num = strColor, name = itemConf.name})
+		itemModule:Get("Icon").SpriteName = itemConf.icon
+		local getNumText = itemModule:Get("GetNum")
+		getNumText.Text = "x" .. shopCsv.itemCount
+		getNumText.Activity = true
+		local qualityImg  = itemModule:Get("IconBox")
+		qualityImg.SpriteName = itemConf.colorIcon
+		qualityImg:AddOnButton(function ( ... )
+			SoundMgr.Play(10001)
+			WindowMgr.Create("UBagDetailPop", shopCsv.itemId)
+		end)
+		itemModule:Get("Score").Text = shopCsv.cost .. Csv.Text("club_exchange_fenshu")
+		itemModule:Get("C_text").Text = Csv.Text("club_exchange_change")
+		if shopCsv.discount ~= nil and shopCsv.discount ~= "" then
+			itemModule:Get("CornerText").Text = shopCsv.discount
+		else
+			itemModule:Get("Corner").Activity = false
+		end
+		local num = self.ShopList[shopCsv.id]
+		if num <= 0 then
+			_P.setItemGray(self, itemModule)
+		else
+			if num > 1 then
+				itemModule:Get("ItemNum").Text = tostring(num)
+			else
+				itemModule:Get("Red").Activity = false
+			end
+			itemModule:Get("C_Btn_b"):AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				if self.Score < shopCsv.cost then
+					CCommon.ShowError(Csv.Text("club_exchange_pointError"))
+					return
+				end
+				CCrossOccupy.ReqShopExchange(shopCsv.id)
+			end)
+		end		
+	end
+end
+
+function _P.refreshTime(self)
+	local passTime = HeartBeat.ServSecond() - self.StartRefTime
+	if passTime <= 0 then passTime = 0 end
+	local haveTime = self.ShopRefreshTime - passTime
+	if haveTime <= 0 then 
+		haveTime = 0
+		if self.ShopRefreshTime ~= 0 then
+			self.ShopRefreshTime = 0
+			CCrossOccupy.ReqShopRefreshAuto()
+		end
+	end
+	self.TimeText.Text = LuaUtil.GetTimeHMS(haveTime)
+
+
+	if self.LastShopRefreshNum ~= self.ShopTimes or self.LastShopRefreshMax ~= self.ShopMaxTimes then
+		self.LastShopRefreshNum = self.ShopTimes
+		self.LastShopRefreshMax = self.ShopMaxTimes
+		self.RefTimes.Text = (self.ShopMaxTimes - self.ShopTimes) .. '/' .. self.ShopMaxTimes
+		self.CostValue.Text = tostring(self.ShopRefreshCost)
+		if self.ShopTimes >= self.ShopMaxTimes then
+			self.RefBtn.IsGray = true
+			self.RefBtn.RaycastTarget = false
+		else
+			self.RefBtn.IsGray = false
+			self.RefBtn.RaycastTarget = true
+		end
+	end
+end
+
+function _P.refreshScore(self)
+	self.ScoreText.Text = tostring(self.Score)
+end
+
+function _P.updateShopInfo(self, data)
+	self.Score = data.score
+	self.ShopTimes = data.shopTimes
+	self.ShopMaxTimes = data.maxTimes or 0
+	self.ShopRefreshTime = data.refreshTime or 0
+	self.StartRefTime = HeartBeat.ServSecond()
+	self.ShopList = {}
+	self.ShopRefreshCost = data.refreshCost
+	if data.shop ~= nil then
+		for _,v in pairs(data.shop) do
+			self.ShopList[v.key] = v.value
+		end
+	end
+end
+
+function _M:OnCreate(data)
+	_P.updateShopInfo(self, data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Club_Exchange")
+	self.mMoudle = moudle
+	self.ItemList = {}
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	self.CostValue = moudle:Get("costValue")
+	self.RefTimes = moudle:Get("CSNum")
+	self.TimeText = moudle:Get("CXNum")
+	self.ScoreText = moudle:Get("integralNum")
+	self.RefBtn = moudle:Get("C_Btn_b_8")
+	moudle:Get("C_Text").Text = Csv.Text("Arena_9")
+	moudle:Get("integral").Text = Csv.Text("Arena_10")
+	moudle:Get("zuanshiSX").Text = Csv.Text("club_exchange_money")
+	moudle:Get("timeSX").Text = Csv.Text("club_exchange_auto")
+	moudle:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")	
+	moudle:Get("costText").Text = Csv.Text("club_shop_cost")
+	self.RefBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.pressRefreshBtn(self)
+	end)
+	moudle.SelfRect:AddOnUpdate(function()
+		_P.refreshTime(self)
+	end, nil, 1)
+	_P.refreshScore(self)
+	_P.refreshTime(self)
+	_P.refreshItems(self)
+end
+
+return _M

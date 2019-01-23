@@ -69,10 +69,11 @@ function _P.OnPlatLanternAnim(self)
 	local upMoveTween = lanternIcon.CachedTran:GetJTweener(MOVE_TWEEN)
 	local tweenData = upMoveTween:GetTweenForType(CS.JTween.JTweenerType.AnchorPos)
 	local posX = self.LoginConf.moveTweenPos[1]
-	if self.LoginConf.moveTweenPos[3] == 1 then
+	if self.LoginConf.moveTweenPos[3] == 1 then -- 同边
 		tweenData.ToPos = Vector2(-posX, self.LoginConf.moveTweenPos[2])
 	else
-		tweenData.ToPos = Vector2((self.ActInfo.day % 2 == 0 and posX) or -posX, self.LoginConf.moveTweenPos[2])
+		local rightPosX = self.LoginConf.moveTweenPos[4] or 0
+		tweenData.ToPos = Vector2((self.ActInfo.day % 2 == 0 and rightPosX) or -posX, self.LoginConf.moveTweenPos[2])
 	end
 	upMoveTween:Play()
 	self.UpMoveTween = upMoveTween

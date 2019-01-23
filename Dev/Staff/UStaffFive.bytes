@@ -9,6 +9,8 @@ local _M = Class(WindowBase)
 local StaffTable = Csv.Const(Define.Const.StaffFive)
 local RecreationManTable = Csv.Const(Define.Const.RecreationMan)
 local BigWigTable = Csv.Const(Define.Const.BigWigTable)
+--超级英雄
+local SuperManTable = Csv.Const(Define.Const.SuperManTable)
 
 --界面构建
 function _M:ctor(parent, specialId)
@@ -16,6 +18,8 @@ function _M:ctor(parent, specialId)
 	local moudle
 	if specialId == 6 then
 		moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Cjdh_Gh")
+	elseif specialId == 8 then
+		moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Cjyx_Gh")
 	else
 		moudle = JGuiManager.GetMoudle(self._RootNode, "M_Activity_Jgwh_Gh")
 	end
@@ -31,6 +35,8 @@ function _M:ctor(parent, specialId)
 		staffList = RecreationManTable
 	elseif specialId == 6 then
 		staffList = BigWigTable
+	elseif specialId == 8 then
+		staffList = SuperManTable
 	end
 
 	for k,v in ipairs(staffList) do
@@ -54,9 +60,14 @@ function _M:ctor(parent, specialId)
 	if staffFirst ~= nil then
 		for k,v in pairs(staffFirst.aureole) do
 			local csvAureole = Csv.Aureole[v * 1000 + 1]
-			if csvAureole ~= nil and csvAureole.costitem == nil then
-				aureoleName = csvAureole.name
-				aureoleAdd = csvAureole.desc
+			if csvAureole ~= nil and csvAureole.type == 1 and csvAureole.costitem == nil then
+				if csvAureole.name ~= nil then
+					aureoleName = csvAureole.name
+				end
+				if csvAureole.desc ~= nil then
+					aureoleAdd = csvAureole.desc
+				end
+				
 				local csvLastAureole = Csv.Aureole[v * 1000 + staffNum - 1]
 				local csvNowAureole = Csv.Aureole[v * 1000 + staffNum]
 				if csvLastAureole ~= nil and csvLastAureole.effect ~= nil then

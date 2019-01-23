@@ -14,6 +14,7 @@ local CParliament = JRequire "Dev.Parliament.CParliament"
 local MMain = JRequire "Dev.Main.MMain"
 local WindowOpen = JRequire "Libs.WindowMgr.WindowOpen"
 local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
 local CLogin = JRequire "Dev.Login.CLogin"
 
 local btnActorId = 10003
@@ -140,7 +141,6 @@ function _P.RefreshAll(self)
 end
 
 function _M:OnCreate()
-
 	local moudle = self:CreateMoudle(self._RootNode, "M_Role_UMain")
 	self.Moudle = moudle
 	moudle:Get("C_Back_Btn"):AddOnButton(function ( ... )
@@ -168,6 +168,8 @@ function _M:OnCreate()
 	self.Level = moudle:Get("text1")
 	self.Commerce = moudle:Get("text3")
 	self.Server = moudle:Get("text4")
+	self.HighestPower = moudle:Get("text5")
+	self.HighestPower.Text = Csv.Text("PlayerMenu_9") .. MPlayer.GetHighestPower()
 
 	local playerInfo = MPlayer.PlayerInfo
 	local serverId  = playerInfo.serverId
@@ -239,6 +241,14 @@ function _M:OnCreate()
 			_P.RefreshCommerce(self)
 		end
 	end)
+	self:RegistCallEvent(Define.EventListenId.PlayerAttrUpdate, function (eventHandle)
+		if self.Moudle ~= nil then
+			self.HighestPower.Text = Csv.Text("PlayerMenu_9") .. MPlayer.GetHighestPower()
+		end
+	end)
+
+	local cabinetShowRect = moudle:Get("infoBg")
+	self.CabinetShowRect = cabinetShowRect
 
 	_P.RefreshDress(self)
 	self.TitleTable = {}
@@ -267,6 +277,14 @@ function _M:OnCreate()
 													end
 												end)
 	end
+
+	-- 展览品相关信息
+	cabinetShowRect.Activity = false
+	cabinetShowRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickShowDesc(self)
+	end, nil, 0.9)
+	_P.SetCabinetData(self)
 end
 
 function _P.RefreshDress(self)
@@ -297,6 +315,7 @@ end
 
 function _P.RefreshTitleList(self)
 	local moudle =self.Moudle
+	local scrollView = moudle:Get("scrollView")
 	local content = moudle:Get("content")
 	local titleList = MParliament.GetTitleList()
 	local titleTable = {}
@@ -314,6 +333,12 @@ function _P.RefreshTitleList(self)
 			end
 			titleTable[v.titleID] = titleMoudle
 		end
+		local isShow = next(titleList) ~= nil
+		scrollView.Activity = isShow
+		self.CabinetShowRect.LocalPosition = (isShow and Vector2(-173, 70)) or Vector2(-173, -56)
+	else
+		scrollView.Activity = false
+		self.CabinetShowRect.LocalPosition = Vector2(-173, -56)
 	end
 	self.TitleTable = titleTable
 
@@ -343,6 +368,57 @@ function _P.OnClickChangeTitle(self,titleID)
 		CParliament.UseTitleItem(titleID, true)
 	end
 end
+
+-- 当前展出纪念品数据
+function _P.SetCabinetData(self)
+	local module = self.Moudle
+	local content = module:Get("content2")
+	local scrollView = module:Get("scrollView2")
+	local cabinetList = MCabinet.GetCurShowCabinets()
+	if cabinetList ~= nil then
+		for k,v in pairs(cabinetList) do
+			local cabinetModule = JGuiManager.GetMoudle(content, "M_Role_UMain_Item2")
+			local showcaseConf = Csv.Showcase[v.itemId]
+			if showcaseConf ~= nil then
+				local icon = cabinetModule:Get("Icon")
+				icon.SpriteName = showcaseConf.icon
+				cabinetModule:Get("name").Text = showcaseConf.name
+				icon:AddOnButton(function()
+					SoundMgr.Play(10001)
+					_P.OnClickShowDesc(self, showcaseConf, k)
+				end, nil, 1)
+			end
+		end
+		scrollView.Activity = next(cabinetList) ~= nil
+	else
+		scrollView.Activity = false
+	end
+end
+
+
+-- 展示该纪念品信息
+function _P.OnClickShowDesc(self, showcaseConf, index)
+	local isShowActivity = false
+	if index == nil or self.CurSelectIndex == index then
+		isShowActivity = self.CabinetShowRect.Activity
+	end
+	if index ~= nil then
+		self.CurSelectIndex = index
+	end
+	self.CabinetShowRect.Activity = not isShowActivity
+
+	-- 2秒后自动关闭
+	if self.CabinetShowRect.Activity then
+		if showcaseConf ~= nil then
+			self.Moudle:Get("InfoText").Text = Csv.Text("showcase_15", {name = showcaseConf.name, desc = showcaseConf.addStr})
+		end
+		
+		self.CabinetShowRect:AddOnTime(function()
+			self.CabinetShowRect.Activity = false
+		end, nil, 2)
+	end
+end
+
 
 function _R.UpdateTitle(self)
 	_P.ChangSelect(self)

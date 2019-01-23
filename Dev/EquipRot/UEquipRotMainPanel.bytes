@@ -223,6 +223,7 @@ function _P.UpdateOneGridData(self, index, data)
 	local robBtn = module:Get("black" .. index)
 	local iconImg = module:Get("Icon" .. index)
 	local qualityImg = module:Get("IconBox" .. index)
+	local robImg = module:Get("AddImg" .. index)
 	
 	local itemConf = Csv.Item[data.itemId]
 	if itemConf then
@@ -238,7 +239,13 @@ function _P.UpdateOneGridData(self, index, data)
 
 	robBtn:AddOnButton(function(...)
 		SoundMgr.Play(10001)
-		WindowMgr.Create("UEquipRotRotPanel", data.itemId, self.EquipRotConf)
+
+		local equipConf = Csv.Equip[self.CurSelectData.itemId]
+		if equipConf ~= nil and equipConf.cantRob ~= nil and equipConf.cantRob == 1 then
+			CCommon.ShowError(Csv.Text("err_equip_cant_rob")) -- 不可以抢夺
+		else
+			WindowMgr.Create("UEquipRotRotPanel", data.itemId, self.EquipRotConf)
+		end
 	end,nil,0.9)
 
 	local colorStr = (data.needNum <= data.hasNum and 'car_main_greenShow') or 'car_main_redShow'
@@ -253,6 +260,10 @@ function _P.UpdateOneGridData(self, index, data)
 		iconImg.IsGray = false
 		qualityImg.IsGray = false
 	end
+
+	local equipConf = Csv.Equip[self.CurSelectData.itemId]
+	local isCantRob = (equipConf ~= nil and equipConf.cantRob ~= nil and equipConf.cantRob == 1)
+	robImg.Activity = (not isCantRob)
 end
 
 
@@ -339,6 +350,10 @@ function _P.UpdateSelectEquip(self, itemId)
 	_P.SetEquipData(self)
 	_P.SetEquipRedActivie(self, self.mEquipItems[self.CurSelectData.itemId].redImg, self.CurSelectData.isCollect)
 	_P.SetCompoundBtnData(self, self.CurSelectData.isCollect)
+
+	local equipConf = Csv.Equip[self.CurSelectData.itemId]
+	local isCantRob = (equipConf ~= nil and equipConf.cantRob ~= nil and equipConf.cantRob == 1)
+	self.mModule:Get("ProtectRect").Activity = not isCantRob
 end
 
 

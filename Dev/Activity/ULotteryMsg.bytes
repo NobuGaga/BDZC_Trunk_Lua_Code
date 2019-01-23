@@ -16,7 +16,7 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
-function _M:OnCreate(msgs)
+function _M:OnCreate(msgs, isCrossLottery)
 	local module = self:CreateMoudle(self._RootNode, "M_Luck_Draw_TC")
 	module:Get("BackBtn"):AddOnButton(function ( ... )
 		SoundMgr.Play(10002)
@@ -32,8 +32,19 @@ function _M:OnCreate(msgs)
 			local msgInfo = msgs[i]
 			local itemCsv = Csv.Item[msgInfo.itemId]
 			local textWidget = self:CreateMoudle(content, "M_Luck_Draw_TC_Item")
-			if msgInfo.itemId == Define.AssetsType.Gold and msgInfo.itemCount ~= nil and msgInfo.itemCount > 0 then
-				textWidget.SelfRect.Text = Csv.Text("DLottery_getGold", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
+
+			if isCrossLottery then
+				local lotteryItemConf = nil
+				if msgInfo.lotteryItemId ~= nil and msgInfo.lotteryItemId > 0 then
+					lotteryItemConf = Csv.CrossLotteryItem[msgInfo.lotteryItemId]
+				end
+
+				if lotteryItemConf ~= nil and lotteryItemConf.poolGoldRatio ~= nil then
+					textWidget.SelfRect.Text = Csv.Text("DLottery_getGold2", {name = msgInfo.playerName, proNum = math.ceil(lotteryItemConf.poolGoldRatio / 100),
+																		item = itemCsv.name, num = msgInfo.itemCount})
+				else
+					textWidget.SelfRect.Text = Csv.Text("DLottery_getGold1", {name = msgInfo.playerName, item = itemCsv.name, num = msgInfo.itemCount})
+				end
 			else
 				textWidget.SelfRect.Text = Csv.Text("lottery_9", {name = msgInfo.playerName, item = itemCsv.name})
 			end

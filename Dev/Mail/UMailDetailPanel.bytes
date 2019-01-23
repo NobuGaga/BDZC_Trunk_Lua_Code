@@ -36,7 +36,7 @@ function _M:OnCreate(data)
 	local remindText = module:Get("text3")
 
 	titleText.Text = Csv.Text("mail_title")
-	descText.Text = Csv.Text("mail_detail_title", {sender = data.sender, title = data.title})
+	descText.Text = Csv.Text("mail_detail_title") .. "【" .. data.sender  .. "】" .. data.title
 	timeText.Text = Csv.Text("mail_detail_time", {time = luaUtil.TransToYearMonthDay(data.sendtime)})
 	remindText.Text = Csv.Text("mail_detail_remind")
 	

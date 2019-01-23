@@ -1,0 +1,302 @@
+local _M = Class()
+
+local isLog = false
+local print = function(...)
+	if isLog then
+		print(...)
+	end
+end
+
+--[==[
+	默认正常人观察顺序为由上往下顺序查看垂直列表, 其他情况不考虑
+]==]
+
+-- 实现方法开关, 为 true 时使用移动 content 位置的方法实现无限滚动, false 为移动列表头尾 item 实现无限滚动
+local isLimitContent = false
+
+-- 布局组件对齐方式转换
+local LayoutChildAlign
+if not isLimitContent then
+	LayoutChildAlign = {
+		[CS.UnityEngine.TextAnchor.UpperLeft] = Vector2(0, 1),
+		[CS.UnityEngine.TextAnchor.UpperCenter] = Vector2(0.5, 1),
+		[CS.UnityEngine.TextAnchor.UpperRight] = Vector2(1, 1),
+		[CS.UnityEngine.TextAnchor.MiddleLeft] = Vector2(0, 0.5),
+		[CS.UnityEngine.TextAnchor.MiddleCenter] = Vector2(0.5, 0.5),
+		[CS.UnityEngine.TextAnchor.MiddleRight] = Vector2(1, 0.5),
+		[CS.UnityEngine.TextAnchor.LowerLeft] = Vector2(0, 0),
+		[CS.UnityEngine.TextAnchor.LowerCenter] = Vector2(0.5, 0),
+		[CS.UnityEngine.TextAnchor.LowerRight] = Vector2(1, 0),
+	}
+end
+
+function _M:ctor(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local isDataValid = self:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	if not isDataValid then
+		return
+	end
+	self:InitDataList()
+	self:InitViewDisplay()
+end
+
+function _M:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local wrongMessage
+	if scrollView == nil or scrollView.OnValueChanged == nil then
+		error("CheckReceiveDataValid Wrong Parameter scrollView is Unvalid")
+		return false
+	end
+	if content == nil or content.AddVerticalLayoutGroup == nil then
+		error("CheckReceiveDataValid Wrong Parameter content is Unvalid")
+		return false
+	end
+	if dataList == nil or type(dataList) ~= "table" then
+		error("CheckReceiveDataValid Wrong Parameter dataList is Unvalid")
+		return false
+	end
+	if itemName == nil or type(itemName) ~= "string" then
+		error("CheckReceiveDataValid Wrong Parameter itemName is Unvalid")
+		return false
+	end
+	if updateFunc == nil or type(updateFunc) ~= "function" then
+		error("CheckReceiveDataValid Wrong Parameter updateFunc is Unvalid")
+		return false
+	end
+	self.scrollView = scrollView
+	self.content = content
+	self.dataList = dataList
+	self.itemName = itemName
+	self.updateFunc = updateFunc
+	-- 可选参数检查
+	if listSortFunc and type(listSortFunc) == "function" then
+		self.listSortFunc = listSortFunc
+	end
+	return true
+end
+
+function _M:InitDataList()
+	self.dataListLength = #self.dataList 
+	if self.dataListLength > 0 then
+		self:SortDataList()
+		return
+	end
+	local dataList = {}
+	for _, data in pairs(self.dataList) do
+		table.insert(dataList, data)
+	end
+	self.dataList = dataList
+	self.dataListLength = #dataList
+	self:SortDataList()
+end
+
+function _M:SortDataList()
+	if self.listSortFunc then
+		table.sort(self.dataList, self.listSortFunc)
+	end
+end
+
+function _M:InitViewDisplay()
+	local layout = self.content:AddVerticalLayoutGroup()
+	self.itemSpace = layout.spacing
+	self.contentTop = layout.padding.top
+	self.contentBottom = layout.padding.bottom
+	if not isLimitContent then
+		self.contentChildAlign = LayoutChildAlign[layout.childAlignment]
+		self.content:DelVerticalLayoutGroup()
+	end
+	self.firstItemCache = JGuiManager.GetMoudle(self.content, self.itemName)
+	self.itemWidth = self.firstItemCache.SelfRect.SizeDelta.x
+	self.itemHeight = self.firstItemCache.SelfRect.SizeDelta.y
+	self.itemHeightSpace = self.itemHeight + self.itemSpace
+	self.viewHeight = self.scrollView.SizeDelta.y
+
+	self:CalculateItemListLength()
+	local itemListLength = math.min(self.dataListLength, self.itemListLength)
+	self.itemListCache = {}
+	for index = 1, itemListLength do
+		self:CreateItem(index)
+	end
+	self:InitViewContent()
+	self:CalculateDataListMaxIndex()
+	self:SetScrollViewListener()
+end
+
+function _M:CalculateItemListLength()
+	self.itemListLength = math.modf(self.viewHeight / self.itemHeightSpace)
+	if self.itemListLength == 0 then
+		if self.itemHeight > self.viewHeight then
+			self.itemListLength = 2
+		else
+			self.itemListLength = 3
+		end
+	else
+		self.itemListLength = self.itemListLength + 2
+	end
+	if not isLimitContent then
+		self.itemMovePosDistance = self.itemListLength * self.itemHeightSpace
+	end
+end
+
+function _M:CreateItem(dataIndex)
+	local itemMoudle
+	if self.firstItemCache then
+		itemMoudle = self.firstItemCache
+		self.firstItemCache = nil
+	else
+		itemMoudle = JGuiManager.GetMoudle(self.content, self.itemName)
+	end
+	table.insert(self.itemListCache, itemMoudle)
+	if not isLimitContent then
+		local itemMoudleRect = itemMoudle.SelfRect
+		itemMoudleRect.AnchorMax = self.contentChildAlign
+		itemMoudleRect.AnchorMin = self.contentChildAlign
+		itemMoudleRect.Pivot = self.content.Pivot
+		itemMoudleRect.LocalPosition = Vector2(0, -self.contentTop - (#self.itemListCache - 1) * self.itemHeightSpace)
+	end
+	self.updateFunc(itemMoudle, self.dataList[dataIndex])
+end
+
+function _M:RefreshItem(itemIndex, dataIndex)
+	if self.itemListCache[itemIndex] == nil then
+		error("RefreshItem Wrong Parameter itemIndex" .. itemIndex .. " is not exit")
+		return
+	end
+	if self.dataList[dataIndex] == nil then
+		error("RefreshItem Wrong Parameter dataIndex " .. dataIndex .. " is not exit")
+		return
+	end
+	self.updateFunc(self.itemListCache[itemIndex], self.dataList[dataIndex])
+end
+
+function _M:InitViewContent()
+	local contentItemHeight
+	if isLimitContent then
+		contentItemHeight = self.itemListLength * self.itemHeightSpace - self.itemSpace
+		self.contentMaxPosY = self.contentTop + contentItemHeight + self.contentBottom - self.viewHeight
+	else
+		contentItemHeight = self.dataListLength * self.itemHeightSpace - self.itemSpace
+		self.itemListIndex = 1 -- item 列表索引, 用于移动单个 item 实现无限滚动的列表, 该索引指向列表第一个 item 是原来 item 列表的第几个
+	end
+	self.content:DelContentSizeFitter()
+	self.content.SizeDelta = Vector2(self.itemWidth, self.contentTop + contentItemHeight + self.contentBottom)
+	self.dataListIndex = 1 -- 数据列表索引, 该索引值为当前 Item 列表第一个 Item 的数据索引值
+end
+
+function _M:CalculateDataListMaxIndex()
+	self.dataListMaxIndex = self.dataListLength - self.itemListLength + 1
+end
+
+function _M:SetScrollViewListener()
+	-- AddListener 可以重复加(委托队列), 作个标记位避免重复添加
+	if self.dataListLength > self.itemListLength and not self.isCircleList then
+		self.isCircleList = true
+		self.scrollView.OnValueChanged:AddListener(function () self:OnValueChanged() end)
+	end
+end
+
+if isLimitContent then
+	-- 方法一 移动整个 content itemListIndex 不使用, 因为整个列表始终保持不变, 改变 content 的位置
+	-- 存在问题, 在改变了 contentPosY 后, 虽然显示上为改变后的值, 但是回调里会有两次回调, 一次是修改后的值
+	-- 一次是修改前的值(press 操作的当前 contentPosY 的值), 无法实现数据刷新, 具体是刷新哪一项
+	_M.OnValueChanged = function (self)
+		local contentPosX = self.content.LocalPosition.x
+		local contentPosY = self.content.LocalPosition.y
+		print("contentPosY", contentPosY)
+		local isRefresh = false
+		if contentPosY < 0 then
+			if self.dataListIndex == 1 then
+				return
+			else
+				self.content.LocalPosition = Vector2(contentPosX, contentPosY + self.contentTop + self.itemHeight)
+				local dataIndexFix = math.modf(math.abs(contentPosY) / self.itemHeightSpace) + 1
+				if self.dataIndexFix and self.dataIndexFix <= dataIndexFix then
+					return
+				end
+				self.dataIndexFix = dataIndexFix
+				self.dataListIndex = self.dataListIndex - dataIndexFix
+				isRefresh = true
+			end
+		elseif contentPosY > self.contentMaxPosY then
+			if self.dataListIndex == self.dataListLength - self.itemListLength + 1 then
+				return
+			else
+				self.content.LocalPosition = Vector2(contentPosX, contentPosY - self.contentBottom - self.itemHeight)
+				local dataIndexFix = math.modf((contentPosY - self.contentMaxPosY) / self.itemHeightSpace) + 1
+				if self.dataIndexFix and self.dataIndexFix <= dataIndexFix then
+					return
+				end
+				self.dataIndexFix = dataIndexFix
+				self.dataListIndex = self.dataListIndex + dataIndexFix
+				isRefresh = true
+			end
+		else
+			print("self.dataIndexFix = nil")
+			self.dataIndexFix = nil
+		end
+		if isRefresh then
+			print("self.dataIndexFix", self.dataIndexFix)
+			print("self.dataListIndex", self.dataListIndex)
+			for itemIndex = 1, self.itemListLength do
+				local dataIndex = self.dataListIndex + itemIndex - 1
+				self:RefreshItem(itemIndex, dataIndex)
+			end
+		end
+	end
+	return _M
+end
+
+--[==[]
+	方法二 通过移动单个 item 实现, 超过屏幕上方的 item 移动到列表底端, 超过屏幕下方的 item 移动到列表顶端
+--]==]
+_M.OnValueChanged = function (self)
+	local contentPosY = self.content.LocalPosition.y
+	local dataListIndex = math.modf((contentPosY - self.contentTop) / self.itemHeightSpace) + 1
+	if self.dataListIndex == dataListIndex then
+		return
+	end
+	if dataListIndex > self.dataListMaxIndex then
+		if self.dataListIndex == self.dataListMaxIndex then
+			return
+		end
+		dataListIndex = self.dataListMaxIndex
+	end
+	if contentPosY <= 0 then
+		if self.dataListIndex == 1 then
+			return
+		end
+		dataListIndex = 1
+	end
+	local dataIndexFix = self.dataListIndex - dataListIndex
+	local isTopRemoveToBottom = dataIndexFix < 0
+	dataIndexFix = math.abs(dataIndexFix)
+	for index = 1, dataIndexFix do
+		local itemIndex, dataIndex
+		local itemMovePosDistance = self.itemMovePosDistance
+		if isTopRemoveToBottom then
+			itemIndex = (index + self.itemListIndex - 1) % self.itemListLength
+			dataIndex = self.dataListIndex + self.itemListLength + index - 1
+			itemMovePosDistance = -itemMovePosDistance
+		else
+			itemIndex = self.itemListIndex - index
+			dataIndex = self.dataListIndex - index
+		end
+		if itemIndex <= 0 then
+			itemIndex = itemIndex + self.itemListLength
+		end
+		local itemMoudleRect = self.itemListCache[itemIndex].SelfRect
+		local itemPosX = itemMoudleRect.LocalPosition.x
+		local itemPosY = itemMoudleRect.LocalPosition.y + itemMovePosDistance 
+		itemMoudleRect.LocalPosition = Vector2(itemPosX, itemPosY)
+		self:RefreshItem(itemIndex, dataIndex)
+	end
+	if isTopRemoveToBottom then
+		self.itemListIndex = (self.itemListIndex + dataIndexFix) % self.itemListLength
+	else
+		self.itemListIndex = self.itemListIndex - dataIndexFix
+	end
+	if self.itemListIndex <= 0 then
+		self.itemListIndex = self.itemListIndex + self.itemListLength
+	end
+	self.dataListIndex = dataListIndex
+end
+
+return _M

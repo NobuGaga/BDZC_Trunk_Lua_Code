@@ -1,0 +1,54 @@
+-- 装备抢夺结算界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MExpedition = JRequire"Dev.Expedition.MExpedition"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+
+local winActorId = 10019
+local failActorId = 10022
+
+function _M:BeforeDestroy()
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+function _M:OnCreate(isWin, rewardList,score, onClose, id)
+	self.OnCloseCall = onClose
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+	self:Lock()
+	self._EventNode:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	if isWin then
+		local module = self:CreateMoudle(self._RootNode, "M_Expedition_Success")
+		SoundMgr.PlayNonStopUI(10014)
+		CCommon.CreateEffect(module:Get("ActorPanel"), winActorId)
+		module:Get("score").Text = Csv.Text("expedition_battle_getScore",{num = score or 0})
+		if rewardList ~= nil then
+			local content = module:Get("Items")
+			for _,v in pairs(rewardList)do
+				CCommon.CreateItem(content, v.id, function ( ... )
+					WindowMgr.Create("UBagDetailPop", v.id)
+				end, {num = v.count})
+			end
+		end
+		LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))
+	else
+		local module = self:CreateMoudle(self._RootNode, "M_Expedition_Fail")
+		SoundMgr.PlayNonStopUI(10015)
+		CCommon.CreateEffect(module:Get("ActorPanel"), failActorId)
+		local csvLine = Csv.Meeting[id]
+		module:Get("score").Text = Csv.Text("expedition_battle_fail",{name = csvLine.name})
+		LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))
+	end
+end
+
+return _M

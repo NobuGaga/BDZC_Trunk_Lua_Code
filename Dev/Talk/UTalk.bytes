@@ -23,6 +23,7 @@ local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MBag = JRequire "Dev.Bag.MBag"
 local UPlayerMenuPop = JRequire"Dev.Friend.UPlayerMenuPop"
 local CClub = JRequire"Dev.Club.CClub"
+local CCrossFlower = JRequire "Dev.CrossFlower.CCrossFlower"
 
 ----------------------CS类引用--------------------------
 local VoiceChat = CS.Speaker.VoiceChat
@@ -666,7 +667,12 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 		redPacket.Activity = true
 		packGot.Activity = false
 
-		packTitle.Text = Csv.Text("talk_redpacket_title")
+		if _data.redPacket.tips ~= nil and _data.redPacket.tips ~= "" then
+			packTitle.Text = _data.redPacket.tips
+		else
+			packTitle.Text = Csv.Text("talk_redpacket_title")
+		end
+
 		packGet.Text = Csv.Text("talk_redpacket_get")
 		packName.Text = Csv.Text("talk_redpacket_name")
 
@@ -698,8 +704,8 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 		itemMoudle.SelfRect.SizeDelta = Vector2(730,200)
 	end
 
-	if _data.clubtype ~= nil then
-		print("clubtype___________",_data.clubtype)
+	if _data.clubtype ~= nil and _data.clubtype > 0 then
+		-- print("clubtype___________",_data.clubtype)
 		talkBg.Activity = false
 
 		local inviteBg = itemMoudle:Get("invite")
@@ -728,6 +734,23 @@ function _P.CreatTalkItem(self,_data,_isShowTime)
 			end)
 		end
 		itemMoudle.SelfRect.SizeDelta = Vector2(730,300)
+	elseif _data.inviteType ~= nil then
+		--跨服鲜花榜
+		if _data.inviteType == 3 or _data.inviteType == 4 then
+			talkBg.Activity = false
+			local csvInvite = Csv.TalkInvite[_data.inviteType]			
+			local inviteBg = itemMoudle:Get("invite")
+			inviteBg.Activity = true
+			if _data.sender == MPlayer.GetId() then
+				inviteBg.SpriteName = csvInvite.bg1
+			else
+				inviteBg.SpriteName = csvInvite.bg2
+			end
+			inviteBg:AddOnClick(function()
+				CCrossFlower.TalkToFlower(_data.sender, _data.serverId)
+			end)
+			itemMoudle.SelfRect.SizeDelta = Vector2(730,300)
+		end
 	end
 
 	itemMoudle.SelfRect:SetAnchor(CS.JGui.JGuiManager.AnchorType.Bottom)
@@ -1212,7 +1235,7 @@ function _P.OpenRedPacket(self,data)
 		end
 	end
 	if data.redPacket.state == 1 then --未拆开
-		WindowMgr.Create("URedpacketSplit",data)
+		WindowMgr.Create("URedpacketSplit",data, nil, data.redPacket.tips)
 	else
 		CPlayer.ReqOpenRedPacket(data.redPacket.packetId)
 	end

@@ -37,32 +37,54 @@ function _P.InitMoudleTopInfo(self)
 end
 
 function _P.InitRewardList(self)
-	local content = self.moudle:Get("content")
-	local MaxStar = 7
-	local curChapter = math.modf(MBattle.CurId / 100)
-	for _, csvData in ipairs(MBattle.CsvBattleReward) do
-		if curChapter < csvData.maxChapter then
-			local itemMoudle = JGuiManager.GetMoudle(content, ItemName)
-			local csvStaff = Csv.Personnel[csvData.staffID]
-			itemMoudle:Get("head").SpriteName = csvStaff.asset
-			for starIndex = csvStaff.star + 1, MaxStar do
-				itemMoudle:Get("star" .. starIndex).Activity = false
-			end
-			itemMoudle:Get("textName").Text = csvStaff.name
-			itemMoudle:Get("textDesc").Text = csvStaff.tips
-			for index, sprite in ipairs(csvStaff.labelImg) do
-				itemMoudle:Get("label" .. index).SpriteName = sprite
-			end
-			local curChapterIndex = csvData.chapter[curChapter]
-			if curChapterIndex then
-				itemMoudle:Get("process").FillAmount = curChapterIndex / csvData.count
-				itemMoudle:Get("textProcess").Text = Csv.Text("battle_reward_process", {cur = curChapterIndex, max = csvData.count})
-			else
-				itemMoudle:Get("processInfo").Activity = false
-			end
-			itemMoudle:Get("textGetTips").Text = Csv.Text("battle_reward_get_tips", {num = csvData.maxChapter})
+	self.content = self.moudle:Get("content")
+	self.maxStar = 7
+	self.curChapter = math.modf(MBattle.CurId / 100)
+	local gotList = {}
+	for _, csvData in ipairs(Csv.BattleFrameReward) do
+		if self.curChapter <= csvData.maxChapter then
+			_P.CreateItem(self, csvData)
+		else
+			gotList[#gotList + 1] = csvData
 		end
 	end
+	for _, csvData in ipairs(gotList) do
+		_P.CreateItem(self, csvData)
+	end
+end
+
+function _P.CreateItem(self, csvData)
+	local chapter = {}
+	local num = 0
+	for _, area in ipairs(csvData.chapterArea) do
+		local startIndex, endIndex = area[1], area[2] or area[1]
+		for index = startIndex, endIndex do
+			chapter[index] = num
+			num = num + 1
+		end
+	end
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemName)
+	local csvStaff = Csv.Personnel[csvData.staffID]
+	itemMoudle:Get("head").SpriteName = csvStaff.asset
+	for starIndex = csvStaff.star + 1, self.maxStar do
+		itemMoudle:Get("star" .. starIndex).Activity = false
+	end
+	itemMoudle:Get("textName").Text = csvStaff.name
+	itemMoudle:Get("textDesc").Text = csvStaff.tips
+	for index, sprite in ipairs(csvStaff.labelImg) do
+		itemMoudle:Get("label" .. index).SpriteName = sprite
+	end
+	local curChapterIndex = chapter[self.curChapter]
+	if curChapterIndex then
+		itemMoudle:Get("process").FillAmount = curChapterIndex / csvData.count
+		itemMoudle:Get("textProcess").Text = Csv.Text("battle_reward_process", {cur = curChapterIndex, max = csvData.count})
+	elseif self.curChapter < csvData.maxChapter then
+		itemMoudle:Get("processInfo").Activity = false
+	else
+		itemMoudle:Get("process").FillAmount = 1
+		itemMoudle:Get("textProcess").Text = Csv.Text("welfare_vipgot")
+	end
+	itemMoudle:Get("textGetTips").Text = Csv.Text("battle_reward_get_tips", {text = csvData.text})
 end
 
 return _M

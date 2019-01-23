@@ -1,0 +1,24 @@
+local _M = {}
+
+_M.TalentTable = {}
+_M.TalentRedPoint = false -- 红点
+
+function _M.Clean()
+	_M.TalentTable = {}
+	_M.TalentRedPoint = false -- 红点
+end
+
+
+function _M.GetCurStageData(stage)
+	local listData = {}
+	for k,v in pairs(Csv.Talent) do
+		if v.star == stage then
+			listData[v.sortId] = v
+		end
+	end
+	
+	return listData
+end
+
+
+return _M

@@ -1,0 +1,310 @@
+-- 商会研发主界面
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local CCommerce = JRequire "Dev.Commerce.CCommerce"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local MCabinet = JRequire "Dev.Cabinet.MCabinet"
+local CCommon = JRequire"Dev.Common.CCommon"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = Class()
+local _P = {}
+
+
+function _M:ctor(parent)
+	self._RootNode = parent
+	local module = JGuiManager.GetMoudle(self._RootNode, "M_Gang_Yanfa", WindowType.UI, 0)
+	self.mModule = module
+
+	local studyBtn = module:Get("C_Btn_a")
+	studyBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickInvest(self)
+	end, nil, 0.9)
+	self.StudyBtn = studyBtn
+	module:Get("C_text").Text = Csv.Text("research_1")
+
+	local getBtn = module:Get("GetBtn")
+	getBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+
+		local curStudyData = MCommerce.MyCommerceInfo.myInfo.curStudyData
+		CCommerce.GetShowItemReq(curStudyData.itemId)
+	end, nil, 0.9)
+	self.GetBtn = getBtn
+	module:Get("GetText").Text = Csv.Text("quest_get")
+
+	local curStudyData = MCommerce.MyCommerceInfo.showItem
+	local questionImg = module:Get("Wenhao")
+	local nameText = module:Get("ExhibitsText")
+	if curStudyData == nil or curStudyData.itemId == nil or curStudyData.itemId == 0 then
+		questionImg.Activity = true
+		nameText.Text = Csv.Text("research_14")
+	else
+		questionImg.Activity = false
+		local showConf = Csv.CommerceShowItem[curStudyData.itemId]
+		if showConf ~= nil then
+			module:Get("Exhibits").SpriteName = showConf.icon
+			nameText.Text = showConf.name
+			module:Get("ExhibitsInfo2").Text = showConf.addStr
+		end
+
+		_P.OnUpdateShowTime(self, curStudyData.expireTime)
+		self.UpdateShowTimer = nameText:AddOnUpdate(function()
+			_P.OnUpdateShowTime(self, curStudyData.expireTime)
+		end, nil, 1)
+	end
+
+	_P.SetCurInvestNumData(self)
+	_P.SetCurStudyData(self)
+	_P.SetPersonShowList(self)
+end
+
+
+function _P.SetCurStudyData(self)
+	local module = self.mModule
+	_P.OnClearStudyTimer(self)
+
+	local curStudyData = MCommerce.MyCommerceInfo.myInfo.curStudyData
+	local questionImg = module:Get("wenhao2")
+	local nameText = module:Get("IconName")
+	if curStudyData == nil then
+		module:Get("Icon").SpriteName = ''
+		module:Get("IconInfo").Text = ''
+		module:Get("BtnXH").Text = ''
+		
+		questionImg.Activity = true
+		nameText.Text = Csv.Text("research_5")
+		module:Get("Time").Text = Csv.Text("research_6")
+		module:Get("Slider2").FillAmount = 0
+		self.GetBtn.Activity = false
+		self.StudyBtn.Activity = true
+	else
+		questionImg.Activity = false
+		local showConf = Csv.CommercePriShowItem[curStudyData.itemId]
+		if showConf ~= nil then
+			module:Get("Icon").SpriteName = showConf.icon
+			nameText.Text = showConf.name
+			module:Get("IconInfo").Text = showConf.addStr
+			module:Get("BtnXH").Text = Csv.Text("research_7", {num = showConf.researchPrice})
+		end
+
+		_P.OnUpdateTime(self, curStudyData.finishTime, showConf.researchDuration)
+		self.UpdateStudyTimer = self.mModule.SelfRect:AddOnUpdate(function()
+			_P.OnUpdateTime(self, curStudyData.finishTime, showConf.researchDuration)
+		end, nil, 1)
+	end
+end
+
+
+function _P.OnClickInvest(self)
+	local curStudyData = MCommerce.MyCommerceInfo.myInfo.curStudyData
+	if curStudyData == nil then
+		CCommon.ShowError(Csv.Text("research_2"))
+	else
+		local maxNum = Csv.Commerce[MCommerce.CommerceLevel].investItemTimes
+		local showConf = Csv.CommercePriShowItem[curStudyData.itemId]
+		if showConf ~= nil then
+			local curTimes = MCommerce.MyCommerceInfo.myInfo.investItemTimes or 0
+			if curTimes >= maxNum then
+				CCommon.ShowError(Csv.Text("research_3"))
+			else
+				local curCongratsNum = MCommerce.MyCommerceInfo.myInfo.contribution.ncur
+				if curCongratsNum < showConf.researchPrice then
+					CCommon.ShowError(Csv.Text("research_4"))
+				else
+					CCommerce.InvestPerReq(curStudyData.itemId)
+				end
+			end
+		end
+	end
+end
+
+
+-- 设置个人展品列表
+function _P.SetPersonShowList(self)
+	local module = self.mModule
+	local itemContent = self.mModule:Get("Content")
+	itemContent:DestroyChildren()
+	
+	self.mPerShowTable = {}
+	local sortList = _P.GetSortList(self, Csv.CommercePriShowItem)
+	for k,v in pairs(sortList) do
+		self.mPerShowTable[v.id] = _P.OnCreateItem(self, itemContent, v, k)
+	end
+end
+
+
+-- 排序
+function _P.GetSortList(self, itemList)
+	local sortList = {}
+	for k,v in pairs(itemList) do
+		sortList[#sortList + 1] = v
+	end
+	
+	table.sort(sortList, function (a, b)
+		if a.needCommerceLevel == b.needCommerceLevel then
+			return a.id < b.id
+		end
+
+		return a.needCommerceLevel < b.needCommerceLevel
+	end)
+
+	return sortList
+end
+
+
+function _P.OnCreateItem(self, itemGrid, data, index)
+	local itemModule = JGuiManager.GetMoudle(itemGrid, "M_Gang_Yanfa_Item", WindowType.UI, 0)
+	if not itemModule then return end
+
+	itemModule:Get("Icon1").SpriteName = data.icon
+	itemModule:Get("Num").Text = 'x1'
+	local showText = data.name .. ':' .. data.addStr
+	itemModule:Get("text1").Text = showText
+	itemModule:Get("C_text").Text = Csv.Text("research_9")
+	_P.SetOneItemData(self, itemModule, data)
+
+	local iconBox = itemModule:Get("IconBox1")
+	iconBox:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		if data.id ~= nil then
+			WindowMgr.Create("UBagDetailPop", data.id)
+		end
+	end, nil, 0.9)
+
+	local ingBtn = itemModule:Get("C_Btn_a")
+	ingBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		_P.OnClickToStudy(self, data)
+	end, nil, 0.9)
+
+	return {itemModule = itemModule, data = data}
+end
+
+
+function _P.SetOneItemData(self, itemModule, data)
+	local curCommerceLv = MCommerce.CommerceLevel
+	local noneText = itemModule:Get("Tips1")
+	local ingText = itemModule:Get("Tips2")
+	local getedText = itemModule:Get("Tips4")
+	local studyBtn = itemModule:Get("C_Btn_a")
+
+	local isLock = curCommerceLv >= data.needCommerceLevel
+	noneText.Text = (isLock and '') or Csv.Text("research_10", {num = data.needCommerceLevel})
+
+	local putOnData = MCabinet.CheckIsHasGet(data.id)
+	local isGet = (putOnData ~= nil)
+	getedText.Text = (isGet and Csv.Text("research_11")) or ''
+
+	local isStudying = MCommerce.MyCommerceInfo.myInfo.curStudyData ~= nil and MCommerce.MyCommerceInfo.myInfo.curStudyData.itemId == data.id
+	studyBtn.Activity = isLock and (not isGet) and (not isStudying)
+	ingText.Text = (isStudying and Csv.Text("research_12")) or ''
+end
+
+
+function _P.OnClickToStudy(self, data)
+	local isHasStudy = MCommerce.MyCommerceInfo.myInfo.curStudyData ~= nil
+	if isHasStudy then
+		CCommon.ShowError(Csv.Text("research_13"))
+	else
+		CCommerce.StudyPerReq(data.id)
+	end
+end
+
+
+-- 每s更新
+function _P.OnUpdateTime(self, endTime, maxTime)
+	local leftTime = endTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearStudyTimer(self)
+	end
+
+	self.GetBtn.Activity = leftTime <= 0
+	self.StudyBtn.Activity = leftTime > 0
+	self.mModule:Get("Time").Text = Csv.Text("research_8", {time = LuaUtil.GetTimeHMS(leftTime)})
+	self.mModule:Get("Slider2").FillAmount = 1 - (leftTime / maxTime)
+end
+
+
+function _P.OnUpdateShowTime(self, endTime)
+	local leftTime = endTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearShowTimer(self)
+	end
+
+	self.mModule:Get("ExhibitsTime").Text = Csv.Text("research_15", {time = LuaUtil.GetTimeHMS(leftTime)})
+end
+
+
+-- 移除计时器
+function _P.OnClearStudyTimer(self)
+	if self.UpdateStudyTimer ~= nil then
+		self.UpdateStudyTimer:Destroy()
+		self.UpdateStudyTimer = nil
+	end
+end
+
+
+function _P.OnClearShowTimer(self)
+	if self.UpdateShowTimer ~= nil then
+		self.UpdateShowTimer:Destroy()
+		self.UpdateShowTimer = nil
+	end
+end
+
+
+-- 设置当前投资次数数据
+function _P.SetCurInvestNumData(self)
+	local maxNum = Csv.Commerce[MCommerce.CommerceLevel].investItemTimes or 0
+	local curTimes = MCommerce.MyCommerceInfo.myInfo.investItemTimes or 0
+	if curTimes < maxNum then
+		self.mModule:Get("LeaveNum").Text = Csv.Text("research_23", {num = (maxNum - curTimes)})
+	else
+		self.mModule:Get("LeaveNum").Text = Csv.Text("research_22", {num = (maxNum - curTimes)})
+	end
+end
+
+
+-- 研究个人展品返回
+function _M:OnResearchBack(data)
+	local curData = self.mPerShowTable[data.itemId]
+	_P.SetOneItemData(self, curData.itemModule, curData.data)
+	_P.SetCurStudyData(self)
+end
+
+
+-- 投资个人展品返回
+function _M:OnInvestBack(data)
+	local curData = self.mPerShowTable[data.itemId]
+	if curData ~= nil and curData.data ~= nil then
+		CCommon.ShowError(Csv.Text("research_21", {num = curData.data.researchReduceDuration}))
+	end
+
+	_P.SetCurInvestNumData(self)
+	_P.SetCurStudyData(self)
+end
+
+
+-- 领取个人展品返回
+function _M:OnGetShowItemBack(data)
+	CCommon.ShowError(Csv.Text("Target_vip_getSuccess"))
+
+	local curData = self.mPerShowTable[data.id]
+	_P.SetOneItemData(self, curData.itemModule, curData.data)
+	_P.SetCurStudyData(self)
+end
+
+
+function _M:Destroy()
+	local module = self.mModule
+	if module ~= nil then
+		module:Destroy()
+	end
+end
+
+
+return _M

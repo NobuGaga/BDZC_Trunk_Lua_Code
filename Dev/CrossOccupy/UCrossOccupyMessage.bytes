@@ -1,0 +1,130 @@
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local MBag = JRequire "Dev.Bag.MBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossOccupy = JRequire "Dev.CrossOccupy.MCrossOccupy"
+local CCrossOccupy = JRequire "Dev.CrossOccupy.CCrossOccupy"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MBag = JRequire "Dev.Bag.MBag"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _P.pressRevenge(self, buildingId, playerId, oriServerId)
+	local pressFunc = function(  )
+		local fightTimes = MCrossOccupy.GetFightTimes()
+		if fightTimes <= 0 then
+			local buyTimes,buyMax = MCrossOccupy.GetFightBuyCount()
+			if buyTimes < buyMax then
+				local haveGode = MBag.GetItemNum(Define.AssetsType.Gold)
+				local needCost = MCrossOccupy.GetFightBuyCost()
+				CCommon.CheckTips(
+					function(isSure, arg)
+						if isSure then
+							if needCost > haveGode then
+								CCommon.ShowError(Csv.Text("err_club_no_gold"))
+							else
+								-- CCrossOccupy.ReqFightBuy()
+								if MLineUp.CheckIsFull() then
+									CCrossOccupy.ReqRevenge(buildingId, playerId, oriServerId)
+								else
+									WindowMgr.Create("ULineUpCheck",function()
+										CCrossOccupy.ReqRevenge(buildingId, playerId, oriServerId)
+									end)	
+								end	
+							end
+						end
+					end, 
+					{
+						items = {[Define.AssetsType.Gold] = haveGode},
+						content = Csv.Text("occupy_15",{num = needCost, max = (buyMax - buyTimes)})
+					}
+				)
+			else
+				CCommon.ShowError(Csv.Text("occupy_13"))
+			end		
+		else
+			if MLineUp.CheckIsFull() then
+				CCrossOccupy.ReqRevenge(buildingId, playerId, oriServerId)
+			else
+				WindowMgr.Create("ULineUpCheck",function()
+					CCrossOccupy.ReqRevenge(buildingId, playerId, oriServerId)
+				end)	
+			end	
+		end
+	end	
+	if self.LastPressTime + 1 < CS.UnityEngine.Time.time then
+		self.LastPressTime = CS.UnityEngine.Time.time
+		if MCrossOccupy.MyBuildID ~= nil and MCrossOccupy.MyBuildID > 0 then
+			CCommon.CheckTips(
+				function(isSure, arg)
+					if isSure then
+						pressFunc()
+					end
+				end,
+				{content = Csv.Text("occupy_32")}
+			)
+		else
+			pressFunc()
+		end
+	end
+end
+
+function _M:OnCreate(data)
+	local moudle = self:CreateMoudle(self._RootNode, "M_Development_Defense")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_Text").Text = Csv.Text("occupy_18")
+	self.LastPressTime = 0
+	local list = data.list
+	local content = moudle:Get("content")
+	if list ~= nil and #list > 0 then
+		moudle:Get("None").Activity = false
+
+		for _,messageInfo in pairs(list) do
+            local oneMoudle = self:CreateMoudle(content, "M_Development_Defense_Item")
+            oneMoudle:Get("ShName").Text = messageInfo.name
+            oneMoudle:Get("zhanli").Text = Csv.Text("occupy_1", {force = messageInfo.force})
+            oneMoudle:Get("SLText").Text = Csv.Text("occupy_2")
+            oneMoudle:Get("C_text").Text = Csv.Text("occupy_17")
+            local btn = oneMoudle:Get("C_Btn_b")
+            if messageInfo.building ~= nil and messageInfo.building > 0 then
+                local buildCsv = Csv.CrossOccupyBuilding[messageInfo.building]
+                oneMoudle:Get("SLNum").Text = buildCsv.name
+                
+                local playerId = messageInfo.id
+				local buildingId = messageInfo.building
+				local oriServerId = messageInfo.oriServerId
+                btn:AddOnButton(function ( ... )
+                    _P.pressRevenge(self, buildingId, playerId, oriServerId)
+                end)
+            else
+                oneMoudle:Get("SLNum").Text = Csv.Text("occupy_4")
+                btn.IsGray = true
+            end
+            oneMoudle:Get("Company").Text = Csv.Text("occupy_3")
+            oneMoudle:Get("NameText").Text = LuaUtil.TransToYearMonthDayHMS(messageInfo.fightTime)
+            oneMoudle:Get("head").SpriteName = MPlayer.GetOtherHeadIcon(messageInfo.head,messageInfo.sex)
+			oneMoudle:Get("OutBox").SpriteName = MPlayer.GetOtherHeadBG(messageInfo.chatBg, messageInfo.vip)
+			oneMoudle:Get("VipImg").SpriteNameAutoScale = "friend_num_"..messageInfo.vip
+		end
+	else
+		local noneNode = moudle:Get("None")
+		noneNode.Text = Csv.Text("occupy_5")
+		noneNode.Activity = true
+	end
+end
+
+return _M

@@ -22,6 +22,7 @@ _M.ARENA_STAGE_TYPE =
 	SixTeenReady = 5,		--16进8准备阶段
 	SixTeenBattle = 6,		--16进8战斗阶段
 
+	
 	EightReady = 7,			--8进4准备阶段
 	EightBattle = 8,		--8进4战斗阶段
 
@@ -58,6 +59,8 @@ _M.ScoreRankList = nil
 _M.SCUArenaChipInfo = nil
 --赛程表信息
 _M.KnockoutAll = nil
+--下一场的比赛信息
+_M.KnockoutNextVsPalyer = nil
 
 --UnityEngine.PlayerPrefs 标记-预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
 _M.CrossArena_Cache_StartTime = nil
@@ -95,6 +98,8 @@ function _M.Clean()
 	_M.SCUArenaChipInfo = nil
 	--赛程表信息
 	_M.KnockoutAll = nil
+	--下一场的比赛信息
+	_M.KnockoutNextVsPalyer = nil
 
 	_M.CrossArena_Cache_StartTime = nil
 	_M.CrossArena_Cache_Stage = nil
@@ -111,7 +116,9 @@ function _M.SetInit(data)
 	if data.isScoreMatch ~= nil then
 		_M.State.isScoreMatch = data.isScoreMatch
 	end
+	
 	_M.State.arenaStage = data.arenaStage or _M.State.arenaStage
+
 	--积分赛是否领奖  1
 	_M.State.scorereward = false
 	if data.scorereward ~= nil then
@@ -132,7 +139,7 @@ function _M.SetInit(data)
 	if data.redpoint ~= nil then
 		_M.State.redpointtip = data.redpoint
 	end
-	_M.State.cantop = false
+	_M.State.canOut = false
 	if data.cantop ~= nil then
 		_M.State.canOut = data.cantop
 	end
@@ -144,6 +151,9 @@ function _M.SetInit(data)
 	if data.canChip ~= nil then
 		_M.State.canChip = data.canChip
 	end
+
+	--更新第三阶段红点
+	WindowMgr.Call("UCrossArenaMain", "UpdateState")
 end
 
 function _M.SetCUArenaMyChip(list)
@@ -369,46 +379,41 @@ function _M.GetFinalRsltTime()
 	return _M.State.startTime + startTime, _M.State.startTime + endTime
 end
 
---
-function _M.IsInArenaTime()
-	local startTime, endTime = _M.GetArenaTime()
-	local serverTime = HeartBeat.ServSecond()
-	return serverTime >= startTime and serverTime <= endTime
-end
-
 --获取实时跨服竞技场阶段时间
 function _M.GetRTArenaStateTime(stage)
-	if not _M.IsInArenaTime() or stage == nil then
+	local startTime, endTime = _M.GetArenaTime()
+	local serverTime = HeartBeat.ServSecond()
+	if stage ~= nil and serverTime >= startTime and serverTime <= endTime then
+		if stage == _M.ARENA_STAGE_TYPE.Ready then
+			return _M.GetYuBeiShuaixuanTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.ReadyRslt then
+			return _M.GetYuBeiShuaixuanRsltTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatch then
+			return _M.GetJiFenSaiTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatchRslt then
+			return _M.GetJiFenSaiRsltTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.SixTeenReady then
+			return _M.Get16ReadyTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
+			return _M.Get16BattleTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.EightReady then
+			return _M.Get8ReadyTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
+			return _M.Get8BattleTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.FourReady then
+			return _M.Get4ReadyTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
+			return _M.Get4BattleTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.FinalReady then
+			return _M.GetFinalReadyTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
+			return _M.GetFinalBattleTime()
+		elseif stage == _M.ARENA_STAGE_TYPE.FinalRslt then
+			return _M.GetFinalRsltTime()
+		end
+	else
 		return 0, 0
 	end
-	if stage == _M.ARENA_STAGE_TYPE.Ready then
-		return _M.GetYuBeiShuaixuanTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.ReadyRslt then
-		return _M.GetYuBeiShuaixuanRsltTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatch then
-		return _M.GetJiFenSaiTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.ScoreMatchRslt then
-		return _M.GetJiFenSaiRsltTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.SixTeenReady then
-		return _M.Get16ReadyTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.SixTeenBattle then
-		return _M.Get16BattleTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.EightReady then
-		return _M.Get8ReadyTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.EightBattle then
-		return _M.Get8BattleTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.FourReady then
-		return _M.Get4ReadyTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.FourBattle then
-		return _M.Get4BattleTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.FinalReady then
-		return _M.GetFinalReadyTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.FinalBattle then
-		return _M.GetFinalBattleTime()
-	elseif stage == _M.ARENA_STAGE_TYPE.FinalRslt then
-		return _M.GetFinalRsltTime()
-	end
-	return 0, 0
 end
 
 --获取积分赛奖励
@@ -453,9 +458,17 @@ function _M.SetKnockoutAll(data)
 	_M.KnockoutAll = data
 end
 
+function _M.SetKnockoutNextVsPalyer(data)
+	_M.KnockoutNextVsPalyer = data
+end
+
 --获取所有淘汰赛数据
 function _M.GetKnockoutAll()
 	return _M.KnockoutAll
+end
+
+function _M.GetKnockoutNextVsPalyer(  )
+	return _M.KnockoutNextVsPalyer
 end
 
 --判断自己是否在淘汰赛中 return{是否在淘汰赛，几强被淘汰，是否结束对战}
@@ -503,61 +516,6 @@ function _M.GetIsInKnockout()
 	end
 
 	return false
-end
-
---红点相关做标记：预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
-function _M.SaveCacheCrossArenaStartTime()
-	local startTime = _M.State.startTime
-	local oldValue = _M.GetCacheCrossArenaStartTime()
-	if startTime ~= oldValue then
-		_M.CrossArena_Cache_StartTime = startTime
-		local key = "ccrossarena_starttime"..(MPlayer.GetId() or 0)
-		CS.UnityEngine.PlayerPrefs.SetInt(key, startTime)
-	end
-end
-
---红点相关做标记：预备筛选阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
-function _M.GetCacheCrossArenaStartTime()
-	if _M.CrossArena_Cache_StartTime == nil then
-		local key = "ccrossarena_starttime"..(MPlayer.GetId() or 0)
-		local startTime = CS.UnityEngine.PlayerPrefs.GetInt(key)
-		_M.CrossArena_Cache_StartTime = startTime or 0
-	end
-	return _M.CrossArena_Cache_StartTime
-end
-
---是否保存过红点标记
-function _M.IsSaveCacheCrossArenaStartTime()
-	local startTime = _M.GetCacheCrossArenaStartTime()
-	return _M.State.startTime == startTime
-end
-
---红点相关做标记：竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
-function _M.SaveCacheCrossArenaStage()
-	local value = os.date("%Y%m%d", HeartBeat.ServSecond())
-	local oldValue = _M.GetCacheCrossArenaStage()
-	if value ~= oldValue then
-		_M.CrossArena_Cache_Stage = value
-		local key = "crossarena_stage"..(MPlayer.GetId() or 0)
-		CS.UnityEngine.PlayerPrefs.SetString(key, value)
-	end
-end
-
---红点相关做标记：竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
-function _M.GetCacheCrossArenaStage()
-	if _M.CrossArena_Cache_Stage == nil then
-		local key = "crossarena_stage"..(MPlayer.GetId() or 0)
-		local stage = CS.UnityEngine.PlayerPrefs.GetString(key)
-		_M.CrossArena_Cache_Stage = stage or ""
-	end
-	return _M.CrossArena_Cache_Stage
-end
-
---是否保存过红点标记
-function _M.IsSaveCacheCrossArenaStage()
-	local oldValue = _M.GetCacheCrossArenaStage()
-	local neValue = os.date("%Y%m%d", HeartBeat.ServSecond())
-	return neValue == oldValue
 end
 
 --获取当前应该播放第几场直播的Index

@@ -1,0 +1,100 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+--@RefType [Dev.Staff.MStaff.bytes#_M]
+local MStaff = JRequire "Dev.Staff.MStaff"
+local JGuiManager = CS.JGui.JGuiManager
+local MBag = JRequire "Dev.Bag.MBag"
+local CBag = JRequire "Dev.Bag.CBag"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+local _R = {}
+
+local BAGUSE_PARAM = Csv.Const(Define.Const.BagUseParam)
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.UpdateExchange(self,id)
+	local mainItemNum = MBag.GetItemNum(self.mMainItemId)
+	self.mMoudle:Get("AssetNum").Text = mainItemNum
+
+	local changeItem = self.mChangeItemTab[id]
+	local itemMoudle = changeItem.itemMoudle
+	if itemMoudle ~= nil then
+		itemMoudle:Get("HaveText1").Text = Csv.Text("bag_exchangeItem_get",{num = MBag.GetItemNum(id)})
+	end
+end
+
+--界面构建
+function _M:OnCreate(itemid)
+	local moudle = self:CreateMoudle(self._RootNode, "M_UniversalCard")
+	self.mMoudle = moudle
+	self.mMainItemId = itemid
+	moudle:Get("C_backBtn"):AddOnButton(function ( ... )
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end, nil, 1.2)
+
+	moudle:Get("title").Text = Csv.Text("bag_exchangeItem_title")
+
+	local mainItemSp = moudle:Get("AssetIcon")
+	local mainItemNum = moudle:Get("AssetNum")
+	self.mMainItemNum = mainItemNum
+
+	local csvItem = Csv.Item[itemid]
+
+	mainItemSp.SpriteName = csvItem.icon
+	mainItemNum.Text = MBag.GetItemNum(itemid)
+
+	local content =  moudle:Get("content")
+	local changeItemTab = {}
+
+	if csvItem.useParam2 ~= nil then
+		for k,v in pairs(csvItem.useParam2)do
+			local csvTarItem = Csv.Item[v[1]]
+
+			if csvTarItem ~= nil then
+				local itemMoudle = JGuiManager.GetMoudle(content,"M_UniversalCard_Item")
+				
+				itemMoudle:Get("goods1").SpriteName = csvTarItem.icon
+				itemMoudle:Get("goodsBox1").SpriteName = csvTarItem.colorIcon
+				itemMoudle:Get("consumeText1").Text = csvTarItem.name
+				itemMoudle:Get("HaveText1").Text = Csv.Text("bag_exchangeItem_get",{num = MBag.GetItemNum(csvTarItem.id)})
+				itemMoudle:Get("XiaoHao").Text = Csv.Text("bag_exchangeItem_use")
+				itemMoudle:Get("Icon").SpriteName = csvItem.icon
+				itemMoudle:Get("IconNum").Text = "X"..v[2]
+
+				itemMoudle:Get("C_text").Text = Csv.Text("bag_exchangeItem_btn")
+				local btn = itemMoudle:Get("C_Btn_b")
+
+				btn:AddOnButton(function()
+					--发送兑换物品
+					if MBag.GetItemNum(itemid) < v[2] then
+						CCommon.ShowError(Csv.Text("common_cont_enough",{name = csvItem.name}))
+					else
+						CBag.ReqExchangeItem(itemid,v[1])
+					end
+				end)
+
+				changeItemTab[csvTarItem.id] = {itemMoudle = itemMoudle,needNum = v[2]}
+			end
+		end
+	end
+	self.mChangeItemTab = changeItemTab
+	--
+end
+
+
+return _M

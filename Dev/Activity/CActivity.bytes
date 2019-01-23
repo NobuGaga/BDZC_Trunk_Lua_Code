@@ -11,6 +11,8 @@ local MGirl = JRequire"Dev.Girl.MGirl"
 local CRankReward = JRequire "Dev.Activity.RankReward.CRankReward"
 --@RefType [Dev.Activity.SevenDayTarget.CSevenDayTarget.bytes#_M]
 local CSevenDayTarget = JRequire "Dev.Activity.SevenDayTarget.CSevenDayTarget"
+--@RefType [Dev.Activity.NewSeven.CNewSeven.bytes#_M]
+local CNewSeven = JRequire "Dev.Activity.NewSeven.CNewSeven"
 --@RefType [Dev.Main.CMain.bytes#_M]
 local CMain = JRequire "Dev.Main.CMain"
 --@RefType [Dev.Player.HeartBeat.bytes#_M]
@@ -42,6 +44,7 @@ local DataNameToType = {
 	lottery = Define.ActivityType.Lottery,
 	sevenDayTarget = Define.ActivityType.SevenDayTarget,
 	charitable = Define.ActivityType.Charitable,
+	newSeven = Define.ActivityType.NewSeven,
 }
 
 local DataNameToSysID = {
@@ -59,6 +62,7 @@ local DataNameToSysID = {
 	lottery = Define.SysId.Lottery,
 	sevenDayTarget = Define.SysId.SevenDayTarget,
 	charitable = Define.SysId.Charitable,
+	newSeven = Define.SysId.NewSeven,
 }
 
 local ActTypeToModule = {
@@ -66,6 +70,11 @@ local ActTypeToModule = {
 	[Define.ActivityType.RankReward] = "Dev.Activity.RankReward.CRankReward",
 	[Define.ActivityType.TimeLimit] = "Dev.Activity.TimeLimit.CTimeLimit",
 	[Define.ActivityType.SevenDayTarget] = "Dev.Activity.SevenDayTarget.CSevenDayTarget",
+	[Define.ActivityType.NewSeven] = "Dev.Activity.NewSeven.CNewSeven",
+}
+
+local ActTypeList = {
+
 }
 
 local ActivityTypeModule = {}
@@ -81,9 +90,8 @@ function _P.GetActivityModuleForType(actType)
 end
 
 function _P.SetRegist(func_send, func_recv)
-	-- for actType, _ in pairs(ActTypeToModule) do
-		-- local typeModule = _P.GetActivityModuleForType(actType)
-		local typeModule = _P.GetActivityModuleForType(Define.ActivityType.SevenDayTarget)
+	for _, actType in ipairs(ActTypeList) do
+		local typeModule = _P.GetActivityModuleForType(actType)
 		if typeModule then
 			if typeModule.func_send then
 				if func_send == nil then
@@ -104,7 +112,7 @@ function _P.SetRegist(func_send, func_recv)
 				end	
 			end
 		end
-	-- end
+	end
 	return func_send, func_recv
 end
 
@@ -173,6 +181,9 @@ local CMD_ID =
 	cOpenCard = 65,					 -- (翻牌活动)开牌 PActivity.COpenCard
 	cOpenAllCard = 66,				 -- (翻牌活动)全开 PActivity.COpenAllCard
 	cRefreshCards = 67,				 -- (翻牌活动)刷新卡牌 PActivity.CRefreshCards
+	cDig = 68,						 -- (探险)挖矿 PActivity.CDig
+	cFightMineBoss = 69,			 -- (探险)挑战boss PActivity.CFightMineBoss
+	cEnterNextMine = 70,			 -- (探险)进入下一层 PActivity.CEnterNextMine
 
 	sInit = 1,						--初始化 PActivity.SActivity
 	sUpdate = 2,					--更新 PActivity.SActivity
@@ -194,6 +205,7 @@ local CMD_ID =
 	sLotteryMsgList = 18,			--(抽奖)历史消息列表 PActivity.SLotteryMsgList
 	sVipDisCountGift = 19,			--VIP 折扣礼包领取后状态推送 PActivity.PVIPDiscountGift
 	sUpdateDailyGift = 20,			--更新每日礼包 PActivity.PDailyGiftInfo
+	sSevenDayRank = 21,				--(七日目标)返回排名PActivity.SSevenDayRank
 	sChairtyBuy	= 22,				--(慈善)购买捐赠物返回 PActivity.PChairtyAct
 	sChairtyDonation = 23,			--(慈善)捐赠返回 PActivity.PChairtyAct
 	sChairtyDrow = 24,				--(慈善)抽奖返回 PActivity.SCharityDrow
@@ -247,6 +259,9 @@ local CMD_ID =
 	sOpenAllCard = 73,				  --(翻牌活动)全开 PActivity.SOpenAllCard
 	sRefreshCards = 74,				  --(翻牌活动)刷新卡牌 PActivity.SRefreshCards
 	sRandomDrop = 75,				  --随机掉落 PActivity.SRandomDrop
+	sDig = 76,						  --(探险)挖矿 PActivity.SDig
+	sFightMineBoss = 77,			  --(探险)挑战boss PActivity.SFightMineBoss
+	sEnterNextMine = 78,			  --(探险)进入下一层 PActivity.SEnterNextMine
 }
 
 function _M.ModuleClean()
@@ -319,6 +334,9 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.cOpenCard]					 = "PActivity.COpenCard",
 		[CMD_ID.cOpenAllCard]				 = "PActivity.COpenAllCard",
 		[CMD_ID.cRefreshCards]				 = "PActivity.CRefreshCards",
+		[CMD_ID.cDig]						 = "PActivity.CDig",
+		[CMD_ID.cFightMineBoss]				 = "PActivity.CFightMineBoss",
+		[CMD_ID.cEnterNextMine]				 = "PActivity.CEnterNextMine",
 	}
 	--接收消息协议注册
 	local func_recv = 
@@ -343,6 +361,7 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sLotteryMsgList]   		 = {proto = "PActivity.SLotteryMsgList", 		handle = _P.OnLotteryMsgList},	--(抽奖)历史消息列表 PActivity.SLotteryMsgList	
 		[CMD_ID.sVipDisCountGift]  		 = {proto = "PActivity.PVIPDiscountGift", 		handle = _P.OnVipDiscountGift},
 		[CMD_ID.sUpdateDailyGift]  		 = {proto = "PActivity.PDailyGiftInfo", 		handle = _P.OnUpdateDailyGift},	--更新每日礼包 PActivity.PDailyGiftInfo	
+		[CMD_ID.sSevenDayRank]	 		 = {proto = "PActivity.SSevenDayRank",			handle = _P.OnUpdateSevenRank},
 		[CMD_ID.sChairtyBuy]			 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyBuy},		--(慈善活动)购买返回PActivity.PChairtyAct
 		[CMD_ID.sChairtyDonation]		 = {proto = "PActivity.PChairtyAct",			handle = _P.OnChairtyDonate},	--(慈善活动)捐赠返回PActivity.PChairtyAct
 		[CMD_ID.sChairtyDrow]			 = {proto = "PActivity.SCharityDrow",			handle = _P.OnChairtyDrow}, 	--(慈善活动)抽奖返回PActivity.SCharityDrow
@@ -396,6 +415,9 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sOpenAllCard]	= {proto = "PActivity.SOpenAllCard", 	handle = _P.OnOpenAllCardBack},	-- (翻牌活动)全开 PActivity.SOpenAllCard
 		[CMD_ID.sRefreshCards]	= {proto = "PActivity.SRefreshCards", 	handle = _P.OnRefreshCardBack},	-- (翻牌活动)刷新卡牌 PActivity.SRefreshCards
 		[CMD_ID.sRandomDrop]	= {proto = "PActivity.SRandomDrop", 	handle = _P.OnRandomDropBack},	-- 随机掉落 PActivity.SRandomDrop
+		[CMD_ID.sDig]			= {proto = "PActivity.SDig", 			handle = _P.OnDigBack},			-- (探险)挖矿 PActivity.SDig
+		[CMD_ID.sFightMineBoss]	= {proto = "PActivity.SFightMineBoss", 	handle = _P.OnFightBossBack},	-- (探险)挑战boss PActivity.SFightMineBoss
+		[CMD_ID.sEnterNextMine]	= {proto = "PActivity.SEnterNextMine", 	handle = _P.OnEnterNextMine},	-- (探险)进入下一层 PActivity.SEnterNextMine
 	}
 
 	func_send, func_recv = _P.SetRegist(func_send, func_recv)
@@ -806,7 +828,7 @@ end
 
 		--更新数据层
 		MActivity.UpdateAct(info.actId, actType, info)
-		_P.CheckCharityRedPoint(data.actId, actType)
+		_M.CheckCharityRedPoint(data.actId)
 	end
 
 --奇遇活动
@@ -1271,16 +1293,20 @@ end
 --商会充值
 	--商会充值红点检测
 	function _P.CheckCommerceRechargeRepoint(actId, actType)
+		local isShowRed = false
 		local info = MActivity.GetFromId(actId)
 		if info ~= nil then
 			for k,v in pairs(info.list) do
 				local csvCommerceRecharge = Csv.CommerceRecharge[actId]
 				local isListItemRed = (v.isGeted == false and info.isRecharge and v.isCanGet)
-				--if MActivity.ActRedpoint(actId, v.id, isListItemRed) then
-					CMain.UpdateRedpoint(isListItemRed, Define.SysId.Commerce_Recharge,actId,v.id)
-				--end
+				if isListItemRed then
+					isShowRed = true
+					break
+				end
 			end
 		end
+
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Commerce, Define.SysId.Commerce_Recharge)
 	end
 	--商会充值数据更新
 	function _P.DoUpdateCommerceRecharge(actType, data)
@@ -1305,7 +1331,7 @@ end
 			--检查小红点
 			_P.CheckCommerceRechargeRepoint(info.actId, actType)
 			WindowMgr.Call("UComRecharge", "OnRefreshView")
-			WindowMgr.Call("UCommerce", "OnRefreshActivityBtn")
+			WindowMgr.Call("UCommerce", "OnRefreshRechargeBtn")
 		end
 	end
 --抽奖活动
@@ -1491,6 +1517,10 @@ function _P.DoUpdate(data, isInit)
 	end
 	if data.charity ~= nil then
 		--慈善活动
+		if isInit then
+			MActivity.CharityFirstRed = true
+		end
+
 		_P.DoUpdateCharity(Define.ActivityType.Charitable, data.charity)
 	end
 	if data.headChange ~= nil then
@@ -1567,6 +1597,11 @@ function _P.DoUpdate(data, isInit)
 	if data.flop ~= nil then
 		for k,v in pairs(data.flop) do
 			_P.DoUpdateFlopCard(Define.ActivityType.FlopCard, v)
+		end
+	end
+	if data.explore ~= nil then
+		for k,v in pairs(data.explore) do
+			_P.DoUpdateExplore(Define.ActivityType.Explore, v)
 		end
 	end
 end
@@ -1694,7 +1729,7 @@ function _P.OnGetSuccess(data)
 		elseif info.actType == Define.ActivityType.Charitable then
 			if data.isGeted then
 				info.selfGetState = MActivity.CharityGetState.Geted
-				_P.CheckCharityRedPoint(actId, info.actType)
+				_M.CheckCharityRedPoint(actId)
 
 				--界面表现
 				WindowMgr.Call("UCharitableRankPanel", "OnGetRewardBack", data)
@@ -1947,7 +1982,8 @@ function _P.OnUpdateState(data)
 				if nil == MActivity.GetListFromType(info.actType) then
 					isNeedUpdateMainBtn = true
 				end
-				CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.Charitable)
+				MActivity.CharityFirstRed = false
+				CMain.UpdateRedpoint(false, Define.SysId.LimitActivity, Define.SysId.Charitable)
 			else
 				local lastState = info.state
 				local newState = data.state
@@ -1959,7 +1995,7 @@ function _P.OnUpdateState(data)
 					lefttime = newState.lefttime,
 				}
 			end
-			_P.CheckCharityRedPoint(actId, info.actType)
+			_M.CheckCharityRedPoint(actId)
 			--奇遇活动关闭
 		elseif info.actType == Define.ActivityType.Adventure then
 			if data.state.state == MActivity.ActivityState.Close then
@@ -2137,7 +2173,7 @@ function _P.OnUpdateState(data)
 			_P.CheckCommerceRechargeRepoint(actId, info.actType)
 			--界面刷新
 			WindowMgr.Call("UComRecharge", "OnRefreshView")
-			WindowMgr.Call("UCommerce","OnRefreshActivityBtn")
+			WindowMgr.Call("UCommerce", "OnRefreshRechargeBtn")
 		elseif info.actType == Define.ActivityType.Lottery then
 			if data.state.state == MActivity.ActivityState.Close then
 				--关闭入口
@@ -2225,6 +2261,12 @@ function _P.OnUpdateState(data)
 			if data.state.state == MActivity.ActivityState.Close then
 				MActivity.ClearForId(data.actId)
 				isNeedUpdateMainBtn = true
+
+				if info.actType == Define.ActivityType.FlopCard and MActivity.FlopCardRed[data.actId] == true then
+					MActivity.FlopCardRed[data.actId] = false
+					CMain.UpdateRedpoint(false, info.sysId, data.actId)
+					MActivity.FlopCardRefreshData[data.actId] = nil
+				end
 			else
 				local newState = data.state
 				info.state = 
@@ -2269,6 +2311,11 @@ function _P.OnUpdateState(data)
 				--关闭入口
 				MActivity.ClearForType(Define.ActivityType.ConsumePoint)
 				MActivity.ConsumePointReqState = MActivity.GetConsumePointRefreshState()
+
+				if MActivity.ConsumePointRed == true then
+					CMain.UpdateRedpoint(false, Define.SysId.ConsumePoint)
+					MActivity.ConsumePointRed = false
+				end
 			else
 				local lastState = info.state
 				local newState = data.state
@@ -2281,6 +2328,23 @@ function _P.OnUpdateState(data)
 			end
 			if WindowMgr.IsCreated("UConsumePointMain") then
 				WindowMgr.Call("UConsumePointMain", "OnUpdateActState", data)
+			end
+		elseif info.actType == Define.ActivityType.Explore then
+			if data.state.state == MActivity.ActivityState.Close then
+				--关闭入口
+				MActivity.ClearForType(Define.ActivityType.Explore)
+			else
+				local lastState = info.state
+				local newState = data.state
+				info.state = 
+				{
+					state = newState.state,
+					startTime = newState.startTime,
+					endTime = newState.endTime,
+				}
+			end
+			if WindowMgr.IsCreated("UExploreTreasure") then
+				WindowMgr.Call("UExploreTreasure", "OnUpdateActState", data)
 			end
 		elseif info.actType == Define.ActivityType.MergeSrv_Login or
 				info.actType == Define.ActivityType.MergeSrv_Firework or
@@ -2379,7 +2443,7 @@ function _P.OnUpdatePro(data)
 			if HeartBeat.ServSecond()  > info.state.lefttime then
 				info.selfGetState = (data.index > 0 and MActivity.CharityGetState.CanGet) or MActivity.CharityGetState.CanNotGet
 
-				_P.CheckCharityRedPoint(actId, info.actType)
+				_M.CheckCharityRedPoint(actId)
 			end
 		elseif info.actType == Define.ActivityType.XinGuan1 or 
 				info.actType == Define.ActivityType.XinGuan2 
@@ -2499,7 +2563,6 @@ function _P.InitSuperGirlData(data)
 	return activityData
 end
 
-
 function _M.UpdateRecuitStaffRed(itemId)
 	for k,v in pairs(Csv.ActivityJaonChen) do
 		if _P.CheckItemIdInList(v.costItemId, itemId) then
@@ -2549,16 +2612,21 @@ function _M.UpdateStaffData(staffId)
 	if jianchenList ~= nil then
 		for k,v in pairs(jianchenList) do
 			for staffKey,staffValue in pairs(v.list) do
+				
 				if staffValue.attrid == staffId then
 					staffValue.isGeted = true
+
+					--红点检测
+					local itemId = staffValue.cost.id
+					if itemId ~= nil then
+						_M.UpdateRecuitStaffRed(itemId)
+					end
 					return
 				end
 			end
 		end
 	end
 end
-
-
 -----------------------------------------------------------------------------------------------------
 -- 新官上任活动，S2C
 -- (新官上任)进入战斗界面返回
@@ -2665,6 +2733,7 @@ end
 function _P.OnChairtyBuy(data)
 	if data == nil then return end
 	WindowMgr.Call("UCharitableShopPanel", "OnBuyCallBack", data)
+	_M.CheckCharityRedPoint(data.actId)
 
 	if WindowMgr.IsCreated("UCharitableActPanel") then
 		WindowMgr.Call("UCharitableActPanel", "UpdateItemData", nil)
@@ -2675,6 +2744,7 @@ function _P.OnChairtyDonate(data)
 	if WindowMgr.IsCreated("UCharitableActPanel") then
 		WindowMgr.Call("UCharitableActPanel", "OnDonateBack", data)
 	end
+	_M.CheckCharityRedPoint(data.actId)
 end
 
 --慈善活动抽奖返回
@@ -2682,6 +2752,7 @@ function _P.OnChairtyDrow(data)
 	if WindowMgr.IsCreated("UCharitableFruitPanel") then
 		WindowMgr.Call("UCharitableFruitPanel", "OnDrowCallBack", data)
 	end
+	_M.CheckCharityRedPoint(data.actId)
 end
 
 --慈善活动打开界面请求数据返回
@@ -2729,7 +2800,7 @@ function _P.OnChairtyRank(data)
 	if data.state == MActivity.CharityGetState.CanGet then
 		local activityData = MActivity.GetFromId(data.actId)
 		activityData.selfGetState = data.state
-		_P.CheckCharityRedPoint(data.actId,self)
+		_M.CheckCharityRedPoint(data.actId)
 	end
 
 	if data ~= nil then
@@ -3036,6 +3107,7 @@ function _P.OnDayout()
 
 	CRankReward.OnDayout()
 	CSevenDayTarget.OnDayout()
+	CNewSeven.OnDayout()
 end
 
 -- 新官上任获取奖励红点
@@ -3074,22 +3146,49 @@ function _P.CheckXinGuanRedPoint(actId, actType)
 end
 
 -- 慈善活动获取奖励红点
-function  _P.CheckCharityRedPoint(actId, actType)
-	local isShowRed = false
-	local activityData = MActivity.GetFromId(actId)
+function _M.CheckCharityRedPoint(actId)
+	if not MMain.FuncIsOpen(Define.SysId.Charitable) then
+		CMain.UpdateRedpoint(false, Define.SysId.LimitActivity, Define.SysId.Charitable)
+	else
+		local isShowRed = false
+		local isHasShopItem = false
+		local isHasHeartNum = false
+		local activityData = MActivity.GetFromId(actId)
 
-	if activityData == nil then return end
-	if activityData.selfGetState == MActivity.CharityGetState.CanGet then
-		isShowRed = true
-	end
+		if activityData == nil then return end
+		if activityData.selfGetState == MActivity.CharityGetState.CanGet then
+			isShowRed = true
+		end
+		MActivity.CharitableRankRed = isShowRed
 
-	MActivity.CharitableRed = isShowRed
-	local sysId = Define.SysId.Charitable
-	--如果功能未开放，红点关闭
-	if not MMain.FuncIsOpen(sysId) then
-		isShowRed = false
+		for k,v in pairs(activityData.shopList) do
+			local hasNum = MBag.GetItemNum(v.itemId)
+			if hasNum > 0 then
+				isHasShopItem = true
+				break
+			end
+		end
+
+		local charityConf = Csv.Charity[actId]
+		if charityConf ~= nil then
+			if charityConf.oneCost ~= nil then
+				local hasNum = MBag.GetItemNum(charityConf.oneCost[1])
+				if hasNum >= charityConf.oneCost[2] then
+					isHasHeartNum = true
+				end
+			end
+
+			if charityConf.tenCost ~= nil then
+				local hasNum = MBag.GetItemNum(charityConf.tenCost[1])
+				if hasNum >= charityConf.tenCost[2] then
+					isHasHeartNum = true
+				end
+			end
+		end
+
+		local isActOver = (HeartBeat.ServSecond() - activityData.state.lefttime >= 0)
+		CMain.UpdateRedpoint(((not isActOver and MActivity.CharityFirstRed) or isShowRed or (not isActOver and isHasShopItem) or isHasHeartNum), Define.SysId.LimitActivity, Define.SysId.Charitable)
 	end
-	CMain.UpdateRedpoint(isShowRed, Define.SysId.LimitActivity,sysId)
 
 	if WindowMgr.IsCreated("UCharitableMainPanel") then
 		WindowMgr.Call("UCharitableMainPanel", "UpdateRed")
@@ -3497,8 +3596,6 @@ function _P.CheckTravalRedPoint(actId)
 	if not MMain.FuncIsOpen(Define.SysId.GlobalTraval) then
 		isShowRed = false
 	end
-	--在限时活动中
-	--CMain.UpdateRedpoint(isShowRed, Define.SysId.LimitActivity,Define.SysId.GlobalTraval)
 	--在主界面中
 	CMain.UpdateRedpoint(isShowRed,Define.SysId.GlobalTraval)
 end
@@ -4301,13 +4398,24 @@ end
 function _M.CheckLimitRed(_sysId,isOpen)
 	if _sysId == Define.SysId.XinGuan1 then
 		if isOpen then
-			CMain.UpdateRedpoint(MActivity.XinGuanRankRed, Define.SysId.LimitActivity,Define.SysId.XinGuan1)
+			local actId1 = MActivity.ActIdForType[Define.ActivityType.XinGuan1]
+			if actId1 ~= nil then
+				_P.CheckXinGuanRedPoint(actId1, Define.ActivityType.XinGuan1)
+			end
+
+			local actId2 = MActivity.ActIdForType[Define.ActivityType.XinGuan2]
+			if actId2 ~= nil then
+				_P.CheckXinGuanRedPoint(actId2, Define.ActivityType.XinGuan2)
+			end
 		else
-			CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.XinGuan1)
+			CMain.UpdateRedpoint(false, Define.SysId.LimitActivity, Define.SysId.XinGuan1)
 		end
 	elseif _sysId == Define.SysId.Charitable then
 		if isOpen then
-			CMain.UpdateRedpoint(MActivity.CharitableRed, Define.SysId.LimitActivity,Define.SysId.Charitable)
+			local actId = MActivity.ActIdForType[Define.ActivityType.Charitable]
+			if actId ~= nil then
+				_M.CheckCharityRedPoint(actId)
+			end
 		else
 			CMain.UpdateRedpoint(false, Define.SysId.LimitActivity,Define.SysId.Charitable)
 		end
@@ -4321,7 +4429,9 @@ function _M.CheckLimitRed(_sysId,isOpen)
 		if not isOpen then
 			CMain.UpdateRedpoint(false,Define.SysId.LimitActivity, Define.SysId.SiegeWall)
 		else
-			CMain.UpdateRedpoint(MSiege.SiegeRed,Define.SysId.LimitActivity, Define.SysId.SiegeWall)
+			if MMain.FuncIsOpen(Define.SysId.SiegeWall) then
+				CMain.UpdateRedpoint(MSiege.SiegeRed,Define.SysId.LimitActivity, Define.SysId.SiegeWall)
+			end
 		end
 	elseif _sysId == Define.SysId.GlobalTraval then
 		if isOpen then
@@ -4482,6 +4592,186 @@ function _P.OnRandomDropBack(data)
 				CCommon.ShowError(Csv.Text("flop_randomDropTip", {name = itemConf.name, num = v.value}))
 			end
 		end
+	end
+end
+
+function _P.OnUpdateSevenRank(data)
+	local actId = data.actId
+	local actData = MActivity.GetFromId(actId)
+	if actData then
+		actData.rankPro = data.rankPro
+		actData.selfRank = data.rank
+		WindowMgr.Call("USevenDayTarget", "OnRefreshRankBottomInfo")
+		WindowMgr.Call("UNewSeven", "OnRefreshRankBottomInfo")
+	end
+end
+
+
+------------------------------------------探险寻宝--------------------------------------------------
+function _P.DoUpdateExplore(actType, data)
+	local info = _P.StateInfo(data, actType)
+	if info.state.lefttime then
+		info.state.lefttime = HeartBeat.ServSecond() + info.state.lefttime
+	else
+		info.state.lefttime = HeartBeat.ServSecond()
+	end
+
+	if data.mine ~= nil then
+		info.layerId = data.mine.id or 1
+		info.stoneList = {}
+		if data.mine.stoneList ~= nil then
+			for k,v in pairs(data.mine.stoneList) do
+				local oneData = {}
+				oneData = v
+				if v.type == 1 then
+					local mineConf = Csv.ExploreStone[v.stoneId]
+					if mineConf then
+						oneData.mineConf = mineConf
+					end
+				end
+				info.stoneList[k] = v
+			end
+		end
+	end
+
+	info.buyDigTimes = data.buyDigTimes or 0
+	info.freeTimes = data.freeTimes or 0
+	info.bigReward = {}
+	if data.bigReward ~= nil then
+		for k,v in pairs(data.bigReward) do
+			info.bigReward[v] = v
+		end
+	end
+
+	MActivity.UpdateAct(info.actId, actType, info)
+	_P.CheckExploreRedPoint(info.actId)
+
+	if WindowMgr.IsCreated("UExploreTreasure") then
+		WindowMgr.Call("UExploreTreasure", "OnUpdateViewData", info, false)
+	end
+end
+
+
+function _M.UpdateExploreRed()
+	local actId = MActivity.ActIdForType[Define.ActivityType.Explore]
+	if actId ~= nil then
+		_P.CheckExploreRedPoint(actId)
+	end
+end
+
+
+function _P.CheckExploreRedPoint(actId)
+	local isFree = false
+	local isHasItem = false
+
+	local exploreConf = Csv.Explore[actId]
+	if exploreConf and exploreConf.costItem ~= nil then
+		local itemNum = MBag.GetItemNum(exploreConf.costItem[1])
+		isHasItem = itemNum > 0
+	end
+
+	local actInfo = MActivity.GetFromId(actId)
+	if actInfo ~= nil then
+		isFree = actInfo.freeTimes > 0
+	end
+
+	CMain.UpdateRedpoint((isFree or isHasItem), Define.SysId.ExploreTreasure)
+end
+
+
+-- 挖矿请求
+function _M.OnDigReq(actId, pos)
+	_M.Send(CMD_ID.cDig, {actId = actId, pos = pos})
+end
+
+
+-- 挑战boss请求
+function _M.OnFightBossReq(actId, pos)
+	_M.Send(CMD_ID.cFightMineBoss, {actId = actId, pos = pos})
+end
+
+
+-- 进入下一层请求
+function _M.OnEnterNextReq(actId, pos)
+	_M.Send(CMD_ID.cEnterNextMine, {actId = actId, pos = pos})
+end
+
+
+-- 挖矿返回
+function _P.OnDigBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		if actInfo.stoneList ~= nil then
+			local updateStone = data.stone
+			if updateStone.type == 1 then
+				local mineConf = Csv.ExploreStone[updateStone.stoneId]
+				if mineConf then
+					updateStone.mineConf = mineConf
+				end
+			end
+			actInfo.stoneList[data.pos] = updateStone
+		end
+
+		if data.isBigReward then
+			local mineConf = Csv.ExploreMine[actInfo.layerId]
+			if mineConf and mineConf.group ~= nil then
+				actInfo.bigReward[mineConf.group] = mineConf.group
+			end
+		end
+		actInfo.buyDigTimes = data.buyDigTimes or 0
+		actInfo.freeTimes = data.freeTimes or 0
+	end
+
+	if WindowMgr.IsCreated("UExploreTreasure") then
+		WindowMgr.Call("UExploreTreasure", "OnDigBack", data)
+	end
+
+	_P.CheckExploreRedPoint(data.actId)
+end
+
+
+-- 挑战boss
+function _P.OnFightBossBack(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil then
+		actInfo.bossReward = {}
+		if data.rewardList ~= nil then
+			for k,v in pairs(data.rewardList) do
+				actInfo.bossReward[k] = v
+			end
+		end
+		actInfo.stoneList[data.pos].isDefeatBoss = data.fight.result
+	end
+
+	if WindowMgr.IsCreated("UBattleBossNew") then
+		WindowMgr.Call("UBattleBossNew", "OnResult", data.fight)
+	end
+end
+
+
+-- 进入下一层
+function _P.OnEnterNextMine(data)
+	local actInfo = MActivity.GetFromId(data.actId)
+	if actInfo ~= nil and data.mine ~= nil then
+		actInfo.layerId = data.mine.id or 1
+		actInfo.stoneList = {}
+		if data.mine.stoneList ~= nil then
+			for k,v in pairs(data.mine.stoneList) do
+				local oneData = {}
+				oneData = v
+				if v.type == 1 then
+					local mineConf = Csv.ExploreStone[v.stoneId]
+					if mineConf then
+						oneData.mineConf = mineConf
+					end
+				end
+				actInfo.stoneList[k] = v
+			end
+		end
+	end
+
+	if WindowMgr.IsCreated("UExploreTreasure") then
+		WindowMgr.Call("UExploreTreasure", "OnEnterNextMine", data)
 	end
 end
 

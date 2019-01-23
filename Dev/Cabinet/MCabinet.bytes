@@ -1,0 +1,79 @@
+local _M = {}
+
+_M.AllCabinetTable = {}		-- 背包所有展览品数组
+
+function _M.Clean()
+	_M.AllCabinetTable = {}
+end
+
+
+-- 判断是否有该展览品
+function _M.CheckIsHasGet(itemId)
+	local isGet = _M.AllCabinetTable[itemId]
+	return isGet
+end
+
+
+-- 判断该展览品是否已装备
+function _M.CheckCabinetIsPutOn(itemId)
+	local isPutOn = false
+	local curData = _M.AllCabinetTable[itemId]
+	if curData ~= nil and curData.layerId ~= nil and curData.gridId ~= nil then
+		isPutOn = true
+	end
+
+	return isPutOn
+end
+
+
+-- 判断该格子是否展示展览品
+function _M.GetThisGridData(layerId, gridId)
+	local gridData = nil
+	if next(_M.AllCabinetTable) ~= nil then
+		for k,v in pairs(_M.AllCabinetTable) do
+			if v.layerId ~= nil and v.layerId == layerId and v.gridId ~= nil and v.gridId == gridId then
+				gridData = v
+				break
+			end
+		end
+	end
+
+	return gridData
+end
+
+
+-- 得到当前展出展览品列表
+function _M.GetCurShowCabinets()
+	local listData = {}
+	if next(_M.AllCabinetTable) ~= nil then
+		for k,v in pairs(_M.AllCabinetTable) do
+			if v.layerId ~= nil and v.gridId ~= nil then
+				listData[#listData + 1] = v
+			end
+		end
+	end
+	
+	return listData
+end
+
+
+-- 获得的展览品中有未展出的物品
+function _M.CheckHasCabinetShow(layerId)
+	local isShow = false
+	if next(_M.AllCabinetTable) ~= nil then
+		for k,v in pairs(_M.AllCabinetTable) do
+			local showcaseConf = Csv.Showcase[v.itemId]
+			if showcaseConf ~= nil then
+				if showcaseConf.type == layerId and v.gridId == nil and v.layerId == nil then
+					isShow = true
+					break
+				end
+			end
+		end
+	end
+
+	return isShow
+end
+
+
+return _M

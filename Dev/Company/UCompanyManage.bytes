@@ -54,7 +54,6 @@ end
 
 --界面构建
 function _M:OnCreate(...)
-	
 	self.EffectIndex = {}
 	self.EffectTable = {{},{},{}}
 	self.EffectState = {false,false,false}
@@ -88,6 +87,8 @@ function _M:OnCreate(...)
 	self:RegistCallEvent(Define.EventListenId.SecondUpdate, function ()
 		_P.UpdateTime(self)
 	end)
+
+	self.AddNum = MPlayer.GetSecretaryTotalAdd()
 
 	local oneKeyLevel = tonumber(Csv.Const(Define.Const.CompanyManageOneKeyLevel)[1])
 	local oneKeyVip = tonumber(Csv.Const(Define.Const.CompanyManageOneKeyLevel)[2])
@@ -173,7 +174,8 @@ function _P.SetManageData(self,moudle,data)
 			local times = manage.times
 			if times > 0 then
 				if csvManage.costType ~= nil then
-					local isLimit,cost = MCompany.CheckIsLimit(math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5))
+					local addPro = (self.AddNum / 10000 + 1)
+					local isLimit,cost = MCompany.CheckIsLimit(math.floor((MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000) * addPro + 0.5))
 					local have = MBag.GetItemNum(csvManage.costType)
 					local itemName = Csv.Item[csvManage.costType].name
 					if cost > have then
@@ -201,10 +203,11 @@ function _P.SetManageData(self,moudle,data)
 	moudle:Get("title_text_1").Text = Csv.Text("company_manageT",{name = csvManage.name})
 	moudle:Get("knowledge_1").Text = Csv.Text("company_manageDsp",{name = Csv.Text("Girl_skill_type"..csvManage.dependType)})
 	local TextCost = moudle:Get("consume")
+	local addPro = (self.AddNum / 10000 + 1)
 	if csvManage.costType ~= nil then
 		TextCost.gameObject:SetActive(true)
 		TextCost.Text = Csv.Text("company_manageCos",{name = Csv.Item[csvManage.costType].name})
-		local costNum = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+		local costNum = math.floor((MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000) * addPro + 0.5)
 		local isLimit,resultNum = MCompany.CheckIsLimit(costNum)
 		if isLimit then
 			moudle:Get("text_11").Text = resultNum
@@ -215,7 +218,7 @@ function _P.SetManageData(self,moudle,data)
 		TextCost.gameObject:SetActive(false)
 	end
 	moudle:Get("text_9").Text = MPlayer.GetAttr(csvManage.dependType)
-	local getNum = math.floor(MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000 + 0.5)
+	local getNum = math.floor((MPlayer.GetAttr(csvManage.dependType)*csvManage.multiple/10000) * addPro + 0.5)
 	local isLimit,resultNum = MCompany.CheckIsLimit(getNum)
 	if isLimit then
 		moudle:Get("earnings_1").Text = Csv.Text("company_manageYujiR")
@@ -239,6 +242,10 @@ function _P.SetManageData(self,moudle,data)
 		moudle:Get("text_8").Text = luaUtil.GetTimeHMS(data.time  - HeartBeat.ServSecond())
 	end
 	_P.RefreshScaleTime(self)
+
+	-- 加成显示
+	moudle:Get("TipsBg").Activity = self.AddNum > 0
+	moudle:Get("Tips").Text = Csv.Text("Home_tip11", {num = math.floor(self.AddNum / 100)})
 end
 
 function _P.GetSortTable(rawTable)

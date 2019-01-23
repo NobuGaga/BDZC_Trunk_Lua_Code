@@ -21,6 +21,8 @@ local LEVEL_UP_EFFECT_ID = 10006
 local LEVEL_UP_EFFECT_ID_2 = 10177
 local ONEKEY_EFFECT = 10176
 
+local BOX_TWEEN = "T_Effect_Guodong"
+
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = Class(WindowBase)
 --私有函数模块 *** 只放置私有函数, 禁止放变量
@@ -95,12 +97,30 @@ function _R.OnResult(self, data, lastCityID)
 					_P.DoSelfState(self, chapterId)
 					SoundMgr.Play(10004)
 					local effectMoudle = CCommon.CreateEffect(self.Moudle.SelfRect, PASS_EFFECT_ID, btn.icon.LocalPosition, function()
-						if self.Moudle ~= nil then
-							self:Unlock()
-							_P.RefreshBattle(self)
-							_P.RefreshTips(self,true,false)
-							if callBack ~= nil then
-								callBack()
+						--若有奖励飞图标
+						if chapterCsv.reward ~= nil then
+							local rewardId = chapterCsv.reward[1]
+							local rewardNum = chapterCsv.reward[2]
+							CCommon.ShowFlyItem(btn.rewardBg, rewardId, rewardNum, 0.2,nil,nil,function()
+								btn.rewardBg:AddOnTime(function()
+									if self.Moudle ~= nil then
+										self:Unlock()
+										_P.RefreshBattle(self)
+										_P.RefreshTips(self,true,false)
+										if callBack ~= nil then
+											callBack()
+										end
+									end
+								end,nil,0.5)
+							end)
+						else
+							if self.Moudle ~= nil then
+								self:Unlock()
+								_P.RefreshBattle(self)
+								_P.RefreshTips(self,true,false)
+								if callBack ~= nil then
+									callBack()
+								end
 							end
 						end
 					end)
@@ -112,12 +132,29 @@ function _R.OnResult(self, data, lastCityID)
 			_P.DoSelfState(self, chapterId)
 			SoundMgr.Play(10004)
 			local effectMoudle = CCommon.CreateEffect(self.Moudle.SelfRect, PASS_EFFECT_ID, btn.icon.LocalPosition, function()
+				--若有奖励飞图标
 				if self.Moudle ~= nil then
-					self:Unlock()
-					_P.RefreshBattle(self)
-					_P.RefreshTips(self,true,false)
-					if callBack ~= nil then
-						callBack()
+					--若有奖励飞图标
+					if chapterCsv.reward ~= nil then
+						local rewardId = chapterCsv.reward[1]
+						local rewardNum = chapterCsv.reward[2]
+						CCommon.ShowFlyItem(btn.rewardBg, rewardId, rewardNum, 0.2,nil,nil,function()
+							btn.rewardBg:AddOnTime(function()
+								self:Unlock()
+								_P.RefreshBattle(self)
+								_P.RefreshTips(self,true,false)
+								if callBack ~= nil then
+									callBack()
+								end
+							end,nil,0.5)
+						end)
+					else
+						self:Unlock()
+						_P.RefreshBattle(self)
+						_P.RefreshTips(self,true,false)
+						if callBack ~= nil then
+							callBack()
+						end
 					end
 				end
 			end)
@@ -281,12 +318,36 @@ function _P.UpdateBattleState(self, chapterId, info)
 	else
 		info.head.SpriteName = chapterCsv.icon
 	end
+
+	--奖励展示
+	info.rewardBg.Activity = false
+	if chapterCsv.reward ~= nil and chapterId >= battleCsv.chapter then
+		info.rewardBg.Activity = true
+		local rewardId = chapterCsv.reward[1]
+		local rewardNum = chapterCsv.reward[2]
+		local csvRewardItem = Csv.Item[rewardId]
+		info.rewadIcon.SpriteName = csvRewardItem.icon
+		info.rewardNum.Text = "x"..rewardNum
+
+		--动画
+		local boxTween = info.rewardBg.CachedTran:GetJTweener(BOX_TWEEN)
+		boxTween:Play()
+
+		--按钮
+		info.rewardBg:AddOnClick(function()
+			CCommon.ShowItemTips(rewardId)
+		end)
+	end
 	
 	info.buyImg.Activity = chapterCsv.staffId
 	info.buyImg.LocalPosition = (info.icon.LocalPosition.x > 0 and RightRecuitPos) or LeftRecuitPos
+	info.rewardBg.LocalPosition = Vector2(info.icon.LocalPosition.x,info.icon.LocalPosition.y+80)
 	if chapterId > battleCsv.chapter then
 		info.icon.Activity = false
 		info.icon.RaycastTarget = false
+
+		--设置位置
+		info.rewardBg.LocalPosition = Vector2(info.icon.LocalPosition.x,info.icon.LocalPosition.y-20)
 	elseif chapterId == battleCsv.chapter then
 		info.icon.Activity = true
 		info.icon.RaycastTarget = true
@@ -559,7 +620,8 @@ function _M:OnCreate()
 	--关卡列表
 	self.Battles = {}
 	for i=1,MAX_BATTLE_COUNT do
-		self.Battles[i]	= { icon = moudle:Get("Ordinary_"..i), head = moudle:Get('head'..i), pass= moudle:Get("Pass"..i),buyImg = moudle:Get("Buy" .. i)}
+		self.Battles[i]	= { icon = moudle:Get("Ordinary_"..i), head = moudle:Get('head'..i), pass= moudle:Get("Pass"..i),buyImg = moudle:Get("Buy" .. i),
+							rewardBg = moudle:Get("ZsBox"..i),rewadIcon = moudle:Get("ZsIcon"..i),rewardNum = moudle:Get("ZsNum"..i)}
 	end
 	self.BossIcon = moudle:Get("image1")
 	self.VSEffect = moudle:Get("VSEffect")
@@ -905,11 +967,24 @@ end
 local MoneyActorId = 10165
 local Acqu_Time1 = 1
 local Acqu_Time2 = 0.6
+local rewardTimes = 0
 function _R.OnAcquisition(self, list, lastCityID)
+	self:DestroyWeakGuide()
 	local acquList = {}
 	for k,v in ipairs(list) do
 		local data = {value = v,chapter = _P.GetChapterForAcqu(v)}
 		table.insert(acquList,data)
+	end
+
+	--计算飘奖励时间
+	local flyItemTime = 0
+	for k,v in ipairs(acquList) do
+		local _chapterCsv = Csv.Chapter[v.chapter]
+		if _chapterCsv ~= nil then
+			if _chapterCsv.reward ~= nil then
+				flyItemTime = flyItemTime +0.9
+			end
+		end
 	end
 
 	local moudle = self.Moudle
@@ -935,24 +1010,49 @@ function _R.OnAcquisition(self, list, lastCityID)
 		self:Unlock()
 		--解除人头不可点状态
 		moudle:Get("RoleIconBg").RaycastTarget = true
-	end,nil,Acqu_Time1 + Acqu_Time2 * (leng))
+	end,nil,Acqu_Time1 + Acqu_Time2 * (leng)+flyItemTime)
 
 	for k,v in ipairs(acquList) do
 		local index = v.chapter%10
 		local chapterItem = self.Battles[index]
 		if chapterItem ~= nil then
+
+			--上一次有无奖励飞图标
+			local lastChapterCsv = Csv.Chapter[v.chapter-1]
+			if lastChapterCsv ~= nil then
+				if lastChapterCsv.reward ~= nil then
+					rewardTimes = rewardTimes +1
+				end
+			end
+
+			local delayTime = Acqu_Time1 + Acqu_Time2 * (k - 1) + rewardTimes*0.9
+
 			moudle:Get("build"..index):AddOnTime(function()
 				chapterItem.icon.Activity = true
 				chapterItem.pass.Activity = false
+				chapterItem.rewardBg.LocalPosition = Vector2(chapterItem.icon.LocalPosition.x,chapterItem.icon.LocalPosition.y+100)
+
 				if v.chapter < nowChapter then
 					local effectMoudle = CCommon.CreateEffect(self.Moudle:Get("Ordinary"), PASS_EFFECT_ID, chapterItem.icon.LocalPosition,function()
 						chapterItem.icon.RaycastTarget = false
 						chapterItem.pass.Activity = true
+						
+						--一键通关
+						local chapterCsv = Csv.Chapter[v.chapter]
+						if chapterCsv.reward ~= nil then
+							local rewardId = chapterCsv.reward[1]
+							local rewardNum = chapterCsv.reward[2]
+							CCommon.ShowFlyItem(chapterItem.rewardBg, rewardId, rewardNum, 0.2,nil,nil,function()
+								chapterItem.rewardBg:AddOnTime(function()
+									chapterItem.rewardBg.Activity = false
+								end,nil,0.5)
+							end)
+						end
 					end)
 				else
 					chapterItem.icon.RaycastTarget = true
 				end
-			end,nil,Acqu_Time1 + Acqu_Time2 * (k - 1))
+			end,nil,delayTime)
 		end
 	end
 end

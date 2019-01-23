@@ -1,0 +1,233 @@
+local _M = Class()
+
+local isLog = true
+local print = function(...)
+	if isLog then
+		print(...)
+	end
+end
+
+--[==[
+	默认正常人观察顺序为由左往右顺序查看水平列表, 其他情况不考虑
+]==]
+
+-- 布局组件对齐方式转换
+local LayoutChildAlign = {
+	[CS.UnityEngine.TextAnchor.UpperLeft] = Vector2(0, 1),
+	[CS.UnityEngine.TextAnchor.UpperCenter] = Vector2(0.5, 1),
+	[CS.UnityEngine.TextAnchor.UpperRight] = Vector2(1, 1),
+	[CS.UnityEngine.TextAnchor.MiddleLeft] = Vector2(0, 0.5),
+	[CS.UnityEngine.TextAnchor.MiddleCenter] = Vector2(0.5, 0.5),
+	[CS.UnityEngine.TextAnchor.MiddleRight] = Vector2(1, 0.5),
+	[CS.UnityEngine.TextAnchor.LowerLeft] = Vector2(0, 0),
+	[CS.UnityEngine.TextAnchor.LowerCenter] = Vector2(0.5, 0),
+	[CS.UnityEngine.TextAnchor.LowerRight] = Vector2(1, 0),
+}
+
+function _M:ctor(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local isDataValid = self:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	if not isDataValid then
+		return
+	end
+	self:InitDataList()
+	self:InitViewDisplay()
+end
+
+function _M:CheckReceiveDataValid(scrollView, content, itemName, dataList, updateFunc, listSortFunc)
+	local wrongMessage
+	if scrollView == nil or scrollView.OnValueChanged == nil then
+		error("CheckReceiveDataValid Wrong Parameter scrollView is Unvalid")
+		return false
+	end
+	if content == nil or content.AddHorizontalLayoutGroup == nil then
+		error("CheckReceiveDataValid Wrong Parameter content is Unvalid")
+		return false
+	end
+	if dataList == nil or type(dataList) ~= "table" then
+		error("CheckReceiveDataValid Wrong Parameter dataList is Unvalid")
+		return false
+	end
+	if itemName == nil or type(itemName) ~= "string" then
+		error("CheckReceiveDataValid Wrong Parameter itemName is Unvalid")
+		return false
+	end
+	if updateFunc == nil or type(updateFunc) ~= "function" then
+		error("CheckReceiveDataValid Wrong Parameter updateFunc is Unvalid")
+		return false
+	end
+	self.scrollView = scrollView
+	self.content = content
+	self.dataList = dataList
+	self.itemName = itemName
+	self.updateFunc = updateFunc
+	-- 可选参数检查
+	if listSortFunc and type(listSortFunc) == "function" then
+		self.listSortFunc = listSortFunc
+	end
+	return true
+end
+
+function _M:InitDataList()
+	self.dataListLength = #self.dataList 
+	if self.dataListLength > 0 then
+		self:SortDataList()
+		return
+	end
+	local dataList = {}
+	for _, data in pairs(self.dataList) do
+		table.insert(dataList, data)
+	end
+	self.dataList = dataList
+	self.dataListLength = #dataList
+	self:SortDataList()
+end
+
+function _M:SortDataList()
+	if self.listSortFunc then
+		table.sort(self.dataList, self.listSortFunc)
+	end
+end
+
+function _M:InitViewDisplay()
+	local layout = self.content:AddHorizontalLayoutGroup()
+	self.itemSpace = layout.spacing
+	self.contentLeft = layout.padding.left
+	self.contentRight = layout.padding.right
+	self.contentChildAlign = LayoutChildAlign[layout.childAlignment]
+	self.content:DelHorizontalLayoutGroup()
+	self.firstItemCache = JGuiManager.GetMoudle(self.content, self.itemName)
+	self.itemWidth = self.firstItemCache.SelfRect.SizeDelta.x
+	self.itemHeight = self.firstItemCache.SelfRect.SizeDelta.y
+	self.itemWidthSpace = self.itemWidth + self.itemSpace
+	self.viewWidth = self.scrollView.SizeDelta.x
+
+	self:CalculateItemListLength()
+	local itemListLength = math.min(self.dataListLength, self.itemListLength)
+	self.itemListCache = {}
+	for index = 1, itemListLength do
+		self:CreateItem(index)
+	end
+	self:InitViewContent()
+	self:CalculateDataListMaxIndex()
+	self:SetScrollViewListener()
+end
+
+function _M:CalculateItemListLength()
+	self.itemListLength = math.modf(self.viewWidth / self.itemWidthSpace)
+	if self.itemListLength == 0 then
+		if self.itemWidth > self.viewWidth then
+			self.itemListLength = 2
+		else
+			self.itemListLength = 3
+		end
+	else
+		self.itemListLength = self.itemListLength + 2
+	end
+	self.itemMovePosDistance = self.itemListLength * self.itemWidthSpace
+end
+
+function _M:CreateItem(dataIndex)
+	local itemMoudle
+	if self.firstItemCache then
+		itemMoudle = self.firstItemCache
+		self.firstItemCache = nil
+	else
+		itemMoudle = JGuiManager.GetMoudle(self.content, self.itemName)
+	end
+	table.insert(self.itemListCache, itemMoudle)
+	local itemMoudleRect = itemMoudle.SelfRect
+	itemMoudleRect.AnchorMax = self.contentChildAlign
+	itemMoudleRect.AnchorMin = self.contentChildAlign
+	itemMoudleRect.Pivot = self.content.Pivot
+	itemMoudleRect.LocalPosition = Vector2(self.contentLeft + (#self.itemListCache - 1) * self.itemWidthSpace, 0)
+	self.updateFunc(itemMoudle, self.dataList[dataIndex])
+end
+
+function _M:RefreshItem(itemIndex, dataIndex)
+	if self.itemListCache[itemIndex] == nil then
+		error("RefreshItem Wrong Parameter itemIndex" .. itemIndex .. " is not exit")
+		return
+	end
+	if self.dataList[dataIndex] == nil then
+		error("RefreshItem Wrong Parameter dataIndex " .. dataIndex .. " is not exit")
+		return
+	end
+	self.updateFunc(self.itemListCache[itemIndex], self.dataList[dataIndex])
+end
+
+function _M:InitViewContent()
+	local contentItemWidth = self.dataListLength * self.itemWidthSpace - self.itemSpace
+	self.itemListIndex = 1 -- item 列表索引, 用于移动单个 item 实现无限滚动的列表, 该索引指向列表第一个 item 是原来 item 列表的第几个
+	self.content:DelContentSizeFitter()
+	self.content.SizeDelta = Vector2(self.contentLeft + contentItemWidth + self.contentRight, self.itemHeight)
+	self.dataListIndex = 1 -- 数据列表索引, 该索引值为当前 Item 列表第一个 Item 的数据索引值
+end
+
+function _M:CalculateDataListMaxIndex()
+	self.dataListMaxIndex = self.dataListLength - self.itemListLength + 1
+end
+
+function _M:SetScrollViewListener()
+	-- AddListener 可以重复加(委托队列), 作个标记位避免重复添加
+	if self.dataListLength > self.itemListLength and not self.isCircleList then
+		self.isCircleList = true
+		self.scrollView.OnValueChanged:AddListener(function () self:OnValueChanged() end)
+	end
+end
+
+--[==[]
+	方法二 通过移动单个 item 实现, 超过屏幕左端的 item 移动到列表右端, 超过屏幕右端的 item 移动到列表左端
+--]==]
+_M.OnValueChanged = function (self)
+	local contentPosX = self.content.LocalPosition.x
+	local dataListIndex = math.modf((math.abs(contentPosX) - self.contentLeft) / self.itemWidthSpace) + 1
+	if self.dataListIndex == dataListIndex then
+		return
+	end
+	if dataListIndex > self.dataListMaxIndex then
+		if self.dataListIndex == self.dataListMaxIndex then
+			return
+		end
+		dataListIndex = self.dataListMaxIndex
+	end
+	if contentPosX >= 0 then
+		if self.dataListIndex == 1 then
+			return
+		end
+		dataListIndex = 1
+	end
+	local dataIndexFix = self.dataListIndex - dataListIndex
+	local isLeftRemoveToRight = dataIndexFix < 0
+	dataIndexFix = math.abs(dataIndexFix)
+	for index = 1, dataIndexFix do
+		local itemIndex, dataIndex
+		local itemMovePosDistance = self.itemMovePosDistance
+		if isLeftRemoveToRight then
+			itemIndex = (index + self.itemListIndex - 1) % self.itemListLength
+			dataIndex = self.dataListIndex + self.itemListLength + index - 1
+		else
+			itemIndex = self.itemListIndex - index
+			dataIndex = self.dataListIndex - index
+			itemMovePosDistance = -itemMovePosDistance
+		end
+		if itemIndex <= 0 then
+			itemIndex = itemIndex + self.itemListLength
+		end
+		local itemMoudleRect = self.itemListCache[itemIndex].SelfRect
+		local itemPosX = itemMoudleRect.LocalPosition.x + itemMovePosDistance
+		local itemPosY = itemMoudleRect.LocalPosition.y 
+		itemMoudleRect.LocalPosition = Vector2(itemPosX, itemPosY)
+		self:RefreshItem(itemIndex, dataIndex)
+	end
+	if isLeftRemoveToRight then
+		self.itemListIndex = (self.itemListIndex + dataIndexFix) % self.itemListLength
+	else
+		self.itemListIndex = self.itemListIndex - dataIndexFix
+	end
+	if self.itemListIndex <= 0 then
+		self.itemListIndex = self.itemListIndex + self.itemListLength
+	end
+	self.dataListIndex = dataListIndex
+end
+
+return _M

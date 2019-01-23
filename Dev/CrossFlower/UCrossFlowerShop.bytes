@@ -1,0 +1,148 @@
+--[[
+	@desc :
+    2018-12-19 14:58:24
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local CCrossFlower = JRequire "Dev.CrossFlower.CCrossFlower"
+local MBag = JRequire "Dev.Bag.MBag"
+local MMain = JRequire "Dev.Main.MMain"
+local JTweenerManager = CS.JTween.JTweenerManager
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local ASSET_LIST = 
+{
+	Define.AssetsType.Soldier,
+	Define.AssetsType.Gold,
+	Define.AssetsType.Coin,
+	Define.AssetsType.Food,	
+}
+local ASSET_INDEX = {}
+for k,v in pairs(ASSET_LIST) do
+	ASSET_INDEX[v] = k
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateShop(self)
+	for k,v in pairs(self.ShopList) do
+		local num = v.MaxCount - (MCrossFlower.ShopList[k] or 0)
+		v.DescText.Text = Csv.Text("shop_xiangou3", {num = num})
+		if num <= 0 then
+			v.Btn.IsGray = true
+			v.Btn.RaycastTarget = false
+		else
+			v.Btn.IsGray = false
+			v.Btn.RaycastTarget = true
+		end
+	end
+end
+
+function _R.OnShopBuy(self, data)
+	_R.OnUpdateShop(self)
+
+	local info = self.ShopList[data.key]
+	CCommon.ShowFlyItem(self._RootNode, info.ItemID, info.ItemNum, 0, info.Btn.RootCanvasPos)
+end
+
+function _P.RefreshAsset(self, assetId)
+	local moudle = self.mMoudle
+	if moudle ~= nil then
+		local index = ASSET_INDEX[assetId]
+		if index ~= nil then
+			local widget = moudle:Get('AssetNum_'..index)
+			widget:DOKill()
+			local lastNum = self.LastAssetsNum[assetId]
+			local nowNum = MBag.GetItemNum(assetId)
+			if lastNum ~= nowNum then
+				self.LastAssetsNum[assetId] = nowNum
+				if self:IsActivity() then
+					local dura
+					local dec = math.abs(nowNum - lastNum)
+					if dec >= 10000 then
+						dura = 2
+					else
+						dura = math.max(0.2, dec / 10000 * 2)
+					end
+					local t = JTweenerManager.IntTween(lastNum,nowNum, dura, function(value)
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(value) end
+					end, function()
+						if widget ~= nil then widget.Text = LuaUtil.NumberFormat(MBag.GetItemNum(assetId)) end
+					end)
+					t:SetTarget(widget.CachedTran)
+				else
+					widget.Text = LuaUtil.NumberFormat(nowNum)
+				end				
+			end
+		end
+	end
+end
+
+function _M:OnCreate(  )
+	local moudle = self:CreateMoudle(self._RootNode, "M_FlowerList_Shop")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	moudle:Get("C_Text").Text = Csv.Text('flower_1')
+	self.LastAssetsNum = {}
+	for index,assetId in pairs(ASSET_LIST) do
+		local csv = Csv.Item[assetId]
+		local assetNum = MBag.GetItemNum(assetId)
+		self.LastAssetsNum[assetId] = assetNum
+		moudle:Get('AssetIcon_' .. index).SpriteName = csv.miniIcon
+		moudle:Get('AssetNum_'..index).Text = LuaUtil.NumberFormat(assetNum)
+	end
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+		if ASSET_INDEX[itemId] ~= nil then
+			_P.RefreshAsset(self, itemId)
+		end
+	end)
+	local actCsvLine = Csv.CrossFlower[MCrossFlower.ActID]
+	local content = moudle:Get("content")
+	self.ShopList = {}
+	for _,v in pairs(actCsvLine.shopid) do
+		local shopCsvLine = Csv.CrossFlowerShop[v]
+		local cost = shopCsvLine.cost
+		local costCsv = Csv.Item[cost[1]]
+		local oneMoudle = self:CreateMoudle(content, "M_FlowerList_Shop_Item")
+		local itemCsv = Csv.Item[shopCsvLine.itemId]
+		oneMoudle:Get("IconBox").SpriteName = itemCsv.colorIcon
+		oneMoudle:Get("Icon").SpriteName = itemCsv.icon
+		oneMoudle:Get("ItemNum").Text = tostring(shopCsvLine.itemCount)
+		oneMoudle:Get("Name").Text = shopCsvLine.title		
+		oneMoudle:Get("Icon2").SpriteName = costCsv.miniIcon
+		oneMoudle:Get("Point").Text = Csv.Text("xinguan_shop_price")
+		oneMoudle:Get("PointText").Text = tostring(cost[2])
+		oneMoudle:Get("Desc").Text = Csv.Text("shop_xiangou2")
+		oneMoudle:Get("BtnText1").Text = Csv.Text("shop_buy")
+		oneMoudle:Get("Select"):AddOnButton(function (  )
+			if MBag.CheckItemEnough(cost[1], cost[2]) then
+				CCrossFlower.ReqShopBuy(v)
+			end
+		end)
+		self.ShopList[v] = 
+		{
+			DescText = oneMoudle:Get("DescText"),
+			Btn = oneMoudle:Get("Select"),
+			MaxCount = shopCsvLine.buyNum,
+
+			ItemID = shopCsvLine.itemId,
+			ItemNum = shopCsvLine.itemCount
+		}
+	end
+	_R.OnUpdateShop(self)
+end
+
+return _M

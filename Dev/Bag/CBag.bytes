@@ -12,6 +12,7 @@ local MAircraft = JRequire "Dev.Aircraft.MAircraft"
 local CTrigger = JRequire "Dev.Main.CTrigger"
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 local CEquipRot = JRequire "Dev.EquipRot.CEquipRot"
+local CTalent = JRequire "Dev.Talent.CTalent"
 
 local _M = {}
 local _P = {}
@@ -19,6 +20,7 @@ local _P = {}
 local ECmdId = {
 	cBagUseItem							=	1,--使用道具 PBag.CUseItem
 	cBagMergeItem						=	2,--合成道具 PBag.CMergeItem
+	cBagExchangeItem                    =   3,--兑换物品 PBag.CExchangeItem
 
 	sBagInit							=	1,--初始化 PBag.SInit
 	sBagGainItem						=	2,--获取道具 PBag.SGainItem
@@ -27,12 +29,14 @@ local ECmdId = {
 	sBagStaffChange                     =   5,--使用道具后员工数据变化 PBag.SStaffChange
 	sBagPackage                         =   6,--使用礼包类物品后返回   PBag.SUsePackage
 	sBagGirlChange                      =   7,--使用道具后美女亲密度变化 PBag.SGirlChange
+	sBagExchangeItem                    =   8,--兑换物品反馈 PBag.SExchangeItem
 }
 
 function _M.ModuleInit(isReload)
 	local send = {
 		[ECmdId.cBagUseItem] = "PBag.CUseItem",
 		[ECmdId.cBagMergeItem] = "PBag.CMergeItem",
+		[ECmdId.cBagExchangeItem] = "PBag.CExchangeItem",
 	}
 	local recv = {
 		[ECmdId.sBagInit]		=	{proto = "PBag.SInit",		handle = _P.OnGetBagData},
@@ -42,6 +46,7 @@ function _M.ModuleInit(isReload)
 		[ECmdId.sBagStaffChange]=	{proto = "PBag.SStaffChange",handle = _P.OnStaffChange},
 		[ECmdId.sBagPackage]=	{proto = "PBag.SUsePackage",handle = _P.OnUsePackage},
 		[ECmdId.sBagGirlChange]=	{proto = "PBag.SGirlChange",handle = _P.OnGirlChange},
+		[ECmdId.sBagExchangeItem]=	{proto = "PBag.SExchangeItem",handle = _P.OnExchangeItem},
 	}
 	_M.Send = SocketMgr.Regist(Define.SysId.Bag, send, recv, isReload)
 end
@@ -60,6 +65,10 @@ function _M.OnMergeItem(id,num)
 	_M.Send(ECmdId.cBagMergeItem,{mergeid = id,mergecount = num})
 end
 
+function _M.ReqExchangeItem(_itemid,_exchangeId)
+	_M.Send(ECmdId.cBagExchangeItem,{itemid = _itemid,exchangeId = _exchangeId})
+end
+
 function _P.OnGetBagData(data)
 	MBag.BagInit(data.itemlist)
 	MBag.BagMergeInit(data.merge)
@@ -72,7 +81,6 @@ end
 
 function _P.OnGetItem(data)
 	MBag.Update(data.item,true)
-	
 	local csvItem = Csv.Item[data.item.itemid]
 	if csvItem ~= nil then
 		if csvItem.isForColorUp ~= nil and csvItem.isForColorUp == 2 then
@@ -99,6 +107,16 @@ function _P.OnGetItem(data)
 			if actId then
 				CActivity.UpdateTravalRed(actId)
 			end
+		end
+
+		-- 探险寻宝红点
+		if data.item.itemid == Define.AssetsType.DigTool then
+			CActivity.UpdateExploreRed()
+		end
+
+		-- 金融天赋红点
+		if data.item.itemid == Define.AssetsType.TalentScore then
+			CTalent.CheckTalentRedPoint()
 		end
 	end
 	
@@ -128,6 +146,15 @@ function _P.OnDelItem(data)
 
 		if csvItem.type == Define.BagType.EquipChip then
 			CEquipRot.CheckEquipRotRedPoint()
+		end
+
+		if data.item.itemid == Define.AssetsType.DigTool then
+			CActivity.UpdateExploreRed()
+		end
+
+		-- 金融天赋红点
+		if data.item.itemid == Define.AssetsType.TalentScore then
+			CTalent.CheckTalentRedPoint()
 		end
 		
 		if data.item.itemid == Define.AssetsType.Gold then
@@ -189,6 +216,10 @@ function _P.OnGirlChange(data)
 			WindowMgr.Call("UBag","GirlChange",data)
 		end
 	end
+end
+
+function _P.OnExchangeItem(data)
+	WindowMgr.Call("UBagExchange","UpdateExchange",data.itemId)
 end
 
 function _P.CheckIsUpdateStaffRed(itemid)

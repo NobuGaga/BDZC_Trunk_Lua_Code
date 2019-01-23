@@ -6,6 +6,10 @@ local SoundMgr = JRequire "Libs.Sound.SoundMgr"
 local MPlayer = JRequire "Dev.Player.MPlayer"
 local CPlayer = JRequire "Dev.Player.CPlayer"
 local MAircraft = JRequire "Dev.Aircraft.MAircraft"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local CMain = JRequire "Dev.Main.CMain"
+
 local _M = Class(WindowBase)
 local _P = {}
 local _R = {}
@@ -18,11 +22,23 @@ function _M:Dispatch(funcName, ...)
 	end
 end
 
+function _M:BeforeDestroy()
+	if self.OnClose ~= nil then
+		self.OnClose()
+
+		MPlayer.SecretaryRed = false
+		CMain.UpdateRedpoint(MPlayer.SecretaryRed, Define.SysId.DressUp)
+		local playerId = MPlayer.GetId()
+		CS.UnityEngine.PlayerPrefs.SetInt("SecretaryDress" .. playerId, 0)
+	end
+end
+
 --界面构建
-function _M:OnCreate(sysId, itemIconSize, iconOffset)
+function _M:OnCreate(sysId, itemIconSize, iconOffset, onClose)
 	local moudle = self:CreateMoudle(self._RootNode, "M_Home_Dress")
 	self.mMoudle = moudle
 	self.SysId = sysId
+	self.OnClose = onClose
 
 	self.CsvTable = {
 		[Define.SysId.Aircraft] = Csv.Aircraft,
@@ -32,6 +48,7 @@ function _M:OnCreate(sysId, itemIconSize, iconOffset)
 	self.ImgLight = moudle:Get("Ing")
 	self.ImgIcon = moudle:Get("Icon")
 	self.ImgIconBG = moudle:Get("IconBg")
+	self.ActorPanel = moudle:Get("ActorPanel")
 	self.IconOffset = iconOffset
 	self.IconSize = itemIconSize
 	if self.IconOffset ~= nil then
@@ -55,14 +72,13 @@ function _P.OnSetData(self,sysId)
 	BtnClose:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		self:Destroy()
-		end, nil, 0.9)
+	end, nil, 0.9)
 
 	local BtnChange = moudle:Get("Btn")
 	BtnChange:AddOnButton(function ( ... )
 		SoundMgr.Play(10001)
 		_P.OnClickChange(self)
-		self:Destroy()
-		end, nil, 0.9)
+	end, nil, 0.9)
 	
 	self.ItemTable = {}
 	_P.CreateList(self,sysId)
@@ -70,11 +86,15 @@ end
 
 function _P.CreateList(self,sysId)
 	local content = self.mMoudle:Get("Content")
+	content:DestroyChildren()
+
 	local dressTable = _P.GetSortTable(MBag.GetDressForSysId(sysId))
 	for k,v in ipairs(dressTable) do
 		if sysId ~= Define.SysId.Aircraft or not MAircraft.IsAircraftSkinUnActivative(v.itemid) then
 			local dressMoudle = JGuiManager.GetMoudle(content,"M_Home_Dress_Item", WindowType.UI, 0)
 			local csvItem = Csv.Item[v.itemid]
+			local getRect = dressMoudle:Get("TextBg")
+			getRect.Activity = false
 			if csvItem ~= nil and csvItem.attrId ~= nil then
 				local icon = dressMoudle:Get("Icon")
 				local csvTable
@@ -91,6 +111,11 @@ function _P.CreateList(self,sysId)
 							csvDress = Csv.AircraftAnimation[csvSkin.asset]
 						end
 					end
+				elseif sysId == Define.SysId.Manage then
+					csvDress = Csv.SecretaryDress[csvItem.attrId]
+
+					getRect.Activity = v.itemcount <= 0
+					dressMoudle:Get("Text").Text = Csv.Text("Home_tip7")
 				else
 					csvTable = self.CsvTable[sysId]
 					if csvTable ~= nil then
@@ -160,17 +185,113 @@ end
 
 function _P.ChangeIcon(self,itemid)
 	local csvItem = Csv.Item[itemid]
+	local descText = self.mMoudle:Get("text1")
+	local timeText = self.mMoudle:Get("text2")
+	local addRect = self.mMoudle:Get("TipsBg")
 	if csvItem ~= nil then
-		self.ImgIcon.SpriteName = csvItem.asset
-		self.ImgIconBG.SpriteName = csvItem.colorIcon
+		if self.SysId == Define.SysId.Manage and csvItem.attrId ~= nil then
+			local dressConf = Csv.SecretaryDress[csvItem.attrId]
+			if dressConf then
+				if self.ActorPanel.CachedTran.childCount > 0 then
+					self.ActorPanel:DestroyChildren()
+				end
+				local effectModule = CCommon.CreateEffect(self.ActorPanel, dressConf.actorId)
+				effectModule.LocalPosition = Vector2(0, -290)
+
+				self.ImgIconBG.SpriteName = dressConf.bgName
+
+				_P.OnClearTimer(self)
+				descText.Activity = true
+				descText.Text = dressConf.getDesc
+				timeText.Activity = true
+				if dressConf.isForever and dressConf.isForever == 1 then
+					timeText.Text = Csv.Text("Home_tip8")
+				else
+					local itemData = MPlayer.SecretaryTable[itemid]
+					if itemData ~= nil then
+						local leftTime = itemData.lefttime - HeartBeat.ServSecond()
+						if leftTime <= 0 then
+							leftTime = 0
+						else
+							self.UpdateShowTimer = self.mMoudle.SelfRect:AddOnUpdate(function()
+								_P.OnUpdateTime(self, itemData.lefttime)
+							end, nil, 1)
+						end
+						timeText.Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+					else
+						timeText.Text = Csv.Text("showcase_7", {time = LuaUtil.GetTimeHMS(dressConf.holdTime)})
+					end
+				end
+
+				addRect.Activity = true
+				self.mMoudle:Get("Tips").Text = Csv.Text("Home_tip10", {num = math.floor(dressConf.addpro / 100)})
+			else
+				descText.Activity = false
+				timeText.Activity = false
+				addRect.Activity = false
+				self.ImgIconBG.SpriteName = csvItem.colorIcon
+			end
+		else
+			self.ImgIcon.SpriteName = csvItem.asset
+			descText.Activity = false
+			timeText.Activity = false
+			addRect.Activity = false
+			self.ImgIconBG.SpriteName = csvItem.colorIcon
+		end
+	else
+		descText.Activity = false
+		timeText.Activity = false
+		addRect.Activity = false
 	end
 end
 
 function _P.OnClickChange(self)
 	local oldItemid = MPlayer.GetDress()[self.SysId]
 	if oldItemid ~= self.SelectItemid then
-		CPlayer.ChangeDress(self.SysId,self.SelectItemid)
+		if self.SysId == Define.SysId.Manage then
+			local isHas = MPlayer.SecretaryTable[self.SelectItemid] ~= nil
+			if isHas then
+				CPlayer.ReqSecretaryDress(self.SelectItemid)
+				self:Destroy()
+			else
+				CCommon.ShowError(Csv.Text("Home_tip9"))
+			end
+		else
+			CPlayer.ChangeDress(self.SysId,self.SelectItemid)
+		end
+	else
+		self:Destroy()
 	end
+end
+
+-- 每s更新
+function _P.OnUpdateTime(self, endTime)
+	local leftTime = endTime - HeartBeat.ServSecond()
+	if leftTime <= 0 then
+		leftTime = 0
+		_P.OnClearTimer(self)
+	end
+
+	self.mMoudle:Get("text2").Text = Csv.Text("showcase_5", {time = LuaUtil.GetTimeHMS(leftTime)})
+end
+
+
+-- 移除计时器
+function _P.OnClearTimer(self)
+	if self.UpdateShowTimer ~= nil then
+		self.UpdateShowTimer:Destroy()
+		self.UpdateShowTimer = nil
+	end
+end
+
+-- 界面更新
+function _R.RefreshDress(self)
+	CCommon.ShowError(Csv.Text("showcase_3"))
+
+	self.ImgLight:SetParent(self.mMoudle.SelfRect.CachedTran)
+	self.ItemTable = {}
+	_P.CreateList(self, self.SysId)
+	_R.RefreshSelected(self)
 end
 
 return _M

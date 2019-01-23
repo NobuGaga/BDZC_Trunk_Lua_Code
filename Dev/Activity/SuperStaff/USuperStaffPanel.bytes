@@ -69,7 +69,7 @@ function _M:OnCreate()
 		local colorDefault = Color(0/255, 195/255, 255/255, 1)
 		local tabHandle = TabGroup.new(function(funcId)
 			_P.OnChoose(self, funcId)
-		end, "fl_007_1", "fl_008_1", nil, nil, nil, nil,pageScrollView,contentTransform, colorDefault, colorLight)
+		end, "", "", nil, nil, nil, nil,pageScrollView,contentTransform, colorDefault, colorLight)
 	
 		local index = 1
 		for k,v in pairs(self.mData) do
@@ -87,13 +87,14 @@ function _M:OnCreate()
 		local curActId = next(self.mData)
 		--当有红点优先红点
 		if self.RedFuncId ~= nil then
-			local redConf = Csv.ActivityJaonChen[self.RedFuncId]
-			curActId = redConf.sortId
+			tabHandle:Choose(self.RedFuncId)
+		else
+			local curData = self.mData[curActId]
+			if curData ~= nil then
+				tabHandle:Choose(curData.actId)
+			end
 		end
-		local curData = self.mData[curActId]
-		if curData ~= nil then
-			tabHandle:Choose(curData.actId)
-		end
+		
 		self.TabHandle = tabHandle
 		self.mItemIndexTab = itemIndexTab
 	end
@@ -127,12 +128,12 @@ function _P.CreatePageItem(self, itemGrid, index, data)
 
 	local activityConf = Csv.ActivityJaonChen[data.actId]
 
-	itemModule.name = 'Btn_c' .. index
+	itemModule.name = 'Btn_c'
 	local nameText = itemModule:Get("Name")
-	nameText.name = "C_text" .. index
+	nameText.name = "C_text"
 
 	local Img = itemModule.SelfRect
-	Img.SpriteName = activityConf.funcImg
+	Img.SpriteName = activityConf.funcImg2
 	
 	self:RegistRedpoint(itemModule:Get("redpoint"), Define.SysId.SuperStaff, data.actId)
 
@@ -144,6 +145,25 @@ function _P.CreatePageItem(self, itemGrid, index, data)
 	end
 
 	return {imageWidget = itemModule.SelfRect, textWidget = nameText}
+end
+
+function _P.SelectPageItem(self,id)
+	local pageModule = self.PageModules
+	local activityConf = Csv.ActivityJaonChen[id]
+	
+	if pageModule ~= nil then
+		for k,v in pairs(pageModule)do
+			local activityConf = Csv.ActivityJaonChen[k]
+			if activityConf ~= nil then
+				local Img = v.imageWidget
+				if k == id then
+					Img.SpriteName = activityConf.funcImg
+				else
+					Img.SpriteName = activityConf.funcImg2
+				end
+			end
+		end
+	end
 end
 
 function _P.GetListData()
@@ -182,6 +202,7 @@ function _P.OnChoose(self, funcId)
 
 	self.CurSelectData = curData
 	_P.SetListData(self, curData.list, true)
+	_P.SelectPageItem(self,funcId)
 end
 
 

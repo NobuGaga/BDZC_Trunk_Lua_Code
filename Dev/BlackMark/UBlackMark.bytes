@@ -1,0 +1,257 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Libs.LuaUtil.bytes#_M]
+local luaUtil = JRequire"Libs.LuaUtil"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.Bag.MBag.bytes#_M]
+local MBag = JRequire "Dev.Bag.MBag"
+--@RefType [Dev.BlackMark.MBlackMark.bytes#_M]
+local MBlackMark = JRequire "Dev.BlackMark.MBlackMark"
+--@RefType [Dev.BlackMark.CBlackMark.bytes#_M]
+local CBlackMark = JRequire "Dev.BlackMark.CBlackMark"
+-- @RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_BlackMarket_UMain"
+local textTitle = "C_Text"
+local csvTitleText = "blackmark_title"
+local btnClose = "C_Back_Btn"
+local ItemMoudleName = "M_BlackMarket_Item"
+local DiscountMoudleName = "M_Discount_Light"
+local DiscountEffectPos = Vector2(0, 5)
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy(...) end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun then 
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitPosterInfo(self)
+	_P.InitProductList(self)
+	_P.InitBottomInfo(self)
+	_R.RefreshView(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(textTitle).Text = Csv.Text(csvTitleText)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	if Csv.Rule[Define.SysId.BlackMark] then
+		local btnInfo = self.moudle:Get("C_Full_Help_Btn")
+		if btnInfo then
+			btnInfo:AddOnButton(function ()
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.BlackMark)
+			end, nil, 1.2)
+		end
+	end
+end
+
+function _P.InitPosterInfo(self)
+	self.textNext = self.moudle:Get("textNext")
+	self.textGem = self.moudle:Get("textGem")
+	self.textGem.Text = MBag.GetItemNum(Define.AssetsType.Gold)
+	self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, 
+		function (eventHandle, itemid, itemcount, isAdd)
+			if itemid == Define.AssetsType.Gold then
+				self.textGem.Text = MBag.GetItemNum(itemid)
+			end
+		end)
+end
+
+function _P.InitProductList(self)
+	self.content = self.moudle:Get("content")
+	self.itemListCache = {}
+end
+
+function _P.RefreshProductList(self)
+	for _, itemMoudle in ipairs(self.itemListCache) do
+		itemMoudle.Activity = false
+	end
+	if MBlackMark.ProductList then
+		for index, productData in ipairs(MBlackMark.ProductList) do
+			if self.itemListCache[index] == nil then
+				_P.CreateProductItem(self)
+			end
+			_P.RefreshProductItem(self, index, productData)
+		end
+	end
+end
+
+function _P.CreateProductItem(self)
+	local itemMoudle = JGuiManager.GetMoudle(self.content, ItemMoudleName)
+	local item = {}
+	local index = #self.itemListCache + 1
+	item.textItemName = itemMoudle:Get("textItemName")
+	item.corner = itemMoudle:Get("corner")
+	item.textDiscount = itemMoudle:Get("textDiscount")
+	item.itemBorder = itemMoudle:Get("itemBorder")
+	item.itemBorder:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		if item.itemID then
+			CCommon.ShowItemTips(item.itemID)
+		end
+	end)
+	item.itemIcon = itemMoudle:Get("itemIcon")
+	item.canBuyRed = itemMoudle:Get("canBuyRed")
+	item.textCanBuy = itemMoudle:Get("textCanBuy")
+	item.textItemCount = itemMoudle:Get("textItemCount")
+	item.textCost = itemMoudle:Get("C_text")
+	item.btnBuy = itemMoudle:Get("C_Btn_b")
+	item.btnBuy:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		local cost = item.textCost.Text
+		if cost == nil or cost == "" then
+			cost = 0
+		else
+			cost = tonumber(cost)
+		end
+		if not MBag.CheckItemEnough(Define.AssetsType.Gold, cost) then
+			return
+		end
+		CBlackMark.Buy(index)
+	end)
+	self.itemListCache[index] = item
+end
+
+function _P.RefreshProductItem(self, index, productData)
+	local item = self.itemListCache[index]
+	item.itemID = productData.itemID
+	item.textItemName.Text = productData.name
+	local isDiscount = productData.discount ~= nil
+	item.corner.Activity = isDiscount
+	if isDiscount then
+		item.textDiscount.Text = productData.discount
+		if item.discountEffect then
+			item.discountEffect.Activity = productData.isDiscountEffect
+		elseif productData.isDiscountEffect then
+			local effectMoudle = JGuiManager.GetMoudle(item.corner, DiscountMoudleName)
+			item.discountEffect = effectMoudle.SelfRect
+			item.discountEffect.LocalPosition = DiscountEffectPos
+		end
+	end
+	item.itemBorder.SpriteName = productData.colorIcon
+	item.itemIcon.SpriteName = productData.icon
+	local isCanBuyMore = productData.canBuyCount > 1
+	item.canBuyRed.Activity = isCanBuyMore
+	if isCanBuyMore then
+		item.textCanBuy.Text = productData.canBuyCount
+	end
+	item.textItemCount.Text = Csv.Text("blackmark_count", {count = productData.count})
+	item.textCost.Text = productData.cost
+	local isMaxBuyTime = productData.canBuyCount <= 0
+	item.btnBuy.IsGray = isMaxBuyTime
+	item.btnBuy.RaycastTarget = not isMaxBuyTime
+end
+
+function _P.InitBottomInfo(self)
+	self.textClose = self.moudle:Get("textClose")
+	self.textClose.Text = Csv.Text("blackmark_counter", {time = luaUtil.GetTimeHMS(0)})	
+	self.btnRefresh = self.moudle:Get("C_Btn_b_8")
+	self.moudle:Get("C_text_8").Text = Csv.Text("club_exchange_refresh")
+	self.btnRefresh:AddOnButton(function ()
+		SoundMgr.Play(10001)
+		CCommon.CheckTips(	function (isSure)
+								if not isSure then
+									return
+								end
+								_P.OnClickRefresh(self)
+							end, 
+							{
+								items = {[1] = MBlackMark.RefreshCost}, 
+								content = Csv.Text("adventure_exchange_tip", {
+									num = MBlackMark.RefreshCost
+								})
+							},
+							Define.NoTipsAgainType.BlackMark)
+	end)
+	self.moudle:Get("textCostTips").Text = Csv.Text("flop_cost")
+	self.textCost = self.moudle:Get("textCost")
+end
+
+function _P.RefreshBottomInfo(self)
+	local isMaxRefreshTime = MBlackMark.IsMaxRefreshTime()
+	self.btnRefresh.IsGray = isMaxRefreshTime
+	self.btnRefresh.RaycastTarget = not isMaxRefreshTime
+	self.textCost.Activity = not isMaxRefreshTime
+	if not isMaxRefreshTime then
+		self.textCost.Text = MBlackMark.RefreshCost
+	end
+end
+
+function _P.OnClickRefresh(self)
+	local ownGem = self.textGem.Text
+	if ownGem == nil or ownGem == "" then
+		ownGem = 0
+	else
+		ownGem = tonumber(ownGem)
+	end
+	if ownGem < MBlackMark.RefreshCost then
+		CCommon.ShowError(Csv.Text("err_adventure_no_gold"))
+		return
+	end
+	CBlackMark.Refresh()
+end
+
+function _R.RefreshView(self)
+	self.textNext.Text = Csv.Text("blackmark_next", {text = MBlackMark.NextTimeText})
+	_P.RefreshProductList(self)
+	_P.RefreshBottomInfo(self)
+end
+
+function _R.RefreshCloseTime(self, lessTime)
+	if self.textClose == nil then
+		return
+	end
+	self.textClose.Text = Csv.Text("blackmark_counter", {time = luaUtil.GetTimeHMS(lessTime)})
+end
+
+function _R.OnBuy(self, index)
+	local productData = MBlackMark.ProductList[index]
+	local item
+	local pos
+	if index then
+		item = self.itemListCache[index]
+		if item then
+			pos = item.btnBuy
+			_P.RefreshProductItem(self, index, productData)
+		end
+	end
+	if pos == nil then
+		pos = self.moudle.SelfRect
+	end
+	-- CCommon.ShowFlyItem(pos, productData.itemID, productData.count, nil, Vector2.zero, false)
+	CCommon.ShowFlyItem(pos, productData.itemID, productData.count)
+end
+
+function _R.OnClose(self)
+	self:Destroy()
+	CCommon.ShowRight(Csv.Text("blackmark_close"))
+end
+
+return _M

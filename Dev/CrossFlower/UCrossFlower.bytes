@@ -1,0 +1,599 @@
+--[[
+	@desc :跨服鲜花榜
+    2018-12-17 14:34:43
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossFlower = JRequire "Dev.CrossFlower.MCrossFlower"
+local CCrossFlower = JRequire "Dev.CrossFlower.CCrossFlower"
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+local MBag = JRequire "Dev.Bag.MBag"
+local TabGroup = JRequire "Dev.Common.TabGroup"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+local FLOWER_EFFECT = 
+{
+	[1] = 10260,
+	[2] = 10261,
+	[3] = 10262,
+}
+
+function _M:BeforeDestroy( ... )
+	if self.scrollController ~= nil then
+		self.scrollController:delete()
+		self.scrollController = nil
+	end
+end
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+function _R.OnUpdateState(self)
+	if MCrossFlower.State == MCrossFlower.STATE.Open then
+		self.TimeNode.Text = Csv.Text("flower_10") .. LuaUtil.TransToYearMonthDay(MCrossFlower.EndTime)
+	else
+		self.TimeNode.Text = Csv.Text("siege_main_close")
+	end
+end
+
+function _R.OnUpdateInfo(self)
+	if MCrossFlower.ActID > 0 then
+		if self.RankType == MCrossFlower.RankType.Get then
+			if MCrossFlower.MyGetRank <= 0 then
+				self.MyRankNode.Text = Csv.Text("flower_11") .. Csv.Text("commerce_rank4")
+			else
+				local actCsv = Csv.CrossFlower[MCrossFlower.ActID]
+				local stageCsv = Csv.FlowerGet[actCsv.getid[MCrossFlower.MyGetStageType]]
+				self.MyRankNode.Text = Csv.Text("flower_11") .. stageCsv.name .. Csv.Text("flower_23", {num = MCrossFlower.MyGetRank})
+			end
+		else
+			if MCrossFlower.MySendRank <= 0 then
+				self.MyRankNode.Text = Csv.Text("flower_11") .. Csv.Text("commerce_rank4")
+			else
+				local actCsv = Csv.CrossFlower[MCrossFlower.ActID]
+				local stageCsv = Csv.FlowerSent[actCsv.sentid[MCrossFlower.MySendStageType]]
+				self.MyRankNode.Text = Csv.Text("flower_11") .. stageCsv.name .. Csv.Text("flower_23", {num = MCrossFlower.MySendRank})
+			end
+		end
+	end
+end
+
+-- 送花返回
+function _R.OnSendFlowerBack(self, type, data)
+	if self.EffectNode ~= nil then
+		self.EffectNode:Destroy()
+	end
+	self.EffectNode = CCommon.CreateEffectEx(self._RootNode, FLOWER_EFFECT[self.FlowerIndex], nil, function(  )
+		_R.OnUpdateList(self, type, data)
+	end)
+end
+
+function _R.OnUpdateList(self, type, data)
+	if type == self.RankType then
+		self.StageType = data.rankType or self.StageType
+		_P.updateStageTypeBtn(self)
+
+		--刷新信息
+		self.SelectPlayerID = 0
+		self.SelectPlayerServerID = 0
+		self.ContentNode:DestroyChildren()
+		if self.scrollController ~= nil then
+			self.scrollController:delete()
+			self.scrollController = nil
+		end
+		local list = data.list
+		if list ~= nil and #list > 0 then
+			self.NoneNode.Activity = false
+			local selectId = data.playerid
+			local selectServerId = data.oriServerId
+			if selectId == nil or selectId <= 0 then
+				selectId = MPlayer.GetId()
+				selectServerId = MPlayer.GetServerId()
+			end
+			for index,info in pairs(list) do
+				if info.id == selectId and info.oriServerId == selectServerId then
+					self.SelectPlayerID = selectId
+					self.SelectPlayerServerID = selectServerId
+
+					-- 滚到最下方，让玩家能看到前面的人的票数，by：pyh
+					if index >= 5 then
+						self.ContentNode.LocalPosition = Vector2(0, (((63 + 12) * index - 6) - 340))
+					end
+					break
+				end
+			end
+			if self.SelectPlayerID == 0 then
+				self.SelectPlayerID = list[1].id
+				self.SelectPlayerServerID = list[1].oriServerId
+			end
+			self.SelectMoudle = self:CreateMoudle(self.ContentNode, "M_Flower_Rank_H")
+			self.scrollController = RankVertical.new(self.ScrollViewNode, self.ContentNode, "M_Flower_Rank",
+				function(index,info,oneMoudle)
+					if oneMoudle ~= nil then
+						if info.rank == 0 then
+							oneMoudle:Get("rank").Text = Csv.Text("flower_28")
+							if oneMoudle:Get("ItemImg") ~= nil then
+								oneMoudle:Get("ItemImg").Activity = false
+							end
+						elseif info.rank > 3 then
+							oneMoudle:Get("rank").Text = info.rank
+						end
+						oneMoudle.SelfRect.LocalPosition = Vector2(0,((63 + 12) * #list - 12)/2 - ((index - 1) * (63 + 12) + 63/2))
+						oneMoudle:Get("name").Text = info.name
+						if self.RankType == MCrossFlower.RankType.Get then
+							oneMoudle:Get("value").Text = info.getNum
+						else
+							oneMoudle:Get("value").Text = info.sendNum
+						end
+						oneMoudle.SelfRect:AddOnButton(function (  )
+							_P.pressPlayerLine(self, info, oneMoudle)
+						end, nil, 0.96)
+
+						if self.SelectPlayerID == info.id and self.SelectPlayerServerID == info.oriServerId then
+							_P.pressPlayerLine(self, info, oneMoudle)
+						end
+					end
+				end)
+			self.scrollController:CreateScroll(8,340,650,63,12,list)
+		else
+			_P.setNone(self)
+		end		
+	end
+end
+
+function _R.OnDropItem(self, data)
+	if self.RankType == MCrossFlower.RankType.Get then
+		local btn 
+		if data.index == 1 then
+			btn = self.GiveBtn_1
+		elseif data.index == 2 then
+			btn = self.GiveBtn_2
+		else
+			btn = self.GiveBtn_3
+		end
+		if btn ~= nil then
+			for index,v in pairs(data.list) do
+				CCommon.ShowFlyItem(btn, v.key, v.value, (index - 1) * 0.6)
+			end
+		end
+	end
+end
+
+function _P.pressPlayerLine(self, info, oneMoudle)
+	self.SelectMoudle.SelfRect.LocalPosition = oneMoudle.SelfRect.LocalPosition
+	self.SelectPlayerID = info.id
+	self.SelectPlayerServerID = info.oriServerId
+	self.PlayerNameNode.Text = _P.GetPlayerName(info.name)
+	if info.rank == 0 then
+		self.PlayerRankNode.Text = Csv.Text("flower_28")
+	else
+		self.PlayerRankNode.Text = info.rank
+	end
+	if self.RankType == MCrossFlower.RankType.Get then
+		self.PlayerFlowerNode.Text = info.getNum
+	else
+		self.PlayerFlowerNode.Text = info.sendNum
+	end
+	self.PlayerHeadNode.SpriteName = MPlayer.GetSpFromSex(info.head, info.sex)
+	self.PlayerBodyNode.SpriteName = MPlayer.GetSpFromSex(info.body, info.sex)
+	if info.sex == Define.Sex.Female then
+		self.GiveTitleNode.Text = Csv.Text("flower_9")
+	else
+		self.GiveTitleNode.Text = Csv.Text("flower_8")
+	end
+end
+
+function _P.GetPlayerName(nameStr)
+	local ret1 = string.match(nameStr, "S%d+.") or ""
+	return string.gsub(nameStr, ret1, "")
+end
+
+function _P.OnTypeChoose(self, rankType)
+	if not self.AutoChoose then
+		self.EnterPlayerID = MPlayer.GetId()
+		self.EnterServerID = MPlayer.GetServerId()
+	end
+	if MCrossFlower.ActID > 0 then
+		self.RankType = rankType
+		local csvLine = Csv.CrossFlower[MCrossFlower.ActID]
+		if csvLine ~= nil then
+			if self.RankType == MCrossFlower.RankType.Get then
+				_P.OnStageChoose(self, MCrossFlower.MyGetStageType, true)
+				local stageCsv
+				local info
+				for k,v in pairs(csvLine.getid) do
+					stageCsv = Csv.FlowerGet[v]
+					info = self.StageNode[k]
+					info.btnText.Text = stageCsv.name
+					info.btnChooseText.Text = stageCsv.name
+				end
+				self.SearchNode.Activity = true
+				self.SerChatNode.Activity = true
+				self.GetRightNode.Activity = true
+				self.SendRightNode.Activity = false
+				self.NumTitleNode.Text = Csv.Text("flower_24")
+				self.PlayerFlowerTitleNode.Text = Csv.Text("flower_24")
+				self.GiveNum_1.Text = "X" .. csvLine.sendNum[1]
+				self.GiveNum_2.Text = "X" .. csvLine.sendNum[2]
+				self.GiveNum_3.Text = "X" .. csvLine.sendNum[3]
+			else
+				_P.OnStageChoose(self, MCrossFlower.MySendStageType, true)
+				local stageCsv
+				local info
+				for k,v in pairs(csvLine.sentid) do
+					stageCsv = Csv.FlowerSent[v]
+					info = self.StageNode[k]
+					info.btnText.Text = stageCsv.name
+					info.btnChooseText.Text = stageCsv.name
+				end
+				self.SearchNode.Activity = false
+				self.SerChatNode.Activity = false
+				self.GetRightNode.Activity = false
+				self.SendRightNode.Activity = true
+				self.NumTitleNode.Text = Csv.Text("flower_25")
+				self.PlayerFlowerTitleNode.Text = Csv.Text("flower_25")
+			end
+		end
+	end
+end
+
+function _P.updateStageTypeBtn(self)
+	for stageType,info in pairs(self.StageNode) do
+		if stageType == self.StageType then
+			info.btnChoose.Activity = true
+		else
+			info.btnChoose.Activity = false
+		end
+	end
+
+	local actCsv = Csv.CrossFlower[MCrossFlower.ActID]
+	if actCsv ~= nil then
+		local stageCsv
+		if self.RankType == MCrossFlower.RankType.Get then
+			stageCsv = Csv.FlowerGet[actCsv.getid[self.StageType]]
+		else
+			stageCsv = Csv.FlowerSent[actCsv.sentid[self.StageType]]
+		end
+		self.TitleNode.SpriteName = stageCsv.icon
+		self.SceneNode.SpriteName = stageCsv.bg
+		self.TipsNode.Text = stageCsv.tips
+	end
+
+	_R.UpdateRedPoint(self)
+end
+
+function _P.setNone(self)
+	self.GiveTitleNode.Text = Csv.Text("flower_8")
+	self.NoneNode.Activity = true
+	self.PlayerNameNode.Text = Csv.Text("flower_30")
+	self.PlayerRankNode.Text = "??"
+	self.PlayerFlowerNode.Text = "??????"
+	self.PlayerHeadNode.SpriteName = ""
+	self.PlayerBodyNode.SpriteName = ""
+end
+
+function _P.OnStageChoose(self, stageType, isChangeType)
+	if isChangeType or stageType ~= self.StageType then
+		self.StageType = stageType
+		if isChangeType then
+			if self.RankType == MCrossFlower.RankType.Get then
+				CCrossFlower.ReqGetListByPlayer(self.EnterPlayerID, self.EnterServerID)
+			else
+				CCrossFlower.ReqSendListByPlayer(self.EnterPlayerID, self.EnterServerID)
+			end
+		else
+			if self.RankType == MCrossFlower.RankType.Get then
+				CCrossFlower.ReqGetListByType(self.StageType)
+			else
+				CCrossFlower.ReqSendListByType(self.StageType)
+			end
+		end
+		self.SelectPlayerID = 0
+		self.SelectPlayerServerID = 0
+		self.ContentNode:DestroyChildren()
+		if self.scrollController ~= nil then
+			self.scrollController:delete()
+			self.scrollController = nil
+		end
+		if self.EffectNode ~= nil then
+			self.EffectNode:Destroy()
+			self.EffectNode = nil
+		end
+		-- _P.setNone(self)
+	end
+	_P.updateStageTypeBtn(self)
+end
+
+function _P.pressGiveBtn(self, index)
+	if MCrossFlower.State == MCrossFlower.STATE.Open then
+		if self.SelectPlayerID > 0 then
+			if self.SelectPlayerID == MPlayer.GetId() and self.SelectPlayerServerID == MPlayer.GetServerId() then
+				CCommon.ShowError(Csv.Text("flower_27"))
+			else
+				local csvLine = Csv.CrossFlower[MCrossFlower.ActID]
+				local sendNum = csvLine.sendNum[index]
+
+				if MBag.CheckItemEnough(MCrossFlower.FlowerItemID, sendNum) then
+					self.FlowerIndex = index
+					CCrossFlower.ReqSendFlower(self.SelectPlayerID, self.SelectPlayerServerID, index)
+				end
+			end	
+		else
+			CCommon.ShowError(Csv.Text("flower_31"))
+		end
+	else
+		CCommon.ShowError(Csv.Text("siege_main_close"))
+	end
+end
+
+function _P.pressToSendFlowerBtn(self)
+	if self.SelectPlayerID > 0 then
+		if self.SelectPlayerID == MPlayer.GetId() and self.SelectPlayerServerID == MPlayer.GetServerId() then
+			CCommon.ShowError(Csv.Text("flower_27"))
+		else
+			_P.autoChooseTab(self, MCrossFlower.RankType.Get, self.SelectPlayerID, self.SelectPlayerServerID)
+		end	
+	else
+		CCommon.ShowError(Csv.Text("flower_31"))
+	end
+end
+
+function _P.autoChooseTab(self, type, playerId, serverId)
+	self.EnterPlayerID = playerId
+	self.EnterServerID = serverId
+	self.AutoChoose = true
+	self.TabHandle:Choose(type)
+	self.AutoChoose = false
+end
+
+function _R.UpdateRedPoint(self)
+	local isAllFalse = false
+	if MCrossFlower.State == MCrossFlower.STATE.Finish then
+		if self.RankType == MCrossFlower.RankType.Get then
+			if MCrossFlower.MyGetRewardState == MCrossFlower.RewardState.CanGet then
+				if self.StageType == MCrossFlower.MyGetStageType then
+					self.RewardRedPointNode.Activity = true
+				else
+					self.RewardRedPointNode.Activity = false
+				end
+				for stageType,info in pairs(self.StageNode) do
+					if stageType == MCrossFlower.MyGetStageType then
+						info.redpoint.Activity = true
+					else
+						info.redpoint.Activity = false
+					end					
+				end
+			else
+				isAllFalse = true
+			end
+		else
+			if MCrossFlower.MySendRewardState == MCrossFlower.RewardState.CanGet then
+				if self.StageType == MCrossFlower.MySendStageType then
+					self.RewardRedPointNode.Activity = true
+				else
+					self.RewardRedPointNode.Activity = false
+				end
+				for stageType,info in pairs(self.StageNode) do
+					if stageType == MCrossFlower.MySendStageType then
+						info.redpoint.Activity = true
+					else
+						info.redpoint.Activity = false
+					end					
+				end
+			else
+				isAllFalse = true
+			end
+		end
+	else
+		isAllFalse = true
+	end
+	if isAllFalse then
+		self.RewardRedPointNode.Activity = false
+		for stageType,info in pairs(self.StageNode) do
+			info.redpoint.Activity = false
+		end
+	end
+end
+
+function _M:OnCreate(enterPlayerId, enterServerId)
+	CCrossFlower.ReqOpenUI()
+	self.EnterPlayerID = enterPlayerId
+	self.EnterServerID = enterServerId
+	if self.EnterPlayerID == nil or self.EnterServerID == nil or self.EnterPlayerID <= 0 or self.EnterServerID <= 0 then
+		self.EnterPlayerID = MPlayer.GetId()
+		self.EnterServerID = MPlayer.GetServerId()
+	end
+
+	local moudle = self:CreateMoudle(self._RootNode, "M_FlowerList_Main")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end,nil,0.9)
+	local helpBtn = moudle:Get("C_Full_Help_Btn")
+	if helpBtn ~= nil then
+		if Csv.Rule[self._SysId] ~= nil then
+			helpBtn:AddOnButton(function ( ... )
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", self._SysId)
+				if self.EffectNode ~= nil then
+					self.EffectNode:Destroy()
+					self.EffectNode = nil
+				end
+			end, nil,  1.2)
+		else
+			helpBtn.Activity = false
+		end
+	end
+	local funcCsv = Csv.Func[self._SysId]
+    moudle:Get("C_Text").Text = funcCsv.name
+	
+	self.EffectNode = nil
+	self.scrollController = nil
+	self.RankType = MCrossFlower.RankType.Get
+	self.StageType = MCrossFlower.MyGetStageType
+	self.SelectPlayerID = 0
+	self.SelectPlayerServerID = 0
+	self.TimeNode = moudle:Get("Time")
+	self.MyRankNode = moudle:Get("RankNum")
+	_R.OnUpdateState(self)
+	_R.OnUpdateInfo(self)
+
+	self.ScrollViewNode = moudle:Get("scrollView")
+	self.ContentNode = moudle:Get("content")
+	self.SearchNode = moudle:Get("Search")
+	self.SerChatNode = moudle:Get("Canvassing")
+	self.TipsNode = moudle:Get("Tips")
+	self.GetRightNode = moudle:Get("SenceBg1")
+	self.SendRightNode = moudle:Get("SenceBg3")
+	self.TitleNode = moudle:Get("Title")
+	self.SceneNode = moudle:Get("Sence")
+	self.NoneNode = moudle:Get("None")
+	self.NumTitleNode = moudle:Get("Fraction")
+	moudle:Get("ranking").Text = Csv.Text("rank_rank")
+	moudle:Get("name").Text = Csv.Text("rank_name")
+	self.NoneNode.Text = Csv.Text("flower_30")
+	self.NoneNode.Activity = false
+	--一键拉票
+		moudle:Get("CanvassingText").Text = Csv.Text("flower_3")
+		self.SerChatNode:AddOnButton(function (  )
+			if MCrossFlower.State == MCrossFlower.STATE.Open then
+				WindowMgr.Create("UCrossFlowerSerChat")
+				if self.EffectNode ~= nil then
+					self.EffectNode:Destroy()
+					self.EffectNode = nil
+				end
+			else
+				CCommon.ShowError(Csv.Text("siege_main_close"))
+			end
+		end)
+	--搜索玩家
+		self.LastSearchTime = 0		
+		moudle:Get("SearchText").Text = Csv.Text("flower_2")
+		self.SearchNode:AddOnButton(function (  )
+			if MCrossFlower.State == MCrossFlower.STATE.Open then
+				local curTime = HeartBeat.ServSecond()
+				if curTime > self.LastSearchTime + 1 then
+					self.LastSearchTime = curTime
+					WindowMgr.Create("UCrossFlowerSearch")
+					if self.EffectNode ~= nil then
+						self.EffectNode:Destroy()
+						self.EffectNode = nil
+					end
+				end
+			else
+				CCommon.ShowError(Csv.Text("siege_main_close"))
+			end
+		end)
+	--鲜花商城
+		moudle:Get("ShopText").Text = Csv.Text("flower_1")
+		moudle:Get("Shop"):AddOnButton(function (  )
+			if MCrossFlower.ActID > 0 then
+				WindowMgr.Create("UCrossFlowerShop")
+				if self.EffectNode ~= nil then
+					self.EffectNode:Destroy()
+					self.EffectNode = nil
+				end
+			else
+				CCommon.ShowError(Csv.Text("siege_main_close"))
+			end
+		end)
+	--我拥有的鲜花数
+		self.FlowerNumNode = moudle:Get("FlowerNum")
+
+		local flowerNum = MBag.GetItemNum(MCrossFlower.FlowerItemID)
+		local showStr = (flowerNum <= 0 and 'flower_39') or 'flower_7'
+		self.FlowerNumNode.Text = Csv.Text(showStr, {num = flowerNum})
+		self:RegistCallEvent(Define.EventListenId.ItemUpdateEvent, function (eventHandle, itemId, itemNum, isAdd )
+			if itemId == MCrossFlower.FlowerItemID then
+				local flowerNum = MBag.GetItemNum(MCrossFlower.FlowerItemID)
+				local showStr = (flowerNum <= 0 and 'flower_39') or 'flower_7'
+				self.FlowerNumNode.Text = Csv.Text(showStr, {num = flowerNum})
+			end
+		end)
+	--送给她花
+		self.GiveTitleNode = moudle:Get("GiveTitle")
+		self.GiveNum_1 = moudle:Get("GiveNum_1")
+		self.GiveNum_2 = moudle:Get("GiveNum_2")
+		self.GiveNum_3 = moudle:Get("GiveNum_3")
+		self.GiveBtn_1 = moudle:Get("GiveBtn_1")
+		self.GiveBtn_2 = moudle:Get("GiveBtn_2")
+		self.GiveBtn_3 = moudle:Get("GiveBtn_3")
+		self.GiveBtn_1:AddOnButton(function(  )
+			_P.pressGiveBtn(self, 1)
+		end)
+		self.GiveBtn_2:AddOnButton(function(  )
+			_P.pressGiveBtn(self, 2)
+		end)
+		self.GiveBtn_3:AddOnButton(function(  )
+			_P.pressGiveBtn(self, 3)
+		end)
+	--选中的玩家信息
+		moudle:Get("RankText").Text = Csv.Text("cross_rank_shpm")
+		self.PlayerNameNode = moudle:Get("NameText")
+		self.PlayerRankNode = moudle:Get("RankTextNum")
+		self.PlayerFlowerTitleNode = moudle:Get("Text")
+		self.PlayerFlowerNode = moudle:Get("FlowerNumText")
+		self.PlayerHeadNode = moudle:Get("Head")
+		self.PlayerBodyNode = moudle:Get("Body")
+	--结算奖励
+		self.RewardRedPointNode = moudle:Get("Red00")
+		moudle:Get("RewardText").Text = Csv.Text("flower_6")
+		moudle:Get("Reward"):AddOnButton(function (  )
+			if MCrossFlower.ActID > 0 then
+				WindowMgr.Create("UCrossFlowerReward", self.RankType, self.StageType)
+				if self.EffectNode ~= nil then
+					self.EffectNode:Destroy()
+					self.EffectNode = nil
+				end
+			else
+				CCommon.ShowError(Csv.Text("siege_main_close"))
+			end
+		end)
+	--去送花
+		moudle:Get("GoBtntext").Text = Csv.Text("flower_21")
+		moudle:Get("GoBtn"):AddOnButton(function(  )
+			_P.pressToSendFlowerBtn(self)
+		end)
+	--阶段按钮
+		self.StageNode = {}
+		for _,index in pairs(MCrossFlower.StageType) do
+			self.StageNode[index] = 
+			{
+				btn = moudle:Get("Label"..index),
+				btnText = moudle:Get("C_text_"..index),
+				btnChoose = moudle:Get("select_"..index),
+				btnChooseText = moudle:Get("C_text_"..index..index),
+				redpoint = moudle:Get("redpoint_"..index),
+			}
+			moudle:Get("Label"..index):AddOnButton(function()
+				_P.OnStageChoose(self, index)
+			end)
+		end
+
+	--table页
+		local tabHandle = TabGroup.new(function (rankType)
+			_P.OnTypeChoose(self, rankType)
+		end, "yth_023", "yth_023",nil,nil,nil,nil,nil,nil,Color(0,195/255,1,1),Color(1,1,75/255,1))
+		self.TabHandle = tabHandle
+		tabHandle:Add(MCrossFlower.RankType.Get, moudle:Get("Toggle1"), moudle:Get("C_text_1_0"), Csv.Text("flower_4"))
+		tabHandle:Add(MCrossFlower.RankType.Send, moudle:Get("Toggle2"), moudle:Get("C_text_2_0"), Csv.Text("flower_5"))
+		self:RegistRedpoint(moudle:Get("redpoint_1_0"), Define.SysId.CrossFlower, MCrossFlower.RankType.Get)
+		self:RegistRedpoint(moudle:Get("redpoint_2_0"), Define.SysId.CrossFlower, MCrossFlower.RankType.Send)
+
+	_P.autoChooseTab(self, self.RankType, self.EnterPlayerID, self.EnterServerID)
+	MCrossFlower.EnterRed = false
+	CCrossFlower.CheckRedPoint()
+end
+
+return _M

@@ -6,6 +6,7 @@ local EventCenter = JRequire "Dev.EventCenter"
 local CCommon = JRequire "Dev.Common.CCommon"
 --@RefType [Dev.Main.CMain.bytes#_M]
 local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
 --@RefType [Dev.Player.HeartBeat.bytes#_M]
 local HeartBeat = JRequire "Dev.Player.HeartBeat"
 --@RefType [SDK.SDKMgr.bytes#_M]
@@ -18,6 +19,8 @@ local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MTalk = JRequire "Dev.Talk.MTalk"
 --@RefType [Dev.SuperVIP.CSuperVIP.bytes#_M]
 local CSuperVIP = JRequire "Dev.SuperVIP.CSuperVIP"
+local MBag = JRequire "Dev.Bag.MBag"
+
 
 --外部接口模块 *** 只放置共有接口, 禁止放变量
 local _M = {}
@@ -39,6 +42,7 @@ local CmdId =
 	cLiveHead       = 11,--兑换头像 PPlayer.CLiveHead
 	cChangeHead     = 12,--修改头像 PPlayer.CLiveHead
 	cChatBGPutOn    = 13,--穿戴聊天框 PPlayer.CChatBGPutOn
+	cSecretary		= 14,--更换秘书皮肤 PPlayer.CSecretary
 
 	sCommonError 	= 1, --通用提示协议 PPlayer.SCommonError
 	sDailyReset 	= 2, --跨天消息
@@ -71,6 +75,7 @@ local CmdId =
 	sChatBGUpdate     = 29, --穿戴的聊天框变更, 前端判断没有则为新增加入 PPlayer.SChatBGPutOn
 	sChangeSexSuccess = 30, --修改性别成功
 	sSexUpdate        = 31, --性别更新 PPlayer.SChangeSex
+	sSecretary		  = 32, --秘书装扮信息更新PPlayer.SSecretary
 }
 
 function _M.ModuleClean()
@@ -93,6 +98,7 @@ function _M.ModuleInit(isReload)
 		[CmdId.cLiveHead] = "PPlayer.CLiveHead",
 		[CmdId.cChangeHead] = "PPlayer.CLiveHead",
 		[CmdId.cChatBGPutOn] = "PPlayer.CChatBGPutOn",
+		[CmdId.cSecretary] = "PPlayer.CSecretary",
 	}
 	--接收消息协议注册
 	local recv = {
@@ -131,10 +137,24 @@ function _M.ModuleInit(isReload)
 		[CmdId.sChatBGUpdate] = {	proto = "PPlayer.SChatBGPutOn",				handle = _P.OnChatBGUpdate},
 		[CmdId.sChangeSexSuccess] = {	proto = "PPlayer.SChangeSex",			handle = _P.OnChangeSexSuccess},
 		[CmdId.sSexUpdate] = {	proto = "PPlayer.SChangeSex",					handle = _P.OnSexUpdate},
+		[CmdId.sSecretary] = {	proto = "PPlayer.SSecretary",					handle = _P.OnChangeMissDress},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Player, send, recv, isReload)	
 end
+
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function(eventHandle)
+	for k,v in pairs(MPlayer.SecretaryTable) do
+		if v.lefttime ~= nil and v.lefttime > 0 then
+			local isRefresh = (v.lefttime - HeartBeat.ServSecond()) <= 0
+			if isRefresh then
+				_M.ReqSecretaryDress()
+				MPlayer.SecretaryTable[k] = nil -- 倒计时为0 ，删除该道具
+				break
+			end
+		end
+	end
+end, true)
 
 --请求升级
 function _M.LevelUpReq()
@@ -187,6 +207,11 @@ end
 --穿戴聊天框
 function _M.ReqChatBGPutOn(id)
 	_M.Send(CmdId.cChatBGPutOn, {id = id})
+end
+
+-- 装扮道具时为0时，向后端请求(更换)
+function _M.ReqSecretaryDress(id)
+	_M.Send(CmdId.cSecretary, {id = id})
 end
 
 --功能开放列表
@@ -295,6 +320,7 @@ function _P.OnInit(msg)
 	info.level = msg.level
 	info.exp = msg.exp
 	info.serverId = msg.serverId
+	info.highestPower = msg.highestPower
 	info.avatar.head = msg.avatar.head
 	info.avatar.body = msg.avatar.body
 
@@ -350,6 +376,7 @@ function _P.OnUpdateAttr(msg)
 		end
 	end
 	info.power = msg.fightpower
+	info.highestPower = msg.highestPower
 
 	EventCenter.CallEventTrigger(Define.EventListenId.PlayerAttrUpdate)
 end
@@ -511,6 +538,54 @@ function _P.OnSexUpdate(data)
 	CCommon.ShowRight(Csv.Text("player_change18"))
 end
 
+-- 更换别墅秘书装扮
+function _P.OnChangeMissDress(data)
+	MPlayer.PlayerInfo.dress[Define.SysId.Manage] = data.id
+
+	if data.idlist ~= nil then
+		MPlayer.SecretaryTable = {}
+		for k,v in pairs(data.idlist) do
+			MPlayer.SecretaryTable[v.id] = v
+		end
+	end
+
+	if WindowMgr.IsCreated("UHomeMap") then
+		WindowMgr.Call("UHomeMap", "RefreshDress", {sysId = Define.SysId.Manage, itemId = data.id})
+	end
+
+	if WindowMgr.IsCreated("UHomeDress") then
+		WindowMgr.Call("UHomeDress", "RefreshDress")
+	end
+
+	-- 更换装扮不需要判定红点，只有添加、删除、Init才用判定
+	if data.status ~= nil then
+		local playerPrefs = CS.UnityEngine.PlayerPrefs
+		local playerId = MPlayer.GetId()
+		-- 1:初始化、2、增加、3、消失、4：更换
+		if data.status == 1 then
+			if playerPrefs.HasKey("SecretaryDress" .. playerId) then
+				local playerKey = playerPrefs.GetInt("SecretaryDress" .. playerId)
+				if playerKey == 1 then
+					_P.CheckDressRedPoint()
+				end
+			else
+				_P.CheckDressRedPoint()
+			end
+		elseif data.status == 2 then
+			_P.CheckDressRedPoint()
+		elseif data.status == 3 then
+			--删除而且是删除最后一个道具才用判断红点
+			local dressNum = 0
+			for k,v in pairs(MPlayer.SecretaryTable) do
+				dressNum = dressNum + 1
+			end
+			if dressNum <= 1 then
+				_P.CheckDressRedPoint()
+			end
+		end
+	end
+end
+
 --红包---
 --_type，_packetNum是备用字段，暂时没有这个需求
 function _M.ReqSendRedPacket(_gold,_type,_packetNum)
@@ -575,6 +650,18 @@ end
 function _P.OnCrossSrv(data)
 	local info = MPlayer.PlayerInfo
 	info.iscross = data.iscross
+end
+
+-- 装扮红点
+function _P.CheckDressRedPoint()
+	local dressNum = 0
+	for k,v in pairs(MPlayer.SecretaryTable) do
+		dressNum = dressNum + 1
+	end
+
+	MPlayer.SecretaryRed = dressNum > 1
+	CS.UnityEngine.PlayerPrefs.SetInt("SecretaryDress" .. MPlayer.PlayerInfo.id, (MPlayer.SecretaryRed and 1) or 0)
+	CMain.UpdateRedpoint(MPlayer.SecretaryRed, Define.SysId.DressUp)
 end
 
 return _M

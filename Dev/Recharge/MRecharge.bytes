@@ -44,6 +44,7 @@ end
 
 function _P.SetCsvRechargeSdkProductId()
 	_M.CsvRechargeIDToProductID = {}
+	local isReplace = Csv.ProductIDReplace[GameSetting.PackageName]
 	for _, csvValue in ipairs(_M.CsvRecharge) do
 		local sdkProductIdPrefix = LuaUtil.StringSplit(csvValue.sdkProductId, ",")
 		local sdkProductId
@@ -52,6 +53,13 @@ function _P.SetCsvRechargeSdkProductId()
 				local spidAndProID = LuaUtil.StringSplit(value, ":")
 				if spidAndProID[1] and spidAndProID[1] == GameSetting.Spid and spidAndProID[2] then
 					sdkProductId = spidAndProID[2]
+				end
+			end
+			if sdkProductId and isReplace then
+				sdkProductIdPrefix = LuaUtil.StringSplit(sdkProductId, "%.")
+				if #sdkProductIdPrefix > 1 then
+					local endString = sdkProductIdPrefix[#sdkProductIdPrefix]
+					sdkProductId = GameSetting.PackageName .. "." .. endString
 				end
 			end
 		end

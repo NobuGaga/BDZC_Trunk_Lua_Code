@@ -74,6 +74,7 @@ function _M:OnCreate(data)
 	self.maxNum = clubConf.maxJoin
 	self.totalScore = data.totalScore
 	local playerid = MPlayer.GetId()
+	self.PlayerId = playerid
 	module:Get("name").Text = data.name
 	module:Get("SeatNum").Text = ((data.msgList == nil and 0) or #data.msgList) .. '/' .. self.maxNum
 	module:Get("FractionNum").Text = (data.totalScore < 0 and 0) or data.totalScore
@@ -418,6 +419,28 @@ function _P.OnCreateSeatItem(self, data, itemGrid, itemName, isRight, index)
 	local iconTween = headIconImg.CachedTran:GetJTweener((isRight and ICON_POSY_TWEEN_RIGHT) or ICON_POSY_TWEEN_LEFT)
 	iconTween:Play()
 
+	local enterRect = itemModule:Get("entry")
+	if self.PlayerId == self.partyData.playerid and data ~= nil and data.ownJoinState ~= nil then
+		local enterText = itemModule:Get("entryText")
+		if data.ownJoinState == 1 then
+			headIconImg:AddOnButton(function(...)
+				SoundMgr.Play(10001)
+				_P.OnClickHead(self, data)
+			end, nil, 1.0)
+			enterText.Text = Csv.Text("club_enter1")
+			enterRect.SpriteName = 'ty_108_2'
+			enterRect.Activity = true
+		elseif data.ownJoinState == 2 then
+			enterText.Text = Csv.Text("club_enter2")
+			enterRect.SpriteName = 'ty_108'
+			enterRect.Activity = true
+		else
+			enterRect.Activity = false
+		end
+	else
+		enterRect.Activity = false
+	end
+
 	seatItem.module = itemModule
 	return seatItem
 end
@@ -620,6 +643,17 @@ function _R.OnInviteFriendBack(self, data)
 	self.partyData.inviteTime = data.inviteTime + HeartBeat.ServSecond()
 	self.partyData.inviteNum = data.inviteNum
 	_P.CreateInviteTimer(self)
+end
+
+
+-- 点击入座玩家头像,ownJoinState 0：目标无游艇会 1：目标开启但玩家未参加 2：目标开启且玩家已参与
+function _P.OnClickHead(self, data)
+	if self.PlayerId ~= self.partyData.playerid or data == nil or data.ownJoinState == nil or data.ownJoinState ~= 1 then
+		return
+	end
+
+	self:Destroy()
+	CClub.OnEnterReq(data.playerid)
 end
 
 

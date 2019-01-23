@@ -1,0 +1,493 @@
+--[[
+    @moudle name : Define.SysId.CrossCommerce
+	@desc :跨服商会战
+    2019-01-08 17:06:03
+]]
+
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local MBag = JRequire "Dev.Bag.MBag"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local _M = {}
+local _P = {}
+
+--系统id: Define.SysId.CrossCommerce = 148
+local CMD_ID = 
+{
+--C --> S
+	--第一阶段
+	cAMyBoss = 4,			--请求我的商会BOSS信息, 在这个界面的时候, 前端会每一段时间请一次--
+	cABossList = 5,			--请求BOSS列表
+	cAFightMyBoss = 6,		--挑战我的商会BOSS, PCrossCommerce.CAFightMyBoss 没有次数的自动购买, 前端会进行次数判断请确认
+	cAFightOtherBoss = 7,	--挑战其他商会的BOSS, PCrossCommerce.CAFightOtherBoss 没有次数的自动购买, 前端会进行次数判断请确认
+	cAShop = 8,				--请求商会界面信息
+	cAShopBuy = 9,			--商店购买
+	cARank = 10,			--请求伤害排行榜	
+
+	--第二阶段
+	cBInfo = 21,			--请求当前的界面信息
+	cBBuyBuff = 22,			--请求购买BUFF, 只有会长有效 PCrossCommerce.CBBuyBuff
+	cBChangeSort = 23,		--更改玩家对战顺序 PCrossCommerce.CBChangeSort
+	cBFightList = 24,		--请求挑战列表
+	cBCommerceScore = 25,	--请求刷新商会积分, 在这个界面的时候, 前端每过一段时间会进行请求一次
+	cBFight = 26,			--请求挑战
+	cBLook = 27,			--请求回看(根据我方的玩家id进行查看) PCrossCommerce.CBLook
+	cBRank = 28,			--请求积分排行
+	cBReward = 29,			--请求领取排名奖励
+	cBRecord = 30,			--请求战斗记录
+
+--S --> C
+	sActivity = 1,			--刷新活动状态 PCrossCommerce.SActivity, 初始化的时候返回
+	sStage = 2,				--刷新活动阶段 PCrossCommerce.SStage, 初始化的时候返回
+
+	--第一阶段
+	sAInfo = 3,				--我的信息 PCrossCommerce.SAInfo, 初始化的时候返回, 用来做小红点
+	sAMyBoss = 4,			--我的商会boss信息返回 PCrossCommerce.SAMyBoss
+	sABossList = 5,			--返回BOSS列表 PCrossCommerce.SABossList
+	sAFightMyBoss = 6,		--挑战返回 PCrossCommerce.SAFightMyBoss
+	sAFightOtherBoss = 7,	--挑战其他商会的BOSS PCrossCommerce.SAFightOtherBoss
+	sAShop = 8,				--商会界面信息 PCrossCommerce.SAShop
+	sAShopBuy = 9,			--商店购买 PCrossCommerce.SAShopBuy
+	sARank = 10,			--伤害排名返回 PCrossCommerce.SARank
+
+	--第二阶段
+	sBFightTimes = 18,		--战斗次数实时刷新 PCrossCommerce.SBFightTimes
+	sInitReward = 19,		--初始化领取状态, 在进入游戏的时候 如果可以领取则返回 PCrossCommerce.SBReward
+	sBLadderInfo = 20,		--只有会长才会进行刷新 PCrossCommerce.SBLadderInfo, 用来做小红点提醒
+							--如果是会长并且是第二阶段初始化的时候返回, 用来做小红点 1会长变化  2第二阶段开启  3进入游戏且是第二阶段
+	sBInfo = 21,			--第二阶段的界面信息 PCrossCommerce.SBInfo
+	sBBuyBuff = 22,			--购买buff返回 PCrossCommerce.SBBuyBuff
+	sBChangeSort = 23,		--更改玩家对战顺序 PCrossCommerce.SBChangeSort
+	sBFightList = 24,		--挑战列表 PCrossCommerce.SBFightList
+	sBCommerceScore = 25,	--刷新商会积分, 前端每过一段时间会进行请求一次 PCrossCommerce.SBCommerceScore
+	sBFight = 26,			--挑战返回 PCrossCommerce.SBFight
+	sBLook = 27,			--回看返回 PCrossCommerce.SBLook
+	sBRank = 28,			--积分排行返回 PCrossCommerce.SBRank
+	sBReward = 29,			--领取奖励返回 PCrossCommerce.SBReward
+	sBRecord = 30,			--战斗记录返回 PCrossCommerce.SBRecord
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+		[CMD_ID.cAMyBoss] = "",
+		[CMD_ID.cABossList] = "",
+		[CMD_ID.cAFightMyBoss] = "PCrossCommerce.CAFightMyBoss",
+		[CMD_ID.cAFightOtherBoss] = "PCrossCommerce.CAFightOtherBoss",
+		[CMD_ID.cAShop] = "",
+		[CMD_ID.cAShopBuy] = "PCrossCommerce.CAShopBuy",
+		[CMD_ID.cARank] = "",
+
+		[CMD_ID.cBInfo] = "",
+		[CMD_ID.cBBuyBuff] = "PCrossCommerce.CBBuyBuff",
+		[CMD_ID.cBChangeSort] = "PCrossCommerce.CBChangeSort",
+		[CMD_ID.cBFightList] = "",
+		[CMD_ID.cBCommerceScore] = "",
+		[CMD_ID.cBFight] = "PCrossCommerce.CBFight",
+		[CMD_ID.cBLook] = "PCrossCommerce.CBLook",
+		[CMD_ID.cBRank] = "",
+		[CMD_ID.cBReward] = "",
+		[CMD_ID.cBRecord] = "",
+	}
+	local recv = {
+		[CMD_ID.sActivity] = {proto = "PCrossCommerce.SActivity", handle = _P.OnActivity},
+		[CMD_ID.sStage] = {proto = "PCrossCommerce.SStage", handle = _P.OnStage},
+		[CMD_ID.sAInfo] = {proto = "PCrossCommerce.SAInfo", handle = _P.OnAInfo},
+		[CMD_ID.sAMyBoss] = {proto = "PCrossCommerce.SAMyBoss", handle = _P.OnAMyBoss},
+		[CMD_ID.sABossList] = {proto = "PCrossCommerce.SABossList", handle = _P.OnABossList},
+		[CMD_ID.sAFightMyBoss] = {proto = "PCrossCommerce.SAFightMyBoss", handle = _P.OnAFightMyBoss},
+		[CMD_ID.sAFightOtherBoss] = {proto = "PCrossCommerce.SAFightOtherBoss", handle = _P.OnAFightOtherBoss},
+		[CMD_ID.sAShop] = {proto = "PCrossCommerce.SAShop", handle = _P.OnAShop},
+		[CMD_ID.sAShopBuy] = {proto = "PCrossCommerce.SAShopBuy", handle = _P.OnAShopBuy},
+		[CMD_ID.sARank] = {proto = "PCrossCommerce.SARank", handle = _P.OnARank},
+
+		[CMD_ID.sBFightTimes] = {proto = "PCrossCommerce.SBFightTimes", handle = _P.OnBFightTimes},
+		[CMD_ID.sInitReward] = {proto = "PCrossCommerce.SBReward", handle = _P.OnInitReward},
+		[CMD_ID.sBLadderInfo] = {proto = "PCrossCommerce.SBLadderInfo", handle = _P.OnBLadderInfo},
+		[CMD_ID.sBInfo] = {proto = "PCrossCommerce.SBInfo", handle = _P.OnBInfo},
+		[CMD_ID.sBBuyBuff] = {proto = "PCrossCommerce.SBBuyBuff", handle = _P.OnBBuyBuff},
+		[CMD_ID.sBChangeSort] = {proto = "PCrossCommerce.SBChangeSort", handle = _P.OnBChangeSort},
+		[CMD_ID.sBFightList] = {proto = "PCrossCommerce.SBFightList", handle = _P.OnBFightList},
+		[CMD_ID.sBCommerceScore] = {proto = "PCrossCommerce.SBCommerceScore", handle = _P.OnBCommerceScore},
+		[CMD_ID.sBFight] = {proto = "PCrossCommerce.SBFight", handle = _P.OnBFight},
+		[CMD_ID.sBLook] = {proto = "PCrossCommerce.SBLook", handle = _P.OnBLook},
+		[CMD_ID.sBRank] = {proto = "PCrossCommerce.SBRank", handle = _P.OnBRank},
+		[CMD_ID.sBReward] = {proto = "PCrossCommerce.SBReward", handle = _P.OnBReward},
+		[CMD_ID.sBRecord] = {proto = "PCrossCommerce.SBRecord", handle = _P.OnBRecord},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.CrossCommerce, send, recv, isReload)
+end
+
+function _M.ModuleClean()
+	MCrossCommerce.Clean()
+end
+
+function _P.CheckIsCanJoin()
+	return MCommerce.IsJoinCommerce() and MCommerce.CommerceLevel >= Csv.Const(158)
+end
+
+function _P.checkRedpoint()
+	local funcIsOpen = MMain.FuncIsOpen(Define.SysId.CrossCommerce) and _P.CheckIsCanJoin()
+	--PVE
+	--PVE有战斗次数
+	CMain.UpdateRedpoint(funcIsOpen and MCrossCommerce.State == MCrossCommerce.STATE.Open and 
+		MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.PVE and  
+		MCrossCommerce.PVE.FightTimes > 0, 
+		Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.PVE, 1)
+	--GVG
+	--会长可以战斗
+	CMain.UpdateRedpoint(funcIsOpen and MCrossCommerce.State == MCrossCommerce.STATE.Open and 
+		MCrossCommerce.StageType == MCrossCommerce.STAGE_TYPE.GVG and 
+		MCrossCommerce.GVG.CommerceLadderId == MPlayer.GetId() and 
+		MCrossCommerce.GVG.FightTimes > 0, 
+		Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG, 1)
+	--有奖励可以领取
+	CMain.UpdateRedpoint(funcIsOpen and MCrossCommerce.State == MCrossCommerce.STATE.Finish and 
+		MCrossCommerce.GVG.MyReward == MCrossCommerce.RewardState.CanGet, 
+		Define.SysId.CrossCommerce, MCrossCommerce.STAGE_TYPE.GVG, 2)
+end
+
+function _M.Open()
+	if _P.CheckIsCanJoin() then
+		WindowMgr.Create("UCrossCommerce")
+	else
+		CCommon.ShowError(Csv.Text("cross_commerce_49"))
+	end
+end
+
+---------------------------------
+-------Client -- Server----------
+---------------------------------
+
+--------------------------第一阶段---------------------------
+	function _M.AMyBossReq()
+		print("--------AMyBossReq--------")
+
+		_M.Send(CMD_ID.cAMyBoss)	
+	end
+
+	function _M.ABossListReq()
+		print("--------ABossListReq--------")
+
+		_M.Send(CMD_ID.cABossList)
+	end
+
+	function _M.AFightMyBossReq(bossid)
+		print("--------AFightMyBossReq--------")
+
+		_M.Send(CMD_ID.cAFightMyBoss, {bossid = bossid})	
+	end
+
+	function _M.AFightOtherBossReq(commerceId, serverId, bossid)
+		print("--------AFightOtherBossReq--------", commerceId, serverId)
+
+		_M.Send(CMD_ID.cAFightOtherBoss, {commerceId = commerceId, serverId = serverId, bossid = bossid})
+	end
+
+	function _M.AShopReq()
+		print("--------AShopReq--------")
+
+		_M.Send(CMD_ID.cAShop)
+	end
+
+	function _M.AShopBuyReq(id)
+		print("--------AShopBuyReq--------", id)
+
+		_M.Send(CMD_ID.cAShopBuy, {id = id})
+	end
+
+	function _M.ARankReq()
+		print("--------ARankReq--------")
+
+		_M.Send(CMD_ID.cARank)
+	end
+
+--------------------------第二阶段---------------------------
+
+	function _M.BInfoReq()
+		print("--------BInfoReq--------")
+
+		_M.Send(CMD_ID.cBInfo)
+	end
+
+	function _M.BBuyBuffReq(playerId, type)
+		print("--------BBuyBuffReq--------", playerId, type)
+
+		_M.Send(CMD_ID.cBBuyBuff, {playerId = playerId, type = type})
+	end
+
+	function _M.BChangeSortReq(id1, id2)
+		print("--------BChangeSortReq--------", id1, id2)
+
+		_M.Send(CMD_ID.cBChangeSort, {id1 = id1, id2 = id2})
+	end
+
+	function _M.BFightListReq()
+		print("--------BFightListReq--------")
+
+		_M.Send(CMD_ID.cBFightList)
+	end
+
+	function _M.BCommerceScoreReq()
+		print("--------BCommerceScoreReq--------")
+
+		_M.Send(CMD_ID.cBCommerceScore)
+	end
+
+	function _M.BFightReq(commerceId, serverId)
+		print("--------BCommerceScoreReq--------", commerceId, serverId)
+
+		_M.Send(CMD_ID.cBFight, {commerceId = commerceId, serverId = serverId})
+	end
+
+	function _M.BLookReq(id)
+		print("--------BLookReq--------", id)
+
+		_M.Send(CMD_ID.cBLook, {id = id})
+	end
+
+	function _M.BRankReq()
+		print("--------BRankReq--------")
+
+		_M.Send(CMD_ID.cBRank)
+	end
+
+	function _M.BRewardReq()
+		print("--------BRewardReq--------")
+
+		_M.Send(CMD_ID.cBReward)
+	end
+
+	function _M.BRecordReq()
+		print("--------BRecordReq--------")
+
+		_M.Send(CMD_ID.cBRecord)
+	end
+
+---------------------------------
+-------Server -- Client----------
+---------------------------------
+
+function _P.OnActivity(msg)
+	LuaUtil.DumpTable(msg, "------OnActivity---->>>")
+	local lastState = MCrossCommerce.State
+	MCrossCommerce.State = msg.state
+	MCrossCommerce.ActID = msg.actId or 0
+	MCrossCommerce.StartTime = msg.starttime or 0
+	MCrossCommerce.EndTime = msg.endtime or 0
+	MCrossCommerce.CloseTime = msg.closetime or 0
+	if lastState ~= MCrossCommerce.State then
+		WindowMgr.Call("UMain", "RefreshTopBtns")
+
+		if WindowMgr.IsCreated("UCrossCommerce") then
+			if MCrossCommerce.State == MCrossCommerce.STATE.Close or MCrossCommerce.State == MCrossCommerce.STATE.Waiting then
+				WindowMgr.Destroy("UCrossCommerce")
+			else
+				WindowMgr.Call("UCrossCommerce", "OnUpdateState")
+			end
+		end
+		_P.checkRedpoint()
+	end	
+end
+
+function _P.OnStage(msg)
+	LuaUtil.DumpTable(msg, "------OnStage---->>>")
+	local lastStage = MCrossCommerce.StageType
+	MCrossCommerce.StageType = msg.stage
+	if lastStage ~= MCrossCommerce.StageType then
+		WindowMgr.Call("UCrossCommerce", "OnUpdateStage")
+		_P.checkRedpoint()
+	end	
+end
+
+--------------------------第一阶段---------------------------
+	function _P.saveAInfo(msg)
+		if msg ~= nil then
+			MCrossCommerce.PVE.FightTimes = msg.fightTimes
+			MCrossCommerce.PVE.FightMax = msg.fightMax
+			MCrossCommerce.PVE.FightBuy = msg.fightBuy
+			MCrossCommerce.PVE.FightBuyMax = msg.fightBuyMax
+			MCrossCommerce.PVE.FightBuyCost = msg.fightBuyCost or 0
+		end
+	end
+	function _P.OnAInfo(msg)
+		LuaUtil.DumpTable(msg, "------OnAInfo---->>>")
+		_P.saveAInfo(msg)
+		WindowMgr.Call("UCrossCommerce", "OnPVEInfo")
+		_P.checkRedpoint()
+	end
+	function _P.saveABoss(msg)
+		if msg ~= nil then
+			MCrossCommerce.PVE.BossId = msg.bossId
+			MCrossCommerce.PVE.BossBlood = msg.blood
+		end
+	end
+	function _P.OnAMyBoss(msg)
+		LuaUtil.DumpTable(msg, "------OnAMyBoss---->>>")
+		_P.saveABoss(msg)
+		WindowMgr.Call("UCrossCommerce", "OnPVEMyBoss")
+	end
+
+	function _P.OnABossList(msg)
+		LuaUtil.DumpTable(msg, "------OnABossList---->>>")
+		WindowMgr.Call("UCrossCommercePVEList", "OnPVEBossList", msg.list)
+	end
+
+	function _P.OnAFightMyBoss(msg)
+		LuaUtil.DumpTable(msg, "------OnAFightMyBoss---->>>")
+		_P.saveAInfo(msg.myInfo)
+		_P.saveABoss(msg.myBoss)
+		WindowMgr.Call("UCrossCommerce", "OnPVEFightMyBoss", msg.fight)
+		_P.checkRedpoint()
+	end
+
+	function _P.OnAFightOtherBoss(msg)
+		LuaUtil.DumpTable(msg, "------OnAFightOtherBoss---->>>")
+		_P.saveAInfo(msg.myInfo)
+		WindowMgr.Call("UCrossCommerce", "OnPVEFightOtherBoss", msg.fight)
+		_P.checkRedpoint()
+	end
+
+	function _P.OnAShop(msg)
+		LuaUtil.DumpTable(msg, "------OnAShop---->>>")
+		MCrossCommerce.PVE.ShopList = {}
+		if msg.shop ~= nil then
+			for _,v in pairs(msg.shop) do
+				MCrossCommerce.PVE.ShopList[v.key] = v.value
+			end
+		end
+		MCrossCommerce.PVE.ShopScore = msg.myScore
+		MCrossCommerce.CommerceGold = msg.commerceGold
+		WindowMgr.Call("UCrossCommercePVEShop", "OnPVEShop")
+	end
+
+	function _P.OnAShopBuy(msg)
+		LuaUtil.DumpTable(msg, "------OnAShopBuy---->>>")
+		MCrossCommerce.PVE.ShopList[msg.info.key] = msg.info.value
+		MCrossCommerce.PVE.ShopScore = msg.myScore
+		WindowMgr.Call("UCrossCommercePVEShop", "OnPVEShopBuy", msg)
+	end
+
+	function _P.OnARank(msg)
+		LuaUtil.DumpTable(msg, "------OnARank---->>>")
+		MCrossCommerce.PVE.MyHurt = msg.myHurt
+		MCrossCommerce.PVE.MyRank = msg.myRank
+		WindowMgr.Call("UCrossCommercePVERank", "OnPVERank", msg.list)
+	end
+
+--------------------------第二阶段---------------------------
+	function _P.OnBFightTimes(msg)
+		LuaUtil.DumpTable(msg, "------OnBFightTimes---->>>")
+		MCrossCommerce.GVG.FightTimes = msg.fightTimes
+		MCrossCommerce.GVG.FightMax = msg.fightMax
+		WindowMgr.Call("UCrossCommerce", "OnGVGFightTimes")
+	end
+	function _P.OnInitReward(msg)
+		LuaUtil.DumpTable(msg, "------OnInitReward---->>>")
+		MCrossCommerce.GVG.MyReward = msg.state
+		WindowMgr.Call("UCrossCommerceGVGReward", "OnInitReward")
+		_P.checkRedpoint()
+	end
+	function _P.OnBLadderInfo(msg)
+		LuaUtil.DumpTable(msg, "------OnBLadderInfo---->>>")
+		MCrossCommerce.GVG.CommerceLadderId = msg.ladderId
+		_P.checkRedpoint()
+	end
+
+	function _P.OnBInfo(msg)
+		LuaUtil.DumpTable(msg, "------OnBInfo---->>>")
+		MCrossCommerce.GVG.CommerceScore = msg.score
+		MCrossCommerce.CommerceGold = msg.gold
+		MCrossCommerce.GVG.Fighters = msg.players or {}
+		WindowMgr.Call("UCrossCommerce", "OnGVGInfo")
+		_P.checkRedpoint()
+	end
+
+	function _P.OnBBuyBuff(msg)
+		LuaUtil.DumpTable(msg, "------OnBBuyBuff---->>>")
+		MCrossCommerce.GVG.CommerceScore = msg.score
+		MCrossCommerce.CommerceGold = msg.gold
+
+		local isHave = false
+		for k,v in pairs(MCrossCommerce.GVG.Fighters) do
+			if v.id == msg.id then
+				isHave = true
+				v.forcePer = msg.forcePer
+				v.forceAdd = msg.forceAdd
+				break
+			end
+		end
+
+		if not isHave then
+			error("buy buff error!!!!, cont find fighter:", msg.id)
+		end
+		WindowMgr.Call("UCrossCommerce", "OnGVGBuyBuff")
+	end
+
+	function _P.OnBChangeSort(msg)
+		LuaUtil.DumpTable(msg, "------OnBChangeSort---->>>")
+		if msg.sortList ~= nil then
+			local tmp = {}
+			for k,v in pairs(msg.sortList) do
+				tmp[v] = k
+			end
+			local fighters = {}
+			for k,v in pairs(MCrossCommerce.GVG.Fighters) do
+				table.insert(fighters, v)
+			end
+			table.sort(fighters, function (a, b)
+				return tmp[a.id] < tmp[b.id]
+			end)
+			MCrossCommerce.GVG.Fighters = fighters
+		end
+		WindowMgr.Call("UCrossCommerce", "OnGVGChangeSort")
+	end
+
+	function _P.OnBFightList(msg)
+		WindowMgr.Call("UCrossCommerceGVGList", "OnGVGFightList", msg.list)
+	end
+
+	function _P.OnBCommerceScore(msg)
+		LuaUtil.DumpTable(msg, "------OnBCommerceScore---->>>")
+		MCrossCommerce.GVG.CommerceScore = msg.score
+		MCrossCommerce.CommerceGold = msg.gold
+		WindowMgr.Call("UCrossCommerce", "OnUpdateCommerceScore")
+	end
+
+	function _P.OnBFight(msg)
+		print("-----OnBFight-----", msg.score, msg.gold, msg.commerceId, msg.commerceName, msg.serverId, msg.result, msg.socreAdd)
+		MCrossCommerce.GVG.CommerceScore = msg.score
+		MCrossCommerce.CommerceGold = msg.gold
+		WindowMgr.Call("UCrossCommerce", "OnGVGFight", msg)
+		_P.checkRedpoint()
+	end
+
+	function _P.OnBLook(msg)
+		LuaUtil.DumpTable(msg, "------OnBLook---->>>")
+		WindowMgr.Call("UCrossCommerceGVGFight", "OnGVGLook", msg)
+	end
+
+	function _P.OnBRank(msg)
+		LuaUtil.DumpTable(msg, "------OnBRank---->>>")
+		MCrossCommerce.GVG.MyRank = msg.myRank
+		MCrossCommerce.GVG.CommerceScore = msg.score
+		WindowMgr.Call("UCrossCommerceGVGReward", "OnGVGRank", msg)
+	end
+
+	function _P.OnBReward(msg)
+		LuaUtil.DumpTable(msg, "------OnBReward---->>>")
+		MCrossCommerce.GVG.MyReward = msg.state
+		WindowMgr.Call("UCrossCommerceGVGReward", "OnGVGReward", msg.items)
+		_P.checkRedpoint()
+	end
+
+	function _P.OnBRecord(msg)
+		LuaUtil.DumpTable(msg, "------OnBRecord---->>>")
+		WindowMgr.Call("UCrossCommerceGVGRecord", "OnGVGRecord", msg.list)
+	end
+
+return _M

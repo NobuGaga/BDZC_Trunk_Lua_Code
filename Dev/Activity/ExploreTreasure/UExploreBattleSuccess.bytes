@@ -1,0 +1,57 @@
+-- 探险寻宝胜利界面
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:EndDestroy( ... )
+	if self.OnCloseCall ~= nil then
+		self.OnCloseCall()
+	end
+end
+
+
+function _M:OnCreate(rewardList, onClose)
+	local module = self:CreateMoudle(self._RootNode, "M_Equipment_Success")
+    self.OnCloseCall = onClose
+
+	self._EventNode:AddOnClick(function()
+		SoundMgr.Play(10001)
+		self:Destroy()
+	end, nil)
+
+	self:Lock()
+	module.SelfRect:AddOnTime(function()
+		self:Unlock()
+	end, nil, 0.5)
+
+	SoundMgr.PlayNonStopUI(10014)
+	CCommon.CreateEffect(module:Get("ActorPanel"), 10188)
+
+	if rewardList ~= nil then
+		local content = module:Get("Items")
+		for _,v in pairs(rewardList)do
+			CCommon.CreateItem(content, v.id, function ( ... )
+				WindowMgr.Create("UBagDetailPop", v.id)
+			end, {num = v.count})
+		end
+	end
+
+	LuaUtil.TextAddThreePoint(module:Get("closeText"), Csv.Text("common_close2"))
+end
+
+
+return _M

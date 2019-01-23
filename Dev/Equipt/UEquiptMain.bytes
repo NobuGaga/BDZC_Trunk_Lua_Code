@@ -8,6 +8,7 @@ local MEquipt = JRequire "Dev.Equipt.MEquipt"
 local CEquipt = JRequire "Dev.Equipt.CEquipt"
 local MStaff = JRequire "Dev.Staff.MStaff"
 local WindowType = JRequire "Libs.WindowMgr.WindowType"
+local MLineUp = JRequire "Dev.LineUp.MLineUp"
 
 local EMPTY_BACK = "ty_018"
 local EQUIP_EXP_ID = 34
@@ -51,6 +52,9 @@ end
 
 --界面构建
 function _M:OnCreate(staffID,type,ShowType)
+	MLineUp.IsChange = false
+	MLineUp.GetLineAllPower()
+
 	self.mSelectStaffID = staffID
 	self.mEquipType = EquipType.all
 	self.mSelectQuality = Quality.all
@@ -58,12 +62,6 @@ function _M:OnCreate(staffID,type,ShowType)
 		self.mEquipType = type
 	end
 
-	self.mPower = 0
-	local staffData = MStaff.StaffTable[staffID]
-	if staffData ~= nil then
-		self.mPower =  staffData.power
-	end
-	
 	local moudle = self:CreateMoudle(self._RootNode, "M_Equipment_UMain")
 	self.mMoudle = moudle
 	moudle:Get("C_Text").Text = Csv.Text("equip_title")
@@ -601,7 +599,7 @@ function _P.OnClickUse(self)
 				isEquip = true
 			end
 		end
-
+		MLineUp.IsChange = true
 		--卸下
 		if equipedData ~= nil then
 			if isEquip then
@@ -631,18 +629,7 @@ function _P.OnClickDecompose()
 end
 
 function _R.StaffChange(self)
-	local oldPower = self.mPower
-	local newPower = MStaff.StaffTable[self.mSelectStaffID].power
-	self.mPower = newPower
-
-	--检测战斗力变化
-	if newPower ~= oldPower then
-		if newPower > oldPower then
-			CCommon.ShowText(Define.ShowStrType.Combat,{newPower,newPower - oldPower,true})
-		else
-			CCommon.ShowText(Define.ShowStrType.Combat,{newPower,oldPower - newPower,false})
-		end
-	end
+	MLineUp.GetLineAllPower()
 end
 
 return _M

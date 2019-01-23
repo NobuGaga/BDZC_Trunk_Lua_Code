@@ -1,0 +1,119 @@
+local MTalent = JRequire "Dev.Talent.MTalent"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local MBag = JRequire "Dev.Bag.MBag"
+
+local _M = {}
+local _P = {}
+
+local ECmdId = 
+{
+	cTalentLevelUp = 1,	-- 升级天赋
+
+	sTalentInit = 1,	-- 初始化 PTalent.SInit
+	sTalentLevelUp = 2,	-- 升级天赋返回 PTalent.SLevelUp
+}
+
+function _M.ModuleClean()
+	MTalent.Clean()
+end
+
+
+function _M.ModuleInit(isReload)
+	-- 发送消息协议注册
+	local func_send = 
+	{
+		[ECmdId.cTalentLevelUp] = "",
+	}
+	-- 接收消息协议注册
+	local func_recv = 
+	{
+		[ECmdId.sTalentInit]    = { proto = "PTalent.SInit",    handle = _P.OnInit},
+		[ECmdId.sTalentLevelUp] = { proto = "PTalent.SLevelUp", handle = _P.OnLevelUpBack},
+	}
+	-- 调用注册接口, 用获得发送函数
+	_M.Send = SocketMgr.Regist(Define.SysId.Talent, func_send, func_recv, isReload)
+end
+
+
+-- 升级天赋
+function _M.LevelUpReq()
+	_M.Send(ECmdId.cTalentLevelUp)
+end
+
+
+-- 初始化（S2C）
+function _P.OnInit(data)
+	if data == nil then
+		return
+	end
+
+	_P.OnSetData(data)
+	_M.CheckTalentRedPoint()
+end
+
+
+function _P.OnSetData(data)
+	local talentConf = Csv.Talent[data.level + 1]
+	local initData = {}
+	if talentConf == nil then -- 最高层
+		initData.isPass = true
+		initData.curLevel = data.level
+
+		local possTalentConf = Csv.Talent[data.level]
+		if possTalentConf then
+			initData.talentConf = possTalentConf
+			initData.curStage = possTalentConf.star
+		end
+	else
+		initData.isPass = false
+		initData.curLevel = data.level + 1
+		initData.talentConf = talentConf
+		initData.curStage = talentConf.star
+	end
+	
+	initData.addSuccProb = (data.addSuccProb and data.addSuccProb / 100) or 0
+	MTalent.TalentTable = initData
+end
+
+
+-- 升级天赋返回
+function _P.OnLevelUpBack(data)
+	if data == nil then return end
+
+	local isNeedChangeStage = false
+	if data.isSuccess then
+		local talentConf = Csv.Talent[data.level + 1]
+		if talentConf ~= nil and talentConf.star > MTalent.TalentTable.curStage then
+			isNeedChangeStage = true
+		end
+
+		_P.OnSetData(data)
+		if MTalent.TalentTable.isPass then
+			_M.CheckTalentRedPoint()
+		end
+	else
+		MTalent.TalentTable.addSuccProb = (data.addSuccProb and data.addSuccProb / 100) or 0
+	end
+
+	WindowMgr.Call("UTalentPanel", "OnLevelUpBack", data, isNeedChangeStage)
+end
+
+
+-- 设置红点显示
+function _M.CheckTalentRedPoint()
+	local isShowRed = false
+	if MMain.FuncIsOpen(Define.SysId.Talent) and not MTalent.TalentTable.isPass and MTalent.TalentTable.talentConf ~= nil then
+		local costData = MTalent.TalentTable.talentConf.costItem[1]
+		local itemNum = MBag.GetItemNum(costData[1])
+		isShowRed = itemNum >= costData[2]
+	end
+
+	if isShowRed ~= MTalent.TalentRedPoint then
+		MTalent.TalentRedPoint = isShowRed
+		CMain.UpdateRedpoint(isShowRed, Define.SysId.Talent)
+	end
+end
+
+
+return _M

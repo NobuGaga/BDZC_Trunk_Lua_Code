@@ -262,7 +262,7 @@ function _P.CreateChargeItem(self, data)
 	
 	item.titleText = itemMoudle:Get("TextTitle")
 	item.titleText.Text = Csv.Text("recharge_coin", {num = data.diamond})
-	if not GameSetting.IsiOSCommit then
+	if not GameSetting.IsiOSCommit or GameSetting.isShowPrice then
 		item.buyNumText = itemMoudle:Get("TextBuyNum")
 		item.buyNumText.Text = data.costText
 	end

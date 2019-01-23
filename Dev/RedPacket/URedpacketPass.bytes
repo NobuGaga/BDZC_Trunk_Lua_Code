@@ -40,10 +40,13 @@ function _M:OnCreate(data, onCloseCallback)
 	local nameText = moudle:Get("Name")
 	local tips1 = moudle:Get("Tips2")
 
-	nameText.Text = data.redPacket.senderName
 	headIcon.SpriteName = MPlayer.GetOtherHeadYuanIcon(data.headid, data.gender)
-
-	tips1.Text = Csv.Text("talk_redpacket_passtime",{time = LuaUtil.GetTimeText(data.redPacket.expireTime)})
+	nameText.Text = data.sendername or data.senderName
+	if data.redPacket ~= nil and data.redPacket.expireTime ~= nil then
+		tips1.Text = Csv.Text("talk_redpacket_passtime",{time = LuaUtil.GetTimeText(data.redPacket.expireTime)})
+	elseif data.expireTime ~= nil then
+		tips1.Text = Csv.Text("talk_redpacket_passtime",{time = LuaUtil.GetTimeText(data.expireTime)})
+	end
 end
 
 return _M

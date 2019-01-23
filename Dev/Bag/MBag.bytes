@@ -337,17 +337,27 @@ end
 
 function _M.GetDressForSysId(sysID)
 	local tab = {}
-	local dressTable = _M.Items[Define.BagType.Dress]
-	if dressTable ~= nil then
-		for k,v in pairs(dressTable) do
-			if v.itemcount > 0 then
-				local csvItem = Csv.Item[v.itemid]
-				if csvItem ~= nil and csvItem.dressSysId == sysID then
-					table.insert(tab,v)
+	if sysID == Define.SysId.Manage then
+		for k,dressData in pairs(Csv.SecretaryDress) do
+			if dressData ~= nil then
+				local isHas = MPlayer.SecretaryTable[dressData.id] ~= nil
+				table.insert(tab, {itemid = dressData.id, itemcount = (isHas and 1) or 0})
+			end
+		end
+	else
+		local dressTable = _M.Items[Define.BagType.Dress]
+		if dressTable ~= nil then
+			for k,v in pairs(dressTable) do
+				if v.itemcount > 0 then
+					local csvItem = Csv.Item[v.itemid]
+					if csvItem ~= nil and csvItem.dressSysId == sysID then
+						table.insert(tab,v)
+					end
 				end
 			end
 		end
 	end
+
 	return tab
 end
 

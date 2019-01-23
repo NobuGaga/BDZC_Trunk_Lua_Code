@@ -85,6 +85,8 @@ function _P.OnCreateItem(self,itemData,isEmpty)
 			ImgIcon.SpriteName = csv.icon
 			ImgColor:AddOnButton(function ( ... )
 				SoundMgr.Play(10001)
+				--拿实时数量
+				data.itemcount = MBag.GetItemNum(data.itemid)
 				_P.OnClickItem(self,data)
 				end, nil, 0.9)
 			ImgColor.SpriteName = csv.colorIcon
@@ -98,6 +100,8 @@ function _P.OnCreateItem(self,itemData,isEmpty)
 		ImgIcon.SpriteName = csv.icon
 		ImgColor:AddOnButton(function ( ... )
 			SoundMgr.Play(10001)
+			--拿实时数量
+			itemData.itemcount = MBag.GetItemNum(itemData.itemid)
 			_P.OnClickItem(self,itemData)
 			end, nil, 0.9)
 		ImgColor.SpriteName = csv.colorIcon
@@ -155,6 +159,7 @@ function _P.OnClickItem(self,data)
 	local TextGoodsNum = moudle:Get("GoodsNum")
 	local TextGoodsDescTitle = moudle:Get("GoodsDescTitle")
 	local TextGoodsDesc = moudle:Get("GoodsDesc")
+	local textDesc = moudle:Get("textDesc")
 	local ImgIcon = moudle:Get("Icon")
 	local ImgColor = moudle:Get("IconColor")
 	local BtnUse = moudle:Get("BtnUse")
@@ -168,6 +173,7 @@ function _P.OnClickItem(self,data)
 		TextGoodsName.Text = Csv.Text("common_color",{num=colorStr,name=csv.name})
 		TextGoodsNum.Text = Csv.Text("bag_num",{num = data.itemcount})
 		TextGoodsDesc.Text = csv.tips
+		textDesc.Text = csv.description or ""
 		TextGoodsDescTitle.Text = Csv.Text("bag_desc")
 		ImgIcon.SpriteName = csv.icon
 		ImgColor.SpriteName = csv.colorIcon
@@ -204,6 +210,7 @@ function _P.OnClickItem(self,data)
 		TextGoodsName.Text = ""
 		TextGoodsNum.Text = ""
 		TextGoodsDesc.Text = ""
+		textDesc.Text = ""
 		TextGoodsDescTitle.Text = ""
 		BtnUse.Activity = false
 		if self.mImgSelect ~= nil then
@@ -244,6 +251,8 @@ function _P.OnClickUse()
 						CBag.OnUseItem(itemData.itemid,1,nil)
 					end			
 				end, {content = Csv.Text("common_changeSex")})
+		elseif csvItem.useType == 38 then	--兑换品类
+			WindowMgr.Create("UBagExchange",itemData.itemid)
 		else
 			if itemData.itemid == CHANGE_NAME_ITEMID then
 				WindowMgr.Create("UBagChangeName")
@@ -314,6 +323,7 @@ function _M:RefreshItemNum(itemid,itemcount,isAdd)
 				else
 					if goodsData.itemcount > 0 then
 						itemMoudle:Get("Num").Text = goodsData.itemcount
+						--_P.OnClickItem(self,goodsData)
 					else
 						itemMoudle:Destroy()
 						_P.OnCreateItem(self,nil,true)

@@ -4,6 +4,8 @@ _M.IsNotOpenPop = nil
 _M.HeadTable = {}
 _M.LastChoose = nil
 _M.HeadAllAttr = nil
+_M.SecretaryTable = {} -- 别墅秘书背包
+_M.SecretaryRed = false
 
 local function InitPlayerInfo()
 	local info =
@@ -28,6 +30,7 @@ local function InitPlayerInfo()
 		iscross = false, --是否跨服
 		chatBg = 0,--当前使用的聊天框id
 		getChatBg = {},--已经拥有的聊天框列表
+		highestPower = 0,--历史最高势力
 	}
 	for _,v in pairs(Define.AttrType) do
 		info.attr[v] = 0
@@ -48,6 +51,8 @@ function _M.Clean()
 	_M.HeadTable = {}
 	_M.LastChoose = nil
 	_M.HeadAllAttr = nil
+	_M.SecretaryTable = {} -- 别墅秘书背包
+	_M.SecretaryRed = false
 end
 
 function _M.EnqueueNotice(level, hierarchy, effectType, str, loop)
@@ -141,6 +146,10 @@ end
 
 function _M.GetTitleList()
 	return _M.PlayerInfo.titleList
+end
+
+function _M.GetHighestPower()
+	return _M.PlayerInfo.highestPower or 0
 end
 
 _M.Attr2StrCache = nil
@@ -311,6 +320,19 @@ function _M.GetOtherChatBG(chatHeadBgId, vipLv)
 
 	local vipCsv = Csv.Vip[vipLv or 0]
 	return vipCsv.imgTalk or ""
+end
+
+-- 获取当前获得秘书装扮总加成(万分比)
+function _M.GetSecretaryTotalAdd()
+	local totalNum = 0
+	for k,v in pairs(_M.SecretaryTable) do
+		local dressConf = Csv.SecretaryDress[v.id]
+		if dressConf ~= nil and dressConf.addpro ~= nil then
+			totalNum = totalNum + dressConf.addpro
+		end
+	end
+
+	return totalNum
 end
 
 return _M

@@ -1,0 +1,71 @@
+--[[
+	@desc :
+    2019-01-10 14:55:15
+]]
+
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+local CCommon = JRequire "Dev.Common.CCommon"
+local MCrossCommerce = JRequire "Dev.CrossCommerce.MCrossCommerce"
+local CCrossCommerce = JRequire "Dev.CrossCommerce.CCrossCommerce"
+local RankVertical = JRequire "Dev.Common.RankVertical"
+local MPlayer = JRequire "Dev.Player.MPlayer"
+local MCommerce = JRequire "Dev.Commerce.MCommerce"
+
+local _M = Class(WindowBase)
+local _P = {}
+local _R = {}
+
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then 
+		fun(self, ...)
+	end
+end
+
+
+function _M:OnCreate(msg)
+	local moudle = self:CreateMoudle(self._RootNode, "M_GangPK_Ranking")
+	self.mMoudle = moudle
+	moudle:Get("C_Back_Btn"):AddOnButton(function()
+		self:Destroy()
+	end)
+    moudle:Get("C_Text").Text = Csv.Text("cross_commerce_53")
+	moudle:Get("ranking").Text = Csv.Text("cross_commerce_53")
+	moudle:Get("name").Text = Csv.Text("commerce_create19")
+	moudle:Get("JiFen").Text = Csv.Text("cross_commerce_55")
+	moudle:Get("OwnName").Text = Csv.Text("cross_commerce_38")
+	moudle:Get("OwnHurt").Text = Csv.Text("cross_commerce_56")
+	moudle:Get("OwnGongXian").Text = Csv.Text("cross_commerce_51")
+	local list = msg.list
+	if list ~= nil and #list > 0 then
+		self.scrollController = RankVertical.new(moudle:Get("scrollView"),moudle:Get("content"),"M_GangPK_Ranking",
+			function(index,info,oneMoudle)
+				if oneMoudle ~= nil then
+					if info.rank > 3 then
+						oneMoudle:Get("rank").Text = info.rank
+					end
+					oneMoudle.SelfRect.LocalPosition = Vector2(0,((63 + 12) * #list - 12)/2 - ((index - 1) * (63 + 12) + 63/2))
+					oneMoudle:Get("name").Text = "S" .. info.serverId .. "." .. info.name
+					oneMoudle:Get("value").Text = info.score
+					if info.serverId == MPlayer.GetServerId() and info.commerceId == MCommerce.MyCommerceId and MCommerce.MyCommerceId > 0 then
+						oneMoudle:Get("QTSHtext").Text = Csv.Text("cross_commerce_42")
+					else
+						oneMoudle:Get("QTSH").Activity = false
+					end
+				end
+			end)
+		self.scrollController:CreateScroll(11,743,700,63,12,list)
+	else
+		moudle:Get("None").Text = Csv.Text("cross_commerce_41")
+	end
+	moudle:Get("NameText").Text = "S" .. MPlayer.GetServerId() .. "." .. MPlayer.GetName()
+	moudle:Get("GongXianText").Text = msg.myRank
+	if MCrossCommerce.PVE.MyRank >= 0 then
+		moudle:Get("HurtText").Text = msg.score
+	else
+		moudle:Get("HurtText").Text = Csv.Text("commerce_rank4")
+	end
+end
+
+return _M

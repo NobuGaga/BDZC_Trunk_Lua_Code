@@ -55,6 +55,16 @@ local CMD_ID =
 
 	cCancelDisband = 30,	--取消解散商会
 
+	-- 商会生产研发
+	cDonate = 31,			--生产捐赠	PCommerce.CDonate
+	cShowItem = 32,			--展出商会展品 PCommerce.CShowItem
+	cResearchItem = 33,		--研究个人展品 PCommerce.CResearchItem
+	cInvestItem = 34,		--投资个人展品 PCommerce.CInvestItem
+	cGetProduceReward = 35, --领取生产奖励
+	cGetDonateReward = 36, 	--领取捐赠奖励 PCommerce.CGetDonateReward
+	cDonateLog = 37,		--捐赠日志
+	cGetShowItem = 38,		--领取展品 PCommerce.PID
+
 	--Server -> Client
 	--初始化 --> 只发商会id(用来标识有没有商会)
 	sInit = 1,			--PCommerce.SInit
@@ -100,6 +110,18 @@ local CMD_ID =
 	sCloseBattle = 21,
 	--刷新商会修学状态
 	sUpdateStudyRed = 22,	--PCOmmerce.SUpdateStudyRed
+	
+	--商会生产研发
+	sDonate = 31,			-- 生产捐赠	PCommerce.SDonate
+	sShowItem = 32,			-- 展出商会展品 PCommerce.SShowItem
+	sResearchItem = 33,		-- 研究个人展品 PCommerce.SResearchItem
+	sInvestItem = 34,		-- 投资个人展品 PCommerce.SInvestItem
+	sGetProduceReward = 35,	-- 领取生产奖励 PCommerce.SGetProduceReward
+	sGetDonateReward = 36,	-- 领取捐赠奖励 PCommerce.SGetDonateReward
+	sDonateLog = 37,		-- 捐赠日志列表 PCommerce.SDonateLog
+	sUpdateProduce = 38,	-- 更新生产信息 PCommerce.PProduce
+	sGetShowItem = 40,		-- 领取展品 PCommerce.PID
+	sNewDonateLog = 41,		-- 新捐赠日志信息 PCommerce.SDonateLog
 }
 
 function _M.ModuleClean()
@@ -148,6 +170,16 @@ function _M.ModuleInit(isReload)
 
 		--取消解散
 		[CMD_ID.cCancelDisband] = "",
+
+		-- 生产研发
+		[CMD_ID.cDonate] = "PCommerce.CDonate",
+		[CMD_ID.cShowItem] = "PCommerce.CShowItem",
+		[CMD_ID.cResearchItem] = "PCommerce.CResearchItem",
+		[CMD_ID.cInvestItem] = "PCommerce.CInvestItem",
+		[CMD_ID.cGetProduceReward] = "",
+		[CMD_ID.cGetDonateReward] = "PCommerce.CGetDonateReward",
+		[CMD_ID.cDonateLog] = "",
+		[CMD_ID.cGetShowItem] = "PCommerce.PID",
 	}
 	--接收消息协议注册
 	local func_recv =
@@ -174,6 +206,18 @@ function _M.ModuleInit(isReload)
 		[CMD_ID.sTransfer] =  {proto = "PCommerce.STransfer",	handle = _P.OnTransferSuccess},
 		[CMD_ID.sCloseBattle] =  {handle = _P.OnBattleClosePush},
 		[CMD_ID.sUpdateStudyRed] =  {proto = "PCommerce.SUpdateStudyRed",	handle = _P.OnUpdateStudyRed},
+
+		-- 生产研究
+		[CMD_ID.sDonate] 			=  {proto = "PCommerce.SDonate",		 	handle = _P.OnDonateBack},
+		[CMD_ID.sShowItem] 			=  {proto = "PCommerce.SShowItem",		 	handle = _P.OnShowItemBack},
+		[CMD_ID.sResearchItem] 		=  {proto = "PCommerce.SResearchItem",		handle = _P.OnResearchBack},
+		[CMD_ID.sInvestItem] 		=  {proto = "PCommerce.SInvestItem",	 	handle = _P.OnInvestBack},
+		[CMD_ID.sGetProduceReward] 	=  {proto = "PCommerce.SGetProduceReward",	handle = _P.OnGetProduceBack},
+		[CMD_ID.sGetDonateReward] 	=  {proto = "PCommerce.SGetDonateReward",	handle = _P.OnGetDonateBack},
+		[CMD_ID.sDonateLog] 		=  {proto = "PCommerce.SDonateLog",			handle = _P.OnGetLogBack},
+		[CMD_ID.sUpdateProduce] 	=  {proto = "PCommerce.PProduce",			handle = _P.OnUpdateProduce},
+		[CMD_ID.sGetShowItem] 		=  {proto = "PCommerce.PID",				handle = _P.OnGetShowItemBack},
+		[CMD_ID.sNewDonateLog] 		=  {proto = "PCommerce.SDonateLog",			handle = _P.OnNewLogPush},
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Commerce, func_send, func_recv, isReload)
@@ -343,17 +387,16 @@ function _P.OnInit(data)
 	MCommerce.MyCommerceId = data.id
 	MCommerce.NextJoinTime = data.joinTime
 	MCommerce.CommerceName = data.name
+	MCommerce.CommerceLevel = data.level or 0
 	MCommerce.StudyRedState = data.studyRed or 0
 
-	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1,Define.SysId.Commerce)
-	WindowMgr.Call("UCommerce","OnUpdateCommerceStudyRed")
+	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1, Define.SysId.Commerce, Define.SysId.Commerce_Study)
 end
 
 function _P.OnUpdateStudyRed(data)
 	MCommerce.StudyRedState = data.studyRed
 
-	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1,Define.SysId.Commerce)
-	WindowMgr.Call("UCommerce","OnUpdateCommerceStudyRed")
+	CMain.UpdateRedpoint(MCommerce.StudyRedState == 1, Define.SysId.Commerce, Define.SysId.Commerce_Study)
 end
 
 --创建成功
@@ -384,7 +427,7 @@ function _P.OnOut(data)
 	MCommerce.MyCommerceId = 0
 	MCommerce.NextJoinTime = data.joinTime
 	MCommerce.CommerceName = nil
-
+	MCommerce.CommerceLevel = 0
 	if data.outType == 1 then
 		--被人踢出商会
 		CCommon.ShowError(Csv.Text("commerce_out1",{
@@ -459,13 +502,22 @@ function _P.OnOpen(data)
 		--是否开启商会学习
 		isOpenStudy = data.isOpenStudy,
 		--商会解散cd
-		disbandTime = data.disbandTime or 0
+		disbandTime = data.disbandTime or 0,
 	}
 	if MCommerce.MyCommerceInfo.notice == nil or MCommerce.MyCommerceInfo.notice == "" then
 		MCommerce.MyCommerceInfo.notice = Csv.Text("commerce_create15")
 	end
 	if MCommerce.MyCommerceInfo.declaration == nil or MCommerce.MyCommerceInfo.declaration == "" then
 		MCommerce.MyCommerceInfo.declaration = Csv.Text("commerce_create16")
+	end
+	-- 商会生产（当前捐献积分，捐献公会等级）
+	if data.donate ~= nil then
+		MCommerce.MyCommerceInfo.productScore = data.donate.score or 0
+		MCommerce.MyCommerceInfo.productGangLv = data.donate.commerceLevel or 0 -- 当一天商会的等级发生了变化，还是按照最原始的等级来显示奖励
+	end
+	-- 商会当前展出展品
+	if data.showItem ~= nil then
+		MCommerce.MyCommerceInfo.showItem = data.showItem
 	end
 
 	--我的信息
@@ -487,7 +539,11 @@ function _P.OnOpen(data)
 		--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
 		staffLifeNum = {},
 		--是否打过商会副本
-		hasBattled = myInfo.hasBattled
+		hasBattled = myInfo.hasBattled,
+		productTable = {},
+		donateTable = {},
+		-- 投资展品次数（商会研究）
+		investItemTimes = myInfo.investItemTimes or 0,
 	}
 	if myInfo.exchangeList ~= nil then
 		for _,v in pairs(myInfo.exchangeList) do
@@ -503,6 +559,15 @@ function _P.OnOpen(data)
 		for _,v in pairs(myInfo.staffLifeNum) do
 			tmpMyInfo.staffLifeNum[v.id] = v.count
 		end
+	end
+	if myInfo.produce ~= nil then
+		tmpMyInfo.productTable = myInfo.produce
+	end
+	if myInfo.donate ~= nil then
+		tmpMyInfo.donateTable = myInfo.donate
+	end
+	if myInfo.showItem ~= nil then -- 个人当前正研究数据（商会研究）
+		tmpMyInfo.curStudyData = myInfo.showItem
 	end
 	MCommerce.MyCommerceInfo.myInfo = tmpMyInfo
 	if data.dynamics ~= nil then
@@ -522,6 +587,7 @@ function _P.OnOpen(data)
 	end
 
 	MCommerce.CommerceName = data.name
+	MCommerce.CommerceLevel = data.level
 
 	WindowMgr.Call("UCommerce","OnOpen")
 
@@ -545,7 +611,9 @@ function _P.OnUpdate(data)
 	local isNeedUpdateDisband = false
 	if data.level ~= nil then
 		cachedInfo.level = data.level
+		MCommerce.CommerceLevel = data.level
 		isNeedUpdateExp = true
+		WindowMgr.Call("UCommerce", "OnUpdateCommerceLevel")
 	end
 	if data.exp ~= nil then
 		cachedInfo.exp = data.exp
@@ -604,6 +672,18 @@ function _P.OnUpdate(data)
 	if isNeedUpdateExp then
 		WindowMgr.Call("UCommerce","OnUpdateExp")
 	end
+
+	-- 商会生产（当前捐献积分，捐献公会等级）
+	if data.donate ~= nil then
+		MCommerce.MyCommerceInfo.productScore = data.donate.score or 0
+		MCommerce.MyCommerceInfo.productGangLv = data.donate.commerceLevel or 0 -- 当一天商会的等级发生了变化，还是按照最原始的等级来显示奖励
+		WindowMgr.Call("UCommerce", "OnUpdateProduct")
+	end
+	-- 商会当前展出展品
+	if data.showItem ~= nil then
+		MCommerce.MyCommerceInfo.showItem = data.showItem
+	end
+
 	if data.myInfo ~= nil then
 		local myInfo = data.myInfo
 		local preJob = myInfo.job
@@ -624,9 +704,15 @@ function _P.OnUpdate(data)
 			--员工已经使用加班通知的次数{{id:员工id,count:已用的加班通知的次数}}
 			staffLifeNum = {},
 			--是否打过商会副本
-			hasBattled = myInfo.hasBattled
+			hasBattled = myInfo.hasBattled,
 		}
 		if cachedInfo ~= nil then
+			if cachedInfo.myInfo ~= nil then
+				tmpMyInfo.productTable = cachedInfo.myInfo.productTable
+				tmpMyInfo.donateTable = cachedInfo.myInfo.donateTable
+				tmpMyInfo.investItemTimes = cachedInfo.myInfo.investItemTimes
+				tmpMyInfo.curStudyData = cachedInfo.myInfo.curStudyData
+			end
 			cachedInfo.myInfo = tmpMyInfo
 		end
 		if myInfo.exchangeList ~= nil then
@@ -643,6 +729,37 @@ function _P.OnUpdate(data)
 			for _,v in pairs(myInfo.staffLifeNum) do
 				tmpMyInfo.staffLifeNum[v.id] = v.count
 			end
+		end
+		if myInfo.produce ~= nil then
+			if tmpMyInfo.productTable == nil then
+				tmpMyInfo.productTable = {}
+			end
+			if myInfo.produce.stockCount ~= nil then
+				tmpMyInfo.productTable.stockCount = myInfo.produce.stockCount
+			end
+			if myInfo.produce.startTime ~= nil then
+				tmpMyInfo.productTable.startTime = myInfo.produce.startTime
+			end
+		end
+		if myInfo.donate ~= nil then
+			if tmpMyInfo.donateTable == nil then
+				tmpMyInfo.donateTable = {}
+			end
+			if myInfo.donate.timesByProduct ~= nil then
+				tmpMyInfo.donateTable.timesByProduct = myInfo.donate.timesByProduct
+			end
+			if myInfo.donate.timesByGold ~= nil then
+				tmpMyInfo.donateTable.timesByGold = myInfo.donate.timesByGold
+			end
+			tmpMyInfo.donateTable.rewardedList = myInfo.donate.rewardedList
+			WindowMgr.Call("UCommerce", "OnUpdateDonate", myInfo.donate)
+		end
+		-- 投资展品次数（商会研究）
+		if myInfo.investItemTimes ~= nil then
+			tmpMyInfo.investItemTimes = myInfo.investItemTimes or 0
+		end
+		if myInfo.showItem ~= nil then -- 个人当前正研究数据（商会研究）
+			tmpMyInfo.curStudyData = myInfo.showItem
 		end
 
 		if preJob ~= myInfo.job and MCommerce.IsCommerceHuiZhang() then
@@ -671,7 +788,7 @@ function _P.OnUpdate(data)
 	end
 	if data.isOpenStudy ~= nil then
 		cachedInfo.isOpenStudy = data.isOpenStudy
-		WindowMgr.Call("UCommerce","OnUpdatemeMyInfo")
+		WindowMgr.Call("UCommerce", "OnRefreshActivityBtn")
 	end
 	if WindowMgr.IsCreated("UCommerceMembers") then
 		WindowMgr.Call("UCommerceMembers", "RefreshMemberNum")
@@ -679,8 +796,8 @@ function _P.OnUpdate(data)
 	if data.disbandTime ~= nil then
 		cachedInfo.disbandTime = data.disbandTime
 		isNeedUpdateDisband = true
-		if MCommerce.IsDissolution() and WindowMgr.IsCreated("UCommerceManager") then
-			WindowMgr.Destroy("UCommerceManager")
+		if MCommerce.IsDissolution() then
+			WindowMgr.Call("UCommerce", "OnOpenBattleList", 1)
 		end
 	end
 	if isNeedUpdateDisband then
@@ -734,13 +851,13 @@ function _P.OnExchange(data)
 	end
 end
 function _P.OnBattleList(data)
-	WindowMgr.Call("UCommerceBattleList", "OnBattleList", data)
+	WindowMgr.Call("UCommerce", "OnBattleList", data)
 end
 function _P.OnBattleReport(data)
 	WindowMgr.Call("UCommerceBattleReport", "OnBattleReport", data)
 end
 function _P.OnBattleBattle(data)
-	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
+	WindowMgr.Call("UCommerce","UpdateBattle",data.info, true)
 	--WindowMgr.Call("UCommerceBattle", "OnBattleBattle", data)
 	if not WindowMgr.IsCreated("UBattleBossNew") then
 		local csvBoss = Csv.CommerceBattle[data.info.id]
@@ -753,15 +870,15 @@ function _P.OnBattleBattle(data)
 				if paramEx.info.state == MCommerce.BattleState.Killed then
 					WindowMgr.Create("UCommerceBattleKill", paramEx, function()
 						if WindowMgr.IsCreated("UBattleBossNew") then
-							--WindowMgr.Destroy("UBattleBossNew")
-							WindowMgr.Create("UCommerceBattleList")
+							WindowMgr.Destroy("UBattleBossNew")
+							WindowMgr.Call("UCommerce", "OnOpenBattleList", 2)
 						end
 					end)
 				else
 					WindowMgr.Create("UCommerceBattleResult", paramEx, function()
 						if WindowMgr.IsCreated("UBattleBossNew") then
-							--WindowMgr.Destroy("UBattleBossNew")
-							WindowMgr.Create("UCommerceBattleList")
+							WindowMgr.Destroy("UBattleBossNew")
+							WindowMgr.Call("UCommerce", "OnOpenBattleList", 2)
 						end
 					end)
 				end
@@ -783,7 +900,7 @@ function _P.OnBattleResult(data)
 	if data.staffLifeNum ~= nil then
 		info.myInfo.staffLifeNum[data.staffLifeNum.id] = data.staffLifeNum.count
 	end
-	WindowMgr.Call("UCommerceBattleList","UpdateBattle",data.info)
+	WindowMgr.Call("UCommerce","UpdateBattle",data.info, true)
 	WindowMgr.Call("UCommerceBattle","OnBattleResult",data)
 
 	MCommerce.MyCommerceInfo.myInfo.hasBattled = true
@@ -833,9 +950,7 @@ end
 
 function _P.OnTransferSuccess(data)
 	if data ~= nil then
-		if WindowMgr.IsCreated("UCommerceManager") then
-			WindowMgr.Destroy("UCommerceManager")
-		end
+		WindowMgr.Call("UCommerce", "OnOpenBattleList", 1)
 	end
 end
 
@@ -849,9 +964,9 @@ function _P.OnBattleClosePush(data)
 	end
 
 	-- 更新副本列表信息界面
-	if WindowMgr.IsCreated("UCommerceBattleList") then
+	WindowMgr.Call("UCommerce", "BattleInfoReq", function( ... )
 		_M.BattleInfoReq()
-	end
+	end)
 end
 
 function _P.CheckBattleRedPoint()
@@ -867,6 +982,162 @@ function _P.CheckBattleRedPoint()
 		MCommerce.BattleRedPoint = false
 	end
 	WindowMgr.Call("UCommerce","OnUpdatemeCanFight")
+end
+
+
+------------------------------------------商会生产--------------------------------------------------
+-- C2S
+-- 生产捐赠
+function _M.DonateReq(type)
+	_M.Send(CMD_ID.cDonate, {type = type})
+end
+
+-- 请求领取生产奖励
+function _M.GetProductRewReq()
+	_M.Send(CMD_ID.cGetProduceReward)
+end
+
+-- 请求领取商会捐赠奖励，每日重置
+function _M.GetDonateRewReq(index)
+	_M.Send(CMD_ID.cGetDonateReward, {index = index})
+end
+
+-- 请求获取商会捐赠日志
+function _M.GetDonateLogReq()
+	_M.Send(CMD_ID.cDonateLog)
+end
+
+-- S2C
+-- 捐赠返回
+function _P.OnDonateBack(data)
+	if data == nil then return end
+
+	local donateTable = MCommerce.MyCommerceInfo.myInfo.donateTable
+	if donateTable ~= nil then
+		if data.type == MCommerce.DonateType.Goods then
+			donateTable.timesByProduct = donateTable.timesByProduct + 1
+		else
+			donateTable.timesByGold = donateTable.timesByGold + 1
+		end
+	end
+
+	WindowMgr.Call("UCommerce", "OnDonateBack", data)
+end
+
+-- 领取生产奖励返回
+function _P.OnGetProduceBack(data)
+	if data == nil then return end
+
+	if MCommerce.MyCommerceInfo.myInfo ~= nil and MCommerce.MyCommerceInfo.myInfo.productTable ~= nil then
+		MCommerce.MyCommerceInfo.myInfo.productTable.stockCount = 0
+		MCommerce.MyCommerceInfo.myInfo.productTable.startTime = data.startTime
+	end
+
+	WindowMgr.Call("UCommerce", "OnGetProduceBack", data)
+end
+
+-- 领取商会捐赠奖励返回
+function _P.OnGetDonateBack(data)
+	if data == nil then return end
+
+	local donateTable = MCommerce.MyCommerceInfo.myInfo.donateTable
+	if donateTable ~= nil then
+		if donateTable.rewardedList == nil then
+			donateTable.rewardedList = {}
+		end
+
+		table.insert(donateTable.rewardedList, data.index)
+	end
+
+	WindowMgr.Call("UCommerce", "OnGetDonateBack", data)
+end
+
+-- 捐赠日志返回
+function _P.OnGetLogBack(data)
+	if data == nil then return end
+
+	WindowMgr.Call("UCommerce", "OnGetLogBack", data.logList)
+end
+
+
+-- 新的捐赠日志推送
+function _P.OnNewLogPush(data)
+	if data == nil then return end
+
+	WindowMgr.Call("UCommerce", "OnNewLogPush", data.logList)
+end
+
+
+-- 生产信息推送
+function _P.OnUpdateProduce(data)
+	if data == nil then return end
+
+	if data ~= nil and MCommerce.MyCommerceInfo.myInfo ~= nil then
+		MCommerce.MyCommerceInfo.myInfo.productTable = data
+	end
+end
+
+
+------------------------------------------商会研究--------------------------------------------------
+-- C2S
+-- 展出商会展品
+function _M.ShowItemReq(itemId)
+	_M.Send(CMD_ID.cShowItem, {itemId = itemId})
+end
+
+
+-- 研究个人展品
+function _M.StudyPerReq(itemId)
+	_M.Send(CMD_ID.cResearchItem, {itemId = itemId})
+end
+
+
+-- 投资个人展品
+function _M.InvestPerReq(itemId)
+	_M.Send(CMD_ID.cInvestItem, {itemId = itemId})
+end
+
+
+function _M.GetShowItemReq(id)
+	_M.Send(CMD_ID.cGetShowItem, {id = id})
+end
+
+
+-- S2C
+-- 展出商会展品返回
+function _P.OnShowItemBack(data)
+	if data == nil then return end
+
+	MCommerce.MyCommerceInfo.showItem = data
+	WindowMgr.Call("UCommerce", "OnShowItemBack", data)
+end
+
+
+-- 研究个人展品返回
+function _P.OnResearchBack(data)
+	if data == nil then return end
+
+	MCommerce.MyCommerceInfo.myInfo.curStudyData = data
+	WindowMgr.Call("UCommerce", "OnResearchBack", data)
+end
+
+
+-- 投资个人展品返回
+function _P.OnInvestBack(data)
+	if data == nil then return end
+
+	MCommerce.MyCommerceInfo.myInfo.investItemTimes = MCommerce.MyCommerceInfo.myInfo.investItemTimes + 1
+	MCommerce.MyCommerceInfo.myInfo.curStudyData = data
+	WindowMgr.Call("UCommerce", "OnInvestBack", data)
+end
+
+
+-- 领取个人展品返回
+function _P.OnGetShowItemBack(data)
+	if data == nil then return end
+
+	MCommerce.MyCommerceInfo.myInfo.curStudyData = nil
+	WindowMgr.Call("UCommerce", "OnGetShowItemBack", data)
 end
 
 

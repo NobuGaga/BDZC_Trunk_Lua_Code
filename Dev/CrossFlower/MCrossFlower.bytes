@@ -1,0 +1,92 @@
+--[[
+	@desc :跨服鲜花榜
+    2018-12-17 14:34:56
+]]
+
+local _M = {}
+
+--活动状态
+_M.STATE = 
+{
+    Waiting = 1,	--未开始
+	Open = 2,		--进行中
+	Finish = 3,		--已结束（显示界面）
+	Close = 4,		--关闭（不显示界面）
+}
+
+_M.RewardState = 
+{
+	--可领取
+	CanGet = 1,
+	--已领取
+	Geted = 2,
+	--未参与
+	NotJoin = 3,
+	--不可领取(进行中时不可以领取)
+	NotGet = 4
+}
+
+--榜单类型
+_M.RankType = 
+{
+	--收到的鲜花榜
+	Get = 1,
+	--送出的鲜花榜
+	Send = 2,
+}
+
+--每个鲜花榜的阶段类型
+_M.StageType = 
+{
+	Stage_1 = 1,
+    Stage_2 = 2,
+    Stage_3 = 3,
+	Stage_4 = 4,
+	Stage_5 = 5,
+}
+
+--变量初始化
+local function init()
+	--活动状态
+	_M.State = _M.STATE.Close
+	--活动id
+	_M.ActID = 0
+	--活动开启时间
+	_M.StartTime = 0
+	--活动结束时间
+	_M.EndTime = 0
+	--活动关闭时间
+	_M.CloseTime = 0
+
+	--鲜花物品id
+	_M.FlowerItemID = Csv.Const(156)
+
+	--鲜花榜排名
+	_M.MyGetRank = 0
+	--鲜花榜阶段
+	_M.MyGetStageType = _M.StageType.Stage_5
+	--鲜花榜奖励状态
+	_M.MyGetRewardState = _M.RewardState.NotJoin
+
+	--送花榜排名
+	_M.MySendRank = 0
+	--送花榜阶段
+	_M.MySendStageType = _M.StageType.Stage_5
+	--送花榜奖励状态
+	_M.MySendRewardState = _M.RewardState.NotJoin
+
+	--本服拉票数
+	_M.MySerChatNum = 0
+	--跨服拉票数
+	_M.CrossSerChatNum = 0
+
+	--商店列表
+	_M.ShopList = {}
+end
+init()
+
+function _M.Clean()
+	init()
+end
+
+return _M

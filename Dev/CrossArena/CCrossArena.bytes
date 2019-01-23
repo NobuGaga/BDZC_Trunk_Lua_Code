@@ -59,322 +59,208 @@ function _M.ModuleInit(isReload)
 	_M.Send = SocketMgr.Regist(Define.SysId.CrossArena, send, recv, isReload)
 end
 
-_P.STAGE_TRANSFORM_UI_FUNC =
-{
-	["KNOCKOUT_UI"] = function()
-		local isInArenaUI = false
-		if WindowMgr.IsCreated("UCrossArenaKnockoutReady") then
-			WindowMgr.Destroy("UCrossArenaKnockoutReady")
-			isInArenaUI = true
-		end
-		if WindowMgr.IsCreated("UCrossArenaKnockoutToday") then
-			WindowMgr.Destroy("UCrossArenaKnockoutToday")
-			isInArenaUI = true
-		end
-		if WindowMgr.IsCreated("UCrossArenaKnockoutBattle") then
-			--WindowMgr.Destroy("UCrossArenaKnockoutBattle")
-			isInArenaUI = true
-		end
-		if WindowMgr.IsCreated("UCrossArenaKnockoutAll") then
-			WindowMgr.Destroy("UCrossArenaKnockoutAll")
-			isInArenaUI = true
-		end
-		return isInArenaUI
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.None] = function(openUI)
-		--TODO(关闭所有跨服竞技场界面)
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.Ready] = function(openUI)
-		if openUI then
-			MCrossArena.SaveCacheCrossArenaStartTime()
-			_M.CheckRedpoint()
-			WindowMgr.Create("UCrossArena")
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.ReadyRslt] = function(openUI)
-		local isInArenaUI = false
-		if WindowMgr.IsCreated("UCrossArena") then
-			--WindowMgr.Destroy("UCrossArena")
-			isInArenaUI = true
-		end
-		if openUI or isInArenaUI then
-			_M.CCUArenaTopRank()
-			WindowMgr.Create("UCrossArenaInRank")
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.ScoreMatch] = function(openUI)
-		local isInArenaUI = false
-		if WindowMgr.IsCreated("UCrossArenaInRank") then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips2"))
-			--WindowMgr.Destroy("UCrossArenaInRank")
-			isInArenaUI = true
-		end
-		if openUI or isInArenaUI then
-			if MCrossArena.GetIsCanScoreMatch() then
-				_M.CCUMatchInfo()
-			else
-				WindowMgr.Create("UCrossArenaScoreRank")
-			end
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt] = function(openUI)
-		local isInArenaUI = false
-		if WindowMgr.IsCreated("UCrossArenaScoreBattle") then
-			--WindowMgr.Destroy("UCrossArenaScoreBattle", true)
-			isInArenaUI = true
-		end
-		if WindowMgr.IsCreated("UCrossArenaScoreReady") then
-			WindowMgr.Destroy("UCrossArenaScoreReady")
-			isInArenaUI = true
-		end
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips3"))
-		end
-		if openUI or isInArenaUI then
-			WindowMgr.Create("UCrossArenaScoreRank")
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.SixTeenReady] = function(openUI)
-		local isInArenaUI = false
-		if WindowMgr.IsCreated("UCrossArenaScoreRank") then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips4"))
-			--WindowMgr.Destroy("UCrossArenaScoreRank")
-			isInArenaUI = true
-		end
-		if openUI or isInArenaUI then
+EventCenter.RegistCallEvent(Define.EventListenId.DailyReset,function(eventHandle)
+	if MCrossArena.GetIsArenaOpen() and _P.IsInArenaUI() then
+		local curStage = MCrossArena.GetArenaStageType()
+		if curStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady then
 			_M.CCUArenaChipInfo()
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 16}))
-		end
-		if openUI or isInArenaUI then
-			_M.CCUArenaFightRecord()
-			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle)
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.EightReady] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips6", {num = 16, num2 = 8}))
-		end
-		if openUI or isInArenaUI then
+			WindowMgr.Create("UCrossArenaMain")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.EightReady then
+			CCommon.ShowRight(Csv.Text("corss_arena_tips12", {num2 = 8}))
 			_M.CCUArenaChipInfo()
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.EightBattle] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 8}))
-		end
-		if openUI or isInArenaUI then
-			_M.CCUArenaFightRecord()
-			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.EightBattle)
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.FourReady] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips6", {num = 8, num2 = 4}))
-		end
-		if openUI or isInArenaUI then
+			WindowMgr.Create("UCrossArenaMain")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FourReady then
+			CCommon.ShowRight(Csv.Text("corss_arena_tips12", {num2 = 4}))
 			_M.CCUArenaChipInfo()
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.FourBattle] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 4}))
-		end
-		if openUI or isInArenaUI then
-			_M.CCUArenaFightRecord()
-			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.FourBattle)
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.FinalReady] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips7", {num = 4}))
-		end
-		if openUI or isInArenaUI then
+			WindowMgr.Create("UCrossArenaMain")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FinalReady then
+			CCommon.ShowRight(Csv.Text("cross_arena_tips7"))
 			_M.CCUArenaChipInfo()
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.FinalBattle] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		if isInArenaUI then
-			CCommon.ShowRight(Csv.Text("cross_arena_tips8"))
-		end
-		if openUI or isInArenaUI then
-			_M.CCUArenaFightRecord()
-			WindowMgr.Create("UCrossArenaKnockoutBattle", MCrossArena.ARENA_STAGE_TYPE.FinalBattle)
-			MCrossArena.SaveCacheCrossArenaStage()
-			_M.CheckRedpoint()
-		end
-	end,
-	[MCrossArena.ARENA_STAGE_TYPE.FinalRslt] = function(openUI)
-		local isInArenaUI = _P.STAGE_TRANSFORM_UI_FUNC["KNOCKOUT_UI"]()
-		-- if isInArenaUI then
-		-- 	CCommon.ShowRight(Csv.Text("cross_arena_tips9"))
-		-- end
-		if not MCrossArena.GetIsArenaOpen() then 
-			return
-		end
-		if openUI or isInArenaUI then
+			WindowMgr.Create("UCrossArenaMain")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
 			_M.CCUArenaChipInfo()
+			WindowMgr.Create("UCrossArenaMain")
 		end
-	end,
-}
+	end
+end, true)
 
 --清空模块
 function _M.ModuleClean()
 	MCrossArena.Clean()
 end
 
+--点击主界面按钮进入
 function _M.OpenUI()
 	local curStage = MCrossArena.GetArenaStageType()
-	local func = _P.STAGE_TRANSFORM_UI_FUNC[curStage]
-	if func then
-		func(true)
+	if curStage <= MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt then
+		if curStage == MCrossArena.ARENA_STAGE_TYPE.Ready then
+			WindowMgr.Create("UCrossArena")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.ReadyRslt then
+			_M.CCUArenaTopRank()
+			WindowMgr.Create("UCrossArenaInRank")
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.ScoreMatch then
+			if MCrossArena.GetIsCanScoreMatch() then
+				_M.CCUMatchInfo()
+			else
+				WindowMgr.Create("UCrossArenaScoreRank")
+			end
+		elseif curStage == MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt then
+			WindowMgr.Create("UCrossArenaScoreRank")
+		end
+	else
+		if curStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady or
+			curStage == MCrossArena.ARENA_STAGE_TYPE.EightReady or
+			curStage == MCrossArena.ARENA_STAGE_TYPE.FourReady or
+			curStage == MCrossArena.ARENA_STAGE_TYPE.FinalReady or
+			curStage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt
+			then
+			_M.CCUArenaChipInfo()
+		end
+
+		if MCrossArena.GetIsArenaOpen() then
+			WindowMgr.Create("UCrossArenaMain")
+		end
 	end
 end
 
 ------------------------------------C=>S
-function _M.CCUArenaTopRank()
-	_M.Send(CMD_ID.cCUArenaTopRank)
-end
+	function _M.CCUArenaTopRank()
+		_M.Send(CMD_ID.cCUArenaTopRank)
+	end
 
-function _M.CCUMatchInfo()
-	_M.Send(CMD_ID.cCUMatchInfo)
-end
+	function _M.CCUMatchInfo()
+		_M.Send(CMD_ID.cCUMatchInfo)
+	end
 
-function _M.CCUMatchPlayer()
-	_M.Send(CMD_ID.cCUMatchPlayer)
-end
+	function _M.CCUMatchPlayer()
+		_M.Send(CMD_ID.cCUMatchPlayer)
+	end
 
-function _M.CCUArenaFight()
-	_M.Send(CMD_ID.cCUArenaFight)
-end
+	function _M.CCUArenaFight()
+		_M.Send(CMD_ID.cCUArenaFight)
+	end
 
---type:1:积分排名奖励 2:玩家押注奖励 3:押注奖池奖励 4:淘汰赛奖励
-function _M.CCUArenaReward(type, playerid)
-	_M.Send(CMD_ID.cCUArenaReward, {type = type, playerid = playerid or 0})
-end
+	--type:1:积分排名奖励 2:玩家押注奖励 3:押注奖池奖励 4:淘汰赛奖励
+	function _M.CCUArenaReward(type, playerid)
+		_M.Send(CMD_ID.cCUArenaReward, {type = type, playerid = playerid or 0})
+	end
 
-function _M.CCUArenaChipInfo()
-	_M.Send(CMD_ID.cCUArenaChipInfo)
-end
+	function _M.CCUArenaChipInfo()
+		_M.Send(CMD_ID.cCUArenaChipInfo)
+	end
 
---//type1:一票, 2:全下, index对应分组
-function _M.CCUArenaChip(playerId, type, index)
-	_M.Send(CMD_ID.cCUArenaChip, {playerId = playerId, type = type, index = index})
-end
+	--//type1:一票, 2:全下, index对应分组
+	function _M.CCUArenaChip(playerId, type, index)
+		_M.Send(CMD_ID.cCUArenaChip, {playerId = playerId, type = type, index = index})
+	end
 
---请求所有比赛数据-赛程表
-function _M.CCUArenaFightRecord()
-	_M.Send(CMD_ID.cCUArenaFightRecord)
-end
+	--请求所有比赛数据-赛程表
+	function _M.CCUArenaFightRecord()
+		_M.Send(CMD_ID.cCUArenaFightRecord)
+	end
+
 
 ------------------------------------S=>C
 function _P.RefreshMainBtn()
 	WindowMgr.Call("UMain", "RefreshTopBtns")
 end
 
--- --小红点相关
--- function _P.IsShowRedpoint()
--- 	local arenaStage = MCrossArena.GetArenaStageType()
--- 	if arenaStage == MCrossArena.ARENA_STAGE_TYPE.Ready then
--- 		--预备筛选阶段，第一次打开
--- 		return not MCrossArena.IsSaveCacheCrossArenaStartTime()
--- 	elseif arenaStage == MCrossArena.ARENA_STAGE_TYPE.ScoreMatch then
--- 		--积分赛，如果有匹配次数，一直红点提示
--- 		return MCrossArena.GetScoreMatchCount() > 0
--- 	elseif arenaStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady 
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.EightReady
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.EightBattle
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.FourReady
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.FourBattle
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.FinalReady
--- 		or arenaStage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
--- 			--竞选对决阶段，所有人每日首次登陆游戏就给一次红点，进入活动页后不再显示红点
--- 			return not MCrossArena.IsSaveCacheCrossArenaStage()
--- 	end
--- 	return false
--- end
+function _P.IsInArenaUI()
+	return WindowMgr.IsCreated("UCrossArena") or 
+		WindowMgr.IsCreated("UCrossArenaInRank") or 
+		WindowMgr.IsCreated("UCrossArenaScoreBattle") or 
+		WindowMgr.IsCreated("UCrossArenaScoreReady") or
+		WindowMgr.IsCreated("UCrossArenaScoreRank") or 
+		WindowMgr.IsCreated("UCrossArenaMain") 
+end
 
 function _P.OnSInit(data)
 	local preState = MCrossArena.GetStateType()
 	local preStage = MCrossArena.GetArenaStageType()
 	MCrossArena.SetInit(data)
-	local curStage = MCrossArena.GetArenaStageType()
-	local curState = MCrossArena.GetStateType()
-	if preStage ~= curStage or preState ~= curState then
-		_P.RefreshMainBtn()
-		local func = _P.STAGE_TRANSFORM_UI_FUNC[curStage]
-		if func then
-			func()
-		end
-	end
 	_M.CheckRedpoint()
-end
 
-function _P.OnVsPlayer(data)
-	local preState = MCrossArena.GetStateType()
-	local preStage = MCrossArena.GetArenaStageType()
-	MCrossArena.SetInit(data)
 	local curStage = MCrossArena.GetArenaStageType()
 	local curState = MCrossArena.GetStateType()
 	if preStage ~= curStage or preState ~= curState then
 		_P.RefreshMainBtn()
-		local func = _P.STAGE_TRANSFORM_UI_FUNC[curStage]
-		if func then
-			func()
+
+		if MCrossArena.GetIsArenaOpen() then
+			if curStage <= MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt then
+				if _P.IsInArenaUI() then
+					if curStage == MCrossArena.ARENA_STAGE_TYPE.ReadyRslt then
+						_M.CCUArenaTopRank()
+						WindowMgr.Create("UCrossArenaInRank")
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.ScoreMatch then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips2"))
+						if MCrossArena.GetIsCanScoreMatch() then
+							_M.CCUMatchInfo()
+						else
+							WindowMgr.Create("UCrossArenaScoreRank")
+						end
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips3"))
+						if WindowMgr.IsCreated("UCrossArenaScoreReady") then
+							WindowMgr.Destroy("UCrossArenaScoreReady")
+						end
+						WindowMgr.Create("UCrossArenaScoreRank")
+					end
+				end
+			else
+				if _P.IsInArenaUI() then
+					if curStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenReady then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips4"))
+						_M.CCUArenaChipInfo()
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.SixTeenBattle then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 16}))
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.EightReady then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips6", {num = 16}))
+						_M.CCUArenaChipInfo()
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.EightBattle then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 8}))
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FourReady then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips6", {num = 8}))
+						_M.CCUArenaChipInfo()
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FourBattle then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips5", {num = 4}))
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FinalReady then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips6", {num = 4}))
+						_M.CCUArenaChipInfo()
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FinalBattle then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips8"))
+					elseif curStage == MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+						CCommon.ShowRight(Csv.Text("cross_arena_tips9"))
+						_M.CCUArenaChipInfo()
+					end
+					WindowMgr.Create("UCrossArenaMain")
+				end
+			end
+		else
+			if WindowMgr.IsCreated("UCrossArenaMain") then
+				WindowMgr.Destroy("UCrossArenaMain")
+			end
 		end
 	end
-	_M.CheckRedpoint()
 end
 
 function _P.OnSRankList(data)
 	MCrossArena.SetScoreRankList(data)
-	if WindowMgr.IsCreated("UCrossArenaInRank") then
-		WindowMgr.Call("UCrossArenaInRank", "RefreshData")
-	end
-	_M.CheckRedpoint()
+	WindowMgr.Call("UCrossArenaInRank", "RefreshData")
 end
 
 function _P.OnSCUArenaMatchInfo(data)
 	MCrossArena.SetSCUArenaMatchInfo(data)
+
 	if data and data.other then
 		WindowMgr.Create("UCrossArenaScoreBattle")
 	else
 		WindowMgr.Create("UCrossArenaScoreReady")
 	end
-	_M.CheckRedpoint()
 end
 
 function _P.OnSPCUArenaPlayer(data)
 	MCrossArena.SetSCUArenaMatchInfo(data)
-	if WindowMgr.IsCreated("UCrossArenaScoreReady") then
-		WindowMgr.Call("UCrossArenaScoreReady", "RefreshData")
-	end
-	_M.CheckRedpoint()
+	WindowMgr.Call("UCrossArenaScoreReady", "RefreshData")
 end
 
 function _P.OnSCUArenaFight(data)
@@ -390,71 +276,72 @@ function _P.OnSCUArenaReward(data)
 	end
 
 	MCrossArena.SetArenaRewardFlag(data)
-	if WindowMgr.IsCreated("UCrossArenaScoreRank") then
-		WindowMgr.Call("UCrossArenaScoreRank", "RefreshData", data)
-	end
-	if WindowMgr.IsCreated("UCrossArenaKnockoutToday") then
-		WindowMgr.Call("UCrossArenaKnockoutToday", "RefreshData", data, rewardinfo)
-	end
-	if WindowMgr.IsCreated("UCrossArenaKnockoutReward") then
-		WindowMgr.Call("UCrossArenaKnockoutReward", "RefreshData", data)
-	end
-	_M.CheckRedpoint()
+	WindowMgr.Call("UCrossArenaScoreRank", "RefreshData", data)
+	WindowMgr.Call("UCrossArenaKnockoutToday", "RefreshData", data, rewardinfo)
+	WindowMgr.Call("UCrossArenaKnockoutReward", "RefreshData", data)
 end
 
 function _P.OnSCUArenaChipInfo(data)
 	MCrossArena.SetSCUArenaChipInfo(data)
 	if data.update then
 		--服务器主动发送过来更新内容
-		if WindowMgr.IsCreated("UCrossArenaKnockoutReady") then
-			WindowMgr.Call("UCrossArenaKnockoutReady", "RefreshData")
-		end
-		if WindowMgr.IsCreated("UCrossArenaKnockoutToday") then
-			WindowMgr.Call("UCrossArenaKnockoutToday", "RefreshData")
-		end
+		
 	else
 		if WindowMgr.IsCreated("UCrossArenaKnockoutBattle") then
 			WindowMgr.Destroy("UCrossArenaKnockoutBattle")
 		end
-		local stage = MCrossArena.GetArenaStageType()
-		if MCrossArena.GetIsCanKnockoutMatch() and stage ~= MCrossArena.ARENA_STAGE_TYPE.FinalRslt then	
-			WindowMgr.Create("UCrossArenaKnockoutReady")
-		else
-			WindowMgr.Create("UCrossArenaKnockoutToday")
-		end
+
+		-- if WindowMgr.IsCreated("UCrossArenaMain") then
+		-- 	if WindowMgr.IsCreated("UCrossArenaKnockoutBattle") or
+		-- 		WindowMgr.IsCreated("UCrossArenaKnockoutToday") or
+		-- 		WindowMgr.IsCreated("UCrossArenaKnockoutReady")
+		-- 	then
+		-- 		if MCrossArena.GetIsCanKnockoutMatch() and MCrossArena.GetArenaStageType() ~= MCrossArena.ARENA_STAGE_TYPE.FinalRslt then
+		-- 			local serverTime = HeartBeat.ServSecond()
+		-- 			local todayPassed = serverTime - LuaUtil.TodayStartTime(serverTime)
+		-- 			if todayPassed - Csv.Const(155) > 0 then
+		-- 				WindowMgr.Create("UCrossArenaKnockoutToday")
+		-- 			else
+		-- 				WindowMgr.Create("UCrossArenaKnockoutReady")
+		-- 			end
+		-- 		else
+		-- 			WindowMgr.Create("UCrossArenaKnockoutToday")
+		-- 		end
+		-- 	end
+		-- end
 	end
-	_M.CheckRedpoint()
+	WindowMgr.Call("UCrossArenaKnockoutReady", "RefreshData")
+	WindowMgr.Call("UCrossArenaKnockoutToday", "RefreshData")
 end
 
 --所有淘汰赛数据
 function _P.OnSCUArenaFightRecord(data)
 	MCrossArena.SetKnockoutAll(data)
 	--赛程表
-	if WindowMgr.IsCreated("UCrossArenaKnockoutAll") then
-		WindowMgr.Call("UCrossArenaKnockoutAll", "RefreshData")
-	end
-	_M.CheckRedpoint()
+	WindowMgr.Call("UCrossArenaKnockoutAll", "RefreshData")
 end
 
 function _P.OnCUArenaVsPlayer(data)
+	MCrossArena.SetKnockoutNextVsPalyer(data)
 	--赛程表下一轮比赛信息
-	if WindowMgr.IsCreated("UCrossArenaKnockoutAll") then
-		WindowMgr.Call("UCrossArenaKnockoutAll", "RefreshNextVsData",data)
-	end
+	WindowMgr.Call("UCrossArenaKnockoutAll", "RefreshNextVsData")
 end
 
 function _P.OnCUArenaMyChip(data)
 	MCrossArena.SetCUArenaMyChip(data.playerlist)
 	WindowMgr.Call("UCrossArenaKnockoutBattle", "RefreshCUArenaMyChip")
-	_M.CheckRedpoint()
 end
 
 function _M.CheckRedpoint()
+	--积分赛奖励红点
 	local canShow = MCrossArena.GetArenaStageType() == MCrossArena.ARENA_STAGE_TYPE.ScoreMatchRslt and MCrossArena.GetIsCanScoreMatch()
 	CMain.UpdateRedpoint(canShow and MCrossArena.GetIsRedCanScore(), Define.SysId.CrossArena, 1, 1)	
+	--淘汰赛领奖
 	CMain.UpdateRedpoint(MCrossArena.GetIsRedCanOut(), Define.SysId.CrossArena, 2, 2)
-	CMain.UpdateRedpoint(MCrossArena.GetIsRedPoint(), Define.SysId.CrossArena, 2, 1)
-	CMain.UpdateRedpoint(MCrossArena.GetIsRedCanChip(), Define.SysId.CrossArena, 2, 3)
+	--主界面
+	CMain.UpdateRedpoint(MCrossArena.GetIsRedPoint(), Define.SysId.CrossArena, 3)
+	--押注分红有领取红点
+	CMain.UpdateRedpoint(MCrossArena.GetIsRedCanChip(), Define.SysId.CrossArena, 4)
 end
 
 --debug

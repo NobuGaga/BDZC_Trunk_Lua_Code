@@ -1,0 +1,808 @@
+----------------------文件引用--------------------------
+--@RefType [Libs.WindowMgr.WindowBase.bytes#_M]
+local WindowBase = JRequire "Libs.WindowMgr.WindowBase"
+--@RefType [Libs.Sound.SoundMgr.bytes#_M]
+local SoundMgr = JRequire "Libs.Sound.SoundMgr"
+--@RefType [Dev.Activity.MActivity.bytes#_M]
+local MActivity = JRequire "Dev.Activity.MActivity"
+--@RefType [Dev.Activity.CActivity.bytes#_M]
+local CActivity = JRequire "Dev.Activity.CActivity"
+--@RefType [Dev.Rank.CRank.bytes#_M]
+local CRank = JRequire "Dev.Rank.CRank"
+--@RefType [Dev.Player.HeartBeat.bytes#_M]
+local HeartBeat = JRequire "Dev.Player.HeartBeat"
+--@RefType [Dev.Common.CCommon.bytes#_M]
+local CCommon = JRequire "Dev.Common.CCommon"
+
+----------------------CS类引用--------------------------
+
+----------------------常量定义--------------------------
+local MoudleName = "M_7Day_Main"
+local btnClose = "btnClose"
+local PageItemName = "M_7Day_Page_Item"
+local TargetItemName = "M_7Day_Target_Item"
+local RankItemName = "M_7Day_Rank_Item"
+
+local GTE_EFFECT_ID = 5
+--今日目标奖励列表移动动画时间
+local PosListMoveTime = 0.3
+--默认无奖励底图
+local DefaultNoReward = "ty_023"
+--默认无奖励物品ID
+local DefaultItemId = 1
+--最小排名缩减
+local Min_Rank_Pow = 3
+--客户端排名最多位数
+local Max_Rank_Pow = 32
+--领取奖励弹出物品时间间隔
+local RewardFlyDelay = 0.3
+--领取奖励弹出物品高度位置
+local RewardFlyPos = Vector2(-100, 40)
+--目标与排名不同数值的活动类型
+local TargetRankDifPro = {
+
+}
+
+--外部接口模块 *** 只放置共有接口, 禁止放变量
+local _M = Class(WindowBase)
+--私有函数模块 *** 只放置私有函数, 禁止放变量
+local _P = {}
+--外部刷新界面模块 *** 放置刷新界面函数, 禁止放变量
+local _R = {}
+
+function _M:BeforeDestroy() end
+
+--事件派发
+function _M:Dispatch(funcName, ...)
+	local fun = _R[funcName]
+	if fun ~= nil then
+		fun(self, ...)
+	end
+end
+
+--界面构建
+function _M:OnCreate()
+	_P.InitMoudleTopInfo(self)
+	_P.InitPageList(self)
+	_P.InitActivityInfo(self)
+	_P.InitTargetView(self)
+	_P.InitRankView(self)
+	_P.InitTargetOrRankPage(self)
+	_R.OnRefreshView(self)
+end
+
+--初始化模块顶部信息
+function _P.InitMoudleTopInfo(self)
+	self.moudle = self:CreateMoudle(self._RootNode, MoudleName)
+	self.moudle:Get(btnClose):AddOnButton(function()
+		SoundMgr.Play(10002)
+		self:Destroy()
+	end)
+	
+	if Csv.Rule[Define.SysId.SevenDayTarget] then
+		local helpBtn = self.moudle:Get("HelpBtn")
+		if helpBtn ~= nil then
+			helpBtn:AddOnButton(function ()
+				SoundMgr.Play(10001)
+				WindowMgr.Create("URuleTips", Define.SysId.SevenDayTarget)
+			end, nil, 1.2)
+		end
+	end
+end
+
+--初始化页签列表
+function _P.InitPageList(self)
+	local pageView = self.moudle:Get("pageView")
+	self.pageViewWidth = pageView.SizeDelta.x
+	self.pageContent = self.moudle:Get("pageContent")
+	self.pageItemList = {}
+	self.pageItemNeedMoveList = {}
+end
+
+--刷新页签列表
+function _P.RefreshPageList(self)
+	if self.listActData then
+		local sortActDataList = {}
+		if self.selectPageIndex and self.pageItemList[self.selectPageIndex] then
+			local pageItem = self.pageItemList[self.selectPageIndex]
+			pageItem.selectImage.Activity = false
+		end
+		self.selectPageIndex = 1
+		for _, data in pairs(self.listActData) do
+			sortActDataList[#sortActDataList + 1] = data
+			if MActivity.ActivityState.Doing == data.state.state and data.type > self.selectPageIndex then
+				self.selectPageIndex = data.type
+			end
+		end
+		table.sort(sortActDataList, function(left, right) return left.type < right.type end)
+		--每次刷新活动最多活动数量
+		local dataMaxNum = 0
+		for index, actData in ipairs(sortActDataList) do
+			_P.RefreshPageItem(self, index, actData)
+			dataMaxNum = index
+		end
+		for index = dataMaxNum + 1, #self.pageItemList do
+			local itemMoudle = self.pageItemList[index].itemMoudle
+			if itemMoudle then
+				itemMoudle.SelfRect.Activity = false
+			end
+		end
+	else
+		error("活动数据为空")
+	end
+end
+
+--判断是否移动页签列表
+function _P.JudgeToMovePageList(self)
+	if self.selectPageIndex and self.pageItemNeedMoveList[self.selectPageIndex] then
+		self.pageContent:DOAnchorPosX(self.pageItemNeedMoveList[self.selectPageIndex], PosListMoveTime)
+	end
+end
+
+--刷新页签Item
+function _P.RefreshPageItem(self, index, actData)
+	local pageItem = self.pageItemList[index]
+	if not pageItem then
+		pageItem = _P.CreatePageItem(self, index)
+	end
+
+	pageItem.itemMoudle.SelfRect.Activity = true
+	pageItem.itemMoudle.SelfRect.IsGray = MActivity.ActivityState.Waiting == actData.state.state
+	pageItem.testNormal.Text = actData.pageName
+	pageItem.testSelect.Text = actData.pageName
+	pageItem.actData = actData
+	self:RegistRedpoint(pageItem.redpoint, Define.SysId.NewSeven, actData.actId)
+end
+
+--创建页签Item
+function _P.CreatePageItem(self, index)
+	local itemMoudle = JGuiManager.GetMoudle(self.pageContent, PageItemName)
+	
+	local item = {}
+	item.itemMoudle = itemMoudle
+	item.testNormal = itemMoudle:Get("testNormal")
+	item.selectImage = itemMoudle:Get("selectImage")
+	item.selectImage.Activity = false
+	item.testSelect = itemMoudle:Get("testSelect")
+	item.redpoint = itemMoudle:Get("redpoint")
+
+	itemMoudle.SelfRect:AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickPage(self, index, self.isSelectTarget)
+	end)
+
+	_P.CalculateIsNeedToMove(self, index, itemMoudle)
+
+	self.pageItemList[index] = item
+	return item
+end
+
+--计算是否需要移动页签列表
+function _P.CalculateIsNeedToMove(self, index, pageItemMoudle)
+	if nil == self.pageItemWidthAndSpace then
+		local layout = self.pageContent:AddHorizontalLayoutGroup()
+		self.pageItemWidthAndSpace = pageItemMoudle.SelfRect.SizeDelta.x + layout.spacing
+	end
+	if nil == self.pageItemNeedMoveList[index] then
+		local width = index * self.pageItemWidthAndSpace
+		if width > self.pageViewWidth then
+			self.pageItemNeedMoveList[index] = self.pageViewWidth - width
+		end
+	end
+end
+
+--点击页签回调
+function _P.OnClickPage(self, index, isSelectTarget, isRefreshView)
+	if self.selectPageIndex and self.selectPageIndex == index and not isRefreshView then
+		return
+	end
+
+	local pageItem = self.pageItemList[index]
+	if nil == pageItem then
+		index = 1
+		pageItem = self.pageItemList[index]
+	end
+	if pageItem then
+		if pageItem.actData then
+			_P.ChangeSelectPage(self, index, pageItem.selectImage)
+			_P.RefreshActivityInfo(self, pageItem.actData)
+			_P.OnClickTargetOrRankButton(self, isSelectTarget, true)			
+		else
+			error("点击页签 index " .. index .. " 活动数据为空")
+		end
+	else
+		error("点击无效页签 index " .. index or "nil")
+	end
+end
+
+--改变选定页签
+function _P.ChangeSelectPage(self, index, selectImage)
+	local lastPageItem = self.pageItemList[self.selectPageIndex]
+	if lastPageItem then
+		lastPageItem.selectImage.Activity = false
+	end
+	self.selectPageIndex = index
+	self.selectActData = self.pageItemList[self.selectPageIndex].actData
+	selectImage.Activity = true
+end
+
+--初始化活动信息
+function _P.InitActivityInfo(self)
+	self.poster = self.moudle:Get("poster")
+	self.textTime = self.moudle:Get("textTime")
+	self.targetDesc = self.moudle:Get("targetDesc")
+	self.textTargetDesc = self.moudle:Get("textTargetDesc")
+	self.textTargetNum = self.moudle:Get("textTargetNum")
+	self.moudle:Get("btnJump"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("USevenDayTargetJump", self.selectActData.jumpTitle, self.selectActData.jumpIDName)
+	end)
+	self.moudle:Get("textTips").Text = Csv.Text("sevendaytarget_tips")
+end
+
+--刷新活动信息
+function _P.RefreshActivityInfo(self, actData)
+	self.poster.SpriteName = actData.poster
+	if self.countTiimer then
+		self.countTiimer:Destroy()
+	end
+	if _P.RefreshActivityTime(self, actData.state) then
+		self.countTiimer = self.textTime:AddOnUpdate(function() 
+			_P.RefreshActivityTime(self, actData.state)
+		end, nil, 1)
+	end
+end
+
+--刷新活动进度信息
+function _P.RefreshActivityProcessInfo(self)
+	if TargetRankDifPro[self.selectActData.type] and not self.isSelectTarget then
+		self.textTargetNum.Text = self.selectActData.rankPro
+		self.textTargetDesc.Text = self.selectActData.rankTitle .. ":"
+	else
+		self.textTargetNum.Text = self.selectActData.curPro
+		self.textTargetDesc.Text = self.selectActData.targetTitle
+	end
+	if self.selectActData.posterFont then
+		if self.isSelectTarget and self.selectActData.posterFont[1] then
+			self.targetDesc.SpriteName = self.selectActData.posterFont[1]
+		elseif not self.isSelectTarget and self.selectActData.posterFont[2] then
+			self.targetDesc.SpriteName = self.selectActData.posterFont[2]
+		else
+			self.targetDesc.SpriteName = ""
+		end
+	else
+		self.targetDesc.SpriteName = ""
+	end
+end
+
+--刷新活动倒计时
+function _P.RefreshActivityTime(self, state)
+	local isCount = false
+	if MActivity.ActivityState.Waiting == state.state then
+		self.textTime.Text = self.selectActData.openTips
+	elseif state.lefttime then
+		local time = state.lefttime - HeartBeat.ServSecond()
+	 	isCount = time >= 0
+		if isCount then
+			self.textTime.Text = CS.Utility.Utils.FormatSeconds(time, Csv.Text("sevendaytarget_count_time"))
+		else
+			self.textTime.Text = Csv.Text("sevendaytarget_over")
+		end
+	else
+		error("未收到活动结算时间 lefttime actID " .. (self.selectActData.actId or "nil"))
+	end
+	return isCount
+end
+
+--初始化今日目标奖励
+function _P.InitTargetView(self)
+	self.targetView = self.moudle:Get("targetView")
+	self.targetContent = self.moudle:Get("targetContent")
+	self.targetContentList = {}
+end
+
+--刷新今日目标奖励
+function _P.RefreshTargetView(self)
+	for _, targetItem in pairs(self.targetContentList) do
+		targetItem.itemRect.Activity = false
+	end
+	if self.selectActData and self.selectActData.targetData then
+		self.firstNotGetIndex = nil
+		self.firstGetIndex = nil
+		for index, targetData in ipairs(self.selectActData.targetData) do
+			if nil == self.targetContentList[index] then
+				_P.CreateTargetItem(self, index)
+			end
+			_P.RefreshTargetItem(self, index, targetData)
+		end
+		_P.CalculateMaxMoveIndex(self)
+		_P.MoveItemList(self)
+	else
+		error("无今日目标奖励数据")
+	end
+end
+
+--创建今日目标奖励Item
+function _P.CreateTargetItem(self, index)
+	local itemMoudle = JGuiManager.GetMoudle(self.targetContent, TargetItemName)
+	
+	local item = {}
+	item.itemRect = itemMoudle.SelfRect
+	item.textTitle = itemMoudle:Get("textTitle")
+	item.content = itemMoudle:Get("content")
+	item.textGet = itemMoudle:Get("textGet")
+	item.btnGet = itemMoudle:Get("btnGet")
+	item.btnGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		--嵌套判定值是否为空, 使用引用值领奖, 因为index可能会刷新
+		if self.selectActData then
+			if self.selectActData.actId then
+				local targetData = self.selectActData.targetData
+				if targetData then
+					if item.index then
+						CActivity.GetRewardReq(self.selectActData.actId, item.index)
+					else
+						error("当前选中页签活动ID " .. self.selectActData.actId .. " item index " .. (item.index or "nil"))
+					end
+				else
+					error("当前选中页签活动ID " .. self.selectActData.actId .. " 今日目标数据为空")
+				end
+			else
+				error("当前选中页签活动ID 为空")
+			end
+		else
+			error("无当前选中页签活动数据")
+		end
+	end)
+	item.redpoint = itemMoudle:Get("redpoint")
+	item.getFlag = itemMoudle:Get("Get")
+
+	_P.InitMoveTargetListData(self, itemMoudle, item.content)
+	self.targetContentList[index] = item
+end
+
+--刷新今日目标奖励Item
+function _P.RefreshTargetItem(self, index, targetData)
+	local item = self.targetContentList[index]
+	if item then
+		item.itemRect.Activity = true
+		item.index = index
+		_P.RefreshTargetItemReward(self, index, item, targetData.targetRewards)
+		item.textTitle.Text = Csv.Text("sevendaytarget_achieve", 
+										{text = self.selectActData.targetItemTitle, targetNum = targetData.target})
+		item.btnGet.Activity = not targetData.isGeted
+		item.getFlag.Activity = targetData.isGeted
+		if not targetData.isGeted then
+			local isCanGet = false
+			if self.selectActData.curPro then
+				isCanGet = self.selectActData.curPro >= targetData.target and MActivity.ActivityState.Waiting ~= self.selectActData.state.state
+			end
+			item.btnGet.IsGray = not isCanGet
+			item.btnGet.RaycastTarget = isCanGet
+			if MActivity.ActivityState.Waiting == self.selectActData.state.state then
+				item.textGet.Text = Csv.Text("err_relarions_not_open")
+			elseif isCanGet then
+				item.textGet.Text = Csv.Text("quest_get")
+			elseif self.selectActData.state.lefttime - HeartBeat.ServSecond() <= 0 then
+				item.textGet.Text = Csv.Text("sevendaytarget_overdue")
+			else
+				item.textGet.Text = Csv.Text("sevendaytarget_not_complete")
+			end
+			self:RegistRedpoint(item.redpoint, Define.SysId.NewSeven, self.selectActData.actId, index)
+			if nil == self.firstNotGetIndex and not isCanGet then
+				self.firstNotGetIndex = index
+			end
+			if nil == self.firstGetIndex and isCanGet then
+				self.firstGetIndex = index
+			end
+		end
+	end
+end
+
+--刷新今日目标奖励Item奖励物品
+function _P.RefreshTargetItemReward(self, index, item, targetRewards)
+	if targetRewards then
+		_P.RestoreItemRewards(self, index, "targetRewardCache")
+		_P.SetItemRewardsAndChangeBg(index, item, targetRewards, self.targetRewardCache, self.targetRewardColCount, 
+									 self.targetItemDefaultHeight, self.targetRewardRowHeight, true)
+	end
+end
+
+--重置奖励Item奖励物品
+function _P.RestoreItemRewards(self, index, rewardCacheName)
+	if nil == self[rewardCacheName] then
+		self[rewardCacheName] = {}
+	end
+	if self[rewardCacheName][index] then
+		for _, rewardItem in ipairs(self[rewardCacheName][index]) do
+			rewardItem:Destroy()
+			rewardItem = nil
+		end
+	end
+	self[rewardCacheName][index] = {}
+end
+
+--设置奖励Item奖励物品及改变Item背景大小
+function _P.SetItemRewardsAndChangeBg(index, item, rewardsData, rewardCache, 
+									  columnCount, itemDefaultHeight, rowHeight, isStoreHeight)
+	local num = 0
+	item.rewards = {}
+	for _, reward in pairs(rewardsData) do
+		local rewardItem = CCommon.CreateItem(item.content, reward.key, CCommon.ShowItemTips, 
+											  {num = reward.value}, Define.SysId.SevenDayTarget)
+		num = num + 1
+		rewardCache[index][num] = rewardItem
+		item.rewards[num] = reward
+	end
+	local row, rest = math.modf(num / columnCount)
+	if rest > 0 then
+		row = row + 1
+	end
+	for i = 1, row * columnCount - num do
+		local rewardItem = CCommon.CreateItem(item.content, DefaultItemId)
+		rewardItem.SelfRect.SpriteName = DefaultNoReward
+		rewardItem:Get("Icon").Activity = false
+		num = num + 1
+		rewardCache[index][num] = rewardItem
+	end
+	local width = item.itemRect.SizeDelta.x
+	item.itemRect.SizeDelta = Vector2(width, itemDefaultHeight + (row - 1) * rowHeight)
+	if isStoreHeight then
+		item.height = item.itemRect.SizeDelta.y
+	end
+end
+
+--初始化移动今日目标奖励列表需要的数据
+function _P.InitMoveTargetListData(self, itemMoudle, content)
+	if nil == self.targetItemDefaultHeight then
+		local itemHeight = itemMoudle.SelfRect.SizeDelta.y
+		local layout = self.targetContent:AddVerticalLayoutGroup()
+		self.targetItemSpace = layout.spacing
+		self.targetItemDefaultHeight = itemHeight + self.targetItemSpace
+		self.targetContentDefaultTop = layout.padding.top
+	end
+	
+	if nil == self.MaxRewardCol and content then
+		local layout = content:AddGridLayoutGroup()
+		if layout then
+			self.targetRewardColCount = layout.constraintCount
+			self.targetRewardRowHeight = layout.cellSize.y + layout.spacing.y
+		end
+	end
+end
+
+--计算最大移动索引
+function _P.CalculateMaxMoveIndex(self)
+	if self.targetListPosCache then
+		for key, _ in pairs(self.targetListPosCache) do
+			self.targetListPosCache[key] = nil
+		end
+	end
+	self.targetListPosCache = {}
+	if self.targetItemSpace then
+		local height = self.targetContentDefaultTop
+		for index, item in pairs(self.targetContentList) do
+			self.targetListPosCache[index] = height
+			height = height + item.height + self.targetItemSpace
+		end
+		self.MaxTargetMoveHegith = height - self.targetView.SizeDelta.y - self.targetItemSpace
+	end
+end
+
+--移动列表
+function _P.MoveItemList(self)
+	local moveIndex
+	if self.firstGetIndex then
+		moveIndex = self.firstGetIndex
+	elseif self.firstNotGetIndex then
+		moveIndex = self.firstNotGetIndex
+	end
+	if moveIndex and self.MaxTargetMoveHegith and self.targetListPosCache then
+		local height = self.targetListPosCache[moveIndex]
+		if height and 0 ~= height then
+			if height > self.MaxTargetMoveHegith then
+				height = self.MaxTargetMoveHegith
+			end
+			self.targetContent:DOAnchorPosY(height, PosListMoveTime)
+		end
+	end
+end
+
+--初始化排行奖励
+function _P.InitRankView(self)
+	self.rankView = self.moudle:Get("rankView")
+	self.rankContent = self.moudle:Get("rankContent")
+	self.rankContentList = {}
+	self.rankRequestActID = {}
+
+	_P.InitRankBottomInfo(self)
+end
+
+--刷新今日目标奖励
+function _P.RefreshRankView(self)
+	for _, rankItem in pairs(self.rankContentList) do
+		rankItem.itemRect.Activity = false
+	end
+	if self.selectActData and self.selectActData.rankData then
+		for index, rankData in ipairs(self.selectActData.rankData) do
+			if nil == self.rankContentList[index] then
+				_P.CreateRankItem(self, index)
+			end
+			_P.RefreshRankItem(self, index, rankData)
+		end
+		_R.OnRefreshRankBottomInfo(self)
+	else
+		error("无排名奖励数据")
+	end
+end
+
+--创建排名奖励Item
+function _P.CreateRankItem(self, index)
+	local itemMoudle = JGuiManager.GetMoudle(self.rankContent, RankItemName)
+
+	local item = {}
+	item.itemRect = itemMoudle.SelfRect
+	item.textTitle = itemMoudle:Get("textTitle")
+	item.content = itemMoudle:Get("rewardContent")
+	if nil == self.rankItemDefaultHeight then
+		self.rankItemDefaultHeight = item.itemRect.SizeDelta.y
+	end
+	if nil == self.rankRewardColumnCount then
+		if item.content then
+			local layout = item.content:AddGridLayoutGroup()
+			if layout then
+				self.rankRewardColumnCount = layout.constraintCount
+				self.rankRewardRowHeight = layout.cellSize.y + layout.spacing.y
+			end
+		end
+	end
+
+	self.rankContentList[index] = item
+end
+
+--刷新排名奖励Item
+function _P.RefreshRankItem(self, index, rankData)
+	local item = self.rankContentList[index]
+	if item then
+		item.itemRect.Activity = true
+		if rankData.from == rankData.to then
+			item.textTitle.Text = Csv.Text("sevendaytarget_rank_title_one", {num = rankData.from})
+		else
+			item.textTitle.Text = Csv.Text("sevendaytarget_rank_title_from_to", {from = rankData.from, to = rankData.to})
+		end
+		if rankData.rankRewards then
+			_P.RestoreItemRewards(self, index, "rankRewardCache")
+			_P.SetItemRewardsAndChangeBg(index, item, rankData.rankRewards, self.rankRewardCache, self.rankRewardColumnCount, 
+									 	 self.rankItemDefaultHeight, self.rankRewardRowHeight, false)
+		end
+	end
+end
+
+--初始化排名底部信息
+function _P.InitRankBottomInfo(self)
+	_P.CalCulateMaxRankPow(self)
+
+	self.rankInfo = self.moudle:Get("rankInfo")
+
+	self.textSelfRank = self.moudle:Get("textSelfRank")
+	self.btnRankList = self.moudle:Get("btnRankList")
+	self.btnRankList:AddOnButton(function()
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UTimeLimitActRank", self.selectActData.rankType, self.selectActData.rankTitle, 
+						 Csv.Text("sevendaytarget_rank_title"), Csv.Text("commerce_detai20"))
+	end)
+	self.moudle:Get("textBtnRankList").Text = Csv.Text("sevendaytarget_rank")
+
+	self.textRankGet = self.moudle:Get("textRankGet")
+	self.btnRankGet = self.moudle:Get("btnRankGet")
+	self.btnRankGet:AddOnButton(function()
+		SoundMgr.Play(10001)
+		CActivity.GetRewardReq(self.selectActData.actId, 0)
+	end)
+	self.moudle:Get("textBtnRankGet").Text = Csv.Text("rankreward_get")
+	self.rankGetPos = self.moudle:Get("rankGetPos")
+	self.btnRankGetRedPoint = self.moudle:Get("btnRankGetRedPoint")
+end
+
+--计算最大排名缩减
+function _P.CalCulateMaxRankPow(self)
+	local max = 2 ^ Max_Rank_Pow
+	local num = 0
+	while(max > 0) do
+		local temp = math.modf(max / 10)
+		if 0 == temp then
+			break
+		else
+			max = temp
+			num = num + 1
+		end
+	end
+	self.maxRankPow = num
+end
+
+--刷新排名底部信息
+function _R.OnRefreshRankBottomInfo(self)
+	if nil == self.selectActData.actId then
+		error("七日目标当前选定的活动ID为空")
+		return
+	end
+	if not self.rankRequestActID[self.selectActData.actId] and 
+	   MActivity.ActivityState.Waiting ~= self.selectActData.state.state then
+		if self.selectActData.rankType then
+			self.rankRequestActID[self.selectActData.actId] = true
+			--本来使用排行榜接口刷新排名, 现在单独使用另一个接口读取
+			-- CRank.GetRankList(self.selectActData.rankType, true)
+			CActivity.SevenDayGetRank(self.selectActData.actId)
+		else
+			error("七日目标当前选定的活动排行榜类型为空")
+			return
+		end
+	end
+	self:RegistRedpoint(self.btnRankGetRedPoint, Define.SysId.NewSeven, self.selectActData.actId, 0, 0)
+	_P.RefreshActivityProcessInfo(self)
+	_P.RefreshSelfRank(self)
+	_P.RefreshRankGetButton(self)
+end
+
+--刷新今日排名自己的排名
+function _P.RefreshSelfRank(self)
+	local rankNum
+	local isOpen = MActivity.ActivityState.Waiting ~= self.selectActData.state.state
+	if isOpen then
+		if self.selectActData.selfRank < 10 ^ Min_Rank_Pow then
+			rankNum = self.selectActData.selfRank
+		else
+			for pow = self.maxRankPow, Min_Rank_Pow, -1 do
+				if self.selectActData.selfRank >= 10 ^ pow then
+					rankNum = math.modf(10 ^ pow) .. "+"
+					break
+				end
+			end
+		end
+	else
+		rankNum = Csv.Text("commerce_rank4")
+	end
+	self.btnRankList.IsGray = not isOpen
+	self.btnRankList.RaycastTarget = isOpen
+	self.textSelfRank.Text = Csv.Text("rankreward_self_rank", {rank = rankNum})
+end
+
+--刷新排名领奖按钮
+function _P.RefreshRankGetButton(self)
+	local csvTips
+	local isFinish = false
+	if self.selectActData.state.lefttime then
+		isFinish = self.selectActData.state.lefttime - HeartBeat.ServSecond() <= 0
+	end
+	local isCanNotGet = MActivity.RewardGetState.CanNotGet == self.selectActData.getState
+	local isGeted = MActivity.RewardGetState.Geted == self.selectActData.getState
+	if isFinish then
+		local isOutRank = self.selectActData.selfRank > self.selectActData.maxRewardRank or 0 == self.selectActData.selfRank
+		if not isGeted then
+			isGeted = false
+			if isOutRank then
+				isCanNotGet = true
+				csvTips = "rankreward_can_not_get"
+			else
+				isCanNotGet = false
+			end
+		end
+	elseif isCanNotGet then
+		csvTips = "rankreward_not_get_time"
+	end
+
+	if csvTips then
+		self.textRankGet.Text = Csv.Text(csvTips)
+	else
+		self.textRankGet.Text = ""
+	end
+
+	self.btnRankGet.Activity = not isGeted
+	self.rankGetPos.Activity = isGeted
+	if not isGeted then
+		self.btnRankGet.IsGray = isCanNotGet
+		self.btnRankGet.RaycastTarget = not isCanNotGet
+	end
+end
+
+--初始化目标or排名页签
+function _P.InitTargetOrRankPage(self)
+	self.targetSelect = self.moudle:Get("targetSelect")
+	self.moudle:Get("btnTarget"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickTargetOrRankButton(self, true)
+	end)
+	self.moudle:Get("testBtnTarget").Text = Csv.Text("sevendaytarget_target")
+	self.targetRed = self.moudle:Get("targetRed")
+
+	self.rankSelect = self.moudle:Get("rankSelect")
+	self.moudle:Get("btnRank"):AddOnButton(function()
+		SoundMgr.Play(10001)
+		_P.OnClickTargetOrRankButton(self, false)
+	end)
+	self.moudle:Get("textBtnRank").Text = Csv.Text("sevendaytarget_rank_reward")
+	self.rankRed = self.moudle:Get("rankRed")
+end
+
+--点击今日目标或者排名按钮
+function _P.OnClickTargetOrRankButton(self, isSelectTarget, isChangePage)
+	if self.isSelectTarget == isSelectTarget and not isChangePage then
+		return
+	end
+	self.isSelectTarget = isSelectTarget
+	self.targetSelect.Activity = isSelectTarget
+	self.rankSelect.Activity = not isSelectTarget
+	self.targetView.Activity = isSelectTarget
+	self.rankView.Activity = not isSelectTarget
+	self.rankInfo.Activity = not isSelectTarget
+	if isChangePage then
+		self:RegistRedpoint(self.targetRed, Define.SysId.NewSeven, self.selectActData.actId, 
+							MActivity.SevenDayTargetPageRedIndex)
+		self:RegistRedpoint(self.rankRed, Define.SysId.NewSeven, self.selectActData.actId, 0)
+		_P.RefreshTargetView(self)
+		_P.RefreshRankView(self)
+	else
+		_P.RefreshActivityProcessInfo(self)
+	end
+end
+
+--刷新领奖按钮状态
+function _R.OnRefreshGetState(self, data)
+	local getPos
+	local rewards
+	if data.index < 0 then
+		self.btnRankGet.Activity = false
+		getPos = self.rankGetPos
+		rewards = self.selectActData.rankData[-data.index].rankRewards
+	else
+		local item = self.targetContentList[data.index]
+		if item then
+			item.btnGet.Activity = false
+			getPos = item.getFlag
+			rewards = item.rewards
+		end
+	end
+
+	if getPos then
+		SoundMgr.Play(10004)
+		getPos.Activity = true
+		getPos.Alpha = 0
+		CCommon.CreateEffect(getPos, GTE_EFFECT_ID, nil, function() 
+			getPos.Alpha = 1
+		end)
+		if rewards then
+			for index, reward in ipairs(rewards) do 
+				CCommon.ShowFlyItem(getPos, reward.key, reward.value, index * RewardFlyDelay, RewardFlyPos, true)
+			end
+		end
+	end
+end
+
+--刷新目标进度及列表领取状态
+function _R.OnRefreshTargetViewAndProcess(self, actId)
+	if self.selectActData.actId == actId then
+		self.textTargetNum.Text = self.selectActData.curPro
+		_P.RefreshTargetView(self)
+	end
+end
+
+--刷新整个界面
+function _R.OnRefreshView(self)
+	self.listActData = MActivity.GetListFromType(Define.ActivityType.NewSeven)
+	if self.listActData then
+		_P.RefreshPageList(self)
+
+		local isFirst = nil == self.isSelectTarget
+		if isFirst then
+			_P.OnClickPage(self, self.selectPageIndex, true, true)
+		else
+			_P.OnClickPage(self, self.selectPageIndex, self.isSelectTarget, true)
+		end
+		_P.JudgeToMovePageList(self)
+	else
+		CCommon.ShowError(Csv.Text("err_newofficer_end"))
+		self:Destroy()
+	end
+end
+
+return _M

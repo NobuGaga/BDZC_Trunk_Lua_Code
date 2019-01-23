@@ -65,6 +65,9 @@ function _M:OnCreate(msg)
 	--商会QQ群
 	moudle:Get("QQ").Text = Csv.Text("commerce_detail7")
 	moudle:Get("QQNum").Text = tostring(data.qq)
+	-- 商会ID
+	moudle:Get("ID").Text = Csv.Text("commerce_main3")
+	moudle:Get("iDNum").Text = tostring(data.id)
 	--对外宣言
 	moudle:Get("Declaration").Text = Csv.Text("commerce_detail8")
 	if data.declaration == nil or data.declaration == "" then
@@ -105,6 +108,14 @@ function _M:OnCreate(msg)
 			childMoudle:Get("position").Text = MCommerce.GetJobStr(player.job)
 		end
 	end
+
+	-- 商会排行版
+	local rankBtn = moudle:Get("RankImg")
+	rankBtn:AddOnButton(function ( ... )
+		SoundMgr.Play(10001)
+		WindowMgr.Create("UCommerceRank")
+	end, nil, 0.9)
+	rankBtn.Activity = not GameSetting.IsiOSCommit
 end
 
 return _M

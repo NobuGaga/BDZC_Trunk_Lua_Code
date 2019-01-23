@@ -405,6 +405,7 @@ function _P.ShowTopImg(self,moudle)
 			self.mSelectPhase = i
 			
 			_P.CheckRedPoint(self)
+			moudle:Get("redpoint1").Activity = false
 			if MSiege.EndTime - HeartBeat.ServSecond() <= settleTime then
 				_P.ShowEndRect(self,moudle,i)
 			else
@@ -413,6 +414,7 @@ function _P.ShowTopImg(self,moudle)
 					_P.ShowEndRect(self,moudle,i)
 				elseif phase == i then
 					_P.SelectNowPhase(self,phase)
+					_R.ShowBossRedPoint(self)
 				end
 			end
 		end,nil,1.2)

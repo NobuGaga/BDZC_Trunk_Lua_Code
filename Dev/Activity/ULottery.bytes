@@ -321,7 +321,8 @@ function _P.DoMessage(self)
 end
 
 
-function _P.DoUpdateTodayNum(self)
+function _P.DoUpdateTodayNum(self,time)
+	local gotIndex = 0
 	if self.GetBtn ~= nil then
 		local isHaveCanGet = false
 		if self.ActId > 0 then
@@ -338,6 +339,8 @@ function _P.DoUpdateTodayNum(self)
 							widgetInfo.proText.Text = Csv.Text("lottery_8", {cur = info.todayNum, max = num})
 							if info.numGets[num] then 
 								widgetInfo.getedSp.Activity = true
+								--移动
+								gotIndex = index
 							else
 								isHaveCanGet = true
 								widgetInfo.getedSp.Activity = false
@@ -361,6 +364,21 @@ function _P.DoUpdateTodayNum(self)
 			self.GetBtn.IsGray = true
 			self.GetBtn.RaycastTarget = false
 		end
+
+		--移动
+		local targartPos = 0
+		if gotIndex > 0 and gotIndex<= NUM_REWARD_COUNT - 4 then
+			targartPos =-(120+30)*gotIndex
+		elseif gotIndex > NUM_REWARD_COUNT - 4 then
+			targartPos = -(120+30)*(NUM_REWARD_COUNT - 4)
+		end
+		if self.mIsInitItem then
+			self.mContent:DOAnchorPosX(targartPos,0)
+			self.mIsInitItem = false
+		else
+			self.mContent:DOAnchorPosX(targartPos,0.2)
+		end
+		
 	end
 end
 
@@ -409,15 +427,16 @@ function _P.ChangeActID(self)
 			end
 		end
 		self.ItemLight = {}
+		local itemTab = self.mItemTable
 		for index = 1,NUM_REWARD_COUNT do
 			local num = lotteryCsv.num[index]
 			local reward = lotteryCsv.reward[index]
 			local itemId = reward[1]
 			local itemCsv = Csv.Item[itemId]
-			local itemSp = moudle:Get("Num_Item"..index)
+			local itemSp = itemTab[index].bg--moudle:Get("Num_Item"..index)
 			itemSp.SpriteName = itemCsv.colorIcon
-			moudle:Get("Num_Icon"..index).SpriteName = itemCsv.icon
-			moudle:Get("Num_Text"..index).Text = tostring(reward[2])
+			itemTab[index].icon.SpriteName = itemCsv.icon--moudle:Get("Num_Icon"..index).SpriteName = itemCsv.icon
+			itemTab[index].num.Text = tostring(reward[2])--moudle:Get("Num_Text"..index).Text = tostring(reward[2])
 			itemSp:AddOnButton(function ( ... )
 				SoundMgr.Play(10001)
 				CCommon.ShowItemTips(itemId)
@@ -679,7 +698,11 @@ function _M:OnCreate()
 		CActivity.ReqLotteryNumGet(10)
 	end)
 	self.TimeTips = moudle:Get("TimeTips")
+
 	self.NumGetList = {}
+	self.mItemTable = {}
+	self.mIsInitItem = true
+	--[[
 	for i=1,NUM_REWARD_COUNT do
 		table.insert(self.NumGetList, {
 			itemBG = moudle:Get("Num_Item"..i),
@@ -687,6 +710,7 @@ function _M:OnCreate()
 			getedSp = moudle:Get("get"..i),
 		})
 	end
+	--]]
 	self.ChooseNode = moudle:Get("ChooseNode")
 	self.ChooseNode.Activity = false
 	self.ArrowNode = moudle:Get("ArrowNode")
@@ -697,7 +721,32 @@ function _M:OnCreate()
 	end	
 	_P.StartPlayLight(self)
 
+	local content = moudle:Get("itemGird")
+	self.mContent = content
 	if self.ActId > 0 then
+		local lotteryCsv = Csv.Lottery[self.ActId]
+		NUM_REWARD_COUNT = #lotteryCsv.num
+		--创建足够的奖励--
+		local index = 0
+		for k,v in pairs(lotteryCsv.num)do
+			index = index +1
+			local itemMoudle = JGuiManager.GetMoudle(content, "M_LuckItem", WindowType.UI, 0)
+			local _bg = itemMoudle.SelfRect
+			local _icon = itemMoudle:Get("Num_Icon")
+			local _num = itemMoudle:Get("Num_Text")
+			local _getImg = itemMoudle:Get("getBG")
+			local _getBg = itemMoudle:Get("get")
+			local _frequency = itemMoudle:Get("frequency")
+
+			table.insert(self.NumGetList, {
+				itemBG = itemMoudle.SelfRect,
+				proText = itemMoudle:Get("frequency"),
+				getedSp = itemMoudle:Get("get"),
+			})
+
+			self.mItemTable[index] = {bg = _bg,icon = _icon,num = _num,getImg = _getImg,getBg = _getBg,frequency = _frequency}
+
+		end
 		_P.ChangeActID(self)
 	else
 		error("Lottery actId error", self.ActId)

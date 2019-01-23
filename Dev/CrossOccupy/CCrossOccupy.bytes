@@ -1,0 +1,277 @@
+local EventCenter = JRequire "Dev.EventCenter"
+local CMain = JRequire "Dev.Main.CMain"
+local MMain = JRequire "Dev.Main.MMain"
+local MCrossOccupy = JRequire "Dev.CrossOccupy.MCrossOccupy"
+local CCommon = JRequire "Dev.Common.CCommon"
+local HeartBeat
+
+local _M = {}
+local _P = {}
+
+--系统id: 跨服楼盘抢夺 CrossOccupy = 146,
+local CMD_ID = 
+{
+	cOpenUI = 1,		--打开界面请求
+	cOpenBuilding = 2,	--打开建筑物: PCrossOccupy.COpenBuilding
+	cFight = 3,			--请求战斗: PCrossOccupy.CFight, 如果玩家不在本建筑中, 则给出提示, 并重新刷新建筑列表
+	cRevenge = 4,		--请求复仇: PCrossOccupy.CFight
+	cMessage = 5,		--请求查看防守记录
+	cOpenShop = 6,		--点击商店按钮
+	cShopExchange = 7,	--请求兑换物品: PCrossOccupy.CExchange
+	cShopRefresh = 8,	--手动刷新商店
+	cShopRefreshAuto = 9,--定时时间到, 定时刷新商店
+	cFightBuy = 10,		--购买挑战次数
+	cCloseUI = 11,		--关闭界面
+	cInfoRefreshAuto = 12,--定时时间到, 定时刷新我的信息
+	cOccupy = 13,		--点击那些空位置进行占领 PCrossOccupy.COccupyBuilding
+
+	sInit = 1,			--进入游戏初始化: PCrossOccupy.SInit
+	sUpdateState = 2,	--刷新活动状态: PCrossOccupy.SState
+	sUpdateInfo = 3,	--刷新我的挑战信息: PCrossOccupy.SInfo 12点重置等时候刷新
+	sOpenUI = 4,		--打开界面返回: PCrossOccupy.SOpenUI 
+	sUpdateUI = 5,		--刷新建筑列表: PCrossOccupy.SOpenUI 只有在界面内有效
+	sOpenBuilding = 6,	--打开建筑物返回: PCrossOccupy.SBuilding
+	sFight = 7,			--请求挑战返回: PCrossOccupy.SFight
+	sRevenge = 8,		--请求复仇返回: PCrossOccupy.SFight
+	sMessage = 9,		--请求防守信息返回: PCrossOccupy.SList
+	sOpenShop = 10,		--请求商店信息返回: PCrossOccupy.SShop
+	sShopExchange = 11,	--请求商店兑换返回: PCrossOccupy.SExchange
+	sShopRefresh = 12,	--手动商店刷新返回: PCrossOccupy.SShop
+	sShopRefreshAuto = 13,--自动定时商店刷新返回: PCrossOccupy.SShop
+	sFightBuy = 14,		--战斗次数购买返回: PCrossOccupy.SInfo
+	sInfoRefreshAuto = 15,--定时刷新我的信息: PCrossOccupy.SInfo 倒计时时间到
+	sOccupy = 16,		--点击那些空位置进行占领: PCrossOccupy.SOccupy
+}
+
+function _M.ModuleInit(isReload)
+	local send = {
+        [CMD_ID.cOpenUI] = "", --打开界面请求
+	    [CMD_ID.cOpenBuilding] = "PCrossOccupy.COpenBuilding", --打开建筑物: PCrossOccupy.COpenBuilding
+        [CMD_ID.cFight] = "PCrossOccupy.CFight", --请求战斗: PCrossOccupy.CFight, 如果玩家不在本建筑中, 则给出提示, 并重新刷新建筑列表
+        [CMD_ID.cRevenge] = "PCrossOccupy.CFight", --请求复仇: PCrossOccupy.CFight
+        [CMD_ID.cMessage] = "",	 --请求查看防守记录
+        [CMD_ID.cOpenShop] = "", --点击商店按钮
+        [CMD_ID.cShopExchange] = "PCrossOccupy.CExchange", --请求兑换物品: PCrossOccupy.CExchange
+        [CMD_ID.cShopRefresh] = "", --手动刷新商店
+        [CMD_ID.cShopRefreshAuto] = "", --定时时间到, 定时刷新商店
+        [CMD_ID.cFightBuy] = "", --购买挑战次数
+		[CMD_ID.cCloseUI] = "", --关闭界面
+		[CMD_ID.cInfoRefreshAuto] = "", --定时时间到, 定时刷新我的信息
+		[CMD_ID.cOccupy] = "PCrossOccupy.COccupyBuilding", 	--点击那些空位置进行占领
+	}
+	local recv = {
+        [CMD_ID.sInit]          =		{proto = "PCrossOccupy.SInit",		handle = _P.OnInit},
+        [CMD_ID.sUpdateState]   =		{proto = "PCrossOccupy.SState",		handle = _P.OnUpdateState},
+        [CMD_ID.sUpdateInfo]    =		{proto = "PCrossOccupy.SInfo",		handle = _P.OnUpdateInfo},
+        [CMD_ID.sOpenUI]        =		{proto = "PCrossOccupy.SOpenUI",	handle = _P.OnOpenUI},
+        [CMD_ID.sUpdateUI]      =		{proto = "PCrossOccupy.SOpenUI",	handle = _P.OnUpdateUI},
+        [CMD_ID.sOpenBuilding]  =		{proto = "PCrossOccupy.SBuilding",	handle = _P.OnOpenBuilding},
+        [CMD_ID.sFight]			=		{proto = "PCrossOccupy.SFight",		handle = _P.OnFight},
+        [CMD_ID.sRevenge]       =		{proto = "PCrossOccupy.SFight",		handle = _P.OnRevenge},
+        [CMD_ID.sMessage]       =		{proto = "PCrossOccupy.SList",		handle = _P.OnMessage},
+        [CMD_ID.sOpenShop]      =		{proto = "PCrossOccupy.SShop",		handle = _P.OnOpenShop},
+        [CMD_ID.sShopExchange]  =		{proto = "PCrossOccupy.SExchange",	handle = _P.OnShopExchange},
+        [CMD_ID.sShopRefresh]   =		{proto = "PCrossOccupy.SShop",		handle = _P.OnShopRefresh},
+        [CMD_ID.sShopRefreshAuto]=		{proto = "PCrossOccupy.SShop",		handle = _P.OnShopRefreshAuto},
+		[CMD_ID.sFightBuy]      =		{proto = "PCrossOccupy.SInfo",		handle = _P.OnFightBuy},
+		[CMD_ID.sInfoRefreshAuto]=		{proto = "PCrossOccupy.SInfo",		handle = _P.OnInfoRefreshAuto},
+		[CMD_ID.sOccupy]		=		{proto = "PCrossOccupy.SOccupy",	handle = _P.OnOccupyBuilding},
+	}
+	_M.Send = SocketMgr.Regist(Define.SysId.CrossOccupy, send, recv, isReload)
+end
+EventCenter.RegistCallEvent(Define.EventListenId.SecondUpdate,function(eventHandle)
+	if MCrossOccupy.IsInGame and 
+		MCrossOccupy.IsShopOpen and 
+		MCrossOccupy.State == MCrossOccupy.STATE.Open and 
+		MCrossOccupy.FightRefTime > 0 and
+		not MCrossOccupy.IsWaitInfoRefreshAuto 
+	then
+		if HeartBeat == nil then
+			HeartBeat = JRequire "Dev.Player.HeartBeat"
+		end
+		if MCrossOccupy.FightRefTime < HeartBeat.ServSecond() then
+			MCrossOccupy.IsWaitInfoRefreshAuto = true
+			_M.Send(CMD_ID.cInfoRefreshAuto)
+		end
+	end
+end, true)
+EventCenter.RegistCallEvent(Define.EventListenId.ToReLogin, function (eventHandle)
+	MCrossOccupy.IsInGame = false
+end, true)
+
+function _M.ModuleClean()
+	MCrossOccupy.Clean()
+end
+
+--Server -- Client
+
+function _M.ReqOpenUI()
+    --判断活动状态
+	_M.Send(CMD_ID.cOpenUI)
+	CCommon.ShowLoading()
+end
+function _M.ReqOpenBuilding(buildingId)
+	_M.Send(CMD_ID.cOpenBuilding, {buildingId = buildingId})
+end
+function _M.ReqFight(buildingId, playerid, oriServerId)
+	_M.Send(CMD_ID.cFight, {buildingId = buildingId, playerid = playerid, oriServerId = oriServerId})
+end
+function _M.ReqRevenge(buildingId, playerid, oriServerId)
+	_M.Send(CMD_ID.cRevenge, {buildingId = buildingId, playerid = playerid, oriServerId = oriServerId})
+end
+function _M.ReqMessage()
+	_M.Send(CMD_ID.cMessage)
+end
+function _M.ReqOpenShop()
+	_M.Send(CMD_ID.cOpenShop)
+end
+function _M.ReqShopExchange(id)
+	_M.Send(CMD_ID.cShopExchange, {id = id})
+end
+function _M.ReqShopRefresh()
+	_M.Send(CMD_ID.cShopRefresh)
+end
+function _M.ReqShopRefreshAuto()
+	_M.Send(CMD_ID.cShopRefreshAuto)
+end
+function _M.ReqFightBuy()
+	_M.Send(CMD_ID.cFightBuy)
+end
+function _M.ReqCloseUI()
+	_M.Send(CMD_ID.cCloseUI)
+end
+function _M.ReqOccupy(buildingId)
+	_M.Send(CMD_ID.cOccupy, {buildingId = buildingId})
+end
+
+function _P.CheckRedpoint()
+	CMain.UpdateRedpoint(
+		MMain.FuncIsOpen(Define.SysId.CrossOccupy) and 
+		MCrossOccupy.State == MCrossOccupy.STATE.Open and 
+		MCrossOccupy.FightTimes > 0 and (MCrossOccupy.MyBuildID == nil or MCrossOccupy.MyBuildID <= 0), Define.SysId.CrossOccupy)
+end
+
+function _M.UpdateRedpoint(  )
+	_P.CheckRedpoint()
+end
+
+--Server -- Client
+
+function _P.OnInit(data)
+	-- LuaUtil.DumpTable(data, "------OnInit---->>>")
+
+	MCrossOccupy.IsShopOpen = data.isShopOpen
+	MCrossOccupy.IsInGame = true
+	if data.state ~= nil then
+		_P.OnUpdateState(data.state)
+	end
+	if data.myInfo ~= nil then
+		_P.OnUpdateInfo(data.myInfo)
+	end
+	WindowMgr.Call("UMain", "RefreshTopBtns")
+end
+function _P.OnUpdateState(data)
+	--LuaUtil.DumpTable(data, "------OnUpdateState---->>>")
+
+	if data.state ~= MCrossOccupy.State then
+		MCrossOccupy.State = data.state
+		WindowMgr.Call("UCrossOccupy", "OnUpdateState")
+	end
+	if MCrossOccupy.State == MCrossOccupy.STATE.Open then
+		MCrossOccupy.ActID = data.actId
+		MCrossOccupy.StartTime = data.starttime
+		MCrossOccupy.EndTime = data.endtime
+	end
+
+	_P.CheckRedpoint()
+end
+function _P.OnUpdateInfo(data)
+	--LuaUtil.DumpTable(data, "------OnUpdateInfo---->>>")
+
+	MCrossOccupy.MyBuildID = data.myBuild or 0
+	MCrossOccupy.FightTimes = data.fightTimes or 0
+	MCrossOccupy.FightBuyTimes = data.buyTimes or 0
+	MCrossOccupy.FightRefTime = data.refreshTime or 0
+	MCrossOccupy.IsWaitInfoRefreshAuto = false
+	
+	WindowMgr.Call("UCrossOccupy", "OnUpdateInfo")
+
+	_P.CheckRedpoint()
+end
+function _P.OnOpenUI(data)
+    CCommon.HideLoading()
+
+	_P.OnUpdateUI(data)
+end
+function _P.OnUpdateUI(data)
+	--LuaUtil.DumpTable(data, "------OnUpdateUI---->>>")
+
+	WindowMgr.Call("UCrossOccupy", "OnUpdateUI", data)
+end
+function _P.OnOpenBuilding(data)
+	--LuaUtil.DumpTable(data, "------OnOpenBuilding---->>>")
+
+	if WindowMgr.IsCreated("UCrossOccupy") then
+		WindowMgr.Create("UCrossOccupyBuilding", data)
+	end
+end
+function _P.OnFight(data)
+	--LuaUtil.DumpTable(data, "------OnFight---->>>")
+
+	WindowMgr.Destroy("UCrossOccupyBuilding")
+	WindowMgr.Destroy("UCrossOccupyMessage")
+
+	WindowMgr.Call("UCrossOccupy", "OnFight", data)
+end
+function _P.OnRevenge(data)
+	_P.OnFight(data)
+end
+function _P.OnMessage(data)
+	--LuaUtil.DumpTable(data, "------OnMessage---->>>")
+
+	if WindowMgr.IsCreated("UCrossOccupy") then
+		WindowMgr.Create("UCrossOccupyMessage", data)
+	end
+end
+function _P.OnOpenShop(data)
+	--LuaUtil.DumpTable(data, "------OnOpenShop---->>>")
+
+	if WindowMgr.IsCreated("UCrossOccupy") then
+		WindowMgr.Create("UCrossOccupyShop", data)
+	end
+end
+function _P.OnShopExchange(data)
+	--LuaUtil.DumpTable(data, "------OnShopExchange---->>>")
+
+	WindowMgr.Call("UCrossOccupyShop", "OnShopExchange", data)
+end
+function _P.OnShopRefresh(data)
+	CCommon.ShowRight(Csv.Text("occupy_7"))
+	_P.OnShopRefreshAuto(data)
+end
+function _P.OnShopRefreshAuto(data)
+	--LuaUtil.DumpTable(data, "------OnShopRefresh---->>>")
+
+	WindowMgr.Call("UCrossOccupyShop", "OnShopRefresh", data)
+end
+function _P.OnFightBuy(data)
+	_P.OnUpdateInfo(data)
+
+	CCommon.ShowRight(Csv.Text("occupy_6"))
+end
+function _P.OnInfoRefreshAuto(data)
+	_P.OnUpdateInfo(data)
+end
+function _P.OnOccupyBuilding(data)
+	--LuaUtil.DumpTable(data, "------OnOccupyBuilding---->>>")
+
+	WindowMgr.Destroy("UCrossOccupyBuilding")
+
+	local buildId = data.myBuild
+	if buildId ~= nil and buildId > 0 then
+		local csvLine = Csv.CrossOccupyBuilding[buildId]
+		CCommon.ShowRight(Csv.Text("occupy_21", {name = csvLine.name}))
+	end	
+end
+
+return _M

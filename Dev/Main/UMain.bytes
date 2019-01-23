@@ -24,6 +24,8 @@ local MQuest = JRequire "Dev.Quest.MQuest"
 --@RefType [Dev.RedPacket.MRedpacket.bytes#_M]
 local MRedpacket = JRequire"Dev.RedPacket.MRedpacket"
 local MGirl = JRequire"Dev.Girl.MGirl"
+--@RefType [Dev.Girl.UGirlShowMoudle.bytes#_M]
+local UGirlShowMoudle = JRequire "Dev.Girl.UGirlShowMoudle"
 
 local JTweenerManager = CS.JTween.JTweenerManager
 
@@ -64,6 +66,11 @@ function _M:BeforeDestroy( ... )
 		self.StoryMoudle:Destroy()
 		self.StoryMoudle:delete()
 		self.StoryMoudle = nil
+	end
+	if self.ShowGirlOrStaffMoudle ~= nil then
+		self.ShowGirlOrStaffMoudle:Destroy()
+		self.ShowGirlOrStaffMoudle:delete()
+		self.ShowGirlOrStaffMoudle = nil
 	end
 end
 
@@ -169,6 +176,16 @@ function _R.ShowStory(self)
 			if info.callBack ~= nil then
 				info.callBack()
 			end
+		elseif info.storyType == 1 or info.storyType == 6 then
+			if self.ShowGirlOrStaffMoudle ~= nil then
+				self.ShowGirlOrStaffMoudle:Destroy()
+				self.ShowGirlOrStaffMoudle:delete()
+				self.ShowGirlOrStaffMoudle = nil
+			end
+			self.ShowGirlOrStaffMoudle = UGirlShowMoudle.new(self.Moudle:Get("StoryShowRoot"), info.objId, info.storyType, function ()
+				_R.ShowStory(self)
+			end)
+			CMain.OnStoryDone(info.storyId)
 		else
 			if self.StoryMoudle ~= nil then
 				self.StoryMoudle:Destroy()
@@ -263,6 +280,18 @@ function _P.RefreshTopBtns(self, moudle)
 			local xinguanConf = Csv.ActivityNewTake[activityId]
 			if xinguanConf then
 				btn.SpriteName = xinguanConf.mainIconBg
+			end
+		elseif v.id == Define.SysId.MidAFestival then
+			local activityId = MActivity.ActIdForType[Define.ActivityType.MidAutumn_Login]
+			if activityId ~= nil then
+				local loginConf = Csv.ActivityMidLogin[activityId]
+				if loginConf and loginConf.mainIcon then
+					btn.SpriteName = loginConf.mainIcon
+				else
+					btn.SpriteName = v.icon
+				end
+			else
+				btn.SpriteName = v.icon
 			end
 		else
 			btn.SpriteName = v.icon

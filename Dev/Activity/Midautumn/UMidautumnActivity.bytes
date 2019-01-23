@@ -146,7 +146,18 @@ function _P.InitActivityTypeGroup(self)
 		self.actTypeGroup[index] = actType
 	end
 	self.actPageDataCache = {}
-	self.moudle:Get("C_Text").Text = csvFuncValue.name
+
+	local actId = MActivity.ActIdForType[Define.ActivityType.MidAutumn_Login]
+	if actId ~= nil then
+		local loginConf = Csv.ActivityMidLogin[actId]
+		if loginConf and loginConf.mainName then
+			self.moudle:Get("C_Text").Text = loginConf.mainName
+		else
+			self.moudle:Get("C_Text").Text = csvFuncValue.name
+		end
+	else
+		self.moudle:Get("C_Text").Text = csvFuncValue.name
+	end
 end
 
 --点击页签事件

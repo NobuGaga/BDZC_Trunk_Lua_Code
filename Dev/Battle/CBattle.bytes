@@ -61,7 +61,6 @@ function _M.ModuleInit(isReload)
 	}
 	--调用注册接口, 用获得发送函数
 	_M.Send = SocketMgr.Regist(Define.SysId.Airport, send, recv, isReload)	
-	MBattle.InitCsvBattleData()
 end
 
 --注册12点重置监听
@@ -170,6 +169,12 @@ function _P.UpdateMapRedpoint()
 			CMain.UpdateRedpoint(false, Define.SysId.BusinessMap, 1)
 		end
 
+		if MBattle.BusinessMapOpen then
+			CMain.UpdateRedpoint(true, Define.SysId.BusinessMap, 2)
+		else
+			CMain.UpdateRedpoint(false, Define.SysId.BusinessMap, 2)
+		end
+
 		for csvId,startTime in pairs(MBattle.BattleMapList) do
 			local csvLine = Csv.BattleCity[csvId]
 			if csvLine.boxReward ~= nil and (nowTime - startTime) / csvLine.boxSpaceTime >= csvLine.boxMaxNum then
@@ -179,6 +184,12 @@ function _P.UpdateMapRedpoint()
 			end
 		end
 	end
+end
+
+function _M.UpdateBusinessMapOpen(isNewOpen)
+	MBattle.BusinessMapOpen = isNewOpen
+
+	_P.UpdateMapRedpoint()
 end
 
 function _P.OnResult(data)
